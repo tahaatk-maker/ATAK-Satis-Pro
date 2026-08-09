@@ -1010,6 +1010,30 @@ function salesCalcState(){
   if(q('#salesPaymentMethod'))q('#salesPaymentMethod').value=method;
   return{gross,discountPct,discountAmount,net,commissionPct,commission,dealer,method,paid,due,splits,allocated,remaining};
 }
+function salesUpdateDock(c){
+  if(q('#salesDockNet'))q('#salesDockNet').textContent=salesMoney(c?.net||0);
+  if(q('#salesDockRemain')){
+    const rem=c?.remaining??0;
+    q('#salesDockRemain').textContent=salesMoney(rem);
+    q('#salesDockRemain').style.color=Math.abs(rem)<0.009?'#7dffa8':(rem>0?'#ffd48a':'#ff9b9b');
+  }
+  const cust=(salesCenterData.customers||[]).find(x=>String(x.id)===String(q('#salesCustomerSelect')?.value||''));
+  if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent=cust?(cust.name.length>22?cust.name.slice(0,21)+'…':cust.name):'—';
+}
+function salesUpdatePosSteps(c){
+  const step1=q('#posStep1'),step2=q('#posStep2'),step3=q('#posStep3');
+  if(!step1||!step2||!step3)return;
+  const hasCustomer=!!(q('#salesCustomerSelect')?.value);
+  const hasCart=qa('.sales-row').length>0;
+  const payReady=!!(c&&c.net>0&&Math.abs(c.remaining)<0.009);
+  [step1,step2,step3].forEach(el=>el.classList.remove('active','done'));
+  if(hasCustomer)step1.classList.add('done');
+  if(hasCart)step2.classList.add('done');
+  if(payReady)step3.classList.add('done');
+  if(!hasCustomer)step1.classList.add('active');
+  else if(!hasCart)step2.classList.add('active');
+  else step3.classList.add('active');
+}
 function salesCalculate(){
   const c=salesCalcState();
   if(q('#salesDiscountAmount'))q('#salesDiscountAmount').value=c.discountAmount.toFixed(2);
@@ -1040,6 +1064,8 @@ function salesCalculate(){
     else if(c.gross<=0)hint.textContent='Ürün tutarı girin.';
     else hint.textContent=`Brüt ${salesMoney(c.gross)} − iskonto ${salesMoney(c.discountAmount)} = net ${salesMoney(c.net)}`;
   }
+  salesUpdateDock(c);
+  salesUpdatePosSteps(c);
   salesPaymentChanged();
 }
 function salesRenderCustomers(){
@@ -1052,11 +1078,18 @@ function salesRenderCustomers(){
 }
 function salesCustomerChanged(){
   const c=salesCenterData.customers.find(x=>x.id===q('#salesCustomerSelect').value),box=q('#salesCustomerInfo'),noteWrap=q('#salesCustomerNoteWrap');
-  if(!c){box.classList.add('hidden');box.innerHTML='';noteWrap?.classList.add('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value='';return}
+  if(!c){
+    box.classList.add('hidden');box.innerHTML='';noteWrap?.classList.add('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value='';
+    if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent='—';
+    salesUpdatePosSteps(salesCalcState());
+    return;
+  }
   box.classList.remove('hidden');
   const addr=[c.district,c.city].filter(Boolean).join('/')||(c.address||'-');
   box.innerHTML=`<div><small>Müşteri</small><b>${c.name}</b></div><div><small>Telefon</small><b>${c.phone||'-'}</b></div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>`;
   noteWrap?.classList.remove('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value=c.note||'';
+  if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent=c.name.length>22?c.name.slice(0,21)+'…':c.name;
+  salesUpdatePosSteps(salesCalcState());
 }
 
 let salesPromissorySettings={defaultInstallments:1,firstDueDays:30};
@@ -1470,6 +1503,13 @@ async function confirmSalesDraft(){
   }catch(e){status.textContent=e.message;status.className='form-status error'}finally{btn.disabled=false;btn.textContent='✓ Kontrol Ettim, Satışı Yap'}
 }
 q('#salesSaveBtn')?.addEventListener('click',openSalesPreview);
+q('#salesDockPreviewBtn')?.addEventListener('click',()=>{
+  q('#salesPaymentStep')?.scrollIntoView({behavior:'smooth',block:'start'});
+  openSalesPreview();
+});
+q('#posStep1')?.addEventListener('click',()=>q('.sales-customer-panel')?.scrollIntoView({behavior:'smooth',block:'start'}));
+q('#posStep2')?.addEventListener('click',()=>q('.sales-products-panel')?.scrollIntoView({behavior:'smooth',block:'start'}));
+q('#posStep3')?.addEventListener('click',()=>q('#salesPaymentStep')?.scrollIntoView({behavior:'smooth',block:'start'}));
 q('#salesPreviewClose')?.addEventListener('click',closeSalesPreview);
 q('#salesPreviewConfirmBtn')?.addEventListener('click',confirmSalesDraft);
 q('#salesPreviewOfferBtn')?.addEventListener('click',sendSalesOffer);

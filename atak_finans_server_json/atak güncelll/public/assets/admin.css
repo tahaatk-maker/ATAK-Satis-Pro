@@ -415,7 +415,7 @@ button.primary,.primary,button{font-size:12px}
 .sales-center-head h2{margin:0;font-size:16px}
 .sales-center-head p{margin:0;font-size:11px}
 .sales-center-head-actions .secondary-btn{min-height:30px;padding:4px 10px}
-.sales-center-layout{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:10px;align-items:stretch;max-width:920px;width:100%}
+.sales-center-layout{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:10px;align-items:stretch;max-width:1180px;width:100%}
 .sales-main-column{display:flex!important;flex-direction:column!important;gap:8px;width:100%}
 .sales-summary-panel,#salesPaymentStep{position:static!important;gap:5px;max-height:none!important;overflow:visible!important;padding:8px!important;width:100%}
 .sales-summary-panel label{gap:2px;font-size:10px}
