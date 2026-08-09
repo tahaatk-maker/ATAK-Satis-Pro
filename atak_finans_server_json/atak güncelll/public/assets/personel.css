@@ -25,7 +25,7 @@ main{max-width:1250px;margin:auto;padding:22px 20px 40px}
 .hero h1{margin:6px 0}
 .hero p{margin:0;color:#d7e7f8}
 
-.modules{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
+.modules{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin:18px 0}
 .module-card{background:#fff;border:1px solid #dfe6ef;border-radius:14px;padding:20px;cursor:pointer;text-align:left;display:grid;gap:6px}
 .module-card:hover{box-shadow:0 7px 22px rgba(0,0,0,.08)}
 .module-card .mod-ico{font-size:22px}
@@ -145,6 +145,23 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .approval-card{display:grid;gap:8px;padding:12px;border:1px solid #f0c0c8;border-radius:12px;background:#fff}
 .approval-card .acts{display:flex;gap:8px;flex-wrap:wrap}
 .row-acts{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Müşteri ödemeleri */
+.pay-filter-bar{align-items:end}
+.period-toggle{display:inline-flex;border:1px solid #d6e0ec;border-radius:10px;overflow:hidden;background:#fff}
+.period-btn{border:0;background:transparent;padding:8px 12px;font-weight:800;cursor:pointer;color:#5b6b82;font:inherit}
+.period-btn.active{background:#075eae;color:#fff}
+#payRows tr{cursor:pointer}
+#payRows tr:hover{background:#f3f7ff}
+#payRows tr.active{background:#e8f1ff}
+.pay-bucket{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800}
+.pay-bucket.overdue{background:#ffe7e7;color:#a52222}
+.pay-bucket.due{background:#fff4d7;color:#8b6200}
+.pay-bucket.open{background:#e8f1ff;color:#0b4f96}
+.pay-bucket.paid{background:#e6f7ee;color:#087c47}
+.pay-note-overdue td{background:#fff5f5}
+.button-row{display:flex;gap:8px;flex-wrap:wrap}
+.form-grid .button-row.wide{grid-column:1/-1}
 
 @media(max-width:980px){
   .modules,.stat-grid,.ciro-grid,.month-stats{grid-template-columns:repeat(2,minmax(0,1fr))}

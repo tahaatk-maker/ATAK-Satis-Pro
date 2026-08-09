@@ -34,7 +34,7 @@ function canFinance(){
   return has('finance_manage')||has('finance_view')||has('orders_manage')||has('customers_manage');
 }
 function hidePanels(){
-  ['#financePanel','#salesPanel','#stockPanel','#announcementPanel'].forEach(x=>$(x)?.classList.add('hidden'));
+  ['#financePanel','#paymentsPanel','#salesPanel','#stockPanel','#announcementPanel'].forEach(x=>$(x)?.classList.add('hidden'));
   $('#home')?.classList.add('hidden');
 }
 function showHome(){
@@ -52,7 +52,10 @@ async function loadSession(){
     $('#welcome').textContent=`Hoş geldin, ${currentUser.name||currentUser.username}`;
     $('#roleName').textContent=currentUser.roleName||currentUser.role||'Personel';
     if(has('orders_manage'))$('#salesCard').classList.remove('hidden');
-    if(canFinance())$('#financeCard').classList.remove('hidden');
+    if(canFinance()){
+      $('#financeCard').classList.remove('hidden');
+      $('#paymentsCard').classList.remove('hidden');
+    }
     if(has('stock_manage'))$('#stockCard').classList.remove('hidden');
     showHome();
   }catch(_){showLogin()}
@@ -764,5 +767,153 @@ $('#announceCard').onclick=async()=>{
       </div>`).join('')||'Aktif duyuru yok.';
   }catch(e){$('#announcementList').textContent=e.message}
 };
+
+/* ——— Müşteri Ödemeleri ——— */
+let payState={filter:'overdue',q:'',rows:[],recentPaid:[],accounts:[],summary:null,selectedId:''};
+function payBucketLabel(b){return({overdue:'Geciken',due:'Bu Ay',open:'Açık',paid:'Kapalı'}[b]||b||'—')}
+function todayLocal(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function renderPayments(){
+  const sum=payState.summary||{};
+  const box=$('#paySummary');
+  if(box){
+    box.innerHTML=`
+      <div class="stat"><small>Geciken</small><b>${sum.overdueCustomers||0}</b><span>${money(sum.overdueAmount||0)}</span></div>
+      <div class="stat"><small>Bu Ay</small><b>${sum.dueMonthCustomers||0}</b><span>${money(sum.dueMonthAmount||0)}</span></div>
+      <div class="stat"><small>Açık Cari</small><b>${sum.openCustomers||0}</b><span>${money(sum.openBalance||0)}</span></div>
+      <div class="stat"><small>Listede</small><b>${(payState.rows||[]).length}</b><span>${payBucketLabel(payState.filter)}</span></div>`;
+  }
+  const tbody=$('#payRows');
+  if(tbody){
+    tbody.innerHTML=(payState.rows||[]).length
+      ?(payState.rows||[]).map(r=>`<tr data-pay-cust="${r.customerId}" class="${r.customerId===payState.selectedId?'active':''}">
+          <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small></td>
+          <td><span class="pay-bucket ${r.bucket}">${payBucketLabel(r.bucket)}</span></td>
+          <td>${money(r.balance)}</td>
+          <td>${money(r.overdueAmount)}</td>
+          <td>${money(r.dueMonthAmount)}</td>
+          <td>${r.nextDue||'—'}</td>
+        </tr>`).join('')
+      :'<tr><td colspan="6">Bu filtrede kayıt yok.</td></tr>';
+    tbody.querySelectorAll('[data-pay-cust]').forEach(tr=>{
+      tr.onclick=()=>selectPayCustomer(tr.dataset.payCust);
+    });
+  }
+  const recent=$('#payRecent');
+  if(recent){
+    recent.innerHTML=(payState.recentPaid||[]).length
+      ?(payState.recentPaid||[]).map(t=>`<tr>
+          <td>${t.date||''}</td>
+          <td>${t.customerName||'—'}</td>
+          <td>${money(t.amount)}</td>
+          <td>${t.method||'—'}</td>
+          <td><button type="button" class="ghost-btn" data-receipt="${t.receiptUrl||''}">A5 Yazdır</button></td>
+        </tr>`).join('')
+      :'<tr><td colspan="5">Henüz tahsilat yok.</td></tr>';
+    recent.querySelectorAll('[data-receipt]').forEach(btn=>{
+      btn.onclick=()=>{if(btn.dataset.receipt)window.open(btn.dataset.receipt+(btn.dataset.receipt.includes('?')?'&':'?')+'autoprint=1','_blank')};
+    });
+  }
+  if(payState.selectedId)selectPayCustomer(payState.selectedId,true);
+}
+function selectPayCustomer(customerId,keepAmount=false){
+  payState.selectedId=String(customerId||'');
+  const row=(payState.rows||[]).find(r=>String(r.customerId)===payState.selectedId);
+  document.querySelectorAll('#payRows tr').forEach(tr=>tr.classList.toggle('active',tr.dataset.payCust===payState.selectedId));
+  const hint=$('#payDetailHint'),body=$('#payDetailBody');
+  if(!row){
+    if(hint){hint.classList.remove('hidden');hint.textContent='Soldan müşteri seçin.';}
+    body?.classList.add('hidden');
+    return;
+  }
+  hint?.classList.add('hidden');
+  body?.classList.remove('hidden');
+  const suggest=row.overdueAmount>0.009?row.overdueAmount:(row.dueMonthAmount>0.009?row.dueMonthAmount:Math.max(row.balance,0));
+  $('#payCustomerBox').innerHTML=`<b>${row.customerName||''}</b><br><small>${row.customerPhone||''}</small><br>
+    Cari: <b>${money(row.balance)}</b> · Geciken: <b>${money(row.overdueAmount)}</b> · Bu ay: <b>${money(row.dueMonthAmount)}</b>`;
+  $('#payNotes').innerHTML=(row.notes||[]).map(n=>{
+    const open=!['paid','cancelled'].includes(String(n.status||'open'));
+    return `<tr class="${n.overdue?'pay-note-overdue':''}">
+      <td>${open?`<input type="checkbox" class="pay-note-cb" value="${n.id}">`:''}</td>
+      <td>${n.serial||String(n.id).slice(0,8)}</td>
+      <td>${n.dueDate||'—'}</td>
+      <td>${money(n.remain)}</td>
+      <td>${n.status==='paid'?'Ödendi':(n.overdue?'Gecikmiş':(n.status==='partial'?'Kısmi':'Açık'))}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="5">Senet kaydı yok — ödeme cari bakiyeden düşer.</td></tr>';
+  const acc=$('#payAccount');
+  if(acc){
+    const cur=acc.value;
+    acc.innerHTML=(payState.accounts||[]).map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Kasa yok</option>';
+    if(cur && [...acc.options].some(o=>o.value===cur))acc.value=cur;
+  }
+  if(!keepAmount || !Number($('#payAmount')?.value||0)){
+    if($('#payAmount'))$('#payAmount').value=suggest>0?suggest.toFixed(2):'';
+  }
+  if($('#payDate') && !$('#payDate').value)$('#payDate').value=todayLocal();
+  document.querySelectorAll('.pay-note-cb').forEach(cb=>{
+    cb.onchange=()=>{
+      const ids=[...document.querySelectorAll('.pay-note-cb:checked')].map(x=>x.value);
+      if(!ids.length)return;
+      const total=(row.notes||[]).filter(n=>ids.includes(n.id)).reduce((a,n)=>a+Number(n.remain||0),0);
+      if($('#payAmount'))$('#payAmount').value=total.toFixed(2);
+    };
+  });
+}
+async function loadPayments(){
+  const st=$('#payStatus');
+  if(st)st.textContent='Yükleniyor...';
+  try{
+    const d=await api(`/web-api/admin/customer-payments-board?filter=${encodeURIComponent(payState.filter)}&q=${encodeURIComponent(payState.q||'')}`);
+    payState.rows=d.rows||[];
+    payState.recentPaid=d.recentPaid||[];
+    payState.accounts=d.accounts||[];
+    payState.summary=d.summary||null;
+    renderPayments();
+    if(st)st.textContent='';
+  }catch(e){if(st)st.textContent=e.message}
+}
+$('#paymentsCard')?.addEventListener('click',()=>{
+  hidePanels();
+  $('#paymentsPanel').classList.remove('hidden');
+  loadPayments();
+});
+$('#payRefresh')?.addEventListener('click',loadPayments);
+$('#payFilterToggle')?.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-pay-filter]'); if(!btn)return;
+  payState.filter=btn.dataset.payFilter||'open';
+  document.querySelectorAll('#payFilterToggle .period-btn').forEach(b=>b.classList.toggle('active',b===btn));
+  loadPayments();
+});
+let paySearchTimer=null;
+$('#paySearch')?.addEventListener('input',()=>{
+  clearTimeout(paySearchTimer);
+  paySearchTimer=setTimeout(()=>{payState.q=$('#paySearch').value.trim();loadPayments()},280);
+});
+$('#payForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=$('#payStatus');
+  if(!payState.selectedId){st.textContent='Önce müşteri seçin.';return}
+  const amount=Number($('#payAmount').value||0);
+  const accountId=$('#payAccount').value;
+  if(!(amount>0)||!accountId){st.textContent='Tutar ve kasa zorunlu.';return}
+  const noteIds=[...document.querySelectorAll('.pay-note-cb:checked')].map(x=>x.value);
+  st.textContent='Kaydediliyor...';
+  try{
+    const d=await api('/web-api/admin/customer-collection',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        customerId:payState.selectedId,amount,accountId,
+        paymentMethod:$('#payMethod').value,
+        date:$('#payDate').value||todayLocal(),
+        description:$('#payDesc').value.trim()||'Aylık ödeme tahsilatı',
+        noteIds
+      })
+    });
+    st.textContent=`Ödeme alındı. Kalan cari: ${money(d.balance)}`;
+    if(d.receiptUrl)window.open(d.receiptUrl+(d.receiptUrl.includes('?')?'&':'?')+'autoprint=1','_blank');
+    await loadPayments();
+    if(payState.selectedId)selectPayCustomer(payState.selectedId);
+  }catch(err){st.textContent=err.message}
+});
 
 loadSession();

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=logo-v5" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=cust-pay-v1" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -566,6 +566,7 @@ body.inv-full #pageTitle{font-size:18px}
 <button class="active" data-tab="dashboard" type="button">⌂ Dashboard</button>
 <button data-tab="foundation" type="button">◆ Foundation Yönetimi</button>
 <button data-tab="financeCenter" type="button">₺ Finans &amp; Cari</button>
+<button data-tab="customerPayments" type="button">💳 Müşteri Ödemeleri</button>
 <button data-tab="customersPage" type="button">👥 Müşteriler</button>
 <button data-tab="salesCenter" type="button">🛒 Satış Merkezi</button>
 <button data-tab="salesTracking" type="button">🚚 Satış Takibi</button>
@@ -1432,6 +1433,61 @@ Bulunamayan → Diğer.
 <div class="turnover-table" id="financeTransactionTable"></div>
 </div>
 </section>
+<section class="tab" id="customerPayments">
+<div class="panel">
+  <div class="panel-head">
+    <div>
+      <small class="eyebrow">TAHSİLAT</small>
+      <h2>Müşteri Ödemeleri</h2>
+      <p>Aylık taksit / senet takibi · gecikenler · bu ay · açık bakiye · ödenenler · A5 makbuz</p>
+    </div>
+    <button id="custPayRefresh" class="secondary-btn" type="button">Yenile</button>
+  </div>
+  <div id="custPaySummary" class="sales-kpi-grid"></div>
+  <div class="sales-report-filters prim-period-bar">
+    <div class="period-toggle" id="custPayFilterToggle">
+      <button type="button" class="period-btn active" data-pay-filter="overdue">Geciken</button>
+      <button type="button" class="period-btn" data-pay-filter="due">Bu Ay</button>
+      <button type="button" class="period-btn" data-pay-filter="open">Açık</button>
+      <button type="button" class="period-btn" data-pay-filter="paid">Ödenenler</button>
+      <button type="button" class="period-btn" data-pay-filter="all">Tümü</button>
+    </div>
+    <label>Ara<input id="custPaySearch" placeholder="Müşteri veya telefon"/></label>
+  </div>
+  <div class="pay-track-layout">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Müşteri</th><th>Durum</th><th>Cari</th><th>Geciken</th><th>Bu Ay</th><th>Sonraki Vade</th></tr></thead>
+        <tbody id="custPayRows"></tbody>
+      </table>
+    </div>
+    <div class="pay-track-detail panel" id="custPayDetail">
+      <h3>Ödeme Al</h3>
+      <p class="note" id="custPayDetailHint">Soldan müşteri seçin.</p>
+      <div id="custPayDetailBody" class="hidden">
+        <div class="info-box" id="custPayCustomerBox"></div>
+        <div class="section-title-row"><h3>Taksit Planı</h3><small>İşaretlemezseniz en yakın vadeden otomatik kapanır</small></div>
+        <div class="table-wrap"><table><thead><tr><th></th><th>Senet</th><th>Vade</th><th>Tutar</th><th>Kalan</th><th>Durum</th></tr></thead><tbody id="custPayNotes"></tbody></table></div>
+        <form id="custPayForm" class="form-grid" style="margin-top:12px">
+          <label>Tutar *<input id="custPayAmount" type="number" min="0.01" step="0.01" required></label>
+          <label>Ödeme şekli
+            <select id="custPayMethod"><option>Nakit</option><option>Kredi Kartı</option><option>Havale</option></select>
+          </label>
+          <label>Kasa / Banka *<select id="custPayAccount" required></select></label>
+          <label>Tarih<input id="custPayDate" type="date"></label>
+          <label class="wide">Açıklama<input id="custPayDesc" placeholder="Aylık ödeme"></label>
+          <div class="button-row wide">
+            <button class="primary" type="submit">Ödemeyi Kaydet + A5 Makbuz</button>
+          </div>
+        </form>
+        <div id="custPayStatus" class="form-status"></div>
+      </div>
+    </div>
+  </div>
+  <div class="section-title-row"><h3>Son Tahsilatlar (Ödenenler)</h3></div>
+  <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Şekil</th><th>Ref</th><th>Makbuz</th></tr></thead><tbody id="custPayRecent"></tbody></table></div>
+</div>
+</section>
 <section class="tab" id="customersPage">
 <div class="foundation-head panel">
 <div>
@@ -1622,5 +1678,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=customer-search-v1"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=cust-pay-v1"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

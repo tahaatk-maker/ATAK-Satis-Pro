@@ -1168,7 +1168,122 @@ app.post('/web-api/admin/finance-transfer',requireAdminOrStaff('finance_manage')
 });
 
 
-app.get('/web-api/admin/customer-detail/:id',requireAdmin,(req,res)=>{
+function applyPaymentToNotes(s,customerId,amount,collectionId){
+  let left=Math.round(Number(amount||0)*100)/100;
+  const notes=(s.promissoryNotes||[])
+    .filter(n=>String(n.customerId)===String(customerId) && !['paid','cancelled'].includes(String(n.status||'open')))
+    .sort((a,b)=>String(a.dueDate||'').localeCompare(String(b.dueDate||'')));
+  const updated=[];
+  for(const n of notes){
+    if(left<=0.009)break;
+    const noteAmt=Math.round(Number(n.amount||0)*100)/100;
+    const already=Math.round(Number(n.paidAmount||0)*100)/100;
+    const remain=Math.max(0,Math.round((noteAmt-already)*100)/100);
+    if(remain<=0.009){n.status='paid';n.paidAmount=noteAmt;continue}
+    const pay=Math.min(left,remain);
+    n.paidAmount=Math.round((already+pay)*100)/100;
+    n.paidAt=new Date().toISOString();
+    n.lastCollectionId=collectionId;
+    n.status=n.paidAmount>=noteAmt-0.009?'paid':'partial';
+    left=Math.round((left-pay)*100)/100;
+    updated.push({id:n.id,serial:n.serial,dueDate:n.dueDate,amount:noteAmt,paidAmount:n.paidAmount,status:n.status,applied:pay});
+  }
+  return{updated,remaining:left};
+}
+function buildCustomerPaymentsBoard(s,{filter='open',q=''}={}){
+  const today=todayISO();
+  const month=today.slice(0,7);
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
+  const notesByCustomer=new Map();
+  for(const n of (s.promissoryNotes||[])){
+    const cid=String(n.customerId||'');
+    if(!cid)continue;
+    if(!notesByCustomer.has(cid))notesByCustomer.set(cid,[]);
+    notesByCustomer.get(cid).push(n);
+  }
+  const rows=[];
+  const seen=new Set();
+  const pushCustomer=(cid)=>{
+    if(seen.has(cid))return;
+    seen.add(cid);
+    const c=customerMap.get(cid); if(!c||c.active===false)return;
+    const bal=round(customerBalance(s,cid));
+    const notes=(notesByCustomer.get(cid)||[]).slice().sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
+    const openNotes=notes.filter(n=>!['paid','cancelled'].includes(String(n.status||'open')));
+    const paidNotes=notes.filter(n=>n.status==='paid');
+    const overdueNotes=openNotes.filter(n=>String(n.dueDate||'')<today);
+    const dueMonthNotes=openNotes.filter(n=>String(n.dueDate||'').slice(0,7)===month);
+    const openInstallment=round(openNotes.reduce((a,n)=>a+Math.max(0,Number(n.amount||0)-Number(n.paidAmount||0)),0));
+    const overdueAmount=round(overdueNotes.reduce((a,n)=>a+Math.max(0,Number(n.amount||0)-Number(n.paidAmount||0)),0));
+    const dueMonthAmount=round(dueMonthNotes.reduce((a,n)=>a+Math.max(0,Number(n.amount||0)-Number(n.paidAmount||0)),0));
+    const nextDue=openNotes[0]?.dueDate||'';
+    let bucket='paid';
+    if(overdueAmount>0.009)bucket='overdue';
+    else if(dueMonthAmount>0.009||(bal>0.009&&dueMonthNotes.length))bucket='due';
+    else if(bal>0.009||openInstallment>0.009)bucket='open';
+    rows.push({
+      customerId:cid,customerName:c.name||'',customerPhone:c.phone||'',
+      balance:bal,openInstallment,overdueAmount,dueMonthAmount,
+      openCount:openNotes.length,overdueCount:overdueNotes.length,paidCount:paidNotes.length,
+      nextDue,bucket,
+      notes:notes.map(n=>({
+        id:n.id,serial:n.serial||'',planId:n.planId||'',saleReference:n.saleReference||'',
+        amount:round(n.amount),paidAmount:round(n.paidAmount||0),
+        remain:round(Math.max(0,Number(n.amount||0)-Number(n.paidAmount||0))),
+        dueDate:n.dueDate||'',status:n.status||'open',
+        overdue:String(n.status||'open')!=='paid'&&String(n.dueDate||'')<today
+      }))
+    });
+  };
+  for(const cid of notesByCustomer.keys())pushCustomer(cid);
+  for(const c of (s.customers||[])){
+    if(c.active===false)continue;
+    const bal=customerBalance(s,c.id);
+    if(bal>0.009)pushCustomer(String(c.id));
+  }
+  const term=String(q||'').trim().toLocaleLowerCase('tr-TR');
+  let out=rows;
+  if(term)out=out.filter(r=>`${r.customerName} ${r.customerPhone}`.toLocaleLowerCase('tr-TR').includes(term));
+  if(filter==='overdue')out=out.filter(r=>r.bucket==='overdue');
+  else if(filter==='due')out=out.filter(r=>r.bucket==='due'||r.bucket==='overdue');
+  else if(filter==='open')out=out.filter(r=>r.balance>0.009||r.openInstallment>0.009);
+  else if(filter==='paid')out=out.filter(r=>r.bucket==='paid'&&r.paidCount>0);
+  out.sort((a,b)=>{
+    const rank={overdue:0,due:1,open:2,paid:3};
+    const d=(rank[a.bucket]??9)-(rank[b.bucket]??9);
+    if(d)return d;
+    return String(a.nextDue||'9999').localeCompare(String(b.nextDue||'9999'))||b.balance-a.balance;
+  });
+  const recentPaid=(s.financeTransactions||[])
+    .filter(t=>t.kind==='collection'&&!t.cancelled)
+    .sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)))
+    .slice(0,40)
+    .map(t=>({
+      id:t.id,date:t.date,amount:Number(t.amount||0),
+      customerId:t.customerId||'',
+      customerName:customerMap.get(String(t.customerId||''))?.name||'',
+      method:t.category||'',reference:t.reference||'',
+      receiptUrl:`/web-api/admin/receipt/${t.id}?size=a5`,
+      description:t.description||''
+    }));
+  const summary={
+    overdueCustomers:rows.filter(r=>r.bucket==='overdue').length,
+    overdueAmount:round(rows.reduce((a,r)=>a+r.overdueAmount,0)),
+    dueMonthCustomers:rows.filter(r=>r.dueMonthAmount>0.009).length,
+    dueMonthAmount:round(rows.reduce((a,r)=>a+r.dueMonthAmount,0)),
+    openBalance:round(rows.reduce((a,r)=>a+Math.max(0,r.balance),0)),
+    openCustomers:rows.filter(r=>r.balance>0.009||r.openInstallment>0.009).length
+  };
+  return{ok:true,filter,summary,rows:out,recentPaid,accounts:(s.financeAccounts||[]).filter(a=>a.active!==false)};
+}
+
+app.get('/web-api/admin/customer-payments-board',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+  const s=readStore();
+  res.json(buildCustomerPaymentsBoard(s,{filter:String(req.query.filter||'open'),q:String(req.query.q||'')}));
+});
+
+app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
   const s=readStore(),customer=s.customers.find(x=>x.id===req.params.id);
   if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
   const transactions=s.financeTransactions
@@ -1407,19 +1522,51 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   });
 });
 
-app.post('/web-api/admin/customer-collection',requireAdmin,(req,res)=>{
+app.post('/web-api/admin/customer-collection',requireAdminOrStaffAny('finance_manage','orders_manage','customers_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{},customer=s.customers.find(c=>c.id===x.customerId);
   if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
   const amount=cleanMoney(x.amount);
   if(!amount)return res.status(400).json({error:'Tahsilat tutarı zorunludur'});
   if(!x.accountId)return res.status(400).json({error:'Kasa veya banka seçilmelidir'});
+  if(!s.financeAccounts.some(a=>a.id===x.accountId&&a.active!==false))return res.status(400).json({error:'Geçersiz kasa/banka'});
+  const method=String(x.paymentMethod||'Nakit').trim()||'Nakit';
+  const desc=String(x.description||`Aylık ödeme tahsilatı · ${method}`).slice(0,500);
   const row=financeTx(s,{
-    date:x.date,kind:'collection',accountId:String(x.accountId),customerId:customer.id,amount,customerDelta:-amount,
-    category:String(x.paymentMethod||'Tahsilat'),description:String(x.description||'Cari tahsilat'),reference:`TAH-${Date.now()}`,createdBy:currentActor(req)?.name||'Admin'
+    date:x.date||todayISO(),kind:'collection',accountId:String(x.accountId),customerId:customer.id,amount,customerDelta:-amount,
+    category:method,description:desc,reference:`TAH-${Date.now()}`,createdBy:currentActor(req)?.name||'Personel'
   });
-  audit(s,'Müşteri tahsilatı',customer.name,{amount,accountId:x.accountId});
+  row.paymentFor='customer_installment';
+  // Seçili senetlere veya FIFO açık taksitlere uygula
+  let allocation;
+  if(Array.isArray(x.noteIds)&&x.noteIds.length){
+    let left=amount;
+    const updated=[];
+    for(const nid of x.noteIds.map(String)){
+      if(left<=0.009)break;
+      const n=(s.promissoryNotes||[]).find(nn=>String(nn.id)===nid&&String(nn.customerId)===String(customer.id));
+      if(!n||n.status==='paid')continue;
+      const noteAmt=Number(n.amount||0),already=Number(n.paidAmount||0),remain=Math.max(0,noteAmt-already);
+      const pay=Math.min(left,remain);
+      n.paidAmount=Math.round((already+pay)*100)/100;
+      n.paidAt=new Date().toISOString();
+      n.lastCollectionId=row.id;
+      n.status=n.paidAmount>=noteAmt-0.009?'paid':'partial';
+      left=Math.round((left-pay)*100)/100;
+      updated.push({id:n.id,serial:n.serial,dueDate:n.dueDate,amount:noteAmt,paidAmount:n.paidAmount,status:n.status,applied:pay});
+    }
+    allocation={updated,remaining:left};
+  }else{
+    allocation=applyPaymentToNotes(s,customer.id,amount,row.id);
+  }
+  row.appliedNotes=allocation.updated;
+  audit(s,'Müşteri tahsilatı',customer.name,{amount,accountId:x.accountId,method,notes:allocation.updated.length});
   writeStore(s);
-  res.json({ok:true,row,balance:customerBalance(s,customer.id)});
+  res.json({
+    ok:true,row,
+    balance:customerBalance(s,customer.id),
+    appliedNotes:allocation.updated,
+    receiptUrl:`/web-api/admin/receipt/${row.id}?size=a5`
+  });
 });
 
 
@@ -2389,17 +2536,72 @@ app.get('/web-api/admin/self-test',requireAdmin,(req,res)=>{
  }catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
-app.get('/web-api/admin/receipt/:id',requireAdmin,(req,res)=>{
+app.get('/web-api/admin/receipt/:id',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
   const s=readStore(),t=s.financeTransactions.find(x=>x.id===req.params.id);
   if(!t)return res.status(404).send('Makbuz hareketi bulunamadı');
   const customer=s.customers.find(x=>x.id===t.customerId);
   const account=s.financeAccounts.find(x=>x.id===t.accountId);
   const settings=s.settings||{};
+  const a5=String(req.query.size||'').toLowerCase()==='a5';
   const title=t.kind==='collection'?'TAHSİLAT MAKBUZU':t.kind==='payment'?'ÖDEME MAKBUZU':'İŞLEM MAKBUZU';
   const amount=Math.abs(Number(t.amount||0)).toLocaleString('tr-TR',{style:'currency',currency:'TRY'});
-  const esc=v=>String(v||'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
-  res.type('html').send(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font-family:Arial,sans-serif;background:#eef2f7;margin:0;padding:24px;color:#17233a}.paper{max-width:760px;margin:auto;background:#fff;padding:34px;border-radius:16px;box-shadow:0 12px 35px #16395c22}.head{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #0a5ca8;padding-bottom:18px}.head h1{margin:0;color:#0a5ca8;font-size:24px}.head p{margin:4px 0;color:#65748a}.number{text-align:right}.amount{font-size:32px;font-weight:900;color:#0a5ca8;margin:28px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #dce4ee;border-radius:10px;padding:13px}.box small{display:block;color:#6c788b;margin-bottom:5px}.foot{margin-top:28px;border-top:1px solid #dce4ee;padding-top:16px;color:#68758a;font-size:12px}.actions{text-align:center;margin-top:20px}.actions button{padding:12px 20px;border:0;border-radius:9px;background:#0a5ca8;color:#fff;font-weight:800}@media print{body{background:#fff;padding:0}.paper{box-shadow:none;border-radius:0;max-width:none}.actions{display:none}}</style></head><body><div class="paper"><div class="head"><div><h1>${esc(settings.siteName||'ATAK HOME')}</h1><p>${esc(settings.address||'')}</p><p>${esc(settings.phone||'')} · ${esc(settings.email||'')}</p></div><div class="number"><b>${title}</b><p>No: ${esc(t.reference||t.id.slice(0,8).toUpperCase())}</p><p>Tarih: ${esc(t.date)}</p></div></div><div class="amount">${amount}</div><div class="grid"><div class="box"><small>Müşteri</small><b>${esc(customer?.name||'Belirtilmedi')}</b></div><div class="box"><small>Kasa / Banka</small><b>${esc(account?.name||'')}</b></div><div class="box"><small>İşlem</small><b>${esc(t.kind)}</b></div><div class="box"><small>Kategori</small><b>${esc(t.category||'-')}</b></div></div><div class="box" style="margin-top:12px"><small>Açıklama</small><b>${esc(t.description||'')}</b></div><div class="foot">Bu belge Atak Home Platform üzerinden oluşturulmuş işlem makbuzudur. Mali fatura yerine geçmez.</div><div class="actions"><button onclick="window.print()">Makbuzu Yazdır</button></div></div></body></html>`);
+  const bal=customer?customerBalance(s,customer.id):0;
+  const balTxt=bal.toLocaleString('tr-TR',{style:'currency',currency:'TRY'});
+  const applied=Array.isArray(t.appliedNotes)?t.appliedNotes:[];
+  const noteStatusTr=st=>({paid:'Ödendi',partial:'Kısmi',open:'Açık',cancelled:'İptal'}[String(st||'')]||String(st||''));
+  const appliedHtml=applied.length
+    ?`<div class="box" style="margin-top:8px"><small>Kapatılan / güncellenen taksitler</small>${applied.map(n=>`<div class="line"><b>${escHtml(n.serial||n.id)}</b> · vade ${escHtml(n.dueDate||'')} · ${Number(n.applied||0).toLocaleString('tr-TR',{style:'currency',currency:'TRY'})} → ${escHtml(noteStatusTr(n.status))}</div>`).join('')}</div>`
+    :'';
+  const pageCss=a5
+    ?`@page{size:A5;margin:7mm}body{background:#fff;margin:0;padding:0}.paper{width:148mm;min-height:200mm;margin:0 auto;padding:10mm;box-shadow:none;border-radius:0}`
+    :`body{background:#eef2f7;margin:0;padding:24px}.paper{max-width:760px;margin:auto;padding:34px;border-radius:16px;box-shadow:0 12px 35px #16395c22}`;
+  const esc=escHtml;
+  res.type('html').send(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+<style>
+*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17233a}
+${pageCss}
+.paper{background:#fff}
+.head{display:flex;justify-content:space-between;gap:12px;border-bottom:2px solid #0a5ca8;padding-bottom:10px}
+.head h1{margin:0;color:#0a5ca8;font-size:${a5?'16px':'22px'}}
+.head p{margin:2px 0;color:#65748a;font-size:${a5?'11px':'13px'}}
+.number{text-align:right;font-size:${a5?'11px':'13px'}}
+.amount{font-size:${a5?'26px':'32px'};font-weight:900;color:#0a5ca8;margin:14px 0 10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.box{border:1px solid #dce4ee;border-radius:8px;padding:8px 10px}
+.box small{display:block;color:#6c788b;margin-bottom:3px;font-size:10px;font-weight:800;text-transform:uppercase}
+.box b{font-size:${a5?'12px':'14px'}}
+.line{font-size:11px;margin-top:3px}
+.foot{margin-top:14px;border-top:1px solid #dce4ee;padding-top:8px;color:#68758a;font-size:10px}
+.signs{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px;text-align:center;font-size:11px;color:#445}
+.signs span{display:block;border-top:1px solid #99a;margin:28px 10px 0;padding-top:6px}
+.actions{text-align:center;margin-top:14px}
+.actions button{padding:10px 16px;border:0;border-radius:8px;background:#0a5ca8;color:#fff;font-weight:800;cursor:pointer}
+@media print{body{background:#fff!important;padding:0!important}.paper{box-shadow:none!important;border-radius:0!important}.actions{display:none!important}}
+</style></head><body>
+<div class="paper">
+  <div class="head">
+    <div><h1>ATAK PAZARLAMA</h1><p>${esc(settings.siteName||'Atak Home')}</p><p>${esc(settings.address||'')}</p><p>${esc(settings.phone||'')}</p></div>
+    <div class="number"><b>${title}</b><p>No: ${esc(t.reference||t.id.slice(0,8).toUpperCase())}</p><p>Tarih: ${esc(t.date)}</p><p>${a5?'A5 Makbuz':'Makbuz'}</p></div>
+  </div>
+  <div class="amount">${amount}</div>
+  <div class="grid">
+    <div class="box"><small>Müşteri</small><b>${esc(customer?.name||'Belirtilmedi')}</b></div>
+    <div class="box"><small>Telefon</small><b>${esc(customer?.phone||'-')}</b></div>
+    <div class="box"><small>Kasa / Banka</small><b>${esc(account?.name||'-')}</b></div>
+    <div class="box"><small>Ödeme Şekli</small><b>${esc(t.category||'-')}</b></div>
+    <div class="box"><small>Kalan Cari</small><b>${balTxt}</b></div>
+    <div class="box"><small>Alan Personel</small><b>${esc(t.createdBy||'-')}</b></div>
+  </div>
+  <div class="box" style="margin-top:8px"><small>Açıklama</small><b>${esc(t.description||'Cari tahsilat')}</b></div>
+  ${appliedHtml}
+  <div class="signs"><div><span>Teslim Eden</span></div><div><span>Teslim Alan</span></div></div>
+  <div class="foot">Bu belge Atak Pazarlama işlem makbuzudur. e-Fatura / resmi fatura yerine geçmez. ${a5?'A5 yazdırma için sayfa boyutunu A5 seçin.':''}</div>
+  <div class="actions"><button onclick="window.print()">A5 Makbuzu Yazdır</button></div>
+</div>
+<script>window.addEventListener('load',()=>{const u=new URL(location.href);if(u.searchParams.get('autoprint')==='1')setTimeout(()=>window.print(),250)})</script>
+</body></html>`);
 });
+function escHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 app.post('/web-api/admin/finance-reverse/:id',requireAdmin,(req,res)=>{
   const s=readStore(),original=s.financeTransactions.find(x=>x.id===req.params.id);

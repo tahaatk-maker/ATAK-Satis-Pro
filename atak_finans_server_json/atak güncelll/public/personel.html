@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Satış Operasyon Personel</title>
 <link rel="icon" href="/assets/favicon.png">
-<link rel="stylesheet" href="/assets/personel.css?v=customer-search-v1">
+<link rel="stylesheet" href="/assets/personel.css?v=cust-pay-v1">
 </head>
 <body>
 
@@ -53,6 +53,12 @@
 <span class="mod-ico">₺</span>
 <b>Finans &amp; Cari</b>
 <small>Cari, hareketler ve ciro özeti</small>
+</button>
+
+<button id="paymentsCard" class="module-card hidden" type="button">
+<span class="mod-ico">💳</span>
+<b>Müşteri Ödemeleri</b>
+<small>Aylık taksit, gecikenler, A5 makbuz</small>
 </button>
 
 <button id="stockCard" class="module-card hidden" type="button">
@@ -193,6 +199,73 @@
     <div id="cancelModalStatus" class="status"></div>
   </div>
 </div>
+</section>
+
+<section id="paymentsPanel" class="panel hidden">
+<div class="panel-head">
+  <div>
+    <small class="eyebrow">TAHSİLAT</small>
+    <h2>Müşteri Ödemeleri</h2>
+    <p>Eski satışların aylık taksit / senet takibi · ödeme al · A5 makbuz yazdır</p>
+  </div>
+  <button id="payRefresh" class="ghost-btn" type="button">Yenile</button>
+</div>
+<div id="paySummary" class="stat-grid"></div>
+<div class="toolbar finance-filters pay-filter-bar">
+  <div class="period-toggle" id="payFilterToggle">
+    <button type="button" class="period-btn active" data-pay-filter="overdue">Geciken</button>
+    <button type="button" class="period-btn" data-pay-filter="due">Bu Ay</button>
+    <button type="button" class="period-btn" data-pay-filter="open">Açık</button>
+    <button type="button" class="period-btn" data-pay-filter="paid">Ödenenler</button>
+    <button type="button" class="period-btn" data-pay-filter="all">Tümü</button>
+  </div>
+  <label class="field">Ara<input id="paySearch" placeholder="Müşteri veya telefon"></label>
+</div>
+<div class="split-panels pay-track-split">
+  <div>
+    <div class="section-title">Müşteri Listesi</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Müşteri</th><th>Durum</th><th>Cari</th><th>Geciken</th><th>Bu Ay</th><th>Vade</th></tr></thead>
+        <tbody id="payRows"></tbody>
+      </table>
+    </div>
+  </div>
+  <div>
+    <div class="section-title">Ödeme Al</div>
+    <p class="soft-hint" id="payDetailHint">Soldan müşteri seçin.</p>
+    <div id="payDetailBody" class="hidden">
+      <div class="info-box" id="payCustomerBox"></div>
+      <div class="section-title">Taksit Planı <small style="font-weight:500;color:#68758a">(işaret yoksa en yakın vadeden)</small></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>Senet</th><th>Vade</th><th>Kalan</th><th>Durum</th></tr></thead>
+          <tbody id="payNotes"></tbody>
+        </table>
+      </div>
+      <form id="payForm" class="form-grid" style="margin-top:12px">
+        <label>Tutar *<input id="payAmount" type="number" min="0.01" step="0.01" required></label>
+        <label>Ödeme şekli
+          <select id="payMethod"><option>Nakit</option><option>Kredi Kartı</option><option>Havale</option></select>
+        </label>
+        <label>Kasa / Banka *<select id="payAccount" required></select></label>
+        <label>Tarih<input id="payDate" type="date"></label>
+        <label class="wide">Açıklama<input id="payDesc" placeholder="Aylık ödeme"></label>
+        <div class="button-row wide">
+          <button class="primary-btn" type="submit">Ödemeyi Kaydet + A5 Makbuz</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="section-title" style="margin-top:16px">Son Tahsilatlar</div>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Şekil</th><th>Makbuz</th></tr></thead>
+    <tbody id="payRecent"></tbody>
+  </table>
+</div>
+<div id="payStatus" class="status"></div>
 </section>
 
 <section id="salesPanel" class="panel hidden">
@@ -363,6 +436,6 @@
 </main>
 </div>
 
-<script src="/assets/personel.js?v=customer-search-v1"></script>
+<script src="/assets/personel.js?v=cust-pay-v1"></script>
 </body>
 </html>
