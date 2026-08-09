@@ -11,12 +11,20 @@ function salesNum(v){
   }else if(s.includes(','))s=s.replace(',','.');
   const n=Number(s);return Number.isFinite(n)?n:0;
 }
+function salesPreferredPriceMethod(){
+  try{
+    const s=typeof salesPaymentSplits==='function'?salesPaymentSplits():null;
+    if(s&&s.card>s.cash)return 'Kredi Kartı';
+  }catch(_){}
+  return 'Nakit';
+}
 function salesProductUnitPrice(p,method=''){
   if(!p)return 0;
   const cash=salesNum(p.cashPrice??p.price??p.salePrice);
   const card=salesNum(p.cardPrice??p.price??p.salePrice);
   const list=salesNum(p.listPrice??p.bekoPrice??p.oldPrice);
-  if(method==='Kredi Kartı')return card||cash||list;
+  const m=method||salesPreferredPriceMethod();
+  if(String(m).includes('Kredi Kartı')||m==='Kredi Kartı')return card||cash||list;
   return cash||card||list||salesNum(p.salePrice)||salesNum(p.bekoPrice);
 }
 function toast(t){q('#toast').textContent=t;q('#toast').classList.remove('hidden');setTimeout(()=>q('#toast').classList.add('hidden'),2800)}
@@ -484,10 +492,20 @@ async function loadSalesCenter(){
         if(match)q('#salesSalesperson').value=match.id;
       }
     }
-    if(q('#salesAccount'))q('#salesAccount').innerHTML=salesCenterData.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+    const accountOpts=salesCenterData.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+    ['#salesAccount','#payCashAccount','#payCardAccount','#payTransferAccount'].forEach(id=>{
+      if(q(id))q(id).innerHTML=accountOpts;
+    });
+    // Nakit için kasa, kart/havale için banka tercihi
+    const cashAcc=salesCenterData.accounts.find(a=>a.type==='cash')||salesCenterData.accounts[0];
+    const bankAcc=salesCenterData.accounts.find(a=>a.type==='bank')||salesCenterData.accounts[0];
+    if(cashAcc&&q('#payCashAccount'))q('#payCashAccount').value=cashAcc.id;
+    if(bankAcc&&q('#payCardAccount'))q('#payCardAccount').value=bankAcc.id;
+    if(bankAcc&&q('#payTransferAccount'))q('#payTransferAccount').value=bankAcc.id;
     if(q('#salesWarehouse'))q('#salesWarehouse').innerHTML=salesCenterData.warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('');
     if(typeof salesRenderCustomers==='function')salesRenderCustomers();
     if(typeof refreshSalesProductSelects==='function')refreshSalesProductSelects();
+    if(typeof loadSalesPromissoryDefaults==='function')loadSalesPromissoryDefaults();
     if(typeof salesCalculate==='function')salesCalculate();
   }catch(e){if(typeof toast==='function')toast(e.message||'Satış merkezi verileri yüklenemedi')}
 }
@@ -534,9 +552,8 @@ function salesAvailableStock(productCode){
 function salesAddRow(selectedCode=''){
   const wrap=q('#salesRows');
   if(!wrap)return;
-  const method=q('#salesPaymentMethod')?.value||'';
   const product=(salesCenterData.products||[]).find(p=>String(p.code)===String(selectedCode));
-  const unit=salesProductUnitPrice(product,method);
+  const unit=salesProductUnitPrice(product,salesPreferredPriceMethod());
   const row=document.createElement('div');
   row.className='sales-row';
   row.innerHTML=`
@@ -558,7 +575,7 @@ function salesAddRow(selectedCode=''){
   sel.addEventListener('change',()=>{
     const p=(salesCenterData.products||[]).find(x=>String(x.code)===String(sel.value));
     if(p){
-      price.value=salesProductUnitPrice(p,q('#salesPaymentMethod')?.value||'');
+      price.value=salesProductUnitPrice(p,salesPreferredPriceMethod());
       const opt=sel.selectedOptions[0];
       if(opt)opt.dataset.name=p.name||p.code;
     }
@@ -587,7 +604,7 @@ function salesReset(){
   if(q('#salesRows'))q('#salesRows').innerHTML='';
   if(q('#salesDiscountPct'))q('#salesDiscountPct').value='0';
   if(q('#salesDiscountAmount'))q('#salesDiscountAmount').value='0';
-  if(q('#salesPaidAmount'))q('#salesPaidAmount').value='0';
+  ['#payCash','#payCard','#payTransfer','#payCredit','#payNote','#salesPaidAmount'].forEach(id=>{if(q(id))q(id).value='0'});
   if(q('#salesDescription'))q('#salesDescription').value='';
   if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value='pending';
   if(q('#salesInvoiceNumber'))q('#salesInvoiceNumber').value='';
@@ -595,11 +612,60 @@ function salesReset(){
   if(q('#salesCustomerSelect'))q('#salesCustomerSelect').value='';
   if(q('#salesStatus')){q('#salesStatus').textContent='';q('#salesStatus').className='form-status'}
   if(q('#salesDate'))q('#salesDate').value=new Date().toISOString().slice(0,10);
+  if(q('#salesPromissoryDescription'))q('#salesPromissoryDescription').value='';
+  if(q('#salesPromissorySchedule'))q('#salesPromissorySchedule').innerHTML='';
   salesCustomerChanged();
   salesInvoiceChanged();
+  loadSalesPromissoryDefaults();
   salesPaymentChanged();
   salesCalculate();
   toast('Yeni satış formu hazır');
+}
+function salesPaymentSplits(){
+  return{
+    cash:Math.max(0,salesNum(q('#payCash')?.value)),
+    card:Math.max(0,salesNum(q('#payCard')?.value)),
+    transfer:Math.max(0,salesNum(q('#payTransfer')?.value)),
+    credit:Math.max(0,salesNum(q('#payCredit')?.value)),
+    note:Math.max(0,salesNum(q('#payNote')?.value)),
+    cashAccountId:q('#payCashAccount')?.value||'',
+    cardAccountId:q('#payCardAccount')?.value||'',
+    transferAccountId:q('#payTransferAccount')?.value||''
+  };
+}
+function salesCollectedAmount(splits){
+  const p=splits||salesPaymentSplits();
+  return Math.round((p.cash+p.card+p.transfer)*100)/100;
+}
+function salesAllocatedAmount(splits){
+  const p=splits||salesPaymentSplits();
+  return Math.round((p.cash+p.card+p.transfer+p.credit+p.note)*100)/100;
+}
+function salesBuildPromissorySchedule(amount,installments,firstDue,intervalMonths){
+  const total=Math.max(0,salesNum(amount));
+  const count=Math.min(36,Math.max(1,Math.round(salesNum(installments)||1)));
+  const interval=Math.min(12,Math.max(1,Math.round(salesNum(intervalMonths)||1)));
+  if(total<=0||!firstDue)return[];
+  const first=new Date(firstDue+'T12:00:00');
+  if(Number.isNaN(first.getTime()))return[];
+  const base=Math.floor((total/count)*100)/100;
+  let remaining=Math.round(total*100)/100;
+  const rows=[];
+  for(let i=0;i<count;i++){
+    const due=new Date(first);due.setMonth(due.getMonth()+i*interval);
+    const amt=i===count-1?Math.round(remaining*100)/100:base;
+    remaining=Math.round((remaining-amt)*100)/100;
+    rows.push({no:i+1,dueDate:due.toISOString().slice(0,10),amount:amt});
+  }
+  return rows;
+}
+function salesRenderPromissorySchedule(){
+  const box=q('#salesPromissorySchedule');if(!box)return;
+  const noteAmt=Math.max(0,salesNum(q('#payNote')?.value));
+  if(noteAmt<=0){box.innerHTML='';return}
+  const rows=salesBuildPromissorySchedule(noteAmt,q('#salesPromissoryInstallments')?.value,q('#salesPromissoryFirstDue')?.value,q('#salesPromissoryInterval')?.value);
+  if(!rows.length){box.innerHTML='<b>⚠ Senet için ilk vade tarihini girin.</b>';return}
+  box.innerHTML=`<b>Senet takvimı · ${salesMoney(noteAmt)}</b><table><thead><tr><th>#</th><th>Vade</th><th>Tutar</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.no}</td><td>${r.dueDate}</td><td>${salesMoney(r.amount)}</td></tr>`).join('')}</tbody></table>`;
 }
 function salesCalcState(){
   let gross=0;
@@ -613,15 +679,27 @@ function salesCalcState(){
   });
   gross=Math.round(gross*100)/100;
   const dealer=(salesCenterData.dealerSettings||[]).find(d=>String(d.id)===String(q('#salesDealer')?.value||''));
-  const method=q('#salesPaymentMethod')?.value||'';
   let discountPct=Math.max(0,salesNum(q('#salesDiscountPct')?.value));
   if(discountPct>100)discountPct=100;
   const discountAmount=Math.round(gross*(discountPct/100)*100)/100;
   const net=Math.round((gross-discountAmount)*100)/100;
   const commissionPct=salesNum(dealer?.commissionPct);
   const commission=Math.round(net*(commissionPct/100)*100)/100;
-  const paid=Math.max(0,salesNum(q('#salesPaidAmount')?.value));
-  return{gross,discountPct,discountAmount,net,commissionPct,commission,dealer,method,paid,due:Math.max(0,Math.round((net-paid)*100)/100)};
+  const splits=salesPaymentSplits();
+  const paid=salesCollectedAmount(splits);
+  const allocated=salesAllocatedAmount(splits);
+  const remaining=Math.round((net-allocated)*100)/100;
+  const due=Math.round((splits.credit+splits.note+Math.max(0,remaining))*100)/100;
+  if(q('#salesPaidAmount'))q('#salesPaidAmount').value=String(paid);
+  const methods=[];
+  if(splits.cash>0)methods.push('Nakit');
+  if(splits.card>0)methods.push('Kredi Kartı');
+  if(splits.transfer>0)methods.push('Havale');
+  if(splits.credit>0)methods.push('Vadeli');
+  if(splits.note>0)methods.push('Senet');
+  const method=methods.length?methods.join(' + '):'Karma';
+  if(q('#salesPaymentMethod'))q('#salesPaymentMethod').value=method;
+  return{gross,discountPct,discountAmount,net,commissionPct,commission,dealer,method,paid,due,splits,allocated,remaining};
 }
 function salesCalculate(){
   const c=salesCalcState();
@@ -634,14 +712,24 @@ function salesCalculate(){
   if(q('#salesCommissionPctLabel'))q('#salesCommissionPctLabel').textContent=`(%${String(c.commissionPct).replace('.',',')})`;
   if(q('#salesPaidPreview'))q('#salesPaidPreview').textContent=salesMoney(c.paid);
   if(q('#salesDuePreview'))q('#salesDuePreview').textContent=salesMoney(c.due);
-  if(q('#salesDiscountLimit'))q('#salesDiscountLimit').textContent=c.dealer?`${c.dealer.name} · ${c.method||'Ödeme'} · İskonto serbest (nakit/kart fark etmez) · Kâr bölü %${String(c.dealer.marginDividePct??0).replace('.',',')}`:'Bayi seçin';
+  if(q('#payAllocated'))q('#payAllocated').textContent=salesMoney(c.allocated);
+  if(q('#payRemaining'))q('#payRemaining').textContent=salesMoney(c.remaining);
+  const bal=q('#payBalanceHint');
+  if(bal){
+    if(c.net<=0){bal.className='sales-pay-balance ok';bal.textContent='Ödeme dağılımını net tutara eşitleyin.';}
+    else if(Math.abs(c.remaining)<0.009){bal.className='sales-pay-balance ok';bal.textContent=`✓ Ödeme dağılımı net tutara eşit (${salesMoney(c.net)})`;}
+    else if(c.remaining>0){bal.className='sales-pay-balance warn';bal.textContent=`⚠ Henüz ${salesMoney(c.remaining)} dağıtılmadı. Nakit/kart/havale/senet/vadeli girin.`;}
+    else{bal.className='sales-pay-balance bad';bal.textContent=`⚠ Dağıtılan tutar netten ${salesMoney(Math.abs(c.remaining))} fazla.`;}
+  }
+  if(q('#salesDiscountLimit'))q('#salesDiscountLimit').textContent=c.dealer?`${c.dealer.name} · ${c.method} · İskonto serbest · Kâr bölü %${String(c.dealer.marginDividePct??0).replace('.',',')}`:'Bayi seçin';
   if(q('#salesCommissionPreview'))q('#salesCommissionPreview').textContent=c.dealer?`Tahmini prim: ${salesMoney(c.commission)}  →  net ${salesMoney(c.net)} × %${String(c.commissionPct).replace('.',',')}`:'Tahmini prim: bayi seçin';
   const hint=q('#salesCalcHint');
   if(hint){
     if(!c.dealer){hint.className='warn';hint.textContent='Bayi seçilmeden prim hesaplanamaz.';}
-    else if(c.gross<=0){hint.className='ok';hint.textContent='Ürün tutarı girin; iskonto (nakit/kart) ve prim anlık hesaplanır.';}
-    else{hint.className='ok';hint.textContent=`✓ Brüt ${salesMoney(c.gross)} − iskonto ${salesMoney(c.discountAmount)} = net ${salesMoney(c.net)} · prim ${salesMoney(c.commission)}`;}
+    else if(c.gross<=0){hint.className='ok';hint.textContent='Ürün tutarı girin; iskonto ve çoklu ödeme anlık hesaplanır.';}
+    else{hint.className='ok';hint.textContent=`✓ Brüt ${salesMoney(c.gross)} − iskonto ${salesMoney(c.discountAmount)} = net ${salesMoney(c.net)} · tahsil ${salesMoney(c.paid)} · senet/vadeli ${salesMoney(c.splits.note+c.splits.credit)}`;}
   }
+  salesPaymentChanged();
 }
 function salesRenderCustomers(){
   const term=(q('#salesCustomerSearch')?.value||'').toLocaleLowerCase('tr-TR'),current=q('#salesCustomerSelect')?.value||'';
@@ -664,22 +752,19 @@ function addDaysISO(days){const d=new Date();d.setDate(d.getDate()+Number(days||
 async function loadSalesPromissoryDefaults(){
   try{const d=await api('/web-api/admin/promissory-settings');salesPromissorySettings=d.settings||salesPromissorySettings}
   catch(_){}
-  q('#salesPromissoryInstallments').value=salesPromissorySettings.defaultInstallments||1;
-  q('#salesPromissoryFirstDue').value=addDaysISO(salesPromissorySettings.firstDueDays??30);
+  if(q('#salesPromissoryInstallments'))q('#salesPromissoryInstallments').value=salesPromissorySettings.defaultInstallments||1;
+  if(q('#salesPromissoryInterval'))q('#salesPromissoryInterval').value=salesPromissorySettings.intervalMonths||1;
+  if(q('#salesPromissoryFirstDue'))q('#salesPromissoryFirstDue').value=addDaysISO(salesPromissorySettings.firstDueDays??30);
 }
 function salesPaymentChanged(){
-  const method=q('#salesPaymentMethod')?.value||'Nakit',isNote=method==='Senet';
-  q('#salesPromissoryOptions')?.classList.toggle('hidden',!isNote);
-  const account=q('#salesAccount'),paid=q('#salesPaidAmount');
-  if(isNote){
-    // Senette peşinat mümkündür. Peşinat yoksa kasa/banka zorunlu değildir.
-    if(Number(paid.value||0)===0)account.value='';
-    account.disabled=Number(paid.value||0)===0;
-    if(!q('#salesPromissoryFirstDue').value)loadSalesPromissoryDefaults();
-  }else{
-    account.disabled=false;
-  }
-  salesCalculate();
+  const noteAmt=Math.max(0,salesNum(q('#payNote')?.value));
+  const wrap=q('#salesPromissoryOptions');
+  wrap?.classList.toggle('hidden',noteAmt<=0);
+  if(noteAmt>0){
+    if(!q('#salesPromissoryFirstDue')?.value)loadSalesPromissoryDefaults();
+    if(q('#salesPromissoryWarn'))q('#salesPromissoryWarn').textContent=`⚠ ${salesMoney(noteAmt)} senet için vade tarihi ve taksit girin. Satış kaydında senet düzeneği oluşturulacak.`;
+    salesRenderPromissorySchedule();
+  }else if(q('#salesPromissorySchedule'))q('#salesPromissorySchedule').innerHTML='';
 }
 
 
@@ -711,7 +796,7 @@ function renderSalesProductResults(){
     const malzeme=salesMaterialCode(p)||'-';
     return `<button type="button" class="sales-product-card" data-sales-product-add="${p.code}">
       <span><b>${madde}</b><small>${malzeme}${categoryName?` · ${categoryName}`:''}</small></span>
-      <strong>${salesMoney(salesProductUnitPrice(p,q('#salesPaymentMethod')?.value||''))}</strong>
+      <strong>${salesMoney(salesProductUnitPrice(p,salesPreferredPriceMethod()))}</strong>
       <em>+ Ekle</em>
     </button>`;
   }).join('');
@@ -756,7 +841,16 @@ q('#salesProductSearchClear')?.addEventListener('click',()=>{
 function salesDeductStockChanged(){const enabled=q('#salesDeductStock')?.value==='yes';q('#salesWarehouseWrap')?.classList.toggle('hidden',!enabled);if(!enabled&&q('#salesWarehouse'))q('#salesWarehouse').value='';salesRefreshRowStocks()}
 q('#salesDeductStock')?.addEventListener('change',salesDeductStockChanged);
 q('#salesWarehouse')?.addEventListener('change',salesRefreshRowStocks);
-q('#salesAddRowBtn')?.addEventListener('click',()=>salesAddRow());q('#salesResetBtn')?.addEventListener('click',salesReset);q('#salesPaidAmount')?.addEventListener('input',()=>{salesPaymentChanged();salesCalculate()});q('#salesPaidAmount')?.addEventListener('change',()=>{salesPaymentChanged();salesCalculate()});q('#salesPaymentMethod')?.addEventListener('change',()=>{salesPaymentChanged();salesCalculate()});q('#salesDealer')?.addEventListener('change',salesCalculate);q('#salesDiscountPct')?.addEventListener('input',salesCalculate);q('#salesDiscountPct')?.addEventListener('change',salesCalculate);q('#salesCustomerSearch')?.addEventListener('input',salesRenderCustomers);q('#salesCustomerSelect')?.addEventListener('change',salesCustomerChanged);
+q('#salesAddRowBtn')?.addEventListener('click',()=>salesAddRow());q('#salesResetBtn')?.addEventListener('click',salesReset);
+['#payCash','#payCard','#payTransfer','#payCredit','#payNote'].forEach(id=>{
+  q(id)?.addEventListener('input',salesCalculate);
+  q(id)?.addEventListener('change',salesCalculate);
+});
+['#salesPromissoryInstallments','#salesPromissoryInterval','#salesPromissoryFirstDue'].forEach(id=>{
+  q(id)?.addEventListener('input',salesRenderPromissorySchedule);
+  q(id)?.addEventListener('change',salesRenderPromissorySchedule);
+});
+q('#salesDealer')?.addEventListener('change',salesCalculate);q('#salesDiscountPct')?.addEventListener('input',salesCalculate);q('#salesDiscountPct')?.addEventListener('change',salesCalculate);q('#salesCustomerSearch')?.addEventListener('input',salesRenderCustomers);q('#salesCustomerSelect')?.addEventListener('change',salesCustomerChanged);
 
 q('#salesCustomerNoteSave')?.addEventListener('click',async()=>{
   const customerId=q('#salesCustomerSelect')?.value||'';if(!customerId){toast('Önce müşteri seçin');return}
@@ -815,25 +909,43 @@ function collectSalesDraft(){
     };
   }).filter(i=>i.productCode&&i.quantity>0);
   const calc=salesCalcState();
-  const paid=calc.paid,method=q('#salesPaymentMethod').value;
+  const splits=calc.splits;
+  const payments=[];
+  if(splits.cash>0)payments.push({method:'Nakit',amount:splits.cash,accountId:splits.cashAccountId});
+  if(splits.card>0)payments.push({method:'Kredi Kartı',amount:splits.card,accountId:splits.cardAccountId});
+  if(splits.transfer>0)payments.push({method:'Havale',amount:splits.transfer,accountId:splits.transferAccountId});
+  if(splits.credit>0)payments.push({method:'Vadeli',amount:splits.credit,accountId:''});
+  const promissory=splits.note>0?{
+    amount:splits.note,
+    installments:Math.min(36,Math.max(1,Math.round(salesNum(q('#salesPromissoryInstallments')?.value)||1))),
+    intervalMonths:Math.min(12,Math.max(1,Math.round(salesNum(q('#salesPromissoryInterval')?.value)||1))),
+    firstDueDate:q('#salesPromissoryFirstDue')?.value||'',
+    description:q('#salesPromissoryDescription')?.value||'Ürün satışı senet planı',
+    schedule:salesBuildPromissorySchedule(splits.note,q('#salesPromissoryInstallments')?.value,q('#salesPromissoryFirstDue')?.value,q('#salesPromissoryInterval')?.value)
+  }:null;
   const dealerId=q('#salesDealer')?.value||'',dealer=calc.dealer,discountPct=calc.discountPct,grossTotal=calc.gross,total=calc.net;
   const deductStock=q('#salesDeductStock')?.value==='yes';
   const salespersonId=q('#salesSalesperson')?.value||'',salesperson=salesCenterData.salespeople.find(p=>String(p.id)===String(salespersonId));
-  const draft={status,customerId,customer,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,items,total,paid,due:calc.due,method,date:q('#salesDate').value,accountId:q('#salesAccount').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'pending',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
+  const draft={status,customerId,customer,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'pending',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
   if(!customerId)return{error:'Müşteri seçmelisiniz.',...draft};
   if(!dealer)return{error:'Satış bayisini seçmelisiniz.',...draft};
   if(!salesperson)return{error:'Satış personelini seçmelisiniz.',...draft};
   if(!items.length)return{error:'En az bir ürün eklemelisiniz.',...draft};
   if(deductStock&&!warehouseId)return{error:'Stoktan düşmek için satış deposu seçmelisiniz.',...draft};
-  if(paid>total)return{error:'Tahsil edilen tutar satış toplamından büyük olamaz.',...draft};
-  if(paid>0&&!draft.accountId)return{error:'Tahsilat varsa kasa / banka seçmelisiniz.',...draft};
+  if(total>0&&Math.abs(calc.remaining)>0.009)return{error:`Ödeme dağılımı net tutara eşit olmalı. Kalan: ${salesMoney(calc.remaining)}`,...draft};
+  if(draft.payments.some(p=>['Nakit','Kredi Kartı','Havale'].includes(p.method)&&p.amount>0&&!p.accountId))return{error:'Nakit / kart / havale için hesap seçmelisiniz.',...draft};
+  if(promissory){
+    if(!promissory.firstDueDate)return{error:'Senet için ilk vade tarihini girin.',...draft};
+    if(!promissory.schedule.length)return{error:'Senet takvimi oluşturulamadı. Vade tarihini kontrol edin.',...draft};
+  }
   if(draft.invoiceStatus==='issued'&&!draft.invoiceNumber.trim())return{error:'Şimdi faturalandı seçildiğinde fatura numarası zorunludur.',...draft};
   return draft;
 }
 function salesPreviewHtml(d){
   const rows=d.items.map(i=>`<tr><td>${i.itemCode||'-'}</td><td>${i.materialCode||i.productName||i.productCode}</td><td>${i.quantity}</td><td>${salesMoney(i.unitPrice)}</td><td>${salesMoney(i.quantity*i.unitPrice)}</td></tr>`).join('');
-  const note=d.method==='Senet'?`<div class="preview-note"><b>Senet:</b> ${Number(q('#salesPromissoryInstallments').value||1)} adet · İlk vade ${q('#salesPromissoryFirstDue').value||'-'} · Senede bağlanacak ${salesMoney(d.due)}</div>`:'';
-  return `<div class="preview-cards"><div><small>Müşteri</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Peşin: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div>${note}<div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div><div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Tahsil Edilen</span><b>${salesMoney(d.paid)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div><div class="preview-note"><b>Fatura:</b> ${d.invoiceStatus==='issued'?`Kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`:'Daha sonra kesilecek'}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${d.deductStock?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`:'Stoktan düşülmeyecek'}<small>Fatura kesme durumu stoğu etkilemez.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
+  const payRows=(d.payments||[]).map(p=>`<div class="sales-total-line"><span>${p.method}${p.accountId?' · hesap seçildi':''}</span><b>${salesMoney(p.amount)}</b></div>`).join('');
+  const note=d.promissory?`<div class="preview-note"><b>⚠ Senet düzenlemesi:</b> ${salesMoney(d.promissory.amount)} · ${d.promissory.installments} taksit · İlk vade ${d.promissory.firstDueDate}<br>${(d.promissory.schedule||[]).map(r=>`${r.no}) ${r.dueDate} → ${salesMoney(r.amount)}`).join(' · ')}</div>`:'';
+  return `<div class="preview-cards"><div><small>Müşteri</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Tahsil: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>${payRows}<div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div>${note}<div class="preview-note"><b>Fatura:</b> ${d.invoiceStatus==='issued'?`Kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`:'Daha sonra kesilecek'}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${d.deductStock?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`:'Stoktan düşülmeyecek'}<small>Fatura kesme durumu stoğu etkilemez.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
 }
 let activeSalesDraft=null;
 function openSalesPreview(){
@@ -841,16 +953,26 @@ function openSalesPreview(){
   activeSalesDraft=d;q('#salesPreviewBody').innerHTML=salesPreviewHtml(d);q('#salesPreviewModal').classList.remove('hidden');q('#salesPreviewModal').setAttribute('aria-hidden','false');document.body.classList.add('modal-open');
 }
 function closeSalesPreview(){q('#salesPreviewModal').classList.add('hidden');q('#salesPreviewModal').setAttribute('aria-hidden','true');document.body.classList.remove('modal-open')}
-function salesOfferText(d){return `ATAK PAZARLAMA TEKLİF\nMüşteri: ${d.customer?.name||''}\n${d.items.map(i=>`${i.quantity} x ${i.itemCode||'-'} / ${i.materialCode||i.productName} - ${salesMoney(i.quantity*i.unitPrice)}`).join('\n')}\n\nBrüt: ${salesMoney(d.grossTotal)}\nİskonto (%${String(d.discountPct||0).replace('.',',')}): -${salesMoney(d.discountAmount||0)}\nNet Toplam: ${salesMoney(d.total)}\nÖdeme: ${d.method}${d.method==='Senet'?`\nSenet: ${Number(q('#salesPromissoryInstallments').value||1)} adet`:''}\n${d.description||''}`}
+function salesOfferText(d){
+  const pay=(d.payments||[]).map(p=>`${p.method}: ${salesMoney(p.amount)}`).join('\n');
+  const note=d.promissory?`\nSenet: ${salesMoney(d.promissory.amount)} / ${d.promissory.installments} taksit / ilk vade ${d.promissory.firstDueDate}`:'';
+  return `ATAK PAZARLAMA TEKLİF\nMüşteri: ${d.customer?.name||''}\n${d.items.map(i=>`${i.quantity} x ${i.itemCode||'-'} / ${i.materialCode||i.productName} - ${salesMoney(i.quantity*i.unitPrice)}`).join('\n')}\n\nBrüt: ${salesMoney(d.grossTotal)}\nİskonto (%${String(d.discountPct||0).replace('.',',')}): -${salesMoney(d.discountAmount||0)}\nNet Toplam: ${salesMoney(d.total)}\nÖdeme:\n${pay}${note}\n${d.description||''}`;
+}
 function sendSalesOffer(){const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);const phone=String(d.customer?.phone||'').replace(/\D/g,'');const raw=salesOfferText(d),text=encodeURIComponent(raw);if(phone){const trPhone=phone.startsWith('0')?'90'+phone.slice(1):phone;const win=window.open(`https://wa.me/${trPhone}?text=${text}`,'_blank');if(!win){navigator.clipboard?.writeText(raw);toast('Tarayıcı yeni pencereyi engelledi. Teklif panoya kopyalandı.')}}else{navigator.clipboard?.writeText(raw);toast('Müşterinin telefonu yok. Teklif metni panoya kopyalandı.')}}
 function printSalesPreview(){const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);const w=window.open('','_blank');if(!w){toast('Tarayıcı yazdırma penceresini engelledi. Açılır pencerelere izin verin.');return}w.document.write(`<html><head><title>Atak Pazarlama Teklif</title><meta charset="utf-8"><style>body{font:14px Arial;padding:30px;color:#14233b}h1{color:#07366c}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #ddd;text-align:left}.preview-cards{display:flex;gap:12px}.preview-cards>div{flex:1;border:1px solid #ddd;padding:10px}.preview-cards small,.preview-cards b,.preview-cards span{display:block}.preview-totals{margin:20px 0 0 auto;width:380px}.preview-totals>div{display:flex;justify-content:space-between;padding:7px;border-bottom:1px solid #ddd}.preview-note,.preview-description{margin-top:12px;padding:10px;border:1px solid #ddd}</style></head><body><h1>ATAK PAZARLAMA</h1><h2>Satış / Teklif Önizleme</h2>${salesPreviewHtml(d)}<script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close()}
 async function confirmSalesDraft(){
   const d=activeSalesDraft||collectSalesDraft();if(d.error){toast(d.error);return}const deductStock=Boolean(d.deductStock);if(deductStock&&!d.warehouseId){toast('Stoktan düşmek için satış deposu seçmelisiniz.');return}const status=d.status,btn=q('#salesPreviewConfirmBtn');btn.disabled=true;btn.textContent='Satış Yapılıyor...';status.textContent='';
   try{
-    const result=await api('/web-api/admin/customer-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customerId:d.customerId,dealerId:d.dealerId,salespersonId:d.salespersonId,salespersonName:d.salesperson?.name||'',discountPct:d.discountPct,warehouseId:d.warehouseId,date:d.date,paymentMethod:d.method,paidAmount:d.paid,accountId:d.accountId,description:d.description,items:d.items,invoiceStatus:d.invoiceStatus,invoiceNumber:d.invoiceNumber,invoiceDate:d.invoiceDate,deductStock})});
-    let noteText='';if(result.collection?.id)window.open('/web-api/admin/receipt/'+result.collection.id,'_blank');
-    if(d.method==='Senet'&&d.due>0){const plan=await api('/web-api/admin/promissory-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customerId:d.customerId,totalAmount:d.due,installments:Number(q('#salesPromissoryInstallments').value||1),firstDueDate:q('#salesPromissoryFirstDue').value,issueDate:d.date,description:q('#salesPromissoryDescription').value||`${result.sale?.reference||''} satış senedi`})});noteText=` · ${plan.notes?.length||0} senet oluşturuldu`;if(plan.printUrl)window.open(plan.printUrl,'_blank')}
-    closeSalesPreview();status.textContent=`Satış kaydedildi. Yeni cari bakiye: ${salesMoney(result.balance)}${noteText}`;status.className='form-status success';await check();await loadSalesCenter();
+    const result=await api('/web-api/admin/customer-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      customerId:d.customerId,dealerId:d.dealerId,salespersonId:d.salespersonId,salespersonName:d.salesperson?.name||'',
+      discountPct:d.discountPct,warehouseId:d.warehouseId,date:d.date,paymentMethod:d.method,
+      payments:d.payments,promissory:d.promissory,
+      description:d.description,items:d.items,invoiceStatus:d.invoiceStatus,invoiceNumber:d.invoiceNumber,invoiceDate:d.invoiceDate,deductStock
+    })});
+    let noteText='';
+    (result.collections||[]).forEach(c=>{if(c?.id)window.open('/web-api/admin/receipt/'+c.id,'_blank')});
+    if(result.promissory?.printUrl){noteText=` · ${result.promissory.notes?.length||0} senet oluşturuldu`;window.open(result.promissory.printUrl,'_blank')}
+    closeSalesPreview();status.textContent=`Satış kaydedildi. Yeni cari bakiye: ${salesMoney(result.balance)}${noteText}`;status.className='form-status success';await check();await loadSalesCenter();salesReset();
   }catch(e){status.textContent=e.message;status.className='form-status error'}finally{btn.disabled=false;btn.textContent='✓ Kontrol Ettim, Satışı Yap'}
 }
 q('#salesSaveBtn')?.addEventListener('click',openSalesPreview);
