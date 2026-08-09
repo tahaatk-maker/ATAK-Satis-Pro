@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=661-kesilmeyen" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=662-ayir" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1141,8 +1141,8 @@ Bulunamayan → Diğer.
       <div class="inv-folder" data-inv-folder="setup">
         <button type="button" data-inv-toggle="setup"><span>Kurulum / Ayar</span><span>▸</span></button>
         <div class="inv-sub">
+          <button type="button" data-inv-view="setup_settings">QNB Ayarları</button>
           <button type="button" data-inv-view="setup_ready">Hazırlık Kontrolü</button>
-          <button type="button" data-inv-view="setup_settings">QNB Ayarlarına Git</button>
         </div>
       </div>
     </aside>
@@ -1178,11 +1178,29 @@ Bulunamayan → Diğer.
           <div class="inv-empty hidden" id="invEmpty">Bu klasörde kayıt yok.</div>
         </div>
         <div class="inv-settings-box hidden" id="invSetupBox">
-          <p class="note">QNB Çözüm Merkezi kurulumunda buradaki checklist yeşile döner. Ayarlar → QNB Solist formuna WSDL / kullanıcı / alias yazılır.</p>
+          <form class="form-stack" id="invoiceIntegrationForm" style="margin:0;padding:0;border:0;background:transparent;box-shadow:none">
+            <div class="panel-head" style="padding:0;margin:0 0 10px"><div>
+              <h2 style="margin:0;font-size:18px;color:#0b2a4a">QNB Solist / eSolutions Ayarları</h2>
+              <p class="note">Yalnız e-Fatura entegrasyonu. Senet ve bayi/prim ayarları Ayarlar menüsündedir.</p>
+            </div></div>
+            <div class="two-col"><label>Sağlayıcı<select id="invoiceProvider"><option value="qnb-solist">QNB Solist</option><option value="qnb-esolutions">QNB eSolutions</option><option value="qnb-efinans">QNB eFinans</option></select></label><label>Ortam<select id="invoiceEnvironment"><option value="test">Test</option><option value="live">Canlı</option></select></label></div>
+            <div class="two-col"><label>Firma VKN<input id="invoiceCompanyVkn" placeholder="10 haneli VKN"/></label><label>Firma Ünvanı<input id="invoiceCompanyTitle"/></label></div>
+            <label>Gönderici Birim Etiketi / GB Alias<input id="invoiceSenderAlias" placeholder="QNB Solist GB alias"/></label>
+            <label>Posta Kutusu / PK Alias<input id="invoicePkAlias" placeholder="Opsiyonel PK alias"/></label>
+            <label>QNB WSDL / Web Servis Adresi<input id="invoiceServiceUrl" placeholder="QNB’nin vereceği test/canlı WSDL"/></label>
+            <div class="two-col"><label>Kullanıcı<input id="invoiceUsername" autocomplete="off"/></label><label>Şifre<input id="invoicePassword" type="password" autocomplete="new-password"/></label></div>
+            <label class="check"><input id="invoiceEnabled" type="checkbox"/> QNB bağlantısını etkinleştir</label>
+            <label class="check"><input id="invoiceDraftMode" type="checkbox" checked/> Önce taslak olarak hazırla/gönder</label>
+            <label class="check"><input id="invoiceAutoDetect" type="checkbox" checked/> e-Fatura / e-Arşiv tipini otomatik belirle</label>
+            <div class="button-row"><button class="primary" type="submit">QNB Ayarlarını Kaydet</button><button id="invoiceConnectionTestBtn" class="secondary-btn" type="button">Altyapıyı Test Et</button></div>
+            <div class="form-status" id="invoiceIntegrationStatus"></div>
+            <div class="self-test-result" id="invoiceConnectionTestResult"></div>
+          </form>
+          <hr style="border:0;border-top:1px solid #e2e8f0;margin:14px 0"/>
+          <p class="note">Hazırlık checklist — QNB Çözüm Merkezi kurulunda yeşile döner.</p>
           <div class="inv-checks" id="invReadyChecks"></div>
           <div class="button-row" style="margin-top:8px">
             <button class="inv-btn primary" id="invRunReadyTestBtn" type="button">Altyapıyı Test Et</button>
-            <button class="inv-btn" id="invGoSettingsBtn" type="button">QNB Ayarlarını Aç</button>
           </div>
         </div>
       </div>
@@ -1413,7 +1431,7 @@ Bulunamayan → Diğer.
 </div>
 </section>
 <section class="tab" id="settings">
-<div class="foundation-head panel"><div><small class="eyebrow">SİSTEM AYARLARI</small><h2>Ayarlar</h2><p class="note">Senet basımı ve şirket varsayılanlarını buradan yönetin.</p></div></div>
+<div class="foundation-head panel"><div><small class="eyebrow">SİSTEM AYARLARI</small><h2>Ayarlar</h2><p class="note">Senet ve bayi/prim ayarları burada. QNB e-Fatura ayarları <b>e-Fatura Merkezi → Kurulum</b> altındadır.</p></div></div>
 <div class="settings-grid">
 <form class="panel form-stack" id="promissorySettingsForm">
 <div class="panel-head"><div><h2>Senet Ayarları</h2><p class="note">Müşteriye basılan senetlerin varsayılan bilgileri.</p></div></div>
@@ -1424,10 +1442,8 @@ Bulunamayan → Diğer.
 <label>Senet Alt Notu<textarea id="noteFooter" placeholder="İşbu senet..." rows="3"></textarea></label>
 <button class="primary" type="submit">Senet Ayarlarını Kaydet</button><div class="form-status" id="promissorySettingsStatus"></div>
 </form>
-<form class="panel form-stack" id="invoiceIntegrationForm">
-<div class="panel dealer-settings-panel">
+<form class="panel form-stack dealer-settings-panel" id="dealerSettingsForm">
 <div class="panel-head"><div><h2>Bayi Kâr / Prim / İskonto Ayarları</h2><p class="note">Bölü oranı maliyet/hakediş hesabı içindir. Personel primi net satış tutarı üzerinden hesaplanır.</p></div></div>
-<form id="dealerSettingsForm">
 <div class="dealer-setting-grid">
 <div class="dealer-setting-card">
 <h3>Atak Beko</h3>
@@ -1448,20 +1464,6 @@ Bulunamayan → Diğer.
 </div>
 <div class="button-row"><button class="primary" type="submit">Bayi Ayarlarını Kaydet</button></div>
 <div id="dealerSettingsStatus" class="form-status"></div>
-</form>
-</div>
-<div class="panel-head"><div><h2>QNB Solist / eSolutions Entegrasyonu</h2><p class="note">Altyapı hazır. QNB Solist WSDL, kullanıcı ve alias bilgileri gelince SOAP gönderim açılır. Satışta “Fatura Kes” kuyruğa alır.</p></div></div>
-<div class="two-col"><label>Sağlayıcı<select id="invoiceProvider"><option value="qnb-solist">QNB Solist</option><option value="qnb-esolutions">QNB eSolutions</option><option value="qnb-efinans">QNB eFinans</option></select></label><label>Ortam<select id="invoiceEnvironment"><option value="test">Test</option><option value="live">Canlı</option></select></label></div>
-<div class="two-col"><label>Firma VKN<input id="invoiceCompanyVkn" placeholder="10 haneli VKN"/></label><label>Firma Ünvanı<input id="invoiceCompanyTitle"/></label></div>
-<label>Gönderici Birim Etiketi / GB Alias<input id="invoiceSenderAlias" placeholder="QNB Solist GB alias"/></label>
-<label>Posta Kutusu / PK Alias<input id="invoicePkAlias" placeholder="Opsiyonel PK alias"/></label>
-<label>QNB WSDL / Web Servis Adresi<input id="invoiceServiceUrl" placeholder="QNB’nin vereceği test/canlı WSDL"/></label>
-<div class="two-col"><label>Kullanıcı<input id="invoiceUsername" autocomplete="off"/></label><label>Şifre<input id="invoicePassword" type="password" autocomplete="new-password"/></label></div>
-<label class="check"><input id="invoiceEnabled" type="checkbox"/> QNB bağlantısını etkinleştir</label>
-<label class="check"><input id="invoiceDraftMode" type="checkbox" checked/> Önce taslak olarak hazırla/gönder</label>
-<label class="check"><input id="invoiceAutoDetect" type="checkbox" checked/> e-Fatura / e-Arşiv tipini otomatik belirle</label>
-<div class="button-row"><button class="primary" type="submit">QNB Ayarlarını Kaydet</button><button id="invoiceConnectionTestBtn" class="secondary-btn" type="button">Altyapıyı Test Et</button></div>
-<div class="form-status" id="invoiceIntegrationStatus"></div><div class="self-test-result" id="invoiceConnectionTestResult"></div>
 </form>
 <section class="panel"><h2>Test Merkezi</h2><p class="note">Canlı veriyi değiştirmeden sistemin temel satış akışını test eder.</p><button class="primary" id="settingsSelfTestBtn" type="button">Sistem Testini Çalıştır</button><div class="self-test-result" id="settingsSelfTestResult"></div></section>
 </div>
@@ -1519,5 +1521,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=661-kesilmeyen"></script><script src="/web-admin-assets/customer-sales.js?v=661-kesilmeyen"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=662-ayir"></script><script src="/web-admin-assets/customer-sales.js?v=662-ayir"></script>
 </body></html>
