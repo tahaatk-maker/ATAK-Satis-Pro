@@ -14,12 +14,75 @@ const { runBekoSync } = require('./lib/beko-sync');
 const qnbSolist = require('./qnb-solist-adapter');
 
 const app = express();
-const PORT = Number(process.env.PORT || 3100);
 const ROOT = __dirname;
+function loadEnvFile(){
+  const p=path.join(ROOT,'.env');
+  if(!fs.existsSync(p))return;
+  for(const line of fs.readFileSync(p,'utf8').split(/\n/)){
+    const t=String(line||'').trim();
+    if(!t||t.startsWith('#'))continue;
+    const i=t.indexOf('='); if(i<1)continue;
+    const key=t.slice(0,i).trim();
+    if(!/^[A-Z0-9_]+$/.test(key) || process.env[key]!=null)continue;
+    let val=t.slice(i+1).trim();
+    if((val.startsWith('"')&&val.endsWith('"'))||(val.startsWith("'")&&val.endsWith("'")))val=val.slice(1,-1);
+    process.env[key]=val;
+  }
+}
+loadEnvFile();
+const PORT = Number(process.env.PORT || 3100);
 const STORE_PATH = path.join(ROOT, 'data', 'store.json');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const COMMERCE_SYNC_URL = process.env.COMMERCE_SYNC_URL || 'http://127.0.0.1:3200/api/sync/beko';
+/** Varsayılan: sadece sahip erişir. Personeli açmak için .env içinde ATAK_OWNER_ONLY=0 */
+function ownerOnlyEnabled(){ return String(process.env.ATAK_OWNER_ONLY ?? '1').trim() !== '0'; }
+function ownerUsernames(){
+  return String(process.env.ATAK_OWNER_USERNAMES || 'admin,taha')
+    .split(/[,;\s]+/).map(x=>x.trim().toLocaleLowerCase('tr-TR')).filter(Boolean);
+}
+function adminPassword(){ return String(process.env.ADMIN_PASSWORD || 'AtakHome2026!'); }
+function allowedIps(){
+  return String(process.env.ATAK_ALLOWED_IPS || '')
+    .split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);
+}
+function clientIp(req){
+  const xf=String(req.headers['x-forwarded-for']||'').split(',')[0].trim();
+  return String(xf||req.ip||req.socket?.remoteAddress||'').replace(/^::ffff:/,'');
+}
+function ipAllowed(req){
+  const list=allowedIps();
+  if(!list.length)return true;
+  const ip=clientIp(req);
+  return list.some(a=>a==='*'||a===ip);
+}
+function isOwnerUsername(username=''){
+  const u=String(username||'').trim().toLocaleLowerCase('tr-TR');
+  if(!u)return false;
+  return ownerUsernames().includes(u) || u==='admin';
+}
+function isOwnerActor(req){
+  if(req.session?.systemOwner===true)return true;
+  const u=req.session?.user || req.session?.staffUser;
+  if(!u)return false;
+  if(String(u.id||'')==='system-owner')return true;
+  if(String(u.role||'').toLowerCase()==='owner')return true;
+  return isOwnerUsername(u.username);
+}
+function ownerLockMessage(){
+  return 'Sistem şu an sadece yöneticiye açıktır. Erişim engellendi.';
+}
+const loginFailMap=new Map();
+function loginRateLimited(key=''){
+  const k=String(key||'unknown');
+  const now=Date.now();
+  let row=loginFailMap.get(k);
+  if(!row||now-row.t>15*60*1000)row={n:0,t:now};
+  row.n+=1; row.t=row.t||now;
+  loginFailMap.set(k,row);
+  return row.n>10;
+}
+function clearLoginFails(key=''){ loginFailMap.delete(String(key||'unknown')); }
 
 /** KDV: beyaz eşya %20; X30 TR / yazar kasa %10; İstikbal mobilya %10 */
 function resolveVatRate(p={}){
@@ -254,10 +317,28 @@ function actorHasPermission(req,permission){
   return permissions.includes('*') || permissions.includes(permission);
 }
 
+function denyIfOwnerLocked(req,res){
+  if(!ownerOnlyEnabled())return false;
+  if(isOwnerActor(req))return false;
+  if(req.session){
+    try{
+      delete req.session.admin;
+      delete req.session.systemOwner;
+      delete req.session.user;
+      delete req.session.staffUser;
+    }catch(_){}
+  }
+  res.status(403).json({error:ownerLockMessage(),ownerOnly:true});
+  return true;
+}
 function requireAdminOrStaff(permission){
   return (req,res,next)=>{
-    if(req.session?.admin===true)return next();
+    if(req.session?.admin===true){
+      if(denyIfOwnerLocked(req,res))return;
+      return next();
+    }
     if(!req.session?.staffUser)return res.status(401).json({error:'Oturum gerekli'});
+    if(denyIfOwnerLocked(req,res))return;
     if(!actorHasPermission(req,permission))
       return res.status(403).json({error:'Bu işlem için yetkiniz yok'});
     next();
@@ -265,8 +346,12 @@ function requireAdminOrStaff(permission){
 }
 function requireAdminOrStaffAny(...permissions){
   return (req,res,next)=>{
-    if(req.session?.admin===true)return next();
+    if(req.session?.admin===true){
+      if(denyIfOwnerLocked(req,res))return;
+      return next();
+    }
     if(!req.session?.staffUser)return res.status(401).json({error:'Oturum gerekli'});
+    if(denyIfOwnerLocked(req,res))return;
     if(permissions.some(p=>actorHasPermission(req,p)))
       return next();
     return res.status(403).json({error:'Bu işlem için yetkiniz yok'});
@@ -397,7 +482,6 @@ function publicUser(user){
 
 
 function staffSession(req){return req.session?.staffUser||null}
-function requireStaff(req,res,next){if(staffSession(req))return next();return res.status(401).json({error:'Personel oturumu gerekli'})}
 function cleanMoney(v){return Math.max(0,Math.round(normalizeNumber(v)*100)/100)}
 function publicStaff(x,store){
   const branch=store.stores.find(s=>s.id===x.storeId);
@@ -476,26 +560,73 @@ function financeTx(s,data){
 }
 
 app.set('trust proxy',1); app.use(helmet({contentSecurityPolicy:false})); app.use(compression()); app.use(express.json({limit:'2mb'})); app.use(express.urlencoded({extended:true}));
-app.use(session({name:'atakhome.sid',secret:process.env.SESSION_SECRET||'CHANGE-ME',resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:12*60*60*1000}}));
-function requireAdmin(req,res,next){ if(req.session?.admin===true)return next(); return res.status(401).json({error:'Oturum gerekli'}); }
-app.use('/assets',express.static(path.join(ROOT,'public','assets'),{maxAge:'7d'})); app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{maxAge:'7d'}));
-app.get('/health',(req,res)=>res.json({ok:true,service:'atakhome-erp-v2',version:'6.3.3-one-sales-center',time:new Date().toISOString()}));
+app.use(session({
+  name:'atakhome.sid',
+  secret:process.env.SESSION_SECRET||crypto.randomBytes(24).toString('hex'),
+  resave:false,
+  saveUninitialized:false,
+  cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:12*60*60*1000}
+}));
+app.use((req,res,next)=>{
+  if(req.path==='/health')return next();
+  if(!ipAllowed(req)){
+    const wantsHtml=String(req.headers.accept||'').includes('text/html');
+    if(wantsHtml)return res.status(403).type('html').send('<!doctype html><meta charset="utf-8"><title>Erişim Engeli</title><body style="font-family:Arial;padding:40px"><h1>Erişim engellendi</h1><p>Bu panel yalnızca yetkili IP üzerinden açılır.</p></body>');
+    return res.status(403).json({error:'IP erişimi engellendi'});
+  }
+  next();
+});
+function requireAdmin(req,res,next){
+  if(req.session?.admin!==true)return res.status(401).json({error:'Oturum gerekli'});
+  if(denyIfOwnerLocked(req,res))return;
+  next();
+}
+function requireStaff(req,res,next){
+  if(!staffSession(req))return res.status(401).json({error:'Personel oturumu gerekli'});
+  if(denyIfOwnerLocked(req,res))return;
+  next();
+}
+app.use('/assets',express.static(path.join(ROOT,'public','assets'),{maxAge:'7d',fallthrough:true}));
+app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{maxAge:'7d',fallthrough:true}));
+app.get('/health',(req,res)=>res.json({
+  ok:true,
+  service:'atakhome-erp-v2',
+  version:'6.3.4-owner-lock',
+  ownerOnly:ownerOnlyEnabled(),
+  time:new Date().toISOString()
+}));
 app.get('/web-api/public',(req,res)=>{ const s=readStore(); res.json({settings:s.settings,categories:s.categories.filter(c=>c.active).sort((a,b)=>a.sort-b.sort),products:s.products.filter(p=>p.active).map(p=>({...p,salePrice:calculateSalePrice(p)})),campaigns:s.campaigns.filter(isCampaignLive).sort((a,b)=>a.sort-b.sort),banners:s.banners.filter(b=>b.active).sort((a,b)=>a.sort-b.sort)}); });
 app.post('/web-api/login',(req,res)=>{
   const username=String(req.body.username||'').trim().toLocaleLowerCase('tr-TR'),password=String(req.body.password||'');
-  if((!username||username==='admin')&&password===String(process.env.ADMIN_PASSWORD||'AtakHome2026!')){
-    req.session.admin=true;req.session.systemOwner=true;delete req.session.user;return res.json({ok:true,user:currentSessionUser(req)});
+  const failKey=`admin:${clientIp(req)}:${username||'admin'}`;
+  if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
+  if((!username||username==='admin')&&password===adminPassword()){
+    clearLoginFails(failKey);
+    req.session.admin=true;req.session.systemOwner=true;delete req.session.user;delete req.session.staffUser;
+    return res.json({ok:true,user:currentSessionUser(req),ownerOnly:ownerOnlyEnabled()});
   }
   const s=readStore(),user=(s.users||[]).find(x=>x.active!==false&&String(x.username||'').toLocaleLowerCase('tr-TR')===username);
   if(!user||!verifyPassword(password,user.passwordHash))return res.status(401).json({error:'Kullanıcı adı veya şifre yanlış'});
+  if(ownerOnlyEnabled() && !isOwnerUsername(user.username) && String(user.role||'').toLowerCase()!=='owner'){
+    return res.status(403).json({error:ownerLockMessage(),ownerOnly:true});
+  }
+  clearLoginFails(failKey);
   const preset=ROLE_PRESETS[user.role]||ROLE_PRESETS.viewer;
-  req.session.admin=true;req.session.systemOwner=false;
+  req.session.admin=true;req.session.systemOwner=String(user.role||'').toLowerCase()==='owner';
   req.session.user={...publicUser(user),permissions:user.permissions?.length?user.permissions:preset.permissions};
-  res.json({ok:true,user:req.session.user});
+  delete req.session.staffUser;
+  res.json({ok:true,user:req.session.user,ownerOnly:ownerOnlyEnabled()});
 });
 app.post('/web-api/logout',(req,res)=>req.session.destroy(()=>res.json({ok:true})));
-app.get('/web-api/me',(req,res)=>res.json({authenticated:req.session?.admin===true,user:currentSessionUser(req)}));
-app.get('/web-api/admin/store',requireAdmin,(req,res)=>{const s=readStore();res.json({...s,users:hasPermission(req,'users_manage')?(s.users||[]).map(publicUser):[]});});
+app.get('/web-api/me',(req,res)=>{
+  const authed=req.session?.admin===true;
+  if(authed && ownerOnlyEnabled() && !isOwnerActor(req)){
+    delete req.session.admin; delete req.session.systemOwner; delete req.session.user;
+    return res.json({authenticated:false,user:null,ownerOnly:true});
+  }
+  res.json({authenticated:authed,user:currentSessionUser(req),ownerOnly:ownerOnlyEnabled()});
+});
+app.get('/web-api/admin/store',requireAdmin,(req,res)=>{const s=readStore();res.json({...s,users:hasPermission(req,'users_manage')?(s.users||[]).map(publicUser):[],security:{ownerOnly:ownerOnlyEnabled(),ownerUsernames:ownerUsernames()}});});
 
 
 
@@ -523,6 +654,20 @@ app.get('/foundation-api/public',(req,res)=>{
 });
 app.post('/foundation-api/login',(req,res)=>{
   const s=readStore(),username=String(req.body?.username||'').trim().toLocaleLowerCase('tr-TR'),password=String(req.body?.password||'');
+  const failKey=`staff:${clientIp(req)}:${username||'admin'}`;
+  if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
+
+  // Sahip kilidi açıkken yönetici şifresiyle personel portalına da girebilir
+  if((!username||username==='admin'||isOwnerUsername(username)) && password===adminPassword()){
+    clearLoginFails(failKey);
+    const branch=(s.stores||[]).find(x=>x.active!==false)||(s.stores||[])[0];
+    req.session.staffUser={
+      id:'system-owner',name:'Sistem Yöneticisi',username:'admin',role:'owner',roleName:'Sahip / Tam Yetki',
+      permissions:['*'],storeId:branch?.id||'',storeName:branch?.name||'Mağaza',active:true
+    };
+    req.session.admin=true;req.session.systemOwner=true;delete req.session.user;
+    return res.json({ok:true,user:req.session.staffUser,ownerOnly:ownerOnlyEnabled()});
+  }
 
   const user=(s.users||[]).find(x=>
     x.active!==false &&
@@ -532,27 +677,37 @@ app.post('/foundation-api/login',(req,res)=>{
   if(!user||!verifyPassword(password,user.passwordHash)){
     return res.status(401).json({error:'Kullanıcı adı veya şifre yanlış'});
   }
+  if(ownerOnlyEnabled() && !isOwnerUsername(user.username) && String(user.role||'').toLowerCase()!=='owner'){
+    return res.status(403).json({error:ownerLockMessage(),ownerOnly:true});
+  }
 
   const branch=(s.stores||[]).find(x=>String(x.id)===String(user.storeId||'')) ||
                (s.stores||[]).find(x=>x.active!==false) ||
                (s.stores||[])[0];
 
+  clearLoginFails(failKey);
   req.session.staffUser={
     id:user.id,
     name:user.name,
     username:user.username,
     role:user.role||'staff',
     roleName:(typeof ROLE_PRESETS!=='undefined' && ROLE_PRESETS[user.role]?.name)||user.role||'Personel',
-    permissions:Array.isArray(user.permissions)?user.permissions:[],
+    permissions:Array.isArray(user.permissions)?user.permissions:(ROLE_PRESETS[user.role]?.permissions||[]),
     storeId:user.storeId||branch?.id||'',
     storeName:branch?.name||'Mağaza',
     active:user.active!==false
   };
 
-  res.json({ok:true,user:req.session.staffUser});
+  res.json({ok:true,user:req.session.staffUser,ownerOnly:ownerOnlyEnabled()});
 });
 app.post('/foundation-api/logout',(req,res)=>{delete req.session.staffUser;res.json({ok:true})});
-app.get('/foundation-api/me',(req,res)=>res.json({authenticated:Boolean(staffSession(req)),user:staffSession(req)}));
+app.get('/foundation-api/me',(req,res)=>{
+  if(staffSession(req) && ownerOnlyEnabled() && !isOwnerActor(req)){
+    delete req.session.staffUser;
+    return res.json({authenticated:false,user:null,ownerOnly:true});
+  }
+  res.json({authenticated:Boolean(staffSession(req)),user:staffSession(req),ownerOnly:ownerOnlyEnabled()});
+});
 app.get('/foundation-api/dashboard',requireStaff,(req,res)=>{
   const s=readStore(),u=staffSession(req),date=todayISO();
   const own=s.turnovers.filter(x=>x.staffId===u.id).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,14);
@@ -2450,7 +2605,15 @@ app.post('/web-api/admin/beko-sync/start',requireAdmin,async(req,res)=>{const s=
 app.post('/web-api/admin/import-csv',requireAdmin,upload.single('file'),(req,res)=>{if(!req.file)return res.status(400).json({error:'CSV dosyası seçilmedi'});let rows;try{rows=parse(req.file.buffer.toString('utf8'),{columns:true,skip_empty_lines:true,bom:true,trim:true});}catch(e){return res.status(400).json({error:`CSV okunamadı: ${e.message}`});}const s=readStore();let added=0,updated=0,skipped=0;for(const r of rows){const brand=String(r.brand||r.marka||r['Marka']||'Beko').trim(),cat=String(r.category||r.kategori||r['Kategori']||'');if(!(brand.toLowerCase()==='beko'||(brand.toLowerCase()==='grundig'&&/kişisel|kisisel/i.test(cat)))){skipped++;continue;}const code=String(r.code||r.urun_kodu||r['Ürün Kodu']||'').trim(),name=String(r.name||r.urun_adi||r['Ürün Adı']||'').trim();if(!code||!name){skipped++;continue;}const i=s.products.findIndex(p=>p.code.toLowerCase()===code.toLowerCase());const p=sanitizeProduct({...r,code,name},i>=0?s.products[i]:{});if(i>=0){s.products[i]=p;updated++;}else{s.products.push(p);added++;}}s.syncLogs.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),source:'csv',added,updated,skipped});audit(s,'CSV ürün aktarımı','Ürünler',{added,updated,skipped});writeStore(s);res.json({ok:true,added,updated,skipped});});
 app.get('/web-api/admin/export-csv',requireAdmin,(req,res)=>{const s=readStore(),h=['code','barcode','brand','name','category','vatRate','purchasePrice','listPrice','cashPrice','cardPrice','minimumSalePrice','bekoPrice','oldPrice','salePrice','priceMode','priceValue','stock','active','featured','tags','image','description','sourceUrl'];const esc=v=>`"${String(Array.isArray(v)?v.join('|'):(v??'')).replace(/"/g,'""')}"`;const lines=[h.join(',')].concat(s.products.map(p=>h.map(k=>esc(p[k])).join(',')));res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="atakhome-products.csv"');res.send('\ufeff'+lines.join('\n'));});
 
-app.get('/web-admin',(req,res)=>res.sendFile(path.join(ROOT,'public','admin.html')));app.get('/web-admin/*',(req,res)=>res.sendFile(path.join(ROOT,'public','admin.html')));app.get('/web-admin-v5',(req,res)=>res.redirect('/web-admin'));app.get('/web-admin-legacy',(req,res)=>res.sendFile(path.join(ROOT,'public','admin-v5.html')));app.get('/personel',(req,res)=>res.sendFile(path.join(ROOT,'public','personel.html')));app.get('/personel/*',(req,res)=>res.sendFile(path.join(ROOT,'public','personel.html')));app.get('/',(req,res)=>res.redirect('/personel'));app.get('*',(req,res)=>res.redirect('/personel'));
+app.get('/web-admin',(req,res)=>res.sendFile(path.join(ROOT,'public','admin.html')));app.get('/web-admin/*',(req,res)=>res.sendFile(path.join(ROOT,'public','admin.html')));app.get('/web-admin-v5',(req,res)=>res.redirect('/web-admin'));app.get('/web-admin-legacy',(req,res)=>res.sendFile(path.join(ROOT,'public','admin-v5.html')));app.get('/personel',(req,res)=>res.sendFile(path.join(ROOT,'public','personel.html')));app.get('/personel/*',(req,res)=>res.sendFile(path.join(ROOT,'public','personel.html')));app.get('/',(req,res)=>res.redirect('/personel'));
+app.get('/assets/*',(req,res)=>res.status(404).type('text').send('Not found'));
+app.get('/web-admin-assets/*',(req,res)=>res.status(404).type('text').send('Not found'));
+app.get('/web-api/*',(req,res)=>res.status(404).json({error:'Bulunamadı'}));
+app.get('/foundation-api/*',(req,res)=>res.status(404).json({error:'Bulunamadı'}));
+app.get('*',(req,res)=>res.redirect('/personel'));
 app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'Sunucu hatası'});});
 ensureStore(readStore()); writeStore(readStore());
-app.listen(PORT,'127.0.0.1',()=>console.log(`Atak Home ERP V2 http://127.0.0.1:${PORT}`));
+app.listen(PORT,'127.0.0.1',()=>{
+  console.log(`Atak Home ERP V2 http://127.0.0.1:${PORT}`);
+  console.log(`[SECURITY] ownerOnly=${ownerOnlyEnabled()} owners=${ownerUsernames().join(',')} ipLock=${allowedIps().length?allowedIps().join(','):'off'}`);
+});
