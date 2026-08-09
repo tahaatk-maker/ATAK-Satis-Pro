@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Satış Operasyon Personel</title>
 <link rel="icon" href="/assets/favicon.png">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v5">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v6">
 </head>
 <body>
 
@@ -298,6 +298,8 @@
   </label>
   <small id="salesCustomerCount" class="muted">0 sonuç</small>
   <div id="salesCustomerInfo" class="info-box hidden"></div>
+  <input type="hidden" id="salesBillingParty" value="individual"/>
+  <div id="salesBillingAutoHint" class="status hidden"></div>
   <div class="pos-nav">
     <span id="salesHint1">Müşteri seçmeden devam edilemez</span>
     <button id="salesNext1" class="primary-btn" type="button" disabled>Devam Et → Ürün</button>
@@ -307,13 +309,18 @@
 <div id="salesStep2" class="pos-step-panel hidden">
   <div class="sales-grid">
     <div>
-      <div class="toolbar">
-        <input id="productSearch" placeholder="Barkod, madde kodu veya ürün adı">
+      <div class="toolbar product-filters">
+        <input id="salesItemCodeFilter" placeholder="Madde kodu">
+        <input id="salesMaterialCodeFilter" placeholder="Malzeme / ürün adı">
+        <input id="productSearch" placeholder="Genel ara (barkod, kod)">
       </div>
+      <div class="product-list-head"><span>Madde</span><span>Malzeme</span><span>Liste</span><span></span></div>
       <div class="product-list" id="productRows"></div>
     </div>
     <div>
       <div class="section-title">Sepet <small id="cartCount">0 kalem</small></div>
+      <p class="muted cart-price-hint">Birim tutarı elle girin — otomatik dolmaz.</p>
+      <div class="cart-cols"><span>Madde / Malzeme</span><span>Adet</span><span>Tutar</span><span></span></div>
       <div id="cartRows" class="cart-list"></div>
       <div class="cart-total"><span>Ara toplam</span><b id="cartSubtotal">₺0,00</b></div>
     </div>
@@ -343,8 +350,8 @@
 
   <div class="sc-sec pay-inline-box">
     <div class="sales-payments-title">
-      <b>Ödeme yöntemi seç (kalanı yazar)</b>
-      <small>Panel ile aynı: nakit + kart + havale + vadeli + senet</small>
+      <b>Ödeme yöntemi — butona bas, kalanı yazar</b>
+      <small>Admin ile aynı: NAKİT · KART · HAVALE · VADELİ · SENET</small>
     </div>
     <div class="pos-pay-tiles" id="posPayTilesInline">
       <button type="button" class="pos-pay-tile cash" data-pay-fill="payCash"><b>NAKİT</b><small>Kalanı yaz</small></button>
@@ -398,13 +405,18 @@
       <label class="field">Aralık (ay)<input id="promissoryInterval" type="number" min="1" max="12" value="1"></label>
       <label class="field">İlk vade<input id="promissoryFirstDue" type="date"></label>
     </div>
+    <label class="field" style="margin-top:12px">Fatura
+      <select id="salesInvoiceStatus">
+        <option value="not_required" selected>Fatura gerekmiyor</option>
+        <option value="pending">Daha sonra kes (Kesilmeyen’e düşer)</option>
+      </select>
+    </label>
   </div>
 
   <div class="pos-nav">
     <button id="salesBack3" class="ghost-btn" type="button">← Ürün</button>
-    <button id="openPayScreenBtn" class="ghost-btn" type="button">Büyük ekran</button>
-    <button id="salesSaveInlineBtn" class="primary-btn pay-open-btn" type="button">SATIŞI KAYDET</button>
-    <button id="salesSavePrintInlineBtn" class="senet-btn hidden" type="button">KAYDET + SENET BAS</button>
+    <button id="salesSaveInlineBtn" class="primary-btn pay-open-btn" type="button">SATIŞI BİTİR</button>
+    <button id="salesSavePrintInlineBtn" class="senet-btn hidden" type="button">BİTİR + SENET BAS</button>
   </div>
   <div id="payInlineStatus" class="status"></div>
 </div>
@@ -424,16 +436,12 @@
       <label class="field">İl *<input id="qcCity" required></label>
       <label class="field">İlçe *<input id="qcDistrict" required></label>
       <label class="field wide">Açık adres *<textarea id="qcAddress" rows="2" required></textarea></label>
-      <label class="field wide"><small>Kurumsal fatura (opsiyonel — senet şahsa, fatura firmaya)</small></label>
+      <label class="field wide"><small>Kurumsal fatura — firma + VKN girerseniz otomatik kurumsal olur (senet yine şahsa)</small></label>
       <label class="field">Firma ünvanı<input id="qcCompanyName" placeholder="Şirket ünvanı"></label>
       <label class="field">Vergi dairesi<input id="qcTaxOffice"></label>
       <label class="field">VKN<input id="qcTaxNo" placeholder="10 hane" inputmode="numeric"></label>
-      <label class="field">Varsayılan fatura
-        <select id="qcInvoiceType">
-          <option value="individual">Bireysel</option>
-          <option value="corporate">Kurumsal</option>
-        </select>
-      </label>
+      <input type="hidden" id="qcInvoiceType" value="individual"/>
+      <p id="qcInvoiceAutoHint" class="muted" style="grid-column:1/-1;margin:0">Şimdilik bireysel. Firma+VKN dolunca kurumsal seçilir.</p>
       <button class="primary-btn wide" type="submit">Kaydet ve Seç</button>
       <div id="qcStatus" class="status"></div>
     </form>
@@ -469,6 +477,6 @@
 </main>
 </div>
 
-<script src="/assets/personel.js?v=fix-v5"></script>
+<script src="/assets/personel.js?v=fix-v6"></script>
 </body>
 </html>

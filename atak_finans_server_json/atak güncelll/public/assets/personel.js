@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v5 */
+/* ATAK_PERSONEL_BUILD=fix-v6 */
 const $=s=>document.querySelector(s);
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
 
@@ -374,9 +374,22 @@ $('#cancelSubmitBtn')?.addEventListener('click',submitCancelRequest);
 $('#customerSearch')?.addEventListener('input',renderCustomers);
 $('#txSearch')?.addEventListener('input',renderTransactions);
 
-function num(v){const n=Number(String(v??'').replace(',','.'));return Number.isFinite(n)?n:0}
+function num(v){
+  if(typeof v==='number')return Number.isFinite(v)?v:0;
+  let s=String(v??'').trim().replace(/%/g,'').replace(/₺/g,'').replace(/\s/g,'');
+  if(!s)return 0;
+  if(s.includes(',')&&s.includes('.')){
+    if(s.lastIndexOf(',')>s.lastIndexOf('.'))s=s.replace(/\./g,'').replace(',','.');
+    else s=s.replace(/,/g,'');
+  }else if(s.includes(','))s=s.replace(',','.');
+  const n=Number(s);return Number.isFinite(n)?n:0;
+}
 function productPrice(p){return num(p?.cashPrice??p?.price??p?.salePrice??p?.cardPrice)}
+function itemCodeOf(p){return String(p?.itemCode||'').trim()}
+function materialOf(p){return String(p?.searchName||p?.name||p?.code||'').trim()}
 function cartGross(){return Math.round(salesCart.reduce((a,r)=>a+num(r.qty)*num(r.unitPrice),0)*100)/100}
+function cartHasMissingPrice(){return salesCart.some(r=>num(r.unitPrice)<=0)}
+function customerHasCorp(c){return Boolean(String(c?.companyName||'').trim()&&String(c?.taxNo||'').replace(/\D/g,'').length>=10)}
 function cartNet(){
   const g=cartGross();
   const d=Math.min(100,Math.max(0,num($('#salesDiscountPct')?.value)));
@@ -399,8 +412,9 @@ function setSalesStep(step){
     :(salesStep===2?'ADIM 2/3 — Ürün ekleyin':'ADIM 3/3 — Ödeme dağılımını tamamlayın');
   if($('#salesNext1'))$('#salesNext1').disabled=!hasCustomer;
   if($('#salesHint1'))$('#salesHint1').textContent=hasCustomer?'Müşteri seçildi — devam edebilirsiniz':'Müşteri seçmeden devam edilemez';
-  if($('#salesNext2'))$('#salesNext2').disabled=!hasCart;
-  if($('#salesHint2'))$('#salesHint2').textContent=hasCart?`${salesCart.length} kalem hazır`:'Sepete ürün ekleyin';
+  const pricesOk=hasCart&&!cartHasMissingPrice();
+  if($('#salesNext2'))$('#salesNext2').disabled=!pricesOk;
+  if($('#salesHint2'))$('#salesHint2').textContent=!hasCart?'Sepete ürün ekleyin':(!pricesOk?'Her kalemde tutarı elle girin':`${salesCart.length} kalem hazır`);
   if(salesStep===3){syncPayAccounts();salesRecalcPay()}
 }
 function salesReset(){
@@ -419,6 +433,9 @@ function salesReset(){
     salesCustomers.length?`Toplam ${salesCustomerTotal||salesCustomers.length} müşteri. Yazarak süzün veya listeden seçin.`
     :'Müşteri yok — önce ekleyin.';
   if($('#salesDiscountPct'))$('#salesDiscountPct').value='0';
+  if($('#salesBillingParty'))$('#salesBillingParty').value='individual';
+  if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value='not_required';
+  $('#salesBillingAutoHint')?.classList.add('hidden');
   ['#payCash','#payCard','#payTransfer','#payCredit','#payNote'].forEach(id=>{if($(id))$(id).value=''});
   if($('#salesDate'))$('#salesDate').value=new Date().toISOString().slice(0,10);
   const due=new Date();due.setDate(due.getDate()+30);
@@ -524,9 +541,23 @@ function stToast(msg){const st=$('#salesStatus');if(st)st.textContent=msg||''}
 function salesCustomerChanged(){
   const c=salesCustomers.find(x=>String(x.id)===String($('#salesCustomerSelect')?.value||''));
   const box=$('#salesCustomerInfo');
-  if(!c){box?.classList.add('hidden');box&&(box.innerHTML='');setSalesStep(salesStep);return}
+  const hint=$('#salesBillingAutoHint');
+  if(!c){
+    box?.classList.add('hidden');box&&(box.innerHTML='');
+    if($('#salesBillingParty'))$('#salesBillingParty').value='individual';
+    hint?.classList.add('hidden');
+    setSalesStep(salesStep);return;
+  }
   box.classList.remove('hidden');
-  const hasCorp=Boolean(String(c.companyName||'').trim()&&String(c.taxNo||'').replace(/\D/g,'').length>=10);
+  const hasCorp=customerHasCorp(c);
+  // Kurumsal bilgi varsa otomatik kurumsal fatura — seçim yok
+  if($('#salesBillingParty'))$('#salesBillingParty').value=hasCorp?'corporate':'individual';
+  if(hint){
+    hint.classList.remove('hidden');
+    hint.textContent=hasCorp
+      ?`Fatura otomatik kurumsal: ${c.companyName} · VKN ${c.taxNo}`
+      :'Fatura bireysel (şahıs / TCKN). Senet her zaman şahsa.';
+  }
   box.innerHTML=`
     <div><small>Şahıs / Senet</small><b>${c.name||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">TCKN ${c.tckn||'—'}</span></div>
     <div><small>Telefon</small><b>${c.phone||'—'}</b></div>
@@ -535,16 +566,29 @@ function salesCustomerChanged(){
   setSalesStep(salesStep);
 }
 function renderProducts(){
-  const term=($('#productSearch')?.value||'').toLocaleLowerCase('tr-TR');
-  const rows=(salesData?.products||[]).filter(p=>
-    `${p.code||''} ${p.name||''} ${p.searchName||''} ${p.itemCode||''} ${p.brand||''}`.toLocaleLowerCase('tr-TR').includes(term)
-  ).slice(0,120);
-  $('#productRows').innerHTML=rows.map(p=>`
-    <button type="button" class="product-item" data-code="${p.code}">
-      <div><strong>${p.name||p.searchName||p.code}</strong><small>${p.code||''} · ${p.brand||'—'}</small></div>
-      <b>${money(productPrice(p))}</b>
-    </button>
-  `).join('')||'<div class="status">Ürün bulunamadı.</div>';
+  const itemTerm=($('#salesItemCodeFilter')?.value||'').toLocaleLowerCase('tr-TR').trim();
+  const matTerm=($('#salesMaterialCodeFilter')?.value||'').toLocaleLowerCase('tr-TR').trim();
+  const term=($('#productSearch')?.value||'').toLocaleLowerCase('tr-TR').trim();
+  const rows=(salesData?.products||[]).filter(p=>{
+    const item=itemCodeOf(p).toLocaleLowerCase('tr-TR');
+    const mat=`${materialOf(p)} ${p.code||''} ${p.name||''}`.toLocaleLowerCase('tr-TR');
+    const hay=`${p.code||''} ${p.name||''} ${p.searchName||''} ${p.itemCode||''} ${p.brand||''} ${p.barcode||''}`.toLocaleLowerCase('tr-TR');
+    if(itemTerm && !item.includes(itemTerm))return false;
+    if(matTerm && !mat.includes(matTerm))return false;
+    if(term && !hay.includes(term))return false;
+    return true;
+  }).slice(0,120);
+  $('#productRows').innerHTML=rows.map(p=>{
+    const madde=itemCodeOf(p)||'-';
+    const malzeme=materialOf(p)||'-';
+    const liste=productPrice(p);
+    return `<button type="button" class="product-item product-item-grid" data-code="${p.code}">
+      <strong title="Madde kodu">${madde}</strong>
+      <span title="Malzeme">${malzeme}<small>${p.brand||p.code||''}</small></span>
+      <em title="Liste (referans)">${liste?money(liste):'—'}</em>
+      <b class="add-chip">EKLE</b>
+    </button>`;
+  }).join('')||'<div class="status">Ürün bulunamadı.</div>';
 }
 function renderCart(){
   $('#cartCount').textContent=`${salesCart.length} kalem`;
@@ -556,9 +600,9 @@ function renderCart(){
   }
   $('#cartRows').innerHTML=salesCart.map((r,i)=>`
     <div class="cart-row" data-idx="${i}">
-      <div><strong>${r.name}</strong><small>${r.code}</small></div>
+      <div><strong>${r.itemCode||'-'}</strong><small>${r.name||r.materialCode||r.code}</small></div>
       <input data-qty type="number" min="1" step="1" value="${r.qty}">
-      <input data-price type="number" min="0" step="0.01" value="${r.unitPrice}">
+      <input data-price type="text" inputmode="decimal" value="${r.unitPrice?String(r.unitPrice):''}" placeholder="Elle tutar" autocomplete="off">
       <button type="button" data-del title="Sil">✕</button>
     </div>`).join('');
   setSalesStep(salesStep);
@@ -567,9 +611,29 @@ function addToCart(code){
   const p=(salesData?.products||[]).find(x=>String(x.code)===String(code));
   if(!p)return;
   const existing=salesCart.find(r=>String(r.code)===String(code));
-  if(existing)existing.qty+=1;
-  else salesCart.push({code:p.code,name:p.searchName||p.name||p.code,qty:1,unitPrice:productPrice(p),itemCode:p.itemCode||'',materialCode:p.searchName||p.code||''});
+  if(existing){
+    existing.qty+=1;
+  }else{
+    // Tutar otomatik dolmaz — personel elle girer
+    salesCart.push({
+      code:p.code,
+      name:materialOf(p),
+      qty:1,
+      unitPrice:0,
+      itemCode:itemCodeOf(p),
+      materialCode:materialOf(p),
+      listPrice:productPrice(p)
+    });
+  }
   renderCart();
+  // Yeni eklenen satırın tutar alanına odaklan
+  const rows=[...document.querySelectorAll('#cartRows .cart-row')];
+  const last=rows[rows.length-1];
+  const priceInput=last?.querySelector('[data-price]');
+  if(priceInput && !num(priceInput.value)){
+    priceInput.focus();
+    try{priceInput.select()}catch(_){}
+  }
 }
 function syncPayAccounts(){
   const cashOpts=salesAccounts.filter(a=>a.type==='cash'&&a.active!==false);
@@ -649,9 +713,7 @@ function salesRecalcPay(){
 function openPayScreen(){
   syncPayAccounts();
   salesRecalcPay();
-  document.querySelector('.pay-inline-box')?.scrollIntoView({behavior:'smooth',block:'start'});
-  const first=['#payCash','#payCard','#payTransfer','#payCredit','#payNote'].map(id=>$(id)).find(el=>!num(el?.value));
-  (first||$('#payCash'))?.focus();
+  document.querySelector('#posPayTilesInline')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
 function closePayScreen(){ /* inline ödeme — modal yok */ }
 function printSaleDocs(url){
@@ -665,12 +727,15 @@ function printSaleDocs(url){
 async function saveSale(printSenet=false){
   const st=$('#payInlineStatus')||$('#salesStatus');
   const customerId=$('#salesCustomerSelect')?.value||'';
-  if(!customerId){st.textContent='Müşteri seçin';return}
-  if(!salesCart.length){st.textContent='Sepete ürün ekleyin';return}
+  if(!customerId){st.textContent='Müşteri seçin';setSalesStep(1);return}
+  if(!salesCart.length){st.textContent='Sepete ürün ekleyin';setSalesStep(2);return}
+  if(cartHasMissingPrice()){st.textContent='Sepette tutarı girilmemiş ürün var — elle tutar yazın';setSalesStep(2);return}
+  if(!$('#salesDealer')?.value){st.textContent='Bayi seçin';return}
   const net=cartNet();
+  if(net<=0){st.textContent='Net tutar 0 olamaz';return}
   const s=paySplits();
   const allocated=Math.round((s.cash+s.card+s.transfer+s.credit+s.note)*100)/100;
-  if(allocated<=0){st.textContent='En az bir ödeme satırına tutar girin';return}
+  if(allocated<=0){st.textContent='Ödeme butonlarından birine basın (NAKİT/KART/…) veya tutar girin';return}
   if(Math.abs(allocated-net)>0.009){st.textContent=`Dağılım nete eşit olmalı. Net ${money(net)} · Dağıtılan ${money(allocated)} · Kalan ${money(net-allocated)}`;return}
   if(s.note>0 && !$('#promissoryFirstDue')?.value){st.textContent='Senet için ilk vade girin';return}
   if(s.cash>0 && !$('#payCashAccount')?.value){st.textContent='Nakit için kasa seçin';return}
@@ -681,6 +746,9 @@ async function saveSale(printSenet=false){
   if(s.card>0)payments.push({method:'Kredi Kartı',amount:s.card,accountId:$('#payCardAccount')?.value||''});
   if(s.transfer>0)payments.push({method:'Havale',amount:s.transfer,accountId:$('#payTransferAccount')?.value||''});
   if(s.credit>0)payments.push({method:'Vadeli',amount:s.credit,accountId:''});
+  const cust=salesCustomers.find(x=>String(x.id)===String(customerId));
+  const billingParty=customerHasCorp(cust)?'corporate':($('#salesBillingParty')?.value||'individual');
+  const invoiceStatus=$('#salesInvoiceStatus')?.value||'not_required';
   const body={
     customerId,
     dealerId:$('#salesDealer')?.value||'',
@@ -688,7 +756,9 @@ async function saveSale(printSenet=false){
     salespersonName:currentUser?.name||'',
     discountPct:num($('#salesDiscountPct')?.value),
     date:$('#salesDate')?.value||new Date().toISOString().slice(0,10),
-    items:salesCart.map(r=>({productCode:r.code,itemCode:r.itemCode,materialCode:r.materialCode,productName:r.name,quantity:r.qty,unitPrice:r.unitPrice})),
+    billingParty,
+    invoiceStatus,
+    items:salesCart.map(r=>({productCode:r.code,itemCode:r.itemCode,materialCode:r.materialCode,productName:r.name,quantity:r.qty,unitPrice:num(r.unitPrice)})),
     payments,
     promissory:s.note>0?{
       amount:s.note,
@@ -699,19 +769,22 @@ async function saveSale(printSenet=false){
     deductStock:false
   };
   st.textContent='Satış kaydediliyor...';
+  const btn=$('#salesSaveInlineBtn');
+  if(btn){btn.disabled=true;btn.textContent='Kaydediliyor...'}
   try{
     const r=await api('/web-api/admin/customer-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const ref=r.sale?.reference||r.reference||'OK';
     lastSaleDocsUrl=r.docsUrl||r.promissory?.printUrl||(r.sale?.id?`/web-api/admin/sale/${r.sale.id}/print-docs`:'');
     if(printSenet && lastSaleDocsUrl){
       printSaleDocs(lastSaleDocsUrl);
-      st.textContent=`Satış kaydedildi (${ref}) — senet/sözleşme açıldı`;
+      st.textContent=`Satış bitti (${ref}) — senet/sözleşme açıldı`;
     }else{
-      st.textContent=`Satış kaydedildi: ${ref}`;
+      st.textContent=`Satış bitti: ${ref}${invoiceStatus==='pending'?' · Kesilmeyen Faturalar’a düştü':''}`;
     }
     $('#salesStatus').textContent=st.textContent;
     salesReset();
-  }catch(e){st.textContent=e.message}
+  }catch(e){st.textContent=e.message||'Satış kaydedilemedi'}
+  finally{if(btn){btn.disabled=false;btn.textContent='SATIŞI BİTİR'}}
 }
 
 document.querySelectorAll('.pos-step').forEach(btn=>btn.addEventListener('click',()=>{
@@ -721,7 +794,12 @@ document.querySelectorAll('.pos-step').forEach(btn=>btn.addEventListener('click'
   setSalesStep(to);
 }));
 $('#salesNext1')?.addEventListener('click',()=>{if($('#salesCustomerSelect')?.value)setSalesStep(2)});
-$('#salesNext2')?.addEventListener('click',()=>{if(salesCart.length)setSalesStep(3)});
+$('#salesNext2')?.addEventListener('click',()=>{
+  if(!salesCart.length){stToast('Sepete ürün ekleyin');return}
+  if(cartHasMissingPrice()){stToast('Her ürün için tutarı elle girin');return}
+  setSalesStep(3);
+  setTimeout(()=>document.querySelector('#posPayTilesInline')?.scrollIntoView({behavior:'smooth',block:'center'}),80);
+});
 $('#salesBack2')?.addEventListener('click',()=>setSalesStep(1));
 $('#salesBack3')?.addEventListener('click',()=>setSalesStep(2));
 $('#salesResetBtn')?.addEventListener('click',salesReset);
@@ -734,7 +812,12 @@ $('#customerSearchSale')?.addEventListener('input',()=>{
   window.__salesCustSearchT=setTimeout(()=>salesSearchCustomers(),280);
 });
 $('#salesCustomerSelect')?.addEventListener('change',salesCustomerChanged);
-$('#productSearch')?.addEventListener('input',renderProducts);
+['#productSearch','#salesItemCodeFilter','#salesMaterialCodeFilter'].forEach(id=>{
+  $(id)?.addEventListener('input',()=>{
+    clearTimeout(window.__prodFilterT);
+    window.__prodFilterT=setTimeout(renderProducts,160);
+  });
+});
 $('#productRows')?.addEventListener('click',e=>{
   const btn=e.target.closest('[data-code]');
   if(btn)addToCart(btn.dataset.code);
@@ -744,6 +827,12 @@ $('#cartRows')?.addEventListener('input',e=>{
   const i=Number(row.dataset.idx);const item=salesCart[i];if(!item)return;
   if(e.target.matches('[data-qty]'))item.qty=Math.max(1,Math.round(num(e.target.value)||1));
   if(e.target.matches('[data-price]'))item.unitPrice=Math.max(0,num(e.target.value));
+  // Fiyat yazarken tüm sepeti yeniden çizme — odak kaybolmasın
+  if(e.target.matches('[data-price]')){
+    $('#cartSubtotal').textContent=money(cartGross());
+    setSalesStep(salesStep);
+    return;
+  }
   renderCart();
 });
 $('#cartRows')?.addEventListener('click',e=>{
@@ -753,7 +842,6 @@ $('#cartRows')?.addEventListener('click',e=>{
   renderCart();
 });
 $('#salesDiscountPct')?.addEventListener('input',salesRecalcPay);
-$('#openPayScreenBtn')?.addEventListener('click',openPayScreen);
 $('#salesDealer')?.addEventListener('change',salesRecalcPay);
 ['#payCash','#payCard','#payTransfer','#payCredit','#payNote'].forEach(id=>{
   $(id)?.addEventListener('input',salesRecalcPay);
@@ -765,9 +853,21 @@ document.querySelectorAll('[data-pay-fill]').forEach(btn=>{
 $('#salesSaveInlineBtn')?.addEventListener('click',()=>saveSale(false));
 $('#salesSavePrintInlineBtn')?.addEventListener('click',()=>saveSale(true));
 
+function syncQcInvoiceHint(){
+  const company=($('#qcCompanyName')?.value||'').trim();
+  const tax=($('#qcTaxNo')?.value||'').replace(/\D/g,'');
+  const corp=Boolean(company&&tax.length>=10);
+  if($('#qcInvoiceType'))$('#qcInvoiceType').value=corp?'corporate':'individual';
+  const hint=$('#qcInvoiceAutoHint');
+  if(hint)hint.textContent=corp
+    ?`Kurumsal fatura otomatik: ${company} · VKN ${tax}`
+    :'Şimdilik bireysel. Firma+VKN dolunca kurumsal seçilir.';
+}
+['#qcCompanyName','#qcTaxNo'].forEach(id=>$(id)?.addEventListener('input',syncQcInvoiceHint));
 $('#salesNewCustomerBtn')?.addEventListener('click',()=>{
   $('#salesQuickCustomerForm')?.reset();
   $('#qcStatus').textContent='';
+  syncQcInvoiceHint();
   $('#salesQuickCustomerModal')?.classList.remove('hidden');
 });
 $('#salesQuickCustomerClose')?.addEventListener('click',()=>$('#salesQuickCustomerModal')?.classList.add('hidden'));
@@ -780,11 +880,8 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
     const taxOffice=($('#qcTaxOffice')?.value||'').trim();
     const taxNo=($('#qcTaxNo')?.value||'').trim();
     const tckn=($('#qcTckn')?.value||'').trim();
-    let invoiceType=$('#qcInvoiceType')?.value==='corporate'?'corporate':'individual';
-    if(invoiceType==='corporate'&&!(companyName&&taxNo.replace(/\D/g,'').length>=10)){
-      st.textContent='Kurumsal fatura için firma ünvanı ve VKN zorunlu';return;
-    }
-    if(!companyName&&!taxNo)invoiceType='individual';
+    // Firma+VKN varsa otomatik kurumsal — manuel seçim yok
+    const invoiceType=(companyName&&taxNo.replace(/\D/g,'').length>=10)?'corporate':'individual';
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({

@@ -105,22 +105,28 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .pay-net-hero{display:flex;justify-content:space-between;align-items:end;padding:14px 16px;border-radius:14px;background:linear-gradient(135deg,#071a33,#125ea3);color:#fff;margin-bottom:14px}
 .pay-net-hero span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9ec0ef;font-weight:800}
 .pay-net-hero strong{font-size:30px}
-.pos-pay-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:12px}
-.pos-pay-tile{border:1.5px solid #d5e0ee;border-radius:12px;background:#fff;padding:12px 10px;text-align:left;cursor:pointer;font:inherit}
-.pos-pay-tile b{display:block;font-size:13px;color:#0b2a4a}
-.pos-pay-tile small{display:block;margin-top:3px;color:#66758a;font-size:11px}
-.pos-pay-tile.cash:hover,.pos-pay-tile.cash:focus{border-color:#15803d;background:#f0fdf4}
-.pos-pay-tile.card:hover,.pos-pay-tile.card:focus{border-color:#1565c0;background:#eef5ff}
-.pos-pay-tile.transfer:hover,.pos-pay-tile.transfer:focus{border-color:#0f766e;background:#f0fdfa}
-.pos-pay-tile.credit:hover,.pos-pay-tile.credit:focus{border-color:#a16207;background:#fffbeb}
-.pos-pay-tile.note:hover,.pos-pay-tile.note:focus{border-color:#be123c;background:#fff1f2}
-.pos-pay-tile.on{color:#fff;border-color:transparent}
-.pos-pay-tile.cash.on{background:#15803d}
-.pos-pay-tile.card.on{background:#1565c0}
-.pos-pay-tile.transfer.on{background:#0f766e}
-.pos-pay-tile.credit.on{background:#a16207}
-.pos-pay-tile.note.on{background:#be123c}
-.pos-pay-tile.on small{color:rgba(255,255,255,.85)}
+.product-filters{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:8px}
+.product-list-head,.cart-cols{display:grid;grid-template-columns:90px minmax(0,1fr) 88px 64px;gap:8px;padding:0 4px 6px;font-size:11px;font-weight:800;color:#7a879a;text-transform:uppercase;letter-spacing:.04em}
+.cart-cols{grid-template-columns:minmax(0,1fr) 70px 110px 34px}
+.cart-price-hint{margin:0 0 6px;font-size:12px}
+.product-item-grid{display:grid!important;grid-template-columns:90px minmax(0,1fr) 88px 64px;gap:8px;align-items:center;width:100%;text-align:left}
+.product-item-grid strong{font-size:13px;color:#0b2a4a}
+.product-item-grid span{display:block;font-size:13px;font-weight:700;color:#13233f;min-width:0}
+.product-item-grid span small{display:block;margin-top:2px;font-weight:650;color:#7a879a}
+.product-item-grid em{font-style:normal;font-size:12px;font-weight:800;color:#66758a;text-align:right}
+.product-item-grid .add-chip{display:inline-grid;place-items:center;min-height:34px;border-radius:8px;background:#1565c0;color:#fff;font-size:11px;font-weight:900}
+.pos-pay-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 14px;padding:12px;border:2px solid #bfd4f5;border-radius:16px;background:linear-gradient(180deg,#f5f9ff,#eef5ff)}
+.pos-pay-tile{border:0;border-radius:14px;padding:16px 12px;min-height:78px;text-align:left;cursor:pointer;font:inherit;box-shadow:0 6px 16px rgba(15,42,77,.08);color:#fff}
+.pos-pay-tile b{display:block;font-size:15px;letter-spacing:.02em}
+.pos-pay-tile small{display:block;margin-top:4px;font-size:12px;font-weight:700;opacity:.9}
+.pos-pay-tile.cash{background:linear-gradient(180deg,#22c55e,#15803d)}
+.pos-pay-tile.card{background:linear-gradient(180deg,#3b82f6,#1565c0)}
+.pos-pay-tile.transfer{background:linear-gradient(180deg,#14b8a6,#0f766e)}
+.pos-pay-tile.credit{background:linear-gradient(180deg,#f59e0b,#a16207)}
+.pos-pay-tile.note{background:linear-gradient(180deg,#f43f5e,#be123c)}
+.pos-pay-tile:hover{transform:translateY(-1px);filter:brightness(1.05)}
+.pos-pay-tile.on{outline:3px solid #0b2a4a;outline-offset:2px;box-shadow:0 10px 22px rgba(15,42,77,.18)}
+.pos-pay-tile.on small{color:rgba(255,255,255,.92)}
 .pay-inline-box{margin-top:14px;padding:14px;border:1px solid #e0e7ef;border-radius:14px;background:#fff}
 .sc-meta-line{font-size:12px;font-weight:800;color:#174a80;margin-top:4px}
 .sales-payments-box{border:1px solid #ecd9c4;border-radius:14px;background:#fff;overflow:hidden;margin-bottom:12px}
@@ -149,6 +155,11 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .pay-screen-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .senet-btn{border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#e11d48,#9f1239);color:#fff}
 @media(max-width:700px){
+  .product-filters{grid-template-columns:1fr}
+  .product-list-head{display:none}
+  .product-item-grid{grid-template-columns:1fr 72px;gap:6px}
+  .product-item-grid em{grid-column:1;text-align:left}
+  .product-item-grid .add-chip{grid-row:1/span 2;grid-column:2}
   .pos-pay-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .sc-pay-cols{display:none}
   .pay-method{grid-template-columns:1fr 1fr;gap:8px}

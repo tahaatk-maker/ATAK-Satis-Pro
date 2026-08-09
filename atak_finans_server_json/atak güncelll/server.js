@@ -621,8 +621,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.6-fix-v5',
-  build:'fix-v5',
+  version:'6.3.7-staff-pos',
+  build:'fix-v6',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -1420,11 +1420,21 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
 });
 
 
+function saleNeedsInvoice(status){
+  const st=String(status||'pending').toLowerCase();
+  return st==='pending'||st==='queued'||st==='queue_qnb';
+}
+function normalizeSaleInvoiceStatus(raw){
+  const st=String(raw||'not_required').toLowerCase().trim();
+  if(st==='issued')return 'issued';
+  if(st==='pending'||st==='queued'||st==='queue_qnb')return 'pending';
+  return 'not_required';
+}
 app.get('/web-api/admin/uninvoiced-sales',requireAdmin,(req,res)=>{
   const s=readStore();
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
   const rows=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale' && !t.cancelled && (t.invoiceStatus||'pending')!=='issued')
+    .filter(t=>t.kind==='sale' && !t.cancelled && saleNeedsInvoice(t.invoiceStatus))
     .map(t=>({
       id:t.id,
       reference:t.reference||'',
@@ -1453,6 +1463,20 @@ app.post('/web-api/admin/sale/:id/mark-invoiced',requireAdmin,(req,res)=>{
   sale.invoiceIssuedAt=new Date().toISOString();
   const iq=(s.invoiceQueue||[]).find(r=>r.saleId===sale.id);if(iq){iq.status='issued';iq.invoiceNumber=invoiceNumber;iq.invoiceDate=invoiceDate;iq.updatedAt=new Date().toISOString()}
   audit(s,'Satış faturası işlendi',sale.reference||sale.id,{invoiceNumber,invoiceDate});
+  writeStore(s);
+  res.json({ok:true,sale});
+});
+app.post('/web-api/admin/sale/:id/mark-no-invoice',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
+  if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
+  sale.invoiceStatus='not_required';
+  sale.invoiceNumber='';
+  sale.invoiceDate='';
+  sale.invoiceIssuedAt='';
+  const iq=(s.invoiceQueue||[]).find(r=>r.saleId===sale.id);
+  if(iq){iq.status='not_required';iq.updatedAt=new Date().toISOString()}
+  audit(s,'Satış fatura gerekmiyor',sale.reference||sale.id,{});
   writeStore(s);
   res.json({ok:true,sale});
 });
@@ -1565,22 +1589,31 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   sale.payments=normalizedPayments.concat(promissoryAmount>0?[{method:'Senet',amount:promissoryAmount,accountId:''}]:[]);
   sale.warehouseId=deductStock?warehouseId:'';
   sale.deductStock=deductStock;
-  sale.invoiceStatus=String(x.invoiceStatus||'pending')==='issued'?'issued':'pending';
+  sale.invoiceStatus=normalizeSaleInvoiceStatus(x.invoiceStatus);
   sale.invoiceNumber=sale.invoiceStatus==='issued'?String(x.invoiceNumber||'').trim():'';
   sale.invoiceDate=sale.invoiceStatus==='issued'?String(x.invoiceDate||x.date||''):'';
   sale.invoiceIssuedAt=sale.invoiceStatus==='issued'?new Date().toISOString():'';
-  const billingPartyPrefer=String(x.billingParty||customer.invoiceType||'individual')==='corporate'?'corporate':'individual';
-  if(billingPartyPrefer==='corporate'&&!customerHasCorporateBilling(customer)){
+  // Kurumsal bilgisi varsa varsayılan kurumsal; aksi halde bireysel
+  const hasCorp=customerHasCorporateBilling(customer);
+  const billingRaw=String(x.billingParty||'').trim();
+  let billingPartyPrefer=billingRaw==='corporate'?'corporate':billingRaw==='individual'?'individual':(hasCorp&&String(customer.invoiceType||'')==='corporate'?'corporate':'individual');
+  if(billingPartyPrefer==='corporate'&&!hasCorp){
     return res.status(400).json({error:'Kurumsal fatura seçildi ancak müşteride firma / VKN bilgisi yok. Müşteri kartına kurumsal bilgileri ekleyin.'});
   }
+  // Kurumsal müşteride seçim yoksa otomatik kurumsal
+  if(!billingRaw && hasCorp)billingPartyPrefer='corporate';
   sale.billingParty=billingPartyPrefer;
   const invoiceParty=resolveCustomerInvoiceParty(customer,billingPartyPrefer);
   sale.invoicePartyType=invoiceParty.partyType;
   sale.invoicePartyName=invoiceParty.name;
   const invCfg=s.invoiceIntegration||{};
-  const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',provider:invCfg.provider||'qnb-solist',providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:sale.invoiceNumber||'',invoiceDate:sale.invoiceDate||'',error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
-  s.invoiceQueue.push(invoiceRecord);
-  sale.invoiceQueueId=invoiceRecord.id;
+  if(saleNeedsInvoice(sale.invoiceStatus)||sale.invoiceStatus==='issued'){
+    const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',provider:invCfg.provider||'qnb-solist',providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:sale.invoiceNumber||'',invoiceDate:sale.invoiceDate||'',error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+    s.invoiceQueue.push(invoiceRecord);
+    sale.invoiceQueueId=invoiceRecord.id;
+  }else{
+    sale.invoiceQueueId='';
+  }
 
   if(deductStock){
     for(const item of cleanItems){
@@ -2323,7 +2356,7 @@ app.get('/web-api/admin/invoice-center',requireAdmin,(req,res)=>{
   const responses=(s.invoiceAppResponses||[]).slice();
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
   const salesPending=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale'&&!t.cancelled&&(t.invoiceStatus||'pending')!=='issued')
+    .filter(t=>t.kind==='sale'&&!t.cancelled&&saleNeedsInvoice(t.invoiceStatus))
     .map(t=>({
       id:t.id,reference:t.reference||'',date:t.date||'',customerId:t.customerId||'',
       customerName:customerMap.get(String(t.customerId))?.name||'',total:Number(t.total||0),

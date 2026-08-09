@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v5 */
+/* ATAK_ADMIN_BUILD=fix-v6 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -498,6 +498,7 @@ async function loadFinanceUninvoiced(){
       <td style="display:flex;gap:6px;flex-wrap:wrap">
         <button type="button" data-fin-mark-invoiced="${r.id}">Manuel Kes</button>
         <button type="button" data-fin-qnb-invoice="${r.id}">QNB’ye Al</button>
+        <button type="button" class="secondary-btn" data-fin-no-invoice="${r.id}">Fatura yok</button>
       </td>
     </tr>`).join('');
     q('#financeUninvoicedEmpty').style.display=financeUninvoicedRows.length?'none':'block';
@@ -515,6 +516,13 @@ async function loadFinanceUninvoiced(){
         const out=await api('/web-api/admin/sale/'+encodeURIComponent(btn.dataset.finQnbInvoice)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
         toast(`QNB kuyruk: ${out.result?.docType||''} · ${out.record?.status||''}`);
         await loadFinanceUninvoiced();
+      }catch(e){toast(e.message)}
+    });
+    qa('[data-fin-no-invoice]').forEach(btn=>btn.onclick=async()=>{
+      if(!confirm('Bu satış için fatura gerekmiyor mu? Listeden çıkarılacak.'))return;
+      try{
+        await api('/web-api/admin/sale/'+encodeURIComponent(btn.dataset.finNoInvoice)+'/mark-no-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+        toast('Fatura gerekmiyor olarak işaretlendi');await loadFinanceUninvoiced();
       }catch(e){toast(e.message)}
     });
     if(status){status.textContent=financeUninvoicedRows.length?`${financeUninvoicedRows.length} adet kesilmeyen fatura`:'Bekleyen yok.';status.className='form-status success'}
@@ -1449,9 +1457,9 @@ function salesCustomerChanged(){
   const corpLine=hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'-'}</b><span style="display:block;font-size:11px;color:#667890">VKN ${c.taxNo||'-'} · ${c.taxOffice||''}</span></div>`:'';
   box.innerHTML=`<div><small>Şahıs / Senet</small><b>${c.name}</b><span style="display:block;font-size:11px;color:#667890">TCKN ${c.tckn||'—'}</span></div><div><small>Telefon</small><b>${c.phone||'-'}</b></div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>${corpLine}`;
   if(billWrap&&billSel){
-    billWrap.classList.toggle('hidden',!hasCorp);
-    const prefer=c.invoiceType==='corporate'&&hasCorp?'corporate':'individual';
-    billSel.value=prefer;
+    // Kurumsal bilgi varsa otomatik kurumsal; seçim gösterilmez
+    billWrap.classList.add('hidden');
+    billSel.value=hasCorp?'corporate':'individual';
   }
   noteWrap?.classList.remove('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value=c.note||'';
   if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent=c.name.length>22?c.name.slice(0,21)+'…':c.name;
@@ -1683,7 +1691,7 @@ function collectSalesDraft(){
   const billingParty=customerHasCorporate(customer||{})
     ?(q('#salesBillingParty')?.value==='corporate'?'corporate':'individual')
     :'individual';
-  const draft={status,customerId,customer,billingParty,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'pending',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
+  const draft={status,customerId,customer,billingParty,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'not_required',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
   if(!customerId)return{error:'Müşteri seçmelisiniz.',...draft};
   if(billingParty==='corporate'&&!customerHasCorporate(customer))return{error:'Kurumsal fatura için müşteri kartına firma / VKN ekleyin.',...draft};
   if(!dealer)return{error:'Satış bayisini seçmelisiniz.',...draft};
@@ -1705,7 +1713,8 @@ function salesPreviewHtml(d){
   const note=d.promissory?`<div class="preview-note"><b>⚠ Senet düzenlemesi:</b> ${salesMoney(d.promissory.amount)} · ${d.promissory.installments} taksit · İlk vade ${d.promissory.firstDueDate}<br>${(d.promissory.schedule||[]).map(r=>`${r.no}) ${r.dueDate} → ${salesMoney(r.amount)}`).join(' · ')}</div>`:'';
   const invLabel=d.invoiceStatus==='issued'
     ?`Manuel kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`
-    :(d.invoiceStatus==='queue_qnb'?'QNB Solist ile kesilecek (e-Fatura / e-Arşiv kuyruğu)':'Daha sonra kesilecek');
+    :(d.invoiceStatus==='queue_qnb'?'QNB Solist ile kesilecek (e-Fatura / e-Arşiv kuyruğu)'
+      :(d.invoiceStatus==='pending'?'Daha sonra kesilecek (Kesilmeyen Faturalar)':'Fatura gerekmiyor'));
   const billLabel=d.billingParty==='corporate'
     ?`Kurumsal · ${d.customer?.companyName||'-'} · VKN ${d.customer?.taxNo||'-'}`
     :`Bireysel · ${d.customer?.name||'-'} · TCKN ${d.customer?.tckn||'—'}`;
