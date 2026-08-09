@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=656-adim" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=657-kilit" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-ui-scale-v4')||'0.85';document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;}catch(e){document.documentElement.style.zoom='0.85';}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -290,13 +290,29 @@
   min-height:48px;padding:0 20px;border:0;border-radius:12px;background:linear-gradient(180deg,#22c55e,#15803d);
   color:#fff;font-weight:800;font-size:14px;cursor:pointer;box-shadow:0 6px 14px rgba(21,128,61,.35);
 }
-/* Wizard: bir seferde tek adım */
+/* Wizard: bir seferde tek adım — JS + CSS kilit */
+#salesCenter .sales-customer-panel.hidden,
+#salesCenter .sales-products-panel.hidden,
+#salesCenter #salesPaymentStep.hidden,
+#salesCenter .sales-summary-panel.hidden,
+#salesCenter .sales-customer-panel[aria-hidden="true"],
+#salesCenter .sales-products-panel[aria-hidden="true"],
+#salesCenter #salesPaymentStep[aria-hidden="true"]{
+  display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;border:0!important;outline:0!important;
+}
 #salesCenter[data-pos-step="1"] .sales-products-panel,
 #salesCenter[data-pos-step="1"] #salesPaymentStep,
 #salesCenter[data-pos-step="2"] .sales-customer-panel,
 #salesCenter[data-pos-step="2"] #salesPaymentStep,
 #salesCenter[data-pos-step="3"] .sales-customer-panel,
-#salesCenter[data-pos-step="3"] .sales-products-panel{display:none!important}
+#salesCenter[data-pos-step="3"] .sales-products-panel{
+  display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;border:0!important;
+}
+#salesCenter .pos-wizard-banner{
+  margin:0 0 12px;padding:12px 14px;border-radius:12px;background:linear-gradient(90deg,#0b3d74,#1565c0);color:#fff;
+  font-size:14px;font-weight:800;letter-spacing:.01em;box-shadow:0 8px 18px rgba(21,101,192,.18);
+}
+#salesCenter .pos-step.locked{opacity:.45;cursor:not-allowed}
 #salesCenter .pos-wizard-nav{
   display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line,#d5e0ee);
 }
@@ -373,7 +389,7 @@
 <main><header class="v4-topbar"><div class="v4-page-heading"><button aria-label="Menüyü aç" class="v4-icon-btn" id="mobileMenuBtn" type="button">☰</button><div><small>ATAK PAZARLAMA PLATFORM</small><h1 id="pageTitle">Dashboard</h1></div></div><div class="v4-top-actions"><label class="ui-scale-wrap" title="Yazılım ekran boyutu (tarayıcı %100 kalsın)"><span>Boyut</span><select id="uiScaleSelect"><option value="0.75">Küçük</option><option value="0.85" selected>Normal</option><option value="0.95">Büyük</option><option value="1">Tam</option></select></label><div class="v4-search-wrap"><span>⌕</span><input id="globalSearch" placeholder="Müşteri, ürün, sipariş veya fatura ara"/></div><button class="v4-icon-btn" id="refreshBtn" title="Yenile" type="button">↻</button><button class="v4-icon-btn v4-notification" title="Bildirimler" type="button">♧<em>0</em></button><div class="v4-admin-chip"><span>WA</span><div><b>Web Admin</b><small>Süper Admin</small></div></div></div></header>
 <section class="tab active v4-dashboard" id="dashboard"><div class="stats v4-metric-grid" id="stats"></div><div class="v4-dashboard-grid"><div class="panel v4-finance-card"><div class="panel-head"><div><small class="v4-kicker">HIZLI FİNANS</small><h2>₺ Kasa / Banka</h2></div><button class="v4-link-btn" data-go="financeCenter" type="button">Finans Merkezi →</button></div><div class="v4-account-preview"><div><small>Toplam Kasa</small><strong id="v4CashPreview">Yükleniyor…</strong></div><div><small>Toplam Banka</small><strong id="v4BankPreview">Yükleniyor…</strong></div></div><div class="v4-quick-form"><button data-go="financeCenter" type="button">+ Tahsilat Al</button><button data-go="financeCenter" type="button">+ Masraf Gir</button><button data-go="financeCenter" type="button">↔ Para Transferi</button></div></div><div class="panel v4-activity-card"><div class="panel-head"><div><small class="v4-kicker">SON HAREKETLER</small><h2>Güncel İşlemler</h2></div><button class="v4-link-btn" data-go="financeCenter" type="button">Tümü →</button></div><div class="activity-list v4-activity-list" id="auditList"></div></div></div><div class="panel v4-actions-panel"><div class="panel-head"><div><small class="v4-kicker">HIZLI İŞLEMLER</small><h2>En Çok Kullanılanlar</h2></div></div><div class="quick-actions v4-quick-actions"><button data-go="customersPage" type="button"><span>👤</span><b>Yeni Müşteri</b><small>Müşteri kartı oluştur</small></button><button data-go="salesCenter" type="button"><span>🛒</span><b>Satış Yap</b><small>Müşteriye ürün sat</small></button><button data-go="customersPage" type="button"><span>💳</span><b>Tahsilat Al</b><small>Cari borcu düş</small></button><button data-go="productImport" type="button"><span>📦</span><b>Ürün Aktar</b><small>Beko linkinden getir</small></button><button data-go="stockCenter" type="button"><span>↔</span><b>Stok Transferi</b><small>Depolar arası aktar</small></button><button data-go="campaigns" type="button"><span>％</span><b>Kampanya</b><small>Yeni kampanya oluştur</small></button><button id="systemSelfTestBtn" type="button"><span>✓</span><b>Sistem Testi</b><small>Buton, satış, tahsilat ve stok</small></button></div></div><div class="panel v4-health-panel"><div class="panel-head"><div><small class="v4-kicker">SİSTEM SAĞLIĞI</small><h2>Ürün ve Operasyon Kontrolleri</h2></div></div><div class="health-cards" id="healthCards"></div></div><footer class="v4-footer"><span>© 2026 Atak Pazarlama. Tüm hakları saklıdır.</span><span>ATAK PAZARLAMA ERP V6.2 · <i></i> Sistem Aktif</span></footer></section><section class="tab" id="salesCenter" data-pos-step="1">
 <div class="sales-center-head">
-<div><small>ATAK PAZARLAMA · KASA / POS <span class="pos-ver">v656 ADIM</span></small><h2>Satış Kasası</h2><p>1 Müşteri → Devam · 2 Ürün → Devam · 3 Ödeme Planı (Senet/Sözleşme veya Önizle/Teklif)</p></div>
+<div><small>ATAK PAZARLAMA · KASA / POS <span class="pos-ver">v657 KİLİT</span></small><h2>Satış Kasası</h2><p>Müşteri yoksa ürün yok · Ürün yoksa ödeme yok · Adım adım ilerler</p></div>
 <div class="sales-center-head-actions">
   <button class="pos-head-btn" id="salesTrackingShortcut" type="button">Sipariş Takibi</button>
   <button class="pos-head-btn danger" id="salesResetBtn" type="button">Yeni Fiş</button>
@@ -381,11 +397,12 @@
 </div>
 <nav class="pos-steps" aria-label="Satış adımları">
   <div class="pos-step active" id="posStep1" role="button" tabindex="0"><b>1</b><span>Müşteri<small>Seç veya ekle</small></span></div>
-  <div class="pos-step" id="posStep2" role="button" tabindex="0"><b>2</b><span>Ürün / Sepet<small>Barkod veya ara</small></span></div>
-  <div class="pos-step" id="posStep3" role="button" tabindex="0"><b>3</b><span>Ödeme / Senet<small>Dağıt ve önizle</small></span></div>
+  <div class="pos-step locked" id="posStep2" role="button" tabindex="0"><b>2</b><span>Ürün / Sepet<small>Önce müşteri</small></span></div>
+  <div class="pos-step locked" id="posStep3" role="button" tabindex="0"><b>3</b><span>Ödeme Planı<small>Önce ürün</small></span></div>
 </nav>
+<div class="pos-wizard-banner" id="salesWizardBanner">ADIM 1/3 — Önce müşteri seçin, sonra Devam Et</div>
 <div class="sales-center-layout sales-center-flow">
-<section class="panel sales-customer-panel">
+<section class="panel sales-customer-panel pos-step-visible" aria-hidden="false">
 <div class="pos-block-head pos-block-1">
   <div class="left"><em>01</em><div><h3>MÜŞTERİ</h3><p>Satışa başlamak için müşteri seçin</p></div></div>
   <button class="pos-big-btn" id="salesNewCustomerBtn" type="button">+ Yeni Müşteri</button>
@@ -454,7 +471,7 @@
 </div>
 </div>
 </section>
-<section class="panel sales-products-panel">
+<section class="panel sales-products-panel hidden" aria-hidden="true" style="display:none!important">
 <div class="pos-block-head pos-block-2">
   <div class="left"><em>02</em><div><h3>ÜRÜN / SEPET</h3><p>Barkod okutun veya listeden ekleyin</p></div></div>
   <button class="pos-big-btn" id="salesAddRowBtn" type="button">+ Satır Ekle</button>
@@ -498,7 +515,7 @@
 </div>
 </div>
 </section>
-<section class="panel sales-summary-panel sales-payment-wide" id="salesPaymentStep">
+<section class="panel sales-summary-panel sales-payment-wide hidden" id="salesPaymentStep" aria-hidden="true" style="display:none!important">
   <div class="pos-block-head pos-block-3">
     <div class="left"><em>03</em><div><h3>ÖDEME PLANI</h3><p>Dağıtımı yapın · sonra senet/sözleşme veya önizle/teklif</p></div></div>
     <button class="pos-big-btn" id="salesJumpPreviewBtn" type="button">Önizle</button>
@@ -1230,5 +1247,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=656-adim"></script><script src="/web-admin-assets/customer-sales.js?v=656-adim"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=657-kilit"></script><script src="/web-admin-assets/customer-sales.js?v=657-kilit"></script>
 </body></html>

@@ -285,7 +285,10 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .sales-center-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}.sales-center-head h2{margin:4px 0}.sales-center-head p{margin:5px 0;color:var(--muted)}
 .sales-center-layout,.sales-center-layout.sales-center-flow{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:15px;align-items:stretch;max-width:1180px;width:100%}
 .sales-main-column{display:flex!important;flex-direction:column!important;gap:15px;width:100%}
-.sales-summary-panel,#salesPaymentStep{position:static!important;display:flex!important;flex-direction:column;gap:11px;width:100%;max-height:none!important}
+.sales-summary-panel,#salesPaymentStep{position:static!important;flex-direction:column;gap:11px;width:100%;max-height:none!important}
+#salesCenter #salesPaymentStep.pos-step-visible{display:flex!important}
+#salesCenter .sales-customer-panel.pos-step-visible,#salesCenter .sales-products-panel.pos-step-visible{display:block!important}
+#salesCenter .sales-customer-panel.hidden,#salesCenter .sales-products-panel.hidden,#salesCenter #salesPaymentStep.hidden{display:none!important}
 .sales-summary-panel label{display:grid;gap:5px;font-size:12px;font-weight:800}.sales-summary-panel input,.sales-summary-panel select,.sales-summary-panel textarea{width:100%}
 .sales-customer-panel,.sales-products-panel{display:grid;gap:12px}.sales-customer-info{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.sales-customer-info>div{padding:11px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}.sales-customer-info small,.sales-customer-info b{display:block}.sales-customer-info small{color:var(--muted);margin-bottom:4px}.sales-customer-info .debt{color:#b42e2e}.sales-customer-info .credit{color:#087c47}
 .sales-rows{display:grid;gap:8px}.sales-row{display:grid;grid-template-columns:minmax(240px,1fr) 75px 125px 100px 58px;gap:7px;align-items:center}.sales-row-total{text-align:right;font-weight:900;color:var(--navy)}.sales-row-remove{height:40px;border:0;border-radius:8px;background:#ffe8e8;color:#a42929;font-weight:800}
