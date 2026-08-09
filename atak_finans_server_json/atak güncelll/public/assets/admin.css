@@ -405,19 +405,32 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .permission-hidden{display:none!important}
 @media(max-width:780px){.permission-grid{grid-template-columns:1fr}.permission-editor-head{align-items:flex-start;flex-direction:column}}
 
-/* ===== Compact density + UI scale (%100 tarayıcı zoom) ===== */
-html{font-size:13px}
+/* ===== Density + UI scale — menü geniş, ekran dolu ===== */
+html{font-size:14px}
 .ui-scale-wrap{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--line);border-radius:9px;background:#f7f9fc;font-size:11px;font-weight:800;color:var(--navy);white-space:nowrap}
 .ui-scale-wrap select{min-height:28px!important;padding:2px 6px!important;font-size:12px!important;border:1px solid var(--line);border-radius:7px;background:#fff}
-.app{grid-template-columns:190px minmax(0,1fr)}
-aside{padding:10px 8px}
-.aside-brand{padding:0 2px 10px}
-.aside-brand img{max-height:36px;width:auto}
-.menu-label{padding:6px 8px 2px}
-nav button,nav a,.logout{padding:7px 8px;border-radius:8px;font-size:11px}
-main{padding:10px 12px!important;min-width:0}
-.v4-topbar,header{min-height:48px!important;margin:0 -12px 10px!important;padding:6px 12px!important}
-.v4-page-heading h1,header h1{font-size:16px!important;margin:1px 0 0!important}
+.app{grid-template-columns:272px minmax(0,1fr);min-height:100vh;align-items:stretch}
+aside{padding:10px 12px 56px;position:sticky;top:0;height:100vh;overflow:hidden}
+.aside-brand.beta-brand{height:96px;margin:0 -12px 8px;padding:8px}
+.aside-brand.beta-brand img{width:100%;height:80px;object-fit:contain}
+.aside-brand{padding:0 2px 8px}
+.aside-brand img{max-height:44px;width:auto}
+aside nav{height:calc(100vh - 170px);overflow:auto;padding:2px 0 10px;gap:2px}
+.menu-label{padding:10px 12px 4px;font-size:10px;letter-spacing:1.2px}
+aside nav button,aside nav a,aside summary,
+nav button,nav a,.logout{
+  min-height:40px;padding:8px 12px;border-radius:10px;font-size:13px;font-weight:750;line-height:1.25
+}
+.logout{left:12px;right:12px;bottom:10px;height:44px;font-size:13px}
+main{padding:12px 18px 18px!important;min-width:0;min-height:100vh;box-sizing:border-box}
+.v4-topbar,header{min-height:56px!important;margin:0 -18px 14px!important;padding:8px 18px!important}
+.v4-page-heading h1,header h1{font-size:20px!important;margin:1px 0 0!important}
+.v4-footer,footer.v4-footer{margin-top:12px;padding:12px 4px;font-size:12px}
+.v4-dashboard .v4-health-panel,.v4-dashboard .v4-actions-panel{margin-bottom:10px}
+.v4-metric-grid,.stats{margin-bottom:12px}
+@media(min-width:1200px){
+  .app{grid-template-columns:minmax(272px,18vw) minmax(0,1fr)}
+}
 .v4-search-wrap input{min-height:32px!important;font-size:12px}
 .panel,.stat{padding:10px!important;border-radius:10px!important}
 .stat strong{font-size:18px}
