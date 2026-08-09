@@ -718,16 +718,17 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     const qty=Math.max(1,Math.round(Number(i.quantity)||1));
     const unitPrice=cleanMoney(i.unitPrice);
     total+=qty*unitPrice;
-    return{productCode:String(i.productCode).trim(),productName:String(i.productName||i.productCode),quantity:qty,unitPrice,total:qty*unitPrice};
+    const productCode=String(i.productCode||'').trim();
+    const product=(s.products||[]).find(p=>String(p.code)===productCode);
+    const itemCode=String(i.itemCode||product?.itemCode||'').trim();
+    const materialCode=String(i.materialCode||product?.searchName||product?.code||i.productName||productCode).trim();
+    return{productCode,itemCode,materialCode,productName:materialCode,quantity:qty,unitPrice,total:qty*unitPrice};
   });
   total=Math.round(total*100)/100;
   const grossTotal=total;
-  const discountPct=Math.max(0,Number(x.discountPct)||0);
+  // İskonto nakit/kart fark etmeksizin serbest uygulanır (üst sınır yok).
+  const discountPct=Math.min(100,Math.max(0,Number(x.discountPct)||0));
   const paymentMethod=String(x.paymentMethod||'');
-  const maxDiscountPct=paymentMethod==='Nakit'?Number(dealer.cashMaxDiscountPct||0):
-    paymentMethod==='Kredi Kartı'?Number(dealer.cardMaxDiscountPct||0):
-    Math.max(Number(dealer.cashMaxDiscountPct||0),Number(dealer.cardMaxDiscountPct||0));
-  if(discountPct>maxDiscountPct+0.0001)return res.status(400).json({error:`${dealer.name} için ${paymentMethod||'bu ödeme türünde'} maksimum iskonto %${maxDiscountPct}`});
   total=Math.round((grossTotal*(1-discountPct/100))*100)/100;
   const commissionPct=Number(dealer.commissionPct||0);
   const commissionAmount=Math.round((total*commissionPct/100)*100)/100;

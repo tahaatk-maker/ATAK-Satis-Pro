@@ -492,15 +492,16 @@ async function loadSalesCenter(){
   }catch(e){if(typeof toast==='function')toast(e.message||'Satış merkezi verileri yüklenemedi')}
 }
 function salesMoney(v){return money2(Number(v||0))}
-function salesMaterialCode(p){return String(p?.searchName||p?.code||'').trim()}
+function salesMaterialCode(p){return String(p?.searchName||p?.code||p?.name||'').trim()}
 function salesItemCode(p){return String(p?.itemCode||'').trim()}
 function salesProductLabel(p){
   const madde=salesItemCode(p)||'-';
   const malzeme=salesMaterialCode(p)||'-';
-  return `Madde: ${madde} · Malzeme: ${malzeme}`;
+  return `${madde} · ${malzeme}`;
 }
 function salesProductDisplayName(p){
-  return String(p?.name||p?.dynamicsName||p?.searchName||p?.code||'').trim();
+  // Satışta görünen ürün/malzeme adı (kod değil)
+  return salesMaterialCode(p)||String(p?.name||p?.dynamicsName||p?.code||'').trim();
 }
 function salesProductOptions(selected=''){
   const itemTerm=(q('#salesItemCodeFilter')?.value||'').trim().toLocaleLowerCase('tr-TR');
@@ -515,7 +516,10 @@ function salesProductOptions(selected=''){
     return true;
   });
   if(q('#salesProductSearchCount'))q('#salesProductSearchCount').textContent=`${source.length} ürün`;
-  return '<option value="">Ürün seçin</option>'+source.map(p=>`<option value="${p.code}" data-name="${salesProductDisplayName(p)}" data-item-code="${salesItemCode(p)}" data-material-code="${salesMaterialCode(p)}" ${String(p.code)===String(selected)?'selected':''}>${salesProductLabel(p)}</option>`).join('');
+  return '<option value="">Madde / Malzeme seçin</option>'+source.map(p=>{
+    const madde=salesItemCode(p), malzeme=salesMaterialCode(p);
+    return `<option value="${p.code}" data-name="${malzeme||p.name||p.code}" data-item-code="${madde}" data-material-code="${malzeme}" ${String(p.code)===String(selected)?'selected':''}>${salesProductLabel(p)}</option>`;
+  }).join('');
 }
 
 function salesAvailableStock(productCode){
@@ -610,7 +614,6 @@ function salesCalcState(){
   gross=Math.round(gross*100)/100;
   const dealer=(salesCenterData.dealerSettings||[]).find(d=>String(d.id)===String(q('#salesDealer')?.value||''));
   const method=q('#salesPaymentMethod')?.value||'';
-  const maxDisc=dealer?(method==='Nakit'?salesNum(dealer.cashMaxDiscountPct):method==='Kredi Kartı'?salesNum(dealer.cardMaxDiscountPct):Math.max(salesNum(dealer.cashMaxDiscountPct),salesNum(dealer.cardMaxDiscountPct))):0;
   let discountPct=Math.max(0,salesNum(q('#salesDiscountPct')?.value));
   if(discountPct>100)discountPct=100;
   const discountAmount=Math.round(gross*(discountPct/100)*100)/100;
@@ -618,7 +621,7 @@ function salesCalcState(){
   const commissionPct=salesNum(dealer?.commissionPct);
   const commission=Math.round(net*(commissionPct/100)*100)/100;
   const paid=Math.max(0,salesNum(q('#salesPaidAmount')?.value));
-  return{gross,discountPct,discountAmount,net,commissionPct,commission,maxDisc,dealer,method,paid,due:Math.max(0,Math.round((net-paid)*100)/100),overLimit:Boolean(dealer)&&discountPct>maxDisc+0.0001};
+  return{gross,discountPct,discountAmount,net,commissionPct,commission,dealer,method,paid,due:Math.max(0,Math.round((net-paid)*100)/100)};
 }
 function salesCalculate(){
   const c=salesCalcState();
@@ -631,13 +634,12 @@ function salesCalculate(){
   if(q('#salesCommissionPctLabel'))q('#salesCommissionPctLabel').textContent=`(%${String(c.commissionPct).replace('.',',')})`;
   if(q('#salesPaidPreview'))q('#salesPaidPreview').textContent=salesMoney(c.paid);
   if(q('#salesDuePreview'))q('#salesDuePreview').textContent=salesMoney(c.due);
-  if(q('#salesDiscountLimit'))q('#salesDiscountLimit').textContent=c.dealer?`${c.dealer.name} · ${c.method||'Ödeme'} iskonto limiti: %${String(c.maxDisc).replace('.',',')} · Kâr bölü %${String(c.dealer.marginDividePct??0).replace('.',',')}`:'İskonto limiti: bayi seçin';
+  if(q('#salesDiscountLimit'))q('#salesDiscountLimit').textContent=c.dealer?`${c.dealer.name} · ${c.method||'Ödeme'} · İskonto serbest (nakit/kart fark etmez) · Kâr bölü %${String(c.dealer.marginDividePct??0).replace('.',',')}`:'Bayi seçin';
   if(q('#salesCommissionPreview'))q('#salesCommissionPreview').textContent=c.dealer?`Tahmini prim: ${salesMoney(c.commission)}  →  net ${salesMoney(c.net)} × %${String(c.commissionPct).replace('.',',')}`:'Tahmini prim: bayi seçin';
   const hint=q('#salesCalcHint');
   if(hint){
     if(!c.dealer){hint.className='warn';hint.textContent='Bayi seçilmeden prim hesaplanamaz.';}
-    else if(c.gross<=0){hint.className='ok';hint.textContent='Ürün tutarı girin; iskonto ve prim anlık hesaplanır.';}
-    else if(c.overLimit){hint.className='bad';hint.textContent=`⚠ ${c.method} için maksimum iskonto %${String(c.maxDisc).replace('.',',')}. Kaydetmeden önce düşürün.`;}
+    else if(c.gross<=0){hint.className='ok';hint.textContent='Ürün tutarı girin; iskonto (nakit/kart) ve prim anlık hesaplanır.';}
     else{hint.className='ok';hint.textContent=`✓ Brüt ${salesMoney(c.gross)} − iskonto ${salesMoney(c.discountAmount)} = net ${salesMoney(c.net)} · prim ${salesMoney(c.commission)}`;}
   }
 }
@@ -708,7 +710,7 @@ function renderSalesProductResults(){
     const madde=salesItemCode(p)||'-';
     const malzeme=salesMaterialCode(p)||'-';
     return `<button type="button" class="sales-product-card" data-sales-product-add="${p.code}">
-      <span><b>Madde: ${madde}</b><small>Malzeme: ${malzeme}${categoryName?` · ${categoryName}`:''}</small></span>
+      <span><b>${madde}</b><small>${malzeme}${categoryName?` · ${categoryName}`:''}</small></span>
       <strong>${salesMoney(salesProductUnitPrice(p,q('#salesPaymentMethod')?.value||''))}</strong>
       <em>+ Ekle</em>
     </button>`;
@@ -798,7 +800,20 @@ function collectSalesDraft(){
   const status=q('#salesStatus'),customerId=q('#salesCustomerSelect').value,warehouseId=q('#salesWarehouse').value;
   const customer=salesCenterData.customers.find(c=>String(c.id)===String(customerId));
   const warehouse=salesCenterData.warehouses.find(w=>String(w.id)===String(warehouseId));
-  const items=qa('.sales-row').map(row=>{const select=row.querySelector('.sales-product'),opt=select.selectedOptions[0];return{productCode:select.value,productName:opt?.dataset.name||select.value,quantity:salesNum(row.querySelector('.sales-qty').value),unitPrice:salesNum(row.querySelector('.sales-price').value)}}).filter(i=>i.productCode&&i.quantity>0);
+  const items=qa('.sales-row').map(row=>{
+    const select=row.querySelector('.sales-product'),opt=select.selectedOptions[0];
+    const product=(salesCenterData.products||[]).find(p=>String(p.code)===String(select.value));
+    const itemCode=opt?.dataset.itemCode||salesItemCode(product)||'';
+    const materialCode=opt?.dataset.materialCode||salesMaterialCode(product)||select.value;
+    return{
+      productCode:select.value,
+      itemCode,
+      materialCode,
+      productName:materialCode||opt?.dataset.name||select.value,
+      quantity:salesNum(row.querySelector('.sales-qty').value),
+      unitPrice:salesNum(row.querySelector('.sales-price').value)
+    };
+  }).filter(i=>i.productCode&&i.quantity>0);
   const calc=salesCalcState();
   const paid=calc.paid,method=q('#salesPaymentMethod').value;
   const dealerId=q('#salesDealer')?.value||'',dealer=calc.dealer,discountPct=calc.discountPct,grossTotal=calc.gross,total=calc.net;
@@ -808,7 +823,6 @@ function collectSalesDraft(){
   if(!customerId)return{error:'Müşteri seçmelisiniz.',...draft};
   if(!dealer)return{error:'Satış bayisini seçmelisiniz.',...draft};
   if(!salesperson)return{error:'Satış personelini seçmelisiniz.',...draft};
-  if(calc.overLimit)return{error:`${dealer.name} için ${method} maksimum iskonto %${calc.maxDisc}.`,...draft};
   if(!items.length)return{error:'En az bir ürün eklemelisiniz.',...draft};
   if(deductStock&&!warehouseId)return{error:'Stoktan düşmek için satış deposu seçmelisiniz.',...draft};
   if(paid>total)return{error:'Tahsil edilen tutar satış toplamından büyük olamaz.',...draft};
@@ -817,9 +831,9 @@ function collectSalesDraft(){
   return draft;
 }
 function salesPreviewHtml(d){
-  const rows=d.items.map(i=>`<tr><td>${i.productCode}</td><td>${i.productName}</td><td>${i.quantity}</td><td>${salesMoney(i.unitPrice)}</td><td>${salesMoney(i.quantity*i.unitPrice)}</td></tr>`).join('');
+  const rows=d.items.map(i=>`<tr><td>${i.itemCode||'-'}</td><td>${i.materialCode||i.productName||i.productCode}</td><td>${i.quantity}</td><td>${salesMoney(i.unitPrice)}</td><td>${salesMoney(i.quantity*i.unitPrice)}</td></tr>`).join('');
   const note=d.method==='Senet'?`<div class="preview-note"><b>Senet:</b> ${Number(q('#salesPromissoryInstallments').value||1)} adet · İlk vade ${q('#salesPromissoryFirstDue').value||'-'} · Senede bağlanacak ${salesMoney(d.due)}</div>`:'';
-  return `<div class="preview-cards"><div><small>Müşteri</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Peşin: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Kod</th><th>Ürün</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div>${note}<div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div><div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Tahsil Edilen</span><b>${salesMoney(d.paid)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div><div class="preview-note"><b>Fatura:</b> ${d.invoiceStatus==='issued'?`Kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`:'Daha sonra kesilecek'}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${d.deductStock?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`:'Stoktan düşülmeyecek'}<small>Fatura kesme durumu stoğu etkilemez.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
+  return `<div class="preview-cards"><div><small>Müşteri</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Peşin: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div>${note}<div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div><div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Tahsil Edilen</span><b>${salesMoney(d.paid)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div><div class="preview-note"><b>Fatura:</b> ${d.invoiceStatus==='issued'?`Kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`:'Daha sonra kesilecek'}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${d.deductStock?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`:'Stoktan düşülmeyecek'}<small>Fatura kesme durumu stoğu etkilemez.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
 }
 let activeSalesDraft=null;
 function openSalesPreview(){
