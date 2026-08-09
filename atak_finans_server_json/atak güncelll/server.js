@@ -859,14 +859,17 @@ app.get('/web-api/admin/sales-catalog',requireAdminOrStaff('orders_manage'),(req
     .filter(c=>c.active!==false)
     .map(c=>({id:c.id,name:c.name}))
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
-  // Personel satışında müşteri/hesap boş kalmasın (yeni personel de satabilsin)
-  const customers=(s.customers||[]).filter(c=>c.active!==false).map(c=>({
-    id:c.id,name:c.name,phone:c.phone||'',taxNo:c.taxNo||'',city:c.city||'',balance:customerBalance(s,c.id),active:true
-  })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+  // Küçük cari listelerinde satış ekranı fallback araması için (10k+ ise boş)
+  const allCustomers=(s.customers||[]).filter(c=>c.active!==false);
+  const customers=allCustomers.length<=500?allCustomers.map(c=>({
+    id:c.id,name:c.name,phone:c.phone||'',taxNo:c.taxNo||'',tckn:c.tckn||'',
+    companyName:c.companyName||'',taxOffice:c.taxOffice||'',city:c.city||'',
+    email:c.email||'',balance:customerBalance(s,c.id),active:true
+  })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr')):[];
   const accounts=(s.financeAccounts||[]).filter(a=>a.active!==false).map(a=>({
     id:a.id,name:a.name,type:a.type,storeId:a.storeId||'',active:true
   }));
-  res.json({ok:true,products,categories,dealerSettings:s.dealerSettings||[],customers,accounts});
+  res.json({ok:true,products,categories,dealerSettings:s.dealerSettings||[],customers,customerTotal:allCustomers.length,accounts});
 });
 
 app.get('/web-api/admin/stock-center',requireAdminOrStaff('stock_manage'),(req,res)=>{
@@ -1168,29 +1171,31 @@ function parseCustomerPayload(x={}){
   };
 }
 function applyCustomerData(row,data){Object.assign(row,data);return row}
-app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),(req,res)=>{
+function customerSearchHandler(req,res){
   const s=readStore();
   const q=String(req.query.q||req.query.query||'').trim().toLocaleLowerCase('tr-TR');
   const limit=Math.min(100,Math.max(1,Number(req.query.limit)||40));
   const id=String(req.query.id||'').trim();
-  let rows=(s.customers||[]).filter(c=>c.active!==false);
+  const all=(s.customers||[]).filter(c=>c.active!==false);
+  let rows=all;
   if(id){
     rows=rows.filter(c=>String(c.id)===id);
-  }else if(q.length>=2){
+  }else if(q.length>=1){
+    // 1+ karakter: satış ekranında "a" / "atak" ile bulunsun
     const digits=q.replace(/\D+/g,'');
     rows=rows.filter(c=>{
-      const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.email||''}`.toLocaleLowerCase('tr-TR');
+      const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.email||''} ${c.city||''} ${c.district||''}`.toLocaleLowerCase('tr-TR');
       if(hay.includes(q))return true;
       if(digits.length>=3){
         const phoneDigits=String(c.phone||'').replace(/\D+/g,'');
-        const taxDigits=String(c.taxNo||c.tckn||'').replace(/\D+/g,'');
+        const taxDigits=`${c.taxNo||''}${c.tckn||''}`.replace(/\D+/g,'');
         if(phoneDigits.includes(digits)||taxDigits.includes(digits))return true;
       }
       return false;
     });
   }else{
-    // Boş / kısa aramada tüm listeyi yollama — 10k+ kayıt için güvenli
-    return res.json({ok:true,total:(s.customers||[]).filter(c=>c.active!==false).length,rows:[],needQuery:true});
+    // Boş aramada tüm listeyi yollama — 10k+ kayıt için güvenli
+    return res.json({ok:true,total:all.length,rows:[],needQuery:true});
   }
   const total=rows.length;
   rows=rows
@@ -1205,7 +1210,10 @@ app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_mana
       balance:customerBalance(s,c.id)
     }));
   res.json({ok:true,total,rows,needQuery:false,limit});
-});
+}
+app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),customerSearchHandler);
+// Alias — bazı proxy/yönlendirmelerde /customers/search takılırsa
+app.get('/web-api/admin/customer-search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),customerSearchHandler);
 app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{};
   let data;

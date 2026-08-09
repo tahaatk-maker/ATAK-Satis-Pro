@@ -114,6 +114,15 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .pos-pay-tile.transfer:hover,.pos-pay-tile.transfer:focus{border-color:#0f766e;background:#f0fdfa}
 .pos-pay-tile.credit:hover,.pos-pay-tile.credit:focus{border-color:#a16207;background:#fffbeb}
 .pos-pay-tile.note:hover,.pos-pay-tile.note:focus{border-color:#be123c;background:#fff1f2}
+.pos-pay-tile.on{color:#fff;border-color:transparent}
+.pos-pay-tile.cash.on{background:#15803d}
+.pos-pay-tile.card.on{background:#1565c0}
+.pos-pay-tile.transfer.on{background:#0f766e}
+.pos-pay-tile.credit.on{background:#a16207}
+.pos-pay-tile.note.on{background:#be123c}
+.pos-pay-tile.on small{color:rgba(255,255,255,.85)}
+.pay-inline-box{margin-top:14px;padding:14px;border:1px solid #e0e7ef;border-radius:14px;background:#fff}
+.sc-meta-line{font-size:12px;font-weight:800;color:#174a80;margin-top:4px}
 .sales-payments-box{border:1px solid #ecd9c4;border-radius:14px;background:#fff;overflow:hidden;margin-bottom:12px}
 .sales-payments-title{padding:10px 12px;border-bottom:1px solid #ecd9c4;background:#fff7ed}
 .sales-payments-title b{display:block;font-size:13px;color:#9a3412}
