@@ -1458,6 +1458,10 @@ app.get('/web-api/admin/invoice-center',requireAdmin,(req,res)=>{
   const isPending=r=>['pending','ready'].includes(String(r.status||''))||!r.status;
   const isError=r=>String(r.status||'')==='error';
   const isArchive=r=>['cancelled','archived','issued'].includes(String(r.status||''));
+  const efaturaRows=queue.filter(r=>{
+    const t=String(r.docType||r.invoiceType||'').toLowerCase();
+    return t==='efatura'||t==='temelfatura'||t==='ticarifatura'||!t||t==='auto';
+  });
   const counts={
     out_pending:queue.filter(isPending).length,
     out_sent:queue.filter(isSent).length,
@@ -1467,7 +1471,9 @@ app.get('/web-api/admin/invoice-center',requireAdmin,(req,res)=>{
     in_incoming:inbox.filter(r=>r.status!=='archived').length,
     in_responses:responses.length,
     in_archive:inbox.filter(r=>r.status==='archived').length,
-    earsiv_all:queue.filter(r=>String(r.docType||r.invoiceType||'')==='earsiv').length
+    earsiv_all:queue.filter(r=>String(r.docType||r.invoiceType||'').toLowerCase()==='earsiv').length,
+    efatura_all:efaturaRows.length,
+    efatura_out:efaturaRows.filter(r=>isPending(r)||isSent(r)||isError(r)).length
   };
   res.json({
     ok:true,
@@ -1777,7 +1783,7 @@ app.get('/web-api/admin/self-test',requireAdmin,(req,res)=>{
   const customer={id:'__test_customer__',name:'Sistem Test Müşteri',active:true};s.customers.push(customer);const account={id:'__test_cash__',name:'Test Kasa',type:'cash',openingBalance:1000,active:true};s.financeAccounts.push(account);const warehouse={id:'__test_wh__',name:'Test Depo',active:true};s.warehouses.push(warehouse);const product={id:'__test_product__',code:'TEST-001',name:'Test Ürün',cashPrice:1000,salePrice:1000,active:true};s.products.push(product);addStockMovement(s,{productCode:'TEST-001',warehouseId:warehouse.id,type:'opening',quantity:5,reference:'SELFTEST'});
   const before=customerBalance(s,customer.id);const sale=financeTx(s,{date:todayISO(),kind:'sale',accountId:'',customerId:customer.id,amount:0,customerDelta:2000,category:'Test',description:'Self-test satış',reference:'TEST-SALE'});addStockMovement(s,{productCode:'TEST-001',warehouseId:warehouse.id,type:'sale',quantity:-2,reference:'TEST-SALE'});const afterSale=customerBalance(s,customer.id);const collection=financeTx(s,{date:todayISO(),kind:'collection',accountId:account.id,customerId:customer.id,amount:500,customerDelta:-500,category:'Nakit',description:'Self-test tahsilat',reference:'TEST-COL'});const afterCollection=customerBalance(s,customer.id),stock=currentStock(s,'TEST-001',warehouse.id)?.quantity||0,accountBal=accountBalance(s,account.id);
   checks.push({name:'Müşteri cari satış',ok:before===0&&afterSale===2000,detail:`0 → ${afterSale}`});checks.push({name:'Tahsilat cari düşümü',ok:afterCollection===1500,detail:`${afterSale} → ${afterCollection}`});checks.push({name:'Stok düşümü',ok:stock===3,detail:`5 → ${stock}`});checks.push({name:'Kasa artışı',ok:accountBal===1500,detail:`1000 → ${accountBal}`});checks.push({name:'Makbuz bağlantısı',ok:Boolean(collection.id),detail:collection.id});
-  const adminHtml=fs.readFileSync(path.join(ROOT,'public','admin.html'),'utf8');const tabs=[...adminHtml.matchAll(/data-tab="([^"]+)"/g)].map(m=>m[1]);const sections=new Set([...adminHtml.matchAll(/<section id="([^"]+)"/g)].map(m=>m[1]));const missing=[...new Set(tabs)].filter(t=>!sections.has(t));checks.push({name:'Admin menü butonları',ok:missing.length===0,detail:missing.length?`Eksik hedef: ${missing.join(', ')}`:'Tüm menü hedefleri mevcut'});res.json({ok:checks.every(c=>c.ok),checks,note:'Test yalnızca bellekte çalışır; canlı veri değiştirilmez.'})
+  const adminHtml=fs.readFileSync(path.join(ROOT,'public','admin.html'),'utf8');const tabs=[...adminHtml.matchAll(/data-tab="([^"]+)"/g)].map(m=>m[1]);const sections=new Set([...adminHtml.matchAll(/<section[^>]*\sid="([^"]+)"/g)].map(m=>m[1]));const missing=[...new Set(tabs)].filter(t=>!sections.has(t));checks.push({name:'Admin menü butonları',ok:missing.length===0,detail:missing.length?`Eksik hedef: ${missing.join(', ')}`:'Tüm menü hedefleri mevcut'});res.json({ok:checks.every(c=>c.ok),checks,note:'Test yalnızca bellekte çalışır; canlı veri değiştirilmez.'})
  }catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
