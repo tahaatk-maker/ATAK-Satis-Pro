@@ -44,10 +44,8 @@ function applyUiScale(v){
 }
 function initUiScale(){
   let scale='0.85';
-  try{scale=localStorage.getItem('atak-ui-scale-v4')||'0.95'}catch(_){}
-  // Eski “Küçük” kayıtları boşluk bırakıyordu — Normal’e yükselt
-  if(scale==='0.75')scale='0.95';
-  if(!['0.75','0.85','0.95','1'].includes(scale))scale='0.95';
+  try{scale=localStorage.getItem('atak-ui-scale-v4')||'0.85'}catch(_){}
+  if(!['0.75','0.85','0.95','1'].includes(scale))scale='0.85';
   applyUiScale(scale);
   q('#uiScaleSelect')?.addEventListener('change',e=>applyUiScale(e.target.value));
   window.addEventListener('resize',()=>{if(isMobileUi())applyUiScale('1')});
@@ -88,16 +86,7 @@ function goTab(id,{remember=true}={}){
   if(id==='salesTracking')setTimeout(loadSalesTracking,20);
   if(id==='dynamicsExcelImport')setTimeout(()=>loadDynamicsImport(),20);
   document.body.classList.toggle('inv-full',id==='invoiceCenter');
-  if(id==='invoiceCenter'){
-    // Küçük zoom bu ekranı boş/dağınık gösterir — en az Normal
-    try{
-      if(!isMobileUi()){
-        const cur=Number(document.documentElement.style.zoom||localStorage.getItem('atak-ui-scale-v4')||0.85);
-        if(cur<0.85){applyUiScale(0.85);if(q('#uiScaleSelect'))q('#uiScaleSelect').value='0.85'}
-      }
-    }catch(_){}
-    setTimeout(()=>loadInvoiceCenter().catch(e=>toast(e.message)),20);
-  }
+  if(id==='invoiceCenter')setTimeout(()=>loadInvoiceCenter().catch(e=>toast(e.message)),20);
   return true
 }
 document.addEventListener('click',e=>{
