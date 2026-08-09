@@ -1061,7 +1061,17 @@ function salesApplyWizardVisibility(){
 function salesSetWizardStep(step){
   salesWizardStep=Math.min(3,Math.max(1,Number(step)||1));
   salesApplyWizardVisibility();
-  salesUpdatePosSteps(salesCalcState());
+  const step1=q('#posStep1'),step2=q('#posStep2'),step3=q('#posStep3');
+  const hasCustomer=!!(q('#salesCustomerSelect')?.value);
+  const hasCart=qa('.sales-row').length>0;
+  [step1,step2,step3].forEach(el=>el?.classList.remove('active','done','locked'));
+  if(hasCustomer && salesWizardStep>1)step1?.classList.add('done');
+  if(hasCart && salesWizardStep>2)step2?.classList.add('done');
+  if(salesWizardStep===1)step1?.classList.add('active');
+  else if(salesWizardStep===2)step2?.classList.add('active');
+  else step3?.classList.add('active');
+  if(!hasCustomer)step2?.classList.add('locked');
+  if(!hasCustomer||!hasCart)step3?.classList.add('locked');
   salesUpdateWizardChrome();
   try{window.scrollTo({top:0,behavior:'smooth'})}catch(_){}
 }
@@ -1117,7 +1127,19 @@ function salesUpdatePosSteps(c){
   else step3.classList.add('active');
   if(!hasCustomer)step2.classList.add('locked');
   if(!hasCustomer||!hasCart)step3.classList.add('locked');
-  salesUpdateWizardChrome();
+  // Chrome/visibility güncelle — sonsuz döngü olmasın diye sadece UI
+  const next1=q('#salesWizardNext1');if(next1)next1.disabled=!hasCustomer;
+  const next2=q('#salesWizardNext2');if(next2)next2.disabled=!hasCart;
+  if(q('#salesWizardHint1'))q('#salesWizardHint1').textContent=hasCustomer?'Müşteri seçildi — devam edebilirsiniz':'Müşteri seçmeden ürün açılmaz';
+  if(q('#salesWizardHint2'))q('#salesWizardHint2').textContent=hasCart?`${qa('.sales-row').length} kalem hazır`:'Ürün eklemeden ödeme açılmaz';
+  if(q('#salesDockStep'))q('#salesDockStep').textContent=`${salesWizardStep} / 3`;
+  const dockBtn=q('#salesDockPreviewBtn');
+  if(dockBtn){
+    if(salesWizardStep===1)dockBtn.textContent=hasCustomer?'DEVAM ET → ÜRÜN':'ÖNCE MÜŞTERİ SEÇ';
+    else if(salesWizardStep===2)dockBtn.textContent=hasCart?'DEVAM ET → ÖDEME':'ÖNCE ÜRÜN EKLE';
+    else dockBtn.textContent='ÖNİZLE / SATIŞI YAP';
+  }
+  salesApplyWizardVisibility();
 }
 function salesCalculate(){
   const c=salesCalcState();
