@@ -1457,23 +1457,27 @@ app.get('/web-api/admin/invoice-center',requireAdmin,(req,res)=>{
   const isSent=r=>['issued','draft_sent','queued_remote','queued'].includes(String(r.status||''));
   const isPending=r=>['pending','ready'].includes(String(r.status||''))||!r.status;
   const isError=r=>String(r.status||'')==='error';
-  const isArchive=r=>['cancelled','archived','issued'].includes(String(r.status||''));
-  const efaturaRows=queue.filter(r=>{
-    const t=String(r.docType||r.invoiceType||'').toLowerCase();
-    return t==='efatura'||t==='temelfatura'||t==='ticarifatura'||!t||t==='auto';
-  });
+  const isArch=r=>['cancelled','archived'].includes(String(r.status||''));
+  const isEf=r=>{const t=String(r.docType||r.invoiceType||'').toLowerCase();return t==='efatura'||t==='temelfatura'||t==='ticarifatura'||!t||t==='auto'};
+  const isEa=r=>String(r.docType||r.invoiceType||'').toLowerCase()==='earsiv';
+  const inboxEf=inbox.filter(r=>String(r.docType||r.profile||'efatura').toLowerCase()!=='earsiv');
+  const inboxEa=inbox.filter(r=>String(r.docType||r.profile||'').toLowerCase()==='earsiv');
+  const ef=queue.filter(isEf),ea=queue.filter(isEa);
   const counts={
-    out_pending:queue.filter(isPending).length,
-    out_sent:queue.filter(isSent).length,
-    out_error:queue.filter(isError).length,
-    out_archive:queue.filter(r=>['cancelled','archived'].includes(String(r.status||''))).length,
     sales_pending:salesPending.length,
-    in_incoming:inbox.filter(r=>r.status!=='archived').length,
-    in_responses:responses.length,
-    in_archive:inbox.filter(r=>r.status==='archived').length,
-    earsiv_all:queue.filter(r=>String(r.docType||r.invoiceType||'').toLowerCase()==='earsiv').length,
-    efatura_all:efaturaRows.length,
-    efatura_out:efaturaRows.filter(r=>isPending(r)||isSent(r)||isError(r)).length
+    ef_out_pending:ef.filter(isPending).length,
+    ef_out_sent:ef.filter(isSent).length,
+    ef_out_error:ef.filter(isError).length,
+    ef_out_archive:ef.filter(isArch).length,
+    ef_in_incoming:inboxEf.filter(r=>r.status!=='archived').length,
+    ef_in_responses:responses.length,
+    ef_in_archive:inboxEf.filter(r=>r.status==='archived').length,
+    ea_out_pending:ea.filter(isPending).length,
+    ea_out_sent:ea.filter(isSent).length,
+    ea_out_error:ea.filter(isError).length,
+    ea_out_archive:ea.filter(isArch).length,
+    ea_in_incoming:inboxEa.filter(r=>r.status!=='archived').length,
+    ea_in_archive:inboxEa.filter(r=>r.status==='archived').length
   };
   res.json({
     ok:true,

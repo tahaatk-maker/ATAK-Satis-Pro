@@ -1922,21 +1922,24 @@ q('#dynamicsImportBtn')?.addEventListener('click',async()=>{
 });
 
 
-/** e-Fatura Merkezi — QNB kutusu klasörleri, Atak kuyruğu */
-let invoiceCenterState={view:'out_pending',data:null,selected:new Set()};
+/** e-Fatura Merkezi — modül: e-Fatura / e-Arşiv / Kurulum */
+let invoiceCenterState={module:'efatura',view:'ef_out_pending',data:null,selected:new Set()};
 const INV_VIEW_META={
-  out_pending:{title:'Gönderilecek Faturalar',hint:'Satıştan “Fatura Kes” ile gelen QNB kuyruğu. WSDL bağlanınca portala gider.'},
-  out_sent:{title:'Gönderilen Faturalar',hint:'Kuyruğa alınan / taslak gönderilen / kesilmiş faturalar.'},
-  out_error:{title:'Hatalı Faturalar',hint:'Gönderim veya doğrulama hatası olan kayıtlar. Tekrar deneyebilirsiniz.'},
-  out_archive:{title:'Giden Arşiv',hint:'İptal / arşivlenmiş giden kayıtlar.'},
-  efatura_all:{title:'e-Fatura Kayıtları',hint:'e-Fatura tipindeki giden kayıtlar (TEMEL / TİCARİ).'},
-  efatura_out:{title:'Giden e-Fatura',hint:'e-Fatura olarak sınıflanan giden kutu kayıtları.'},
-  in_incoming:{title:'Gelen Faturalar',hint:'QNB portal senkronu bağlanınca gelen e-Faturalar burada listelenir.'},
-  in_responses:{title:'Uygulama Yanıtları',hint:'Ticari fatura kabul/red yanıtları (QNB bağlanınca).'},
-  in_archive:{title:'Gelen Arşiv',hint:'Arşivlenmiş gelen faturalar.'},
-  earsiv_all:{title:'e-Arşiv Faturalar',hint:'docType = earsiv olan giden kayıtlar.'},
-  setup_ready:{title:'Kurulum / Hazırlık',hint:'QNB checklist. Senet ve bayi ayarları burada değil — Ayarlar menüsünde.'},
-  setup_settings:{title:'QNB Ayarları',hint:'Yalnız e-Fatura / QNB Solist. Senet ve kâr-prim Ayarlar’dadır.'}
+  ef_out_pending:{title:'e-Fatura · Gönderilecek',hint:'Giden e-Fatura kuyruğu. Satıştan Fatura Kes ile düşer; WSDL bağlanınca portala gider.'},
+  ef_out_sent:{title:'e-Fatura · Gönderilen',hint:'Kuyruğa alınan / taslak / kesilmiş e-Faturalar.'},
+  ef_out_error:{title:'e-Fatura · Hatalı',hint:'Gönderim veya doğrulama hatası. Tekrar deneyebilirsiniz.'},
+  ef_out_archive:{title:'e-Fatura · Giden Arşiv',hint:'İptal / arşivlenmiş giden e-Faturalar.'},
+  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Portal senkronu bağlanınca gelen e-Faturalar.'},
+  ef_in_responses:{title:'e-Fatura · Uygulama Yanıtları',hint:'Ticari fatura kabul/red yanıtları.'},
+  ef_in_archive:{title:'e-Fatura · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Faturalar.'},
+  ea_out_pending:{title:'e-Arşiv · Gönderilecek',hint:'Giden e-Arşiv kuyruğu.'},
+  ea_out_sent:{title:'e-Arşiv · Gönderilen',hint:'Gönderilmiş / kuyruğa alınmış e-Arşiv faturaları.'},
+  ea_out_error:{title:'e-Arşiv · Hatalı',hint:'Hatalı e-Arşiv kayıtları.'},
+  ea_out_archive:{title:'e-Arşiv · Giden Arşiv',hint:'Arşivlenmiş giden e-Arşiv.'},
+  ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv (portal bağlanınca).'},
+  ea_in_archive:{title:'e-Arşiv · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Arşiv.'},
+  setup_ready:{title:'Kurulum / Hazırlık',hint:'QNB checklist. Senet ve bayi ayarları Ayarlar menüsünde.'},
+  setup_settings:{title:'QNB Ayarları',hint:'Yalnız e-Fatura / QNB Solist entegrasyonu.'}
 };
 function invEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function invStatusBadge(st){
@@ -1944,39 +1947,42 @@ function invStatusBadge(st){
   const label={pending:'Bekliyor',ready:'Hazır',queued:'Kuyruk',draft_sent:'Taslak',queued_remote:'Portal kuyruk',issued:'Kesildi',error:'Hatalı',cancelled:'İptal',archived:'Arşiv'}[s]||s;
   return `<span class="inv-badge ${invEsc(s)}">${invEsc(label)}</span>`;
 }
+function invIsEf(r){const t=String(r.docType||r.invoiceType||r.profile||'').toLowerCase();return t==='efatura'||t==='temelfatura'||t==='ticarifatura'||!t||t==='auto'}
+function invIsEa(r){return String(r.docType||r.invoiceType||r.profile||'').toLowerCase()==='earsiv'}
+function invStatusBucket(view){
+  if(view.endsWith('_pending'))return 'pending';
+  if(view.endsWith('_sent'))return 'sent';
+  if(view.endsWith('_error'))return 'error';
+  if(view.endsWith('_archive'))return 'archive';
+  return '';
+}
 function invFilterQueue(rows,view){
   const list=rows||[];
-  if(view==='out_pending')return list.filter(r=>['pending','ready'].includes(String(r.status||'pending')));
-  if(view==='out_sent')return list.filter(r=>['issued','draft_sent','queued_remote','queued'].includes(String(r.status||'')));
-  if(view==='out_error')return list.filter(r=>String(r.status||'')==='error');
-  if(view==='out_archive')return list.filter(r=>['cancelled','archived'].includes(String(r.status||'')));
-  if(view==='earsiv_all')return list.filter(r=>String(r.docType||r.invoiceType||'').toLowerCase()==='earsiv');
-  if(view==='efatura_all'||view==='efatura_out'){
-    return list.filter(r=>{
-      const t=String(r.docType||r.invoiceType||'').toLowerCase();
-      return t==='efatura'||t==='temelfatura'||t==='ticarifatura'||!t||t==='auto';
-    });
-  }
-  return list;
+  const type=view.startsWith('ea_')?'earsiv':'efatura';
+  const typed=list.filter(r=>type==='earsiv'?invIsEa(r):invIsEf(r));
+  const bucket=invStatusBucket(view);
+  if(bucket==='pending')return typed.filter(r=>['pending','ready'].includes(String(r.status||'pending')));
+  if(bucket==='sent')return typed.filter(r=>['issued','draft_sent','queued_remote','queued'].includes(String(r.status||'')));
+  if(bucket==='error')return typed.filter(r=>String(r.status||'')==='error');
+  if(bucket==='archive')return typed.filter(r=>['cancelled','archived'].includes(String(r.status||'')));
+  return typed;
 }
 function invApplySearch(rows){
   const term=String(q('#invSearch')?.value||'').toLocaleLowerCase('tr-TR').trim();
-  const doc=q('#invDocTypeFilter')?.value||'all';
   const unreadOnly=!!q('#invUnreadOnly')?.checked;
   return (rows||[]).filter(r=>{
-    if(doc!=='all'&&String(r.docType||r.invoiceType||'')!==doc)return false;
     if(unreadOnly&&r.read===true)return false;
     if(!term)return true;
-    const hay=`${r.invoiceNumber||''} ${r.reference||''} ${r.customer?.name||r.customerName||''} ${r.uuid||''} ${r.providerDocumentId||''}`.toLocaleLowerCase('tr-TR');
+    const hay=`${r.invoiceNumber||''} ${r.reference||''} ${r.customer?.name||r.customerName||r.supplierName||''} ${r.uuid||''}`.toLocaleLowerCase('tr-TR');
     return hay.includes(term);
   });
 }
 function invSetCounts(c={}){
   const map={
-    invCountOutPending:'out_pending',invCountOutSent:'out_sent',invCountOutError:'out_error',invCountOutArchive:'out_archive',
-    invCountInIncoming:'in_incoming',invCountInResponses:'in_responses',
-    invCountInArchive:'in_archive',invCountEarsiv:'earsiv_all',
-    invCountEfatura:'efatura_all',invCountEfaturaOut:'efatura_out'
+    invCountEfOutPending:'ef_out_pending',invCountEfOutSent:'ef_out_sent',invCountEfOutError:'ef_out_error',invCountEfOutArchive:'ef_out_archive',
+    invCountEfInIncoming:'ef_in_incoming',invCountEfInResponses:'ef_in_responses',invCountEfInArchive:'ef_in_archive',
+    invCountEaOutPending:'ea_out_pending',invCountEaOutSent:'ea_out_sent',invCountEaOutError:'ea_out_error',invCountEaOutArchive:'ea_out_archive',
+    invCountEaInIncoming:'ea_in_incoming',invCountEaInArchive:'ea_in_archive'
   };
   Object.entries(map).forEach(([id,key])=>{if(q('#'+id))q('#'+id).textContent=String(c[key]||0)});
 }
@@ -2002,7 +2008,8 @@ function invRenderTable(rows){
   q('#invToolbar')?.classList.remove('hidden');
   const view=invoiceCenterState.view;
   const head=q('#invTableHead'),body=q('#invTableBody'),empty=q('#invEmpty');
-  if(view.startsWith('in_')){
+  const isInbox=view.includes('_in_');
+  if(isInbox){
     head.innerHTML=`<tr><th></th><th>Okundu</th><th>Fatura Tarihi</th><th>Fatura No</th><th>Müşteri / Tedarikçi</th><th>Profil</th><th>Tutar</th><th>ERP</th></tr>`;
     body.innerHTML=rows.map(r=>`<tr data-inv-id="${invEsc(r.id||r.uuid||'')}">
       <td><input type="checkbox" data-inv-check="${invEsc(r.id||r.uuid||'')}"/></td>
@@ -2049,12 +2056,27 @@ function invRenderTable(rows){
     w.document.write(`<pre style="white-space:pre-wrap;font:12px/1.4 monospace;padding:16px">${invEsc(row.ublXml)}</pre>`);
   });
 }
+function invSetModule(mod,{keepView=false}={}){
+  invoiceCenterState.module=mod;
+  qa('[data-inv-module]').forEach(b=>b.classList.toggle('active',b.dataset.invModule===mod));
+  qa('[data-inv-pane]').forEach(p=>p.classList.toggle('active',p.dataset.invPane===mod));
+  if(!keepView){
+    if(mod==='efatura')invoiceCenterState.view='ef_out_pending';
+    else if(mod==='earsiv')invoiceCenterState.view='ea_out_pending';
+    else invoiceCenterState.view='setup_settings';
+  }
+  invPaintCurrentView();
+}
 function invPaintCurrentView(){
   const view=invoiceCenterState.view;
   const meta=INV_VIEW_META[view]||{title:view,hint:''};
   if(q('#invViewTitle'))q('#invViewTitle').textContent=meta.title;
   if(q('#invViewHint'))q('#invViewHint').textContent=meta.hint;
   qa('[data-inv-view]').forEach(b=>b.classList.toggle('active',b.dataset.invView===view));
+  if(q('#invDocTypeFilter')){
+    q('#invDocTypeFilter').value=view.startsWith('ea_')?'earsiv':(view.startsWith('ef_')?'efatura':'all');
+    q('#invDocTypeFilter').style.display='none';
+  }
   if(view==='setup_settings'||view==='setup_ready'){
     invRenderSetup([]);
     q('#invFootStatus').textContent=view==='setup_ready'?'Hazırlık kontrolü':'QNB ayarları';
@@ -2064,9 +2086,11 @@ function invPaintCurrentView(){
   }
   const d=invoiceCenterState.data||{};
   let rows=[];
-  if(view==='in_incoming')rows=(d.inbox||[]).filter(r=>r.status!=='archived');
-  else if(view==='in_responses')rows=d.responses||[];
-  else if(view==='in_archive')rows=(d.inbox||[]).filter(r=>r.status==='archived');
+  if(view==='ef_in_incoming')rows=(d.inbox||[]).filter(r=>!invIsEa(r)&&r.status!=='archived');
+  else if(view==='ef_in_responses')rows=d.responses||[];
+  else if(view==='ef_in_archive')rows=(d.inbox||[]).filter(r=>!invIsEa(r)&&r.status==='archived');
+  else if(view==='ea_in_incoming')rows=(d.inbox||[]).filter(r=>invIsEa(r)&&r.status!=='archived');
+  else if(view==='ea_in_archive')rows=(d.inbox||[]).filter(r=>invIsEa(r)&&r.status==='archived');
   else rows=invFilterQueue(d.queue||[],view);
   rows=invApplySearch(rows);
   invRenderTable(rows);
@@ -2093,13 +2117,16 @@ async function loadInvoiceCenter(){
 }
 function invSetView(view){
   invoiceCenterState.view=view;
-  if(view.startsWith('out_'))q('[data-inv-folder="outbox"]')?.classList.add('open');
-  if(view.startsWith('efatura')){const f=q('[data-inv-folder="efatura"]');f?.classList.add('open');const t=f?.querySelector('[data-inv-toggle] span:last-child');if(t)t.textContent='▾'}
-  if(view.startsWith('in_'))q('[data-inv-folder="inbox"]')?.classList.add('open');
-  if(view.startsWith('earsiv')){const f=q('[data-inv-folder="earsiv"]');f?.classList.add('open');const t=f?.querySelector('[data-inv-toggle] span:last-child');if(t)t.textContent='▾'}
-  if(view.startsWith('setup')){const f=q('[data-inv-folder="setup"]');f?.classList.add('open');const t=f?.querySelector('[data-inv-toggle] span:last-child');if(t)t.textContent='▾'}
+  if(view.startsWith('ef_'))invoiceCenterState.module='efatura';
+  else if(view.startsWith('ea_'))invoiceCenterState.module='earsiv';
+  else if(view.startsWith('setup'))invoiceCenterState.module='setup';
+  qa('[data-inv-module]').forEach(b=>b.classList.toggle('active',b.dataset.invModule===invoiceCenterState.module));
+  qa('[data-inv-pane]').forEach(p=>p.classList.toggle('active',p.dataset.invPane===invoiceCenterState.module));
+  const folderKey=view.startsWith('ef_out')?'ef_out':view.startsWith('ef_in')?'ef_in':view.startsWith('ea_out')?'ea_out':view.startsWith('ea_in')?'ea_in':view.startsWith('setup')?'setup':'';
+  if(folderKey){const f=q(`[data-inv-folder="${folderKey}"]`);f?.classList.add('open');const t=f?.querySelector('[data-inv-toggle] span:last-child');if(t)t.textContent='▾'}
   invPaintCurrentView();
 }
+qa('[data-inv-module]').forEach(btn=>btn.addEventListener('click',()=>invSetModule(btn.dataset.invModule)));
 qa('[data-inv-toggle]').forEach(btn=>btn.addEventListener('click',()=>{
   const folder=btn.closest('.inv-folder');
   folder?.classList.toggle('open');
@@ -2109,7 +2136,6 @@ qa('[data-inv-toggle]').forEach(btn=>btn.addEventListener('click',()=>{
 qa('[data-inv-view]').forEach(btn=>btn.addEventListener('click',()=>invSetView(btn.dataset.invView)));
 q('#invRefreshBtn')?.addEventListener('click',()=>loadInvoiceCenter());
 q('#invSearch')?.addEventListener('input',()=>invPaintCurrentView());
-q('#invDocTypeFilter')?.addEventListener('change',()=>invPaintCurrentView());
 q('#invUnreadOnly')?.addEventListener('change',()=>invPaintCurrentView());
 q('#invPortalQueryBtn')?.addEventListener('click',async()=>{
   q('#invFootStatus').textContent='Portal sorgulanıyor…';
