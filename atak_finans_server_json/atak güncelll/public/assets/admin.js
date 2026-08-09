@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v10 */
+/* ATAK_ADMIN_BUILD=fix-v11 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -682,7 +682,7 @@ function syncCustomerFormUI(prefix){
   const company=q(`#${prefix}CompanyName`);
   const office=q(`#${prefix}TaxOffice`);
   const vkn=q(`#${prefix}TaxNo`);
-  if(tckn)tckn.required=!corp;
+  if(tckn)tckn.required=false;
   if(company)company.required=corp;
   if(office)office.required=corp;
   if(vkn)vkn.required=corp;
@@ -710,8 +710,8 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
     if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
     if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
     if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
-  }else{
-    if(!tckn||tckn.replace(/\D/g,'').length!==11)throw new Error('Bireysel fatura için 11 haneli TCKN zorunludur');
+  }else if(tckn&&tckn.replace(/\D/g,'').length!==11){
+    throw new Error('TCKN girildiyse 11 hane olmalıdır');
   }
   const email=(q(`#${prefix}Email`)?.value||'').trim();
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Geçerli bir e-posta girin (e-Fatura / e-Arşiv için)');

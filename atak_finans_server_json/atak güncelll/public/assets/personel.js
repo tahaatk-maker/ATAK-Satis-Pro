@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v10 */
+/* ATAK_PERSONEL_BUILD=fix-v11 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1149,7 +1149,7 @@ function syncQcInvoiceUI(){
   $('#qcCompanyWrap')?.classList.toggle('hidden',!corp);
   $('#qcTaxOfficeWrap')?.classList.toggle('hidden',!corp);
   $('#qcTaxNoWrap')?.classList.toggle('hidden',!corp);
-  if($('#qcTckn'))$('#qcTckn').required=!corp;
+  if($('#qcTckn'))$('#qcTckn').required=false;
   if($('#qcCompanyName'))$('#qcCompanyName').required=corp;
   if($('#qcTaxOffice'))$('#qcTaxOffice').required=corp;
   if($('#qcTaxNo'))$('#qcTaxNo').required=corp;
@@ -1178,8 +1178,8 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
       if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
       if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
       if(taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için 10 haneli VKN zorunludur');
-    }else if(tckn.replace(/\D/g,'').length!==11){
-      throw new Error('Bireysel fatura için 11 haneli TCKN zorunludur');
+    }else if(tckn&&tckn.replace(/\D/g,'').length!==11){
+      throw new Error('TCKN girildiyse 11 hane olmalıdır');
     }
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},

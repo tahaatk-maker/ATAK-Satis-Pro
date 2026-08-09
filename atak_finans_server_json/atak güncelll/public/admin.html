@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v10" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v11" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -683,7 +683,7 @@ body.inv-full #pageTitle{font-size:18px}
         <p class="field-hint" style="margin:0">Senet her zaman şahıs adına kalır. Fatura tipi zorunludur.</p>
       </div>
       <div class="cust-form-sec" id="salesQuickCustomerIndividualSec"><div class="cust-form-sec-title">Bireysel fatura</div>
-        <label>TCKN *<input id="salesQuickCustomerTckn" placeholder="11 haneli TCKN" inputmode="numeric" required/></label>
+        <label>TCKN<input id="salesQuickCustomerTckn" placeholder="11 haneli TCKN (zorunlu değil)" inputmode="numeric"/></label>
       </div>
       <div class="cust-form-sec hidden" id="salesQuickCustomerCorporateSec"><div class="cust-form-sec-title">Kurumsal fatura</div>
         <label>Firma ünvanı *<input id="salesQuickCustomerCompanyName" placeholder="Şirket ünvanı"/></label>
@@ -1615,7 +1615,7 @@ Bulunamayan → Diğer.
 <p class="field-hint" style="margin:0">Senet şahıs adına kalır. Fatura tipi zorunludur — opsiyonel değil.</p>
 </div>
 <div class="cust-form-sec" id="customerPageIndividualSec"><div class="cust-form-sec-title">Bireysel fatura</div>
-<label>TCKN *<input id="customerPageTckn" placeholder="11 haneli TCKN" inputmode="numeric" required/></label>
+<label>TCKN<input id="customerPageTckn" placeholder="11 haneli TCKN (zorunlu değil)" inputmode="numeric"/></label>
 </div>
 <div class="cust-form-sec hidden" id="customerPageCorporateSec"><div class="cust-form-sec-title">Kurumsal fatura</div>
 <label>Firma ünvanı *<input id="customerPageCompanyName" placeholder="Şirket ünvanı"/></label>
@@ -1722,5 +1722,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v10"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v11"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

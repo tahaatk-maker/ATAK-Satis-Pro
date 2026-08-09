@@ -1,4 +1,5 @@
-fix-v10
-expect-health=6.3.11-invoice-required
-invoice-type-required-bireysel-kurumsal
+fix-v11
+expect-health=6.3.12-tckn-optional
+tckn-not-required
+corporate-still-required-when-selected
 2026-08-09
