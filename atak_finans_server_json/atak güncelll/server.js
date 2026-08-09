@@ -621,7 +621,7 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.4-owner-lock',
+  version:'6.3.5-customer-search',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -1889,7 +1889,7 @@ app.get('/web-api/admin/sales-tracking',requireAdmin,(req,res)=>{
         id:t.id,reference:t.reference||'',date:t.date||'',dealerId:t.dealerId||'',dealerName:t.dealerName||'',
         salespersonId:t.salespersonId||'',salespersonName:t.salespersonName||t.createdBy||'',
         customerId:t.customerId||'',customerName:c.name||'',customerPhone:c.phone||'',customerNote:c.note||'',
-        total:Number(t.total||0),items:t.items||[],deliveryStatus:t.deliveryStatus||'order_received',
+        total:saleAmount(t),items:t.items||[],deliveryStatus:t.deliveryStatus||'order_received',
         deliveryNote:t.deliveryNote||'',invoiceStatus:t.invoiceStatus||'pending',deductStock:Boolean(t.deductStock),
         warehouseId:t.warehouseId||'',createdAt:t.createdAt||''
       }
