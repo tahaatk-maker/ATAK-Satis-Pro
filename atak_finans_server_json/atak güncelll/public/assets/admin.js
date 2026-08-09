@@ -541,9 +541,11 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
     if(!taxOffice)throw new Error('Kurumsal faturada vergi dairesi zorunludur');
     if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal faturada geçerli VKN zorunludur');
   }
+  const email=(q(`#${prefix}Email`)?.value||'').trim();
+  if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Geçerli bir e-posta girin (e-Fatura / e-Arşiv için)');
   const payload={
     name,phone,
-    email:(q(`#${prefix}Email`)?.value||'').trim(),
+    email,
     city,district,address,
     deliverySameAsBilling:deliverySame,
     deliveryCity,deliveryDistrict,deliveryAddress,
@@ -603,7 +605,7 @@ function renderCustomerPageList(){
   box.innerHTML=rows.map(c=>{
     const bal=Number(c.balance||0);
     const balCls=bal>0?'debt':bal<0?'credit':'closed';
-    const sub=[c.phone,c.city&&c.district?`${c.district}/${c.city}`:(c.address||'')].filter(Boolean).join(' · ');
+    const sub=[c.phone,c.email,c.city&&c.district?`${c.district}/${c.city}`:(c.address||'')].filter(Boolean).join(' · ');
     const active=String(c.id)===String(customersPageData.selectedId)?'active':'';
     return `<button type="button" class="customer-card ${active}" data-customer-id="${c.id}"><div><b>${c.name||'-'}</b><small>${sub||'Adres yok'}${c.invoiceType==='corporate'?' · Kurumsal':''}</small></div><div class="customer-card-balance ${balCls}"><small>Cari</small><strong>${money2(bal)}</strong></div></button>`;
   }).join('');
@@ -1702,17 +1704,175 @@ q('[data-tab="uninvoicedSales"]')?.addEventListener('click',()=>setTimeout(loadU
 loadDealerSettings();
 
 function reportKpis(s={}){return `<article><small>Satış Adedi</small><b>${Number(s.count||0)}</b></article><article><small>Brüt Ciro</small><b>${salesMoney(s.gross||0)}</b></article><article><small>Net Ciro</small><b>${salesMoney(s.net||0)}</b></article><article><small>İskonto</small><b>${salesMoney(s.discount||0)}</b></article><article class="commission"><small>Hak Edilen Prim</small><b>${salesMoney(s.commission||0)}</b></article>`}
+let reasonModalState=null;
+function openReasonModal({title,hint,onSubmit}){
+  reasonModalState={onSubmit};
+  if(q('#reasonModalTitle'))q('#reasonModalTitle').textContent=title||'Sebep';
+  if(q('#reasonModalHint'))q('#reasonModalHint').textContent=hint||'Sebep yazın; talep Yönetici Onayları’na düşer.';
+  if(q('#reasonModalText'))q('#reasonModalText').value='';
+  q('#reasonModal')?.classList.remove('hidden');
+  q('#reasonModal')?.setAttribute('aria-hidden','false');
+  document.body.classList.add('modal-open');
+  q('#reasonModalText')?.focus();
+}
+function closeReasonModal(){
+  reasonModalState=null;
+  q('#reasonModal')?.classList.add('hidden');
+  q('#reasonModal')?.setAttribute('aria-hidden','true');
+  if(q('#saleEditModal')?.classList.contains('hidden')&&q('#salesPreviewModal')?.classList.contains('hidden'))document.body.classList.remove('modal-open');
+}
+q('#reasonModalClose')?.addEventListener('click',closeReasonModal);
+q('#reasonModalCancel')?.addEventListener('click',closeReasonModal);
+q('#reasonModalSubmit')?.addEventListener('click',async()=>{
+  const reason=(q('#reasonModalText')?.value||'').trim();
+  if(!reason){toast('Sebep zorunludur');return}
+  const cb=reasonModalState?.onSubmit;
+  closeReasonModal();
+  if(cb)await cb(reason);
+});
 async function requestCancellation(targetType,targetId,ref=''){
-  const reason=prompt(`${ref||'İşlem'} iptal sebebi:`);if(!reason)return;
-  const warn=targetType==='sale'?'Satış iptalinde bağlı tahsilat, cari, stok ve prim ters kayıtla düzeltilecek. Devam edilsin mi?':'Tahsilat iptalinde kasa/banka ve cari ters kayıtla düzeltilecek. Devam edilsin mi?';
-  if(!confirm(warn))return;
-  try{const r=await api('/web-api/admin/cancellation-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetType,targetId,reason})});toast(r.direct?'İşlem iptal edildi.':'İptal talebi yönetici onayına gönderildi.');await loadMySalesReport();await loadStaffSalesReport();await loadApprovals()}catch(e){toast(e.message)}
+  openReasonModal({
+    title:targetType==='collection'?'Tahsilat İptal Sebebi':'Satış İptal Sebebi',
+    hint:`${ref||'İşlem'} için iptal sebebi yazın. Talep Yönetici Onayları’na gider; onaylanınca cari, kasa/banka, stok ve prim düzeltilir.`,
+    onSubmit:async(reason)=>{
+      try{
+        await api('/web-api/admin/cancellation-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetType,targetId,reason})});
+        toast('İptal talebi yönetici onayına gönderildi');
+        await loadMySalesReport();await loadStaffSalesReport();await loadApprovals();
+      }catch(e){toast(e.message)}
+    }
+  });
+}
+let saleEditState={sale:null,products:[],accounts:[]};
+function saleEditPaySum(){
+  return ['#saleEditPayCash','#saleEditPayCard','#saleEditPayTransfer','#saleEditPayCredit','#saleEditPayNote']
+    .reduce((a,id)=>a+salesNum(q(id)?.value),0);
+}
+function saleEditGross(){
+  return qa('#saleEditItems tr').reduce((a,row)=>{
+    const qty=salesNum(row.querySelector('.se-qty')?.value);
+    const price=salesNum(row.querySelector('.se-price')?.value);
+    return a+qty*price;
+  },0);
+}
+function refreshSaleEditTotals(){
+  const gross=Math.round(saleEditGross()*100)/100;
+  const disc=Math.min(100,Math.max(0,salesNum(q('#saleEditDiscount')?.value)));
+  const net=Math.round(gross*(1-disc/100)*100)/100;
+  const allocated=Math.round(saleEditPaySum()*100)/100;
+  const rem=Math.round((net-allocated)*100)/100;
+  if(q('#saleEditTotals'))q('#saleEditTotals').innerHTML=`<div><span>Brüt</span><b>${salesMoney(gross)}</b></div><div><span>İskonto</span><b>-${salesMoney(gross-net)}</b></div><div><span>Net</span><strong>${salesMoney(net)}</strong></div><div><span>Ödeme dağılımı</span><b>${salesMoney(allocated)}</b></div><div><span>Kalan</span><b class="${Math.abs(rem)>0.009?'debt':'credit'}">${salesMoney(rem)}</b></div>`;
+  return{gross,disc,net,allocated,rem};
+}
+function saleEditAddRow(item={}){
+  const tr=document.createElement('tr');
+  const code=item.productCode||'';
+  const name=item.productName||item.materialCode||'';
+  tr.innerHTML=`<td><input class="se-code" list="saleEditProductList" value="${salesEsc(code)}" placeholder="Ürün kodu"/></td>
+    <td><input class="se-name" value="${salesEsc(name)}" placeholder="Ürün adı"/></td>
+    <td><input class="se-qty" type="number" min="1" step="1" value="${Number(item.quantity||1)}"/></td>
+    <td><input class="se-price" type="number" min="0" step="0.01" value="${Number(item.unitPrice||0)}"/></td>
+    <td><button type="button" class="secondary-btn se-del">Sil</button></td>`;
+  q('#saleEditItems')?.appendChild(tr);
+  tr.querySelector('.se-del')?.addEventListener('click',()=>{tr.remove();refreshSaleEditTotals()});
+  tr.querySelector('.se-code')?.addEventListener('change',e=>{
+    const p=saleEditState.products.find(x=>String(x.code)===String(e.target.value));
+    if(p){tr.querySelector('.se-name').value=p.searchName||p.name||'';if(!salesNum(tr.querySelector('.se-price').value))tr.querySelector('.se-price').value=p.cashPrice||0}
+    refreshSaleEditTotals();
+  });
+  ['se-qty','se-price'].forEach(cls=>tr.querySelector('.'+cls)?.addEventListener('input',refreshSaleEditTotals));
+}
+async function openSaleEditModal(saleId){
+  const st=q('#saleEditStatus');if(st){st.textContent='';st.className='form-status'}
+  try{
+    const d=await api('/web-api/admin/sale/'+encodeURIComponent(saleId));
+    if(d.pending?.length){toast('Bu satış için bekleyen onay talebi var');return}
+    saleEditState={sale:d.sale,products:d.products||[],accounts:d.accounts||[]};
+    if(q('#saleEditTitle'))q('#saleEditTitle').textContent=`Düzenle · ${d.sale.reference||''}`;
+    if(q('#saleEditMeta'))q('#saleEditMeta').innerHTML=`<div><small>Müşteri</small><b>${salesEsc(d.customer?.name||'-')}</b><span>${salesEsc(d.customer?.email||d.customer?.phone||'')}</span></div><div><small>Satıcı</small><b>${salesEsc(d.sale.salespersonName||'-')}</b><span>${salesEsc(d.sale.dealerName||'')}</span></div><div><small>Mevcut net</small><b>${salesMoney(d.sale.total)}</b><span>${salesEsc(d.sale.paymentMethod||'')}</span></div>`;
+    let list=q('#saleEditProductList');
+    if(!list){list=document.createElement('datalist');list.id='saleEditProductList';document.body.appendChild(list)}
+    list.innerHTML=(d.products||[]).slice(0,800).map(p=>`<option value="${salesEsc(p.code)}">${salesEsc(p.searchName||p.name||'')}</option>`).join('');
+    const cashAcc=(d.accounts||[]).filter(a=>a.type==='cash');
+    const bankAcc=(d.accounts||[]).filter(a=>a.type==='bank'||a.type==='cash');
+    if(q('#saleEditCashAccount'))q('#saleEditCashAccount').innerHTML=cashAcc.concat(d.accounts||[]).filter((a,i,arr)=>arr.findIndex(x=>x.id===a.id)===i).map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+    if(q('#saleEditBankAccount'))q('#saleEditBankAccount').innerHTML=(d.accounts||[]).map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+    q('#saleEditItems').innerHTML='';
+    (d.sale.items||[]).forEach(i=>saleEditAddRow(i));
+    if(!(d.sale.items||[]).length)saleEditAddRow({});
+    if(q('#saleEditDiscount'))q('#saleEditDiscount').value=Number(d.sale.discountPct||0);
+    const pays=d.sale.payments||[];
+    const sumBy=m=>pays.filter(p=>String(p.method).toLocaleLowerCase('tr-TR').includes(m)).reduce((a,p)=>a+Number(p.amount||0),0);
+    if(q('#saleEditPayCash'))q('#saleEditPayCash').value=sumBy('nakit')||0;
+    if(q('#saleEditPayCard'))q('#saleEditPayCard').value=sumBy('kart')||0;
+    if(q('#saleEditPayTransfer'))q('#saleEditPayTransfer').value=sumBy('havale')||0;
+    if(q('#saleEditPayCredit'))q('#saleEditPayCredit').value=sumBy('vadeli')||0;
+    if(q('#saleEditPayNote'))q('#saleEditPayNote').value=sumBy('senet')||0;
+    const firstCash=pays.find(p=>/nakit/i.test(p.method)&&p.accountId);
+    const firstBank=pays.find(p=>/(kart|havale)/i.test(p.method)&&p.accountId);
+    if(firstCash&&q('#saleEditCashAccount'))q('#saleEditCashAccount').value=firstCash.accountId;
+    if(firstBank&&q('#saleEditBankAccount'))q('#saleEditBankAccount').value=firstBank.accountId;
+    if(q('#saleEditReason'))q('#saleEditReason').value='';
+    refreshSaleEditTotals();
+    q('#saleEditModal')?.classList.remove('hidden');
+    q('#saleEditModal')?.setAttribute('aria-hidden','false');
+    document.body.classList.add('modal-open');
+  }catch(e){toast(e.message)}
+}
+function closeSaleEditModal(){
+  q('#saleEditModal')?.classList.add('hidden');
+  q('#saleEditModal')?.setAttribute('aria-hidden','true');
+  if(q('#reasonModal')?.classList.contains('hidden')&&q('#salesPreviewModal')?.classList.contains('hidden'))document.body.classList.remove('modal-open');
+}
+q('#saleEditClose')?.addEventListener('click',closeSaleEditModal);
+q('#saleEditCancel')?.addEventListener('click',closeSaleEditModal);
+q('#saleEditAddItem')?.addEventListener('click',()=>{saleEditAddRow({});refreshSaleEditTotals()});
+['#saleEditDiscount','#saleEditPayCash','#saleEditPayCard','#saleEditPayTransfer','#saleEditPayCredit','#saleEditPayNote'].forEach(id=>q(id)?.addEventListener('input',refreshSaleEditTotals));
+q('#saleEditSubmit')?.addEventListener('click',async()=>{
+  const st=q('#saleEditStatus');
+  const sale=saleEditState.sale;if(!sale)return;
+  const reason=(q('#saleEditReason')?.value||'').trim();
+  if(!reason){st.textContent='Düzenleme sebebi zorunlu';st.className='form-status error';return}
+  const totals=refreshSaleEditTotals();
+  if(Math.abs(totals.rem)>0.009){st.textContent=`Ödeme dağılımı nete eşit olmalı. Kalan: ${salesMoney(totals.rem)}`;st.className='form-status error';return}
+  const items=qa('#saleEditItems tr').map(row=>({
+    productCode:(row.querySelector('.se-code')?.value||'').trim(),
+    productName:(row.querySelector('.se-name')?.value||'').trim(),
+    materialCode:(row.querySelector('.se-name')?.value||'').trim(),
+    quantity:salesNum(row.querySelector('.se-qty')?.value),
+    unitPrice:salesNum(row.querySelector('.se-price')?.value)
+  })).filter(i=>i.productCode&&i.quantity>0);
+  if(!items.length){st.textContent='En az bir ürün gerekli';st.className='form-status error';return}
+  const cash=salesNum(q('#saleEditPayCash')?.value),card=salesNum(q('#saleEditPayCard')?.value),transfer=salesNum(q('#saleEditPayTransfer')?.value),credit=salesNum(q('#saleEditPayCredit')?.value),note=salesNum(q('#saleEditPayNote')?.value);
+  const payments=[];
+  if(cash>0)payments.push({method:'Nakit',amount:cash,accountId:q('#saleEditCashAccount')?.value||''});
+  if(card>0)payments.push({method:'Kredi Kartı',amount:card,accountId:q('#saleEditBankAccount')?.value||''});
+  if(transfer>0)payments.push({method:'Havale',amount:transfer,accountId:q('#saleEditBankAccount')?.value||''});
+  if(credit>0)payments.push({method:'Vadeli',amount:credit,accountId:''});
+  if(note>0)payments.push({method:'Senet',amount:note,accountId:''});
+  try{
+    st.textContent='Onaya gönderiliyor...';st.className='form-status';
+    await api('/web-api/admin/cancellation-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      targetType:'sale_edit',targetId:sale.id,reason,
+      payload:{items,discountPct:totals.disc,payments,description:sale.description||''}
+    })});
+    toast('Satış düzenlemesi yönetici onayına gönderildi');
+    closeSaleEditModal();
+    await loadStaffSalesReport();await loadMySalesReport();await loadApprovals();
+  }catch(e){st.textContent=e.message;st.className='form-status error'}
+});
+function reportSaleActions(r){
+  if(r.pendingCancel)return `<span class="approval-status pending" title="${salesEsc(r.pendingReason||'')}">İptal onayı bekliyor</span>`;
+  if(r.pendingEdit)return `<span class="approval-status pending" title="${salesEsc(r.pendingReason||'')}">Düzenleme onayı bekliyor</span>`;
+  return `<button type="button" class="secondary-btn" data-sale-edit="${r.id}">Düzenle</button> <button type="button" data-report-cancel="${r.id}" data-ref="${salesEsc(r.reference||'')}">İptal</button>`;
 }
 async function loadMySalesReport(){
   const st=q('#mySalesStatus');
   try{const d=await api('/web-api/admin/sales-performance');q('#mySalesSummary').innerHTML=reportKpis(d.summary);
-    q('#mySalesTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.date||'-'}</td><td>${r.dealerName||'-'}</td><td>${r.salespersonName||r.createdBy||'-'}</td><td><b>${salesMoney(r.total)}</b></td><td>%${Number(r.discountPct||0)}</td><td><b>${salesMoney(r.commissionAmount||0)}</b></td><td><button type="button" data-my-cancel="${r.id}" data-ref="${r.reference||''}">İptal</button></td></tr>`).join('');
-    qa('[data-my-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.myCancel,b.dataset.ref));st.textContent=`${d.rows?.length||0} satış.`;st.className='form-status success';
+    q('#mySalesTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.date||'-'}</td><td>${r.dealerName||'-'}</td><td>${r.salespersonName||r.createdBy||'-'}</td><td><b>${salesMoney(r.total)}</b></td><td>%${Number(r.discountPct||0)}</td><td><b>${salesMoney(r.commissionAmount||0)}</b></td><td>${reportSaleActions(r)}</td></tr>`).join('');
+    qa('[data-report-cancel],[data-my-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportCancel||b.dataset.myCancel,b.dataset.ref));
+    qa('[data-sale-edit]').forEach(b=>b.onclick=()=>openSaleEditModal(b.dataset.saleEdit));
+    st.textContent=`${d.rows?.length||0} satış.`;st.className='form-status success';
   }catch(e){st.textContent=e.message;st.className='form-status error'}
 }
 async function loadStaffSalesReport(){
@@ -1721,36 +1881,42 @@ async function loadStaffSalesReport(){
   try{const d=await api('/web-api/admin/sales-performance?'+params.toString());
     const current=person;q('#staffSalesPersonFilter').innerHTML='<option value="">Tüm personel</option>'+(d.people||[]).map(p=>`<option value="${p.id}">${p.name}</option>`).join('');if(current)q('#staffSalesPersonFilter').value=current;
     q('#staffSalesSummary').innerHTML=reportKpis(d.summary);
-    q('#staffSalesTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.date||'-'}</td><td><b>${r.salespersonName||r.createdBy||'-'}</b></td><td>${r.dealerName||'-'}</td><td>${salesMoney(r.grossTotal||r.total)}</td><td><b>${salesMoney(r.total)}</b></td><td>${salesMoney(r.commissionAmount||0)}</td><td><button type="button" data-report-cancel="${r.id}" data-ref="${r.reference||''}">İptal</button></td></tr>`).join('');
-    q('#staffCollectionsTable').innerHTML=(d.collections||[]).map(c=>`<tr><td>${c.date||'-'}</td><td>${c.customerName||'-'}</td><td><b>${salesMoney(c.amount)}</b></td><td>${c.accountName||c.category||'-'}</td><td>${c.reference||'-'}</td><td><button type="button" data-col-cancel="${c.id}" data-ref="${c.reference||''}">İptal</button></td></tr>`).join('');
-    qa('[data-report-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportCancel,b.dataset.ref));qa('[data-col-cancel]').forEach(b=>b.onclick=()=>requestCancellation('collection',b.dataset.colCancel,b.dataset.ref));
+    q('#staffSalesTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.date||'-'}</td><td><b>${r.customerName||'-'}</b><small>${r.reference||''}</small></td><td><b>${r.salespersonName||r.createdBy||'-'}</b></td><td>${r.dealerName||'-'}</td><td>${salesMoney(r.grossTotal||r.total)}</td><td><b>${salesMoney(r.total)}</b></td><td>${salesMoney(r.commissionAmount||0)}</td><td>${reportSaleActions(r)}</td></tr>`).join('');
+    q('#staffCollectionsTable').innerHTML=(d.collections||[]).map(c=>`<tr><td>${c.date||'-'}</td><td>${c.customerName||'-'}</td><td><b>${salesMoney(c.amount)}</b></td><td>${c.accountName||c.category||'-'}</td><td>${c.reference||'-'}</td><td>${c.pendingCancel?'<span class="approval-status pending">Onay bekliyor</span>':`<button type="button" data-col-cancel="${c.id}" data-ref="${c.reference||''}">İptal</button>`}</td></tr>`).join('');
+    qa('[data-report-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportCancel,b.dataset.ref));
+    qa('[data-col-cancel]').forEach(b=>b.onclick=()=>requestCancellation('collection',b.dataset.colCancel,b.dataset.ref));
+    qa('[data-sale-edit]').forEach(b=>b.onclick=()=>openSaleEditModal(b.dataset.saleEdit));
     if(!d.canManage){q('[data-tab="staffSalesReport"]')?.classList.add('hidden');q('[data-tab="managerApprovals"]')?.classList.add('hidden')}
-    st.textContent=d.canManage?'Yönetici raporu hazır.':'Yalnız kendi satışlarınız.';st.className='form-status success';
+    st.textContent=d.canManage?'İptal ve düzenleme talepleri Yönetici Onayları’na düşer.':'Yalnız kendi satışlarınız.';st.className='form-status success';
   }catch(e){st.textContent=e.message;st.className='form-status error'}
 }
 function approvalTypeLabel(type=''){
-  return({sale:'Satış iptali',collection:'Tahsilat iptali',customer_edit:'Müşteri düzenleme'}[type]||type||'-');
+  return({sale:'Satış iptali',collection:'Tahsilat iptali',customer_edit:'Müşteri düzenleme',sale_edit:'Satış düzenleme'}[type]||type||'-');
 }
 function approvalDetailHtml(r){
-  if(r.targetType!=='customer_edit'||!r.payload?.after)return r.reason||'-';
+  if(r.targetType==='sale_edit'){
+    const p=r.payload?.preview||{};
+    return `<div class="approval-edit-detail"><div>${salesEsc(r.reason||'Satış düzenleme')}</div><small>Net: ${salesMoney(p.beforeTotal)} → <b>${salesMoney(p.afterTotal)}</b> · ${p.itemCount||0} kalem</small></div>`;
+  }
+  if(r.targetType!=='customer_edit'||!r.payload?.after)return salesEsc(r.reason||'-');
   const b=r.payload.before||{},a=r.payload.after||{};
   const keys=['name','phone','email','city','district','address','invoiceType','companyName','taxOffice','taxNo','tckn','note','active'];
-  const changes=keys.filter(k=>String(b[k]??'')!==String(a[k]??'')).map(k=>`<div><small>${k}</small>: <s>${b[k]??'-'}</s> → <b>${a[k]??'-'}</b></div>`).join('');
-  return `<div class="approval-edit-detail"><div>${r.reason||'Müşteri düzenleme'}</div>${changes||'<small>Alan farkı yok</small>'}</div>`;
+  const changes=keys.filter(k=>String(b[k]??'')!==String(a[k]??'')).map(k=>`<div><small>${k}</small>: <s>${salesEsc(b[k]??'-')}</s> → <b>${salesEsc(a[k]??'-')}</b></div>`).join('');
+  return `<div class="approval-edit-detail"><div>${salesEsc(r.reason||'Müşteri düzenleme')}</div>${changes||'<small>Alan farkı yok</small>'}</div>`;
 }
 async function loadApprovals(){
   const info=q('#approvalInfo');
   try{const d=await api('/web-api/admin/cancellation-requests');if(!d.canManage){q('[data-tab="managerApprovals"]')?.classList.add('hidden');info.textContent='Yalnız yönetici.';return}
     q('#approvalTable').innerHTML=(d.rows||[]).map(r=>`<tr><td><span class="approval-status ${r.status}">${r.status==='pending'?'Bekliyor':r.status==='approved'?'Onaylandı':'Reddedildi'}</span></td><td>${approvalTypeLabel(r.targetType)}</td><td>${r.targetReference||'-'}</td><td>${r.requestedByName||'-'}</td><td>${approvalDetailHtml(r)}</td><td>${String(r.requestedAt||'').replace('T',' ').slice(0,16)}</td><td>${r.status==='pending'?`<button type="button" data-appr="${r.id}" data-type="${r.targetType||''}">Onayla</button> <button type="button" data-rej="${r.id}">Reddet</button>`:(r.reviewedBy||'-')}</td></tr>`).join('');
     qa('[data-appr]').forEach(b=>b.onclick=async()=>{
-      const msg=b.dataset.type==='customer_edit'
-        ?'Müşteri düzenlemesi uygulansın mı?'
-        :'Onaylansın mı? Satış ise tahsilat, cari, stok ve prim de düzeltilecek.';
+      const msg=b.dataset.type==='customer_edit'?'Müşteri düzenlemesi uygulansın mı?'
+        :b.dataset.type==='sale_edit'?'Satış düzenlemesi uygulansın mı? Cari, kasa, stok ve prim güncellenecek.'
+        :'İptal onaylansın mı? Satış ise tahsilat, cari, stok ve prim ters kayıtla düzeltilir.';
       if(!confirm(msg))return;
-      try{await api('/web-api/admin/cancellation-request/'+b.dataset.appr+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve'})});toast('Onaylandı');await loadApprovals();await loadStaffSalesReport();if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId)}catch(e){toast(e.message)}
+      try{await api('/web-api/admin/cancellation-request/'+b.dataset.appr+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve'})});toast('Onaylandı');await loadApprovals();await loadStaffSalesReport();await loadMySalesReport();if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId)}catch(e){toast(e.message)}
     });
     qa('[data-rej]').forEach(b=>b.onclick=async()=>{const note=prompt('Red açıklaması:','')||'';try{await api('/web-api/admin/cancellation-request/'+b.dataset.rej+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reject',note})});toast('Reddedildi');await loadApprovals()}catch(e){toast(e.message)}});
-    info.textContent='Satış/tahsilat iptalleri ve müşteri düzenlemeleri burada onaylanır.';info.className='form-status success';
+    info.textContent='İptal, satış düzenleme ve müşteri değişiklikleri burada onaylanır. Onaylanmadan finans değişmez.';info.className='form-status success';
   }catch(e){info.textContent=e.message;info.className='form-status error'}
 }
 q('#mySalesRefresh')?.addEventListener('click',loadMySalesReport);q('#staffSalesRefresh')?.addEventListener('click',loadStaffSalesReport);q('#approvalRefresh')?.addEventListener('click',loadApprovals);

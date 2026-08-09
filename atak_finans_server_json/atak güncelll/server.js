@@ -1040,13 +1040,17 @@ function cancelCollectionInStore(s,collection,actor,reason=''){
   collection.cancelled=true;collection.cancelledAt=new Date().toISOString();collection.cancelledBy=actor;collection.cancelReason=reason;
   return reversal;
 }
+function relatedSaleCollections(s,sale){
+  const ids=new Set([String(sale.collectionId||''),...((sale.collectionIds||[]).map(String))].filter(Boolean));
+  return (s.financeTransactions||[]).filter(t=>t.kind==='collection'&&!t.cancelled&&(
+    ids.has(String(t.id)) ||
+    (sale.reference && String(t.description||'').includes(String(sale.reference)))
+  ));
+}
 function cancelSaleInStore(s,sale,actor,reason=''){
   if(!sale||sale.kind!=='sale')throw new Error('Satış bulunamadı');
   if(sale.cancelled)return {already:true};
-  const related=(s.financeTransactions||[]).filter(t=>t.kind==='collection'&&!t.cancelled&&(
-    String(t.id)===String(sale.collectionId||'') ||
-    (sale.reference && String(t.description||'').includes(sale.reference))
-  ));
+  const related=relatedSaleCollections(s,sale);
   related.forEach(c=>cancelCollectionInStore(s,c,actor,`Satış iptali: ${reason}`));
   const reversal=financeTx(s,{
     date:todayISO(),kind:'sale_cancel',customerId:sale.customerId,amount:0,
@@ -1066,6 +1070,123 @@ function cancelSaleInStore(s,sale,actor,reason=''){
   const iq=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id));
   if(iq&&iq.status!=='issued'){iq.status='cancelled';iq.error='Satış iptal edildi';iq.updatedAt=new Date().toISOString()}
   return {already:false,linkedCollections:related.length,stockRestored:Boolean(sale.deductStock&&sale.warehouseId)};
+}
+function normalizeSaleEditItems(s,items){
+  const clean=(Array.isArray(items)?items:[]).filter(i=>String(i.productCode||'').trim()&&Number(i.quantity)>0).map(i=>{
+    const qty=Math.max(1,Math.round(Number(i.quantity)||1));
+    const unitPrice=cleanMoney(i.unitPrice);
+    const productCode=String(i.productCode||'').trim();
+    const product=(s.products||[]).find(p=>String(p.code)===productCode);
+    const itemCode=String(i.itemCode||product?.itemCode||'').trim();
+    const materialCode=String(i.materialCode||product?.searchName||product?.code||i.productName||productCode).trim();
+    return{productCode,itemCode,materialCode,productName:materialCode,quantity:qty,unitPrice,total:Math.round(qty*unitPrice*100)/100};
+  });
+  if(!clean.length)throw new Error('En az bir ürün gerekli');
+  return clean;
+}
+function applySaleEditInStore(s,sale,patch={},actor='Yönetici',reason=''){
+  if(!sale||sale.kind!=='sale')throw new Error('Satış bulunamadı');
+  if(sale.cancelled)throw new Error('İptal edilmiş satış düzenlenemez');
+  const before={
+    items:JSON.parse(JSON.stringify(sale.items||[])),
+    grossTotal:Number(sale.grossTotal||sale.total||0),
+    discountPct:Number(sale.discountPct||0),
+    discountAmount:Number(sale.discountAmount||0),
+    total:Number(sale.total||0),
+    customerDelta:Number(sale.customerDelta||sale.total||0),
+    commissionPct:Number(sale.commissionPct||0),
+    commissionAmount:Number(sale.commissionAmount||0),
+    payments:JSON.parse(JSON.stringify(sale.payments||[])),
+    description:sale.description||'',
+    paymentMethod:sale.paymentMethod||''
+  };
+  const cleanItems=normalizeSaleEditItems(s,patch.items!=null?patch.items:sale.items);
+  let grossTotal=Math.round(cleanItems.reduce((a,i)=>a+i.total,0)*100)/100;
+  const discountPct=Math.min(100,Math.max(0,Number(patch.discountPct!=null?patch.discountPct:sale.discountPct)||0));
+  const total=Math.round((grossTotal*(1-discountPct/100))*100)/100;
+  const discountAmount=Math.round((grossTotal-total)*100)/100;
+  const commissionPct=Number(sale.commissionPct||0);
+  const commissionAmount=Math.round((total*commissionPct/100)*100)/100;
+
+  let payments=Array.isArray(patch.payments)?patch.payments:null;
+  if(!payments){
+    payments=(sale.payments||[]).map(p=>({method:String(p.method||''),amount:cleanMoney(p.amount),accountId:String(p.accountId||'')}));
+  }else{
+    payments=payments.map(p=>({method:String(p.method||'').trim(),amount:cleanMoney(p.amount),accountId:String(p.accountId||'')})).filter(p=>p.amount>0&&p.method);
+  }
+  const allocated=Math.round(payments.reduce((a,p)=>a+p.amount,0)*100)/100;
+  if(total>0 && Math.abs(allocated-total)>0.009){
+    throw new Error(`Ödeme dağılımı net tutara eşit olmalı. Net: ${total}, Dağıtılan: ${allocated}`);
+  }
+  for(const p of payments){
+    if(['Nakit','Kredi Kartı','Havale'].includes(p.method)){
+      if(!p.accountId)throw new Error(`${p.method} için kasa/banka seçilmelidir`);
+      if(!s.financeAccounts.some(a=>a.id===p.accountId&&a.active!==false))throw new Error(`${p.method} hesabı geçersiz`);
+    }
+  }
+
+  // Stok farkı
+  if(sale.deductStock&&sale.warehouseId){
+    const oldMap=new Map(),newMap=new Map();
+    (before.items||[]).forEach(i=>oldMap.set(String(i.productCode),(oldMap.get(String(i.productCode))||0)+Number(i.quantity||0)));
+    cleanItems.forEach(i=>newMap.set(String(i.productCode),(newMap.get(String(i.productCode))||0)+Number(i.quantity||0)));
+    const codes=new Set([...oldMap.keys(),...newMap.keys()]);
+    for(const code of codes){
+      const diff=(newMap.get(code)||0)-(oldMap.get(code)||0); // + means more sold → stock down
+      if(!diff)continue;
+      if(diff>0){
+        const stockRow=currentStock(s,code,sale.warehouseId);
+        const available=Number(stockRow?.quantity||0)-Number(stockRow?.reserved||0);
+        if(available<diff)throw new Error(`${code} için depoda yalnızca ${Math.max(0,available)} adet satılabilir stok var`);
+        addStockMovement(s,{productCode:code,warehouseId:sale.warehouseId,type:'sale',quantity:-diff,reference:sale.reference||sale.id,note:`Satış düzenleme · ${reason}`,user:actor});
+      }else{
+        addStockMovement(s,{productCode:code,warehouseId:sale.warehouseId,type:'sale_cancel',quantity:-diff,reference:sale.reference||sale.id,note:`Satış düzenleme iade · ${reason}`,user:actor});
+      }
+    }
+  }
+
+  // Eski tahsilatları iptal et, yeni nakit/kart/havale tahsilatlarını oluştur
+  const oldCollections=relatedSaleCollections(s,sale);
+  oldCollections.forEach(c=>cancelCollectionInStore(s,c,actor,`Satış düzenleme: ${reason}`));
+  const collections=[];
+  for(const p of payments){
+    if(!['Nakit','Kredi Kartı','Havale'].includes(p.method))continue;
+    const collection=financeTx(s,{
+      date:sale.date||todayISO(),kind:'collection',accountId:p.accountId,customerId:sale.customerId,
+      amount:p.amount,customerDelta:-p.amount,category:p.method,
+      description:`${sale.reference||sale.id} satış tahsilatı · ${p.method} (düzenleme)`,
+      reference:`TAH-${Date.now()}-${collections.length+1}`,createdBy:actor
+    });
+    collections.push(collection);
+  }
+
+  // Cari: satışın customerDelta'sı güncellenir (bakiye toplamı bundan hesaplanır).
+  // Eski tahsilat iptali + yeni tahsilatlar kasa/banka ve cariyi dengeler.
+  sale.items=cleanItems;
+  sale.grossTotal=grossTotal;
+  sale.discountPct=discountPct;
+  sale.discountAmount=discountAmount;
+  sale.total=total;
+  sale.customerDelta=total;
+  sale.commissionPct=commissionPct;
+  sale.commissionAmount=commissionAmount;
+  sale.payments=payments;
+  sale.paymentMethod=payments.map(p=>p.method).join(' + ')||sale.paymentMethod||'';
+  sale.description=String(patch.description!=null?patch.description:sale.description||'');
+  sale.collectionId=collections[0]?.id||'';
+  sale.collectionIds=collections.map(c=>c.id);
+  sale.editedAt=new Date().toISOString();
+  sale.editedBy=actor;
+  sale.editReason=reason;
+  sale.editHistory=Array.isArray(sale.editHistory)?sale.editHistory:[];
+  sale.editHistory.unshift({at:sale.editedAt,by:actor,reason,before:{total:before.total,items:before.items.length,payments:before.payments},after:{total,items:cleanItems.length,payments:payments.length}});
+
+  const iq=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id));
+  if(iq&&iq.status!=='issued'){
+    iq.items=cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)}));
+    iq.total=total;iq.updatedAt=new Date().toISOString();
+  }
+  return {before,after:{items:cleanItems,grossTotal,discountPct,discountAmount,total,commissionAmount,payments,description:sale.description},collections:collections.length};
 }
 
 
@@ -1114,6 +1235,22 @@ app.get('/web-api/admin/salespeople',requireAdminOrStaff('orders_manage'),(req,r
   const s=readStore();
   res.json({ok:true,rows:salesPeople(s,req),currentUser:currentSessionUser(req),canManage:isSystemManager(req)});
 });
+app.get('/web-api/admin/sale/:id',requireAdmin,(req,res)=>{
+  const s=readStore(),sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
+  if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
+  const customer=s.customers.find(c=>c.id===sale.customerId)||null;
+  const collections=relatedSaleCollections(s,sale).map(c=>({
+    id:c.id,date:c.date,amount:c.amount,accountId:c.accountId,
+    accountName:s.financeAccounts.find(a=>a.id===c.accountId)?.name||'',category:c.category,reference:c.reference
+  }));
+  const pending=(s.cancellationRequests||[]).filter(r=>r.status==='pending'&&String(r.targetId)===String(sale.id));
+  res.json({
+    ok:true,sale,customer,collections,
+    accounts:s.financeAccounts.filter(a=>a.active!==false),
+    products:(s.products||[]).filter(p=>p.active!==false).map(p=>({code:p.code,name:p.name,itemCode:p.itemCode||'',searchName:p.searchName||'',cashPrice:Number(p.cashPrice||p.salePrice||p.price||0)})),
+    pending,canManage:isSystemManager(req)
+  });
+});
 app.get('/web-api/admin/sales-performance',requireAdmin,(req,res)=>{
   const s=readStore(),u=currentSessionUser(req),canManage=isSystemManager(req);
   let rows=(s.financeTransactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled);
@@ -1125,6 +1262,24 @@ app.get('/web-api/admin/sales-performance',requireAdmin,(req,res)=>{
   if(from)rows=rows.filter(t=>String(t.date||'')>=from);
   if(to)rows=rows.filter(t=>String(t.date||'')<=to);
   rows=rows.sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
+  const pendingByTarget=new Map();
+  (s.cancellationRequests||[]).filter(r=>r.status==='pending').forEach(r=>{
+    pendingByTarget.set(`${r.targetType}:${r.targetId}`,r);
+  });
+  const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
+  rows=rows.map(t=>{
+    const c=customerMap.get(String(t.customerId));
+    const pendCancel=pendingByTarget.get(`sale:${t.id}`);
+    const pendEdit=pendingByTarget.get(`sale_edit:${t.id}`);
+    return{
+      ...t,
+      customerName:c?.name||'',
+      customerEmail:c?.email||'',
+      pendingCancel:Boolean(pendCancel),
+      pendingEdit:Boolean(pendEdit),
+      pendingReason:pendCancel?.reason||pendEdit?.reason||''
+    };
+  });
   const summary={
     count:rows.length,
     gross:Math.round(rows.reduce((a,x)=>a+Number(x.grossTotal||x.total||0),0)*100)/100,
@@ -1132,33 +1287,48 @@ app.get('/web-api/admin/sales-performance',requireAdmin,(req,res)=>{
     discount:Math.round(rows.reduce((a,x)=>a+(Number(x.grossTotal||x.total||0)-Number(x.total||0)),0)*100)/100,
     commission:Math.round(rows.reduce((a,x)=>a+Number(x.commissionAmount||0),0)*100)/100
   };
-  const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c.name]));
   const accountMap=new Map((s.financeAccounts||[]).map(a=>[String(a.id),a.name]));
   const collections=(s.financeTransactions||[]).filter(t=>t.kind==='collection'&&!t.cancelled).map(t=>({
-    ...t,customerName:customerMap.get(String(t.customerId))||'',accountName:accountMap.get(String(t.accountId))||''
+    ...t,
+    customerName:customerMap.get(String(t.customerId))?.name||'',
+    accountName:accountMap.get(String(t.accountId))||'',
+    pendingCancel:Boolean(pendingByTarget.get(`collection:${t.id}`))
   }));
   res.json({ok:true,canManage,summary,rows,collections,people:salesPeople(s,req)});
 });
 app.post('/web-api/admin/cancellation-request',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},u=currentSessionUser(req),targetType=String(x.targetType||''),targetId=String(x.targetId||''),reason=String(x.reason||'').trim();
-  if(!['sale','collection'].includes(targetType))return res.status(400).json({error:'Geçersiz işlem türü'});
-  if(!reason)return res.status(400).json({error:'İptal sebebi zorunludur'});
+  if(!['sale','collection','sale_edit'].includes(targetType))return res.status(400).json({error:'Geçersiz işlem türü'});
+  if(!reason)return res.status(400).json({error:'Sebep zorunludur'});
   const target=(s.financeTransactions||[]).find(t=>String(t.id)===targetId);
   if(!target)return res.status(404).json({error:'İşlem bulunamadı'});
   if(target.cancelled)return res.status(400).json({error:'İşlem zaten iptal edilmiş'});
-  if(isSystemManager(req)){
+  if((s.cancellationRequests||[]).some(r=>r.status==='pending'&&['sale','sale_edit','collection'].includes(r.targetType)&&String(r.targetId)===targetId))
+    return res.status(409).json({error:'Bu işlem için bekleyen onay talebi var'});
+
+  if(targetType==='sale_edit'){
+    let preview;
     try{
-      const result=targetType==='sale'?cancelSaleInStore(s,target,u?.name||'Yönetici',reason):cancelCollectionInStore(s,target,u?.name||'Yönetici',reason);
-      audit(s,'Yönetici işlem iptal etti',target.reference||target.id,{targetType,reason});writeStore(s);
-      return res.json({ok:true,direct:true,result});
+      const clone=JSON.parse(JSON.stringify(s));
+      const saleClone=(clone.financeTransactions||[]).find(t=>String(t.id)===targetId);
+      preview=applySaleEditInStore(clone,saleClone,x.payload||{},u?.name||'Personel',reason);
     }catch(e){return res.status(400).json({error:e.message})}
+    const row={
+      id:crypto.randomUUID(),targetType:'sale_edit',targetId,targetReference:target.reference||'',
+      reason,status:'pending',requestedById:u?.id||'',requestedByName:u?.name||'Personel',
+      requestedAt:new Date().toISOString(),reviewedBy:'',reviewedAt:'',reviewNote:'',
+      payload:{after:x.payload||{},preview:{beforeTotal:preview.before.total,afterTotal:preview.after.total,itemCount:preview.after.items.length}}
+    };
+    s.cancellationRequests.unshift(row);
+    audit(s,'Satış düzenleme onayı istendi',target.reference||target.id,{reason,personel:row.requestedByName});
+    writeStore(s);return res.json({ok:true,direct:false,pendingApproval:true,row});
   }
-  if((s.cancellationRequests||[]).some(r=>r.status==='pending'&&r.targetType===targetType&&String(r.targetId)===targetId))
-    return res.status(409).json({error:'Bu işlem için bekleyen iptal talebi var'});
+
+  // İptal her zaman yönetici onayına düşer
   const row={id:crypto.randomUUID(),targetType,targetId,targetReference:target.reference||'',reason,status:'pending',
     requestedById:u?.id||'',requestedByName:u?.name||'Personel',requestedAt:new Date().toISOString(),reviewedBy:'',reviewedAt:'',reviewNote:''};
   s.cancellationRequests.unshift(row);audit(s,'İptal talebi oluşturuldu',target.reference||target.id,{targetType,reason,personel:row.requestedByName});
-  writeStore(s);res.json({ok:true,direct:false,row});
+  writeStore(s);res.json({ok:true,direct:false,pendingApproval:true,row});
 });
 app.get('/web-api/admin/cancellation-requests',requireAdmin,(req,res)=>{
   const s=readStore(),u=currentSessionUser(req),canManage=isSystemManager(req);
@@ -1174,7 +1344,8 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdmin,(req,res)
   const action=String(req.body?.action||''),note=String(req.body?.note||''),actor=currentSessionUser(req)?.name||'Yönetici';
   if(action==='reject'){
     row.status='rejected';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
-    audit(s,row.targetType==='customer_edit'?'Müşteri düzenleme reddedildi':'İptal talebi reddedildi',row.targetReference||row.targetId,{note});
+    const rejectLabel=row.targetType==='customer_edit'?'Müşteri düzenleme reddedildi':row.targetType==='sale_edit'?'Satış düzenleme reddedildi':'İptal talebi reddedildi';
+    audit(s,rejectLabel,row.targetReference||row.targetId,{note});
     writeStore(s);return res.json({ok:true,row});
   }
   if(action!=='approve')return res.status(400).json({error:'Geçersiz işlem'});
@@ -1187,6 +1358,16 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdmin,(req,res)
       row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
       audit(s,'Müşteri düzenleme onaylandı',customer.name,{reason:row.reason,personel:row.requestedByName});
       writeStore(s);return res.json({ok:true,row,customer:{...customer,balance:customerBalance(s,customer.id)}});
+    }catch(e){return res.status(400).json({error:e.message})}
+  }
+  if(row.targetType==='sale_edit'){
+    const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(row.targetId)&&t.kind==='sale');
+    if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
+    try{
+      const result=applySaleEditInStore(s,sale,row.payload?.after||{},actor,row.reason);
+      row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
+      audit(s,'Satış düzenleme onaylandı',sale.reference||sale.id,{reason:row.reason,personel:row.requestedByName,total:result.after.total});
+      writeStore(s);return res.json({ok:true,row,result});
     }catch(e){return res.status(400).json({error:e.message})}
   }
   const target=(s.financeTransactions||[]).find(t=>String(t.id)===String(row.targetId));

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=649-print-docs" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=650-sale-edit" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-ui-scale-v4')||'0.85';document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;}catch(e){document.documentElement.style.zoom='0.85';}})();</script>
 <style>
 /* ===== Satış Merkezi — POS Kasa ===== */
@@ -413,7 +413,7 @@
 <label>Başlangıç<input id="staffSalesFrom" type="date"/></label><label>Bitiş<input id="staffSalesTo" type="date"/></label>
 </div>
 <div id="staffSalesSummary" class="sales-kpi-grid"></div>
-<div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Satıcı</th><th>Bayi</th><th>Brüt</th><th>Net</th><th>Prim</th><th>İşlem</th></tr></thead><tbody id="staffSalesTable"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Müşteri</th><th>Satıcı</th><th>Bayi</th><th>Brüt</th><th>Net</th><th>Prim</th><th>İşlem</th></tr></thead><tbody id="staffSalesTable"></tbody></table></div>
 <h3>Tahsilatlar</h3>
 <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Hesap</th><th>Referans</th><th>İşlem</th></tr></thead><tbody id="staffCollectionsTable"></tbody></table></div>
 <div id="staffSalesStatus" class="form-status"></div>
@@ -421,7 +421,7 @@
 
 <section class="tab" id="managerApprovals">
 <div class="panel">
-<div class="panel-head"><div><small class="eyebrow">YÖNETİCİ</small><h2>Yönetici Onayları</h2><p>Personel satış/tahsilat iptalleri ve müşteri düzenleme talepleri.</p></div><button id="approvalRefresh" class="secondary-btn" type="button">Yenile</button></div>
+<div class="panel-head"><div><small class="eyebrow">YÖNETİCİ</small><h2>Yönetici Onayları</h2><p>Satış/tahsilat iptalleri, satış düzenlemeleri ve müşteri değişiklikleri.</p></div><button id="approvalRefresh" class="secondary-btn" type="button">Yenile</button></div>
 <div id="approvalInfo" class="form-status"></div>
 <div class="table-wrap"><table><thead><tr><th>Durum</th><th>Tür</th><th>Referans</th><th>Personel</th><th>Sebep</th><th>Tarih</th><th>İşlem</th></tr></thead><tbody id="approvalTable"></tbody></table></div>
 </div></section>
@@ -811,7 +811,7 @@ Bulunamayan → Diğer.
 <label>Ad Soyad / Firma *<input autocomplete="name" id="customerPageName" required placeholder="Zorunlu"/></label>
 <div class="two-col">
 <label>Telefon *<input autocomplete="tel" id="customerPagePhone" required placeholder="05xx xxx xx xx"/></label>
-<label>E-posta<input autocomplete="email" id="customerPageEmail" type="email"/></label>
+<label>E-posta (e-Fatura / e-Arşiv)<input autocomplete="email" id="customerPageEmail" type="email" placeholder="ornek@mail.com"/><small class="field-hint">Fatura gönderimi için önerilir</small></label>
 </div>
 <label>Durum<select id="customerPageActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></label>
 </div>
@@ -908,6 +908,45 @@ Bulunamayan → Diğer.
 </section>
 </main></div>
 <div class="modal hidden" id="productModal"><form class="modal-card" id="productForm"><button class="x" id="closeModal" type="button">×</button><h2>Ürün kartı</h2><input id="pId" type="hidden"/><div class="form-grid two"><label>Ürün kodu<input id="pCode" required=""/></label><label>Barkod<input id="pBarcode"/></label><label>Marka<select id="pBrand"></select></label><label class="wide">Ürün adı<input id="pName" required=""/></label><label>Kategori<select id="pCategory" required=""></select></label><label>KDV<input id="pVatRate" readonly="" type="number"/></label><label>Alış fiyatı (KDV dahil)<input id="pPurchasePrice" type="number"/></label><label>Liste fiyatı<input id="pListPrice" type="number"/></label><label>Nakit fiyatı<input id="pCashPrice" type="number"/></label><label>Kart fiyatı<input id="pCardPrice" type="number"/></label><label>Minimum satış fiyatı<input id="pMinimumSalePrice" type="number"/></label><label>Beko fiyatı<input id="pBekoPrice" type="number"/></label><label>Çizili fiyat<input id="pOldPrice" type="number"/></label><label>Fiyat kuralı<select id="pPriceMode"><option value="same">Beko ile aynı</option><option value="percent_down">Yüzde düşür</option><option value="percent_up">Yüzde yükselt</option><option value="fixed_down">Tutar düşür</option><option value="fixed_up">Tutar ekle</option><option value="manual">Manuel</option></select></label><label>Kural değeri / manuel fiyat<input id="pPriceValue" type="number"/></label><label>Stok<input id="pStock" type="number"/></label><label>Etiketler<input id="pTags" placeholder="Fırsat, Yeni, 9 Taksit"/></label><label class="wide">Görsel URL<input id="pImage"/></label><div class="wide profit-preview" id="profitPreview"></div><label class="wide">Açıklama<textarea id="pDescription"></textarea></label><label class="check"><input id="pActive" type="checkbox"/> Yayında</label><label class="check"><input id="pFeatured" type="checkbox"/> Öne çıkan</label></div><button class="primary" type="submit">Kaydet</button></form></div>
+<div id="reasonModal" class="sales-preview-modal hidden" aria-hidden="true">
+  <div class="sales-preview-dialog" style="width:min(520px,96vw)">
+    <div class="sales-preview-head"><div><small>ONAY TALEBİ</small><h2 id="reasonModalTitle">İptal Sebebi</h2></div><button id="reasonModalClose" type="button">×</button></div>
+    <p id="reasonModalHint" class="note">Sebep yazın; talep Yönetici Onayları’na düşer. Onaylanınca cari, kasa, stok ve prim düzeltilir.</p>
+    <label>Sebep<textarea id="reasonModalText" rows="4" placeholder="Örn. Yanlış ürün / müşteri vazgeçti / tutar hatası"></textarea></label>
+    <div class="sales-preview-actions">
+      <button id="reasonModalCancel" class="secondary-btn" type="button">Vazgeç</button>
+      <button id="reasonModalSubmit" class="primary" type="button">Onaya Gönder</button>
+    </div>
+  </div>
+</div>
+<div id="saleEditModal" class="sales-preview-modal hidden" aria-hidden="true">
+  <div class="sales-preview-dialog" style="width:min(920px,96vw)">
+    <div class="sales-preview-head"><div><small>SATIŞ DÜZENLEME</small><h2 id="saleEditTitle">Satışı Düzenle</h2></div><button id="saleEditClose" type="button">×</button></div>
+    <p class="note">Ürün ekleyip çıkarabilir, fiyat/iskonto ve tahsilat dağılımını düzeltebilirsiniz. Kayıt yönetici onayına gider; onaylanınca finans (cari/kasa/stok/prim) güncellenir.</p>
+    <div id="saleEditMeta" class="preview-cards"></div>
+    <div class="table-wrap"><table><thead><tr><th>Ürün kodu</th><th>Ad</th><th>Adet</th><th>Birim</th><th></th></tr></thead><tbody id="saleEditItems"></tbody></table></div>
+    <div class="sales-preview-actions" style="justify-content:flex-start;border:0;padding-top:0">
+      <button id="saleEditAddItem" class="secondary-btn" type="button">+ Ürün Ekle</button>
+    </div>
+    <div class="sale-edit-grid">
+      <label>İskonto %<input id="saleEditDiscount" type="number" step="0.01" min="0" max="100"/></label>
+      <label>Nakit<input id="saleEditPayCash" type="number" step="0.01" min="0"/></label>
+      <label>Kart<input id="saleEditPayCard" type="number" step="0.01" min="0"/></label>
+      <label>Havale<input id="saleEditPayTransfer" type="number" step="0.01" min="0"/></label>
+      <label>Vadeli<input id="saleEditPayCredit" type="number" step="0.01" min="0"/></label>
+      <label>Senet<input id="saleEditPayNote" type="number" step="0.01" min="0"/></label>
+      <label>Nakit hesabı<select id="saleEditCashAccount"></select></label>
+      <label>Kart/Havale hesabı<select id="saleEditBankAccount"></select></label>
+    </div>
+    <div id="saleEditTotals" class="preview-totals"></div>
+    <label>Düzenleme sebebi<textarea id="saleEditReason" rows="3" placeholder="Ne değiştirildi ve neden?"></textarea></label>
+    <div class="form-status" id="saleEditStatus"></div>
+    <div class="sales-preview-actions">
+      <button id="saleEditCancel" class="secondary-btn" type="button">Vazgeç</button>
+      <button id="saleEditSubmit" class="primary" type="button">Düzenlemeyi Onaya Gönder</button>
+    </div>
+  </div>
+</div>
 <div id="salesPreviewModal" class="sales-preview-modal hidden" aria-hidden="true">
   <div class="sales-preview-dialog">
     <div class="sales-preview-head"><div><small>SATIŞ ÖNİZLEME</small><h2>Satışı Kontrol Et</h2></div><button id="salesPreviewClose" type="button">×</button></div>
@@ -920,5 +959,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=649-print-docs"></script><script src="/web-admin-assets/customer-sales.js?v=649-print-docs"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=650-sale-edit"></script><script src="/web-admin-assets/customer-sales.js?v=650-sale-edit"></script>
 </body></html>
