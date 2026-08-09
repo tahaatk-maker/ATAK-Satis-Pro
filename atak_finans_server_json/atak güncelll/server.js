@@ -970,10 +970,16 @@ app.post('/web-api/admin/sale/:id/mark-invoiced',requireAdmin,(req,res)=>{
 
 app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{};
+  const actor=currentActor(req);
+  // Personel portalında satış her zaman kendi adına yazılır
+  if(!actorIsManager(req) && actor){
+    x.salespersonId=actor.id;
+    x.salespersonName=actor.name;
+  }
   const dealer=(s.dealerSettings||[]).find(d=>String(d.id)===String(x.dealerId)&&d.active!==false);
   if(!dealer)return res.status(400).json({error:'Geçerli satış bayisi seçilmelidir'});
   const people=salesPeople(s,req);
-  const salesperson=people.find(p=>String(p.id)===String(x.salespersonId)) || people.find(p=>String(p.name).toLocaleLowerCase('tr-TR')===String(x.salespersonName||'').toLocaleLowerCase('tr-TR'));
+  const salesperson=people.find(p=>String(p.id)===String(x.salespersonId)) || people.find(p=>String(p.name).toLocaleLowerCase('tr-TR')===String(x.salespersonName||'').toLocaleLowerCase('tr-TR')) || (actor?{id:actor.id,name:actor.name}:null);
   if(!salesperson)return res.status(400).json({error:'Satış personeli seçilmelidir'});
   const customer=s.customers.find(c=>c.id===x.customerId);
   if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});

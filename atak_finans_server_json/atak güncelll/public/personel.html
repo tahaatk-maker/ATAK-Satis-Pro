@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Atak Home Personel</title>
 <link rel="icon" href="/assets/favicon.png">
-<link rel="stylesheet" href="/assets/personel.css?v=staff-finance-v2">
+<link rel="stylesheet" href="/assets/personel.css?v=staff-pos-v3">
 </head>
 <body>
 
@@ -139,21 +139,116 @@
 <section id="salesPanel" class="panel hidden">
 <div class="panel-head">
 <div>
-<small class="eyebrow">SATIŞ</small>
+<small class="eyebrow">SATIŞ KASASI</small>
 <h2>Satış Merkezi</h2>
-<p>Ürün kataloğu (hızlı bakış). Tam satış için yönetim panelini kullanın.</p>
+<p id="salesScopeHint">Müşteri → ürün → ödeme adımlarıyla satış yapın.</p>
 </div>
-<a class="primary-btn" href="/web-admin" id="salesGoAdmin">Tam Satış Ekranı →</a>
+<button id="salesResetBtn" class="ghost-btn" type="button">Yeni Fiş</button>
 </div>
-<div id="salesStatus" class="status">Yükleniyor...</div>
-<div class="toolbar">
-<input id="productSearch" placeholder="Ürün kodu veya ürün adı ara">
+
+<nav class="pos-steps" aria-label="Satış adımları">
+  <button type="button" class="pos-step active" data-pos-step="1"><b>1</b><span>Müşteri</span></button>
+  <button type="button" class="pos-step" data-pos-step="2"><b>2</b><span>Ürün / Sepet</span></button>
+  <button type="button" class="pos-step" data-pos-step="3"><b>3</b><span>Ödeme</span></button>
+</nav>
+<div class="pos-banner" id="salesBanner">ADIM 1/3 — Önce müşteri seçin</div>
+<div id="salesStatus" class="status"></div>
+
+<div id="salesStep1" class="pos-step-panel">
+  <div class="toolbar">
+    <input id="customerSearchSale" placeholder="Ad, telefon veya VKN/TCKN ara">
+    <button id="salesNewCustomerBtn" class="primary-btn" type="button">+ Yeni Müşteri</button>
+  </div>
+  <label class="field">Müşteri
+    <select id="salesCustomerSelect"><option value="">Müşteri seçin</option></select>
+  </label>
+  <div id="salesCustomerInfo" class="info-box hidden"></div>
+  <div class="pos-nav">
+    <span id="salesHint1">Müşteri seçmeden devam edilemez</span>
+    <button id="salesNext1" class="primary-btn" type="button" disabled>Devam Et → Ürün</button>
+  </div>
 </div>
-<div class="table-wrap">
-<table>
-<thead><tr><th>Kod</th><th>Ürün</th><th>Marka</th></tr></thead>
-<tbody id="productRows"></tbody>
-</table>
+
+<div id="salesStep2" class="pos-step-panel hidden">
+  <div class="sales-grid">
+    <div>
+      <div class="toolbar">
+        <input id="productSearch" placeholder="Barkod, madde kodu veya ürün adı">
+      </div>
+      <div class="product-list" id="productRows"></div>
+    </div>
+    <div>
+      <div class="section-title">Sepet <small id="cartCount">0 kalem</small></div>
+      <div id="cartRows" class="cart-list"></div>
+      <div class="cart-total"><span>Ara toplam</span><b id="cartSubtotal">₺0,00</b></div>
+    </div>
+  </div>
+  <div class="pos-nav">
+    <button id="salesBack2" class="ghost-btn" type="button">← Müşteri</button>
+    <span id="salesHint2">Sepete ürün ekleyin</span>
+    <button id="salesNext2" class="primary-btn" type="button" disabled>Devam Et → Ödeme</button>
+  </div>
+</div>
+
+<div id="salesStep3" class="pos-step-panel hidden">
+  <div class="pay-grid">
+    <label class="field">Bayi
+      <select id="salesDealer"></select>
+    </label>
+    <label class="field">İskonto %
+      <input id="salesDiscountPct" type="number" min="0" max="100" step="0.01" value="0">
+    </label>
+    <label class="field">Satış Tarihi
+      <input id="salesDate" type="date">
+    </label>
+    <label class="field">Nakit hesabı
+      <select id="payCashAccount"></select>
+    </label>
+    <label class="field">Kart / Havale hesabı
+      <select id="payBankAccount"></select>
+    </label>
+  </div>
+  <div class="pay-tiles">
+    <label>Nakit <input id="payCash" type="number" min="0" step="0.01" value="0"></label>
+    <label>Kredi Kartı <input id="payCard" type="number" min="0" step="0.01" value="0"></label>
+    <label>Havale <input id="payTransfer" type="number" min="0" step="0.01" value="0"></label>
+    <label>Senet <input id="payNote" type="number" min="0" step="0.01" value="0"></label>
+  </div>
+  <div id="promissoryWrap" class="pay-grid hidden">
+    <label class="field">Senet taksit<input id="promissoryInstallments" type="number" min="1" max="36" value="1"></label>
+    <label class="field">İlk vade<input id="promissoryFirstDue" type="date"></label>
+  </div>
+  <div class="totals-box">
+    <div><span>Brüt</span><b id="payGross">₺0,00</b></div>
+    <div><span>İskonto</span><b id="payDiscount">₺0,00</b></div>
+    <div class="net"><span>Net</span><b id="payNet">₺0,00</b></div>
+    <div><span>Dağıtılan</span><b id="payAllocated">₺0,00</b></div>
+    <div><span>Kalan</span><b id="payRemain">₺0,00</b></div>
+  </div>
+  <div class="pos-nav">
+    <button id="salesBack3" class="ghost-btn" type="button">← Ürün</button>
+    <button id="salesFillCash" class="ghost-btn" type="button">Tümünü Nakit</button>
+    <button id="salesFillCard" class="ghost-btn" type="button">Tümünü Kart</button>
+    <button id="salesSaveBtn" class="primary-btn" type="button">SATIŞI KAYDET</button>
+  </div>
+</div>
+
+<div id="salesQuickCustomerModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="panel-head">
+      <h2>Yeni Müşteri</h2>
+      <button id="salesQuickCustomerClose" class="ghost-btn" type="button">Kapat</button>
+    </div>
+    <form id="salesQuickCustomerForm" class="form-grid">
+      <label class="field">Ad Soyad / Firma *<input id="qcName" required></label>
+      <label class="field">Telefon *<input id="qcPhone" required></label>
+      <label class="field">İl *<input id="qcCity" required></label>
+      <label class="field">İlçe *<input id="qcDistrict" required></label>
+      <label class="field wide">Açık adres *<textarea id="qcAddress" rows="2" required></textarea></label>
+      <button class="primary-btn wide" type="submit">Kaydet ve Seç</button>
+      <div id="qcStatus" class="status"></div>
+    </form>
+  </div>
 </div>
 </section>
 
@@ -185,6 +280,6 @@
 </main>
 </div>
 
-<script src="/assets/personel.js?v=staff-finance-v2"></script>
+<script src="/assets/personel.js?v=staff-pos-v3"></script>
 </body>
 </html>

@@ -11,6 +11,10 @@ async function api(url,opt={}){
 let currentUser=null;
 let financeData=null;
 let salesData=null;
+let salesCustomers=[];
+let salesAccounts=[];
+let salesCart=[];
+let salesStep=1;
 
 function has(permission){
   const p=currentUser?.permissions||[];
@@ -180,6 +184,50 @@ $('#financeFilterApply')?.addEventListener('click',loadFinance);
 $('#customerSearch')?.addEventListener('input',renderCustomers);
 $('#txSearch')?.addEventListener('input',renderTransactions);
 
+function num(v){const n=Number(String(v??'').replace(',','.'));return Number.isFinite(n)?n:0}
+function productPrice(p){return num(p?.cashPrice??p?.price??p?.salePrice??p?.cardPrice)}
+function cartGross(){return Math.round(salesCart.reduce((a,r)=>a+num(r.qty)*num(r.unitPrice),0)*100)/100}
+function cartNet(){
+  const g=cartGross();
+  const d=Math.min(100,Math.max(0,num($('#salesDiscountPct')?.value)));
+  return Math.round(g*(1-d/100)*100)/100;
+}
+function setSalesStep(step){
+  salesStep=Math.min(3,Math.max(1,Number(step)||1));
+  ['1','2','3'].forEach(n=>{
+    $(`#salesStep${n}`)?.classList.toggle('hidden',String(salesStep)!==n);
+  });
+  document.querySelectorAll('.pos-step').forEach(btn=>{
+    const n=Number(btn.dataset.posStep);
+    btn.classList.toggle('active',n===salesStep);
+    btn.classList.toggle('done',n<salesStep);
+  });
+  const hasCustomer=!!$('#salesCustomerSelect')?.value;
+  const hasCart=salesCart.length>0;
+  $('#salesBanner').textContent=salesStep===1
+    ?'ADIM 1/3 — Önce müşteri seçin'
+    :(salesStep===2?'ADIM 2/3 — Ürün ekleyin':'ADIM 3/3 — Ödeme dağılımını tamamlayın');
+  if($('#salesNext1'))$('#salesNext1').disabled=!hasCustomer;
+  if($('#salesHint1'))$('#salesHint1').textContent=hasCustomer?'Müşteri seçildi — devam edebilirsiniz':'Müşteri seçmeden devam edilemez';
+  if($('#salesNext2'))$('#salesNext2').disabled=!hasCart;
+  if($('#salesHint2'))$('#salesHint2').textContent=hasCart?`${salesCart.length} kalem hazır`:'Sepete ürün ekleyin';
+  if(salesStep===3)salesRecalcPay();
+}
+function salesReset(){
+  salesCart=[];
+  if($('#salesCustomerSelect'))$('#salesCustomerSelect').value='';
+  if($('#salesDiscountPct'))$('#salesDiscountPct').value='0';
+  ['#payCash','#payCard','#payTransfer','#payNote'].forEach(id=>{if($(id))$(id).value='0'});
+  if($('#salesDate'))$('#salesDate').value=new Date().toISOString().slice(0,10);
+  const due=new Date();due.setDate(due.getDate()+30);
+  if($('#promissoryFirstDue'))$('#promissoryFirstDue').value=due.toISOString().slice(0,10);
+  renderSalesCustomers();
+  renderProducts();
+  renderCart();
+  setSalesStep(1);
+  $('#salesStatus').textContent='';
+}
+
 $('#salesCard').onclick=async()=>{
   hidePanels();
   $('#salesPanel').classList.remove('hidden');
@@ -187,23 +235,213 @@ $('#salesCard').onclick=async()=>{
 };
 async function loadSales(){
   const st=$('#salesStatus');
-  st.textContent='Ürünler yükleniyor...';
+  st.textContent='Satış verileri yükleniyor...';
   try{
-    salesData=await api('/web-api/admin/sales-catalog');
-    renderProducts();
-    st.textContent=`${(salesData.products||[]).length} ürün hazır`;
+    const [cat,fin]=await Promise.all([
+      api('/web-api/admin/sales-catalog'),
+      api('/web-api/admin/finance-center')
+    ]);
+    salesData=cat;
+    salesCustomers=(fin.customers||[]).filter(c=>c.active!==false);
+    salesAccounts=fin.accounts||[];
+    if($('#salesDealer')){
+      $('#salesDealer').innerHTML=(cat.dealerSettings||[]).filter(d=>d.active!==false)
+        .map(d=>`<option value="${d.id}">${d.name}</option>`).join('')||'<option value="">Bayi yok</option>';
+    }
+    const cashOpts=salesAccounts.filter(a=>a.type==='cash'&&a.active!==false);
+    const bankOpts=salesAccounts.filter(a=>a.type==='bank'&&a.active!==false);
+    const allOpts=salesAccounts.filter(a=>a.active!==false);
+    const fillAcc=(sel,rows)=>{
+      if(!sel)return;
+      const list=rows.length?rows:allOpts;
+      sel.innerHTML=list.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Hesap yok</option>';
+    };
+    fillAcc($('#payCashAccount'),cashOpts);
+    fillAcc($('#payBankAccount'),bankOpts);
+    $('#salesScopeHint').textContent=`Satışlar sizin adınıza kaydedilir · ${(cat.products||[]).length} ürün`;
+    salesReset();
+    st.textContent='';
   }catch(e){st.textContent=e.message}
+}
+function renderSalesCustomers(){
+  const term=($('#customerSearchSale')?.value||'').toLocaleLowerCase('tr-TR');
+  const current=$('#salesCustomerSelect')?.value||'';
+  const rows=salesCustomers.filter(c=>`${c.name||''} ${c.phone||''} ${c.taxNo||''}`.toLocaleLowerCase('tr-TR').includes(term));
+  $('#salesCustomerSelect').innerHTML='<option value="">Müşteri seçin</option>'+rows.map(c=>
+    `<option value="${c.id}" ${String(c.id)===String(current)?'selected':''}>${c.name}${c.phone?' · '+c.phone:''}</option>`
+  ).join('');
+  if(current && rows.some(c=>String(c.id)===String(current)))$('#salesCustomerSelect').value=current;
+  salesCustomerChanged();
+}
+function salesCustomerChanged(){
+  const c=salesCustomers.find(x=>String(x.id)===String($('#salesCustomerSelect')?.value||''));
+  const box=$('#salesCustomerInfo');
+  if(!c){box?.classList.add('hidden');box&&(box.innerHTML='');setSalesStep(salesStep);return}
+  box.classList.remove('hidden');
+  box.innerHTML=`
+    <div><small>Müşteri</small><b>${c.name||'—'}</b></div>
+    <div><small>Telefon</small><b>${c.phone||'—'}</b></div>
+    <div><small>Cari</small><b>${money(c.balance)}</b></div>`;
+  setSalesStep(salesStep);
 }
 function renderProducts(){
   const term=($('#productSearch')?.value||'').toLocaleLowerCase('tr-TR');
   const rows=(salesData?.products||[]).filter(p=>
-    `${p.code||''} ${p.name||''} ${p.searchName||''}`.toLocaleLowerCase('tr-TR').includes(term)
-  ).slice(0,150);
+    `${p.code||''} ${p.name||''} ${p.searchName||''} ${p.itemCode||''} ${p.brand||''}`.toLocaleLowerCase('tr-TR').includes(term)
+  ).slice(0,120);
   $('#productRows').innerHTML=rows.map(p=>`
-    <tr><td><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||'—'}</td></tr>
-  `).join('')||'<tr><td colspan="3">Ürün bulunamadı.</td></tr>';
+    <button type="button" class="product-item" data-code="${p.code}">
+      <div><strong>${p.name||p.searchName||p.code}</strong><small>${p.code||''} · ${p.brand||'—'}</small></div>
+      <b>${money(productPrice(p))}</b>
+    </button>
+  `).join('')||'<div class="status">Ürün bulunamadı.</div>';
 }
+function renderCart(){
+  $('#cartCount').textContent=`${salesCart.length} kalem`;
+  $('#cartSubtotal').textContent=money(cartGross());
+  if(!salesCart.length){
+    $('#cartRows').innerHTML='<div class="status">Sepet boş — listeden ürün ekleyin.</div>';
+    setSalesStep(salesStep);
+    return;
+  }
+  $('#cartRows').innerHTML=salesCart.map((r,i)=>`
+    <div class="cart-row" data-idx="${i}">
+      <div><strong>${r.name}</strong><small>${r.code}</small></div>
+      <input data-qty type="number" min="1" step="1" value="${r.qty}">
+      <input data-price type="number" min="0" step="0.01" value="${r.unitPrice}">
+      <button type="button" data-del title="Sil">✕</button>
+    </div>`).join('');
+  setSalesStep(salesStep);
+}
+function addToCart(code){
+  const p=(salesData?.products||[]).find(x=>String(x.code)===String(code));
+  if(!p)return;
+  const existing=salesCart.find(r=>String(r.code)===String(code));
+  if(existing)existing.qty+=1;
+  else salesCart.push({code:p.code,name:p.searchName||p.name||p.code,qty:1,unitPrice:productPrice(p),itemCode:p.itemCode||'',materialCode:p.searchName||p.code||''});
+  renderCart();
+}
+function salesRecalcPay(){
+  const net=cartNet();
+  const cash=num($('#payCash')?.value),card=num($('#payCard')?.value),tr=num($('#payTransfer')?.value),note=num($('#payNote')?.value);
+  const allocated=Math.round((cash+card+tr+note)*100)/100;
+  const remain=Math.round((net-allocated)*100)/100;
+  const gross=cartGross();
+  if($('#payGross'))$('#payGross').textContent=money(gross);
+  if($('#payDiscount'))$('#payDiscount').textContent=money(gross-net);
+  if($('#payNet'))$('#payNet').textContent=money(net);
+  if($('#payAllocated'))$('#payAllocated').textContent=money(allocated);
+  if($('#payRemain'))$('#payRemain').textContent=money(remain);
+  $('#promissoryWrap')?.classList.toggle('hidden',note<=0);
+}
+function fillPay(method){
+  const net=cartNet();
+  ['#payCash','#payCard','#payTransfer','#payNote'].forEach(id=>{if($(id))$(id).value='0'});
+  if(method==='cash'&&$('#payCash'))$('#payCash').value=String(net);
+  if(method==='card'&&$('#payCard'))$('#payCard').value=String(net);
+  salesRecalcPay();
+}
+async function saveSale(){
+  const st=$('#salesStatus');
+  const customerId=$('#salesCustomerSelect')?.value||'';
+  if(!customerId){st.textContent='Müşteri seçin';return}
+  if(!salesCart.length){st.textContent='Sepete ürün ekleyin';return}
+  const net=cartNet();
+  const cash=num($('#payCash')?.value),card=num($('#payCard')?.value),tr=num($('#payTransfer')?.value),note=num($('#payNote')?.value);
+  const allocated=Math.round((cash+card+tr+note)*100)/100;
+  if(Math.abs(allocated-net)>0.009){st.textContent=`Ödeme net tutara eşit olmalı. Net ${money(net)}, dağıtılan ${money(allocated)}`;return}
+  if(note>0 && !$('#promissoryFirstDue')?.value){st.textContent='Senet için ilk vade girin';return}
+  const payments=[];
+  if(cash>0)payments.push({method:'Nakit',amount:cash,accountId:$('#payCashAccount')?.value||''});
+  if(card>0)payments.push({method:'Kredi Kartı',amount:card,accountId:$('#payBankAccount')?.value||''});
+  if(tr>0)payments.push({method:'Havale',amount:tr,accountId:$('#payBankAccount')?.value||''});
+  const body={
+    customerId,
+    dealerId:$('#salesDealer')?.value||'',
+    salespersonId:currentUser?.id||'',
+    salespersonName:currentUser?.name||'',
+    discountPct:num($('#salesDiscountPct')?.value),
+    date:$('#salesDate')?.value||new Date().toISOString().slice(0,10),
+    items:salesCart.map(r=>({productCode:r.code,itemCode:r.itemCode,materialCode:r.materialCode,productName:r.name,quantity:r.qty,unitPrice:r.unitPrice})),
+    payments,
+    promissory:note>0?{amount:note,installments:num($('#promissoryInstallments')?.value)||1,firstDueDate:$('#promissoryFirstDue')?.value,intervalMonths:1}:null,
+    deductStock:false
+  };
+  st.textContent='Satış kaydediliyor...';
+  try{
+    const r=await api('/web-api/admin/customer-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    st.textContent=`Satış kaydedildi: ${r.sale?.reference||r.reference||'OK'}`;
+    salesReset();
+  }catch(e){st.textContent=e.message}
+}
+
+document.querySelectorAll('.pos-step').forEach(btn=>btn.addEventListener('click',()=>{
+  const to=Number(btn.dataset.posStep);
+  if(to>=2 && !$('#salesCustomerSelect')?.value){ $('#salesStatus').textContent='Önce müşteri seçin';return}
+  if(to>=3 && !salesCart.length){ $('#salesStatus').textContent='Önce ürün ekleyin';return}
+  setSalesStep(to);
+}));
+$('#salesNext1')?.addEventListener('click',()=>{if($('#salesCustomerSelect')?.value)setSalesStep(2)});
+$('#salesNext2')?.addEventListener('click',()=>{if(salesCart.length)setSalesStep(3)});
+$('#salesBack2')?.addEventListener('click',()=>setSalesStep(1));
+$('#salesBack3')?.addEventListener('click',()=>setSalesStep(2));
+$('#salesResetBtn')?.addEventListener('click',salesReset);
+$('#customerSearchSale')?.addEventListener('input',renderSalesCustomers);
+$('#salesCustomerSelect')?.addEventListener('change',salesCustomerChanged);
 $('#productSearch')?.addEventListener('input',renderProducts);
+$('#productRows')?.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-code]');
+  if(btn)addToCart(btn.dataset.code);
+});
+$('#cartRows')?.addEventListener('input',e=>{
+  const row=e.target.closest('[data-idx]');if(!row)return;
+  const i=Number(row.dataset.idx);const item=salesCart[i];if(!item)return;
+  if(e.target.matches('[data-qty]'))item.qty=Math.max(1,Math.round(num(e.target.value)||1));
+  if(e.target.matches('[data-price]'))item.unitPrice=Math.max(0,num(e.target.value));
+  renderCart();
+});
+$('#cartRows')?.addEventListener('click',e=>{
+  const del=e.target.closest('[data-del]');if(!del)return;
+  const row=del.closest('[data-idx]');if(!row)return;
+  salesCart.splice(Number(row.dataset.idx),1);
+  renderCart();
+});
+['#salesDiscountPct','#payCash','#payCard','#payTransfer','#payNote'].forEach(id=>{
+  $(id)?.addEventListener('input',salesRecalcPay);
+});
+$('#salesFillCash')?.addEventListener('click',()=>fillPay('cash'));
+$('#salesFillCard')?.addEventListener('click',()=>fillPay('card'));
+$('#salesSaveBtn')?.addEventListener('click',saveSale);
+
+$('#salesNewCustomerBtn')?.addEventListener('click',()=>{
+  $('#salesQuickCustomerForm')?.reset();
+  $('#qcStatus').textContent='';
+  $('#salesQuickCustomerModal')?.classList.remove('hidden');
+});
+$('#salesQuickCustomerClose')?.addEventListener('click',()=>$('#salesQuickCustomerModal')?.classList.add('hidden'));
+$('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=$('#qcStatus');
+  st.textContent='Kaydediliyor...';
+  try{
+    const r=await api('/web-api/admin/customer',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        name:$('#qcName').value,phone:$('#qcPhone').value,
+        city:$('#qcCity').value,district:$('#qcDistrict').value,address:$('#qcAddress').value,
+        deliverySameAsBilling:true,invoiceType:'individual'
+      })
+    });
+    const row=r.row;
+    salesCustomers.unshift(row);
+    $('#salesQuickCustomerModal')?.classList.add('hidden');
+    if($('#customerSearchSale'))$('#customerSearchSale').value='';
+    renderSalesCustomers();
+    $('#salesCustomerSelect').value=row.id;
+    salesCustomerChanged();
+    st.textContent='';
+  }catch(err){st.textContent=err.message}
+});
 
 $('#stockCard').onclick=async()=>{
   hidePanels();
