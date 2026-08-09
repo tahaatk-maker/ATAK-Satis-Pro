@@ -102,7 +102,27 @@ function localDate(d=new Date()){const z=new Date(d.getTime()-d.getTimezoneOffse
 function weekStart(d=new Date()){const x=new Date(d),day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return localDate(x)}
 async function fetchRevenueSummary(startDate,endDate){return api(`/web-api/admin/revenue-summary?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`)}
 let dashboardRevenue=null;
-async function renderDashboardRevenue(){try{const d=localDate();dashboardRevenue=await fetchRevenueSummary(d,d);const c=dashboardRevenue.channels,total=Object.values(c).reduce((a,b)=>a+Number(b.amount||0),0);q('#stats').innerHTML=`<div class="stat channel beko"><small>Beko Mağaza bugün</small><strong>${money(c.beko.amount)}</strong><em>${c.beko.orderCount} satış</em></div><div class="stat channel istikbal"><small>İstikbal bugün</small><strong>${money(c.istikbal.amount)}</strong><em>${c.istikbal.orderCount} satış</em></div><div class="stat channel atakhome"><small>AtakHome bugün</small><strong>${money(c.atakhome.amount)}</strong><em>${c.atakhome.orderCount} otomatik sipariş</em></div><div class="stat channel hb"><small>Hepsiburada bugün</small><strong>${money(c.hepsiburada.amount)}</strong><em>${c.hepsiburada.orderCount} sipariş</em></div><div class="stat total"><small>Toplam ciro</small><strong>${money(total)}</strong><em>KDV dahil</em></div>`}catch(e){console.error(e)}}
+async function renderDashboardRevenue(){
+  try{
+    const d=localDate();
+    dashboardRevenue=await fetchRevenueSummary(d,d);
+    const c=dashboardRevenue.channels,total=Object.values(c).reduce((a,b)=>a+Number(b.amount||0),0);
+    let netToday=0,netCount=0,primToday=0;
+    try{
+      const board=await api('/web-api/admin/sales-prim-board?period=day&date='+encodeURIComponent(d));
+      netToday=Number(board.summary?.net||0);
+      netCount=Number(board.summary?.count||0);
+      primToday=Number(board.summary?.commission||0);
+    }catch(_){}
+    q('#stats').innerHTML=`
+      <div class="stat net-today"><small>Bugün NET Satış</small><strong>${money(netToday)}</strong><em>${netCount} satış · Prim ${money(primToday)}</em></div>
+      <div class="stat channel beko"><small>Beko Mağaza bugün</small><strong>${money(c.beko.amount)}</strong><em>${c.beko.orderCount} satış</em></div>
+      <div class="stat channel istikbal"><small>İstikbal bugün</small><strong>${money(c.istikbal.amount)}</strong><em>${c.istikbal.orderCount} satış</em></div>
+      <div class="stat channel atakhome"><small>AtakHome bugün</small><strong>${money(c.atakhome.amount)}</strong><em>${c.atakhome.orderCount} otomatik sipariş</em></div>
+      <div class="stat channel hb"><small>Hepsiburada bugün</small><strong>${money(c.hepsiburada.amount)}</strong><em>${c.hepsiburada.orderCount} sipariş</em></div>
+      <div class="stat total"><small>Toplam ciro</small><strong>${money(total)}</strong><em>KDV dahil</em></div>`;
+  }catch(e){console.error(e)}
+}
 function renderDashboard(){const ps=store.products,active=ps.filter(p=>p.active),campaigns=store.campaigns.filter(c=>c.active),missingImage=ps.filter(p=>!p.image),zeroStock=ps.filter(p=>!p.stock);renderDashboardRevenue();q('#healthCards').innerHTML=`<div class="health"><b>${missingImage.length}</b><span>Görseli eksik ürün</span></div><div class="health"><b>${zeroStock.length}</b><span>Stok 0 / sorunuz</span></div><div class="health"><b>${campaigns.length}</b><span>Aktif kampanya</span></div><div class="health"><b>${ps.filter(p=>Number(p.cashPrice||0)<Number(p.minimumSalePrice||0)&&Number(p.minimumSalePrice||0)>0).length}</b><span>Minimum fiyat altı</span></div>`;q('#auditList').innerHTML=(store.auditLogs||[]).slice(0,12).map(a=>`<div class="activity"><i></i><div><b>${a.action}</b><br><small>${a.entity} · ${new Date(a.date).toLocaleString('tr-TR')}</small></div></div>`).join('')||'<p>Henüz işlem kaydı yok.</p>'}
 function renderCategoryOptions(){const opts=store.categories.sort((a,b)=>a.sort-b.sort).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');q('#filterCategory').innerHTML='<option value="all">Tüm kategoriler</option>'+opts;q('#bulkCategory').innerHTML='<option value="all">Tüm ürünler</option>'+opts;q('#pCategory').innerHTML=opts}
 function renderBrandOptions(){const opts=(store.brands||[]).filter(b=>b.active).sort((a,b)=>a.sort-b.sort).map(b=>`<option value="${b.name}">${b.name}</option>`).join('');q('#pBrand').innerHTML=opts}
@@ -2224,7 +2244,126 @@ async function loadUninvoicedSales(){await loadInvoiceCenter()}
 
 loadDealerSettings();
 
-function reportKpis(s={}){return `<article><small>Satış Adedi</small><b>${Number(s.count||0)}</b></article><article><small>Brüt Ciro</small><b>${salesMoney(s.gross||0)}</b></article><article><small>Net Ciro</small><b>${salesMoney(s.net||0)}</b></article><article><small>İskonto</small><b>${salesMoney(s.discount||0)}</b></article><article class="commission"><small>Hak Edilen Prim</small><b>${salesMoney(s.commission||0)}</b></article>`}
+function reportKpis(s={}){return `<article><small>Satış Adedi</small><b>${Number(s.count||0)}</b></article><article><small>Brüt Ciro</small><b>${salesMoney(s.gross||0)}</b></article><article class="net-kpi"><small>NET Satış</small><b>${salesMoney(s.net||0)}</b></article><article class="deduct-kpi"><small>İptal / İade</small><b>- ${salesMoney(s.cancelled||0)}</b></article><article class="commission"><small>Hak Edilen Prim</small><b>${salesMoney(s.commission||0)}</b></article>`}
+function isoToday(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function isoMonth(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}
+let mySalesBoard=null,staffSalesBoard=null;
+function primBoardQuery(prefix){
+  const period=(q(`#${prefix}PeriodToggle .period-btn.active`)?.dataset.period)||'day';
+  const params=new URLSearchParams();
+  params.set('period',period);
+  if(period==='month'){
+    const m=q(`#${prefix}Month`)?.value||isoMonth();
+    params.set('month',m);
+  }else{
+    const d=q(`#${prefix}Date`)?.value||isoToday();
+    params.set('date',d);
+  }
+  if(prefix==='staffSales'){
+    const person=q('#staffSalesPersonFilter')?.value||'';
+    const dealer=q('#staffSalesDealerFilter')?.value||'';
+    if(person)params.set('salespersonId',person);
+    if(dealer)params.set('dealerId',dealer);
+  }
+  return params;
+}
+function setPeriodUi(prefix,period){
+  qa(`#${prefix}PeriodToggle .period-btn`).forEach(b=>b.classList.toggle('active',b.dataset.period===period));
+  q(`#${prefix}DateWrap`)?.classList.toggle('hidden',period!=='day');
+  q(`#${prefix}MonthWrap`)?.classList.toggle('hidden',period!=='month');
+}
+function buildPrimWhatsAppText(board,title='ATAK PAZARLAMA'){
+  const s=board?.summary||{},rank=board?.ranking||[];
+  const periodLabel=board?.period==='month'?'AYLIK':'GÜNLÜK';
+  const lines=[
+    `*${title}*`,
+    `${periodLabel} SATIŞ & PRİM`,
+    `Dönem: ${board?.label||'-'}`,
+    ``,
+    `NET: ${salesMoney(s.net||0)}`,
+    `Brüt: ${salesMoney(s.gross||0)}`,
+    `İptal/İade: ${salesMoney(s.cancelled||0)}`,
+    `Prim: ${salesMoney(s.commission||0)}`,
+    `Adet: ${Number(s.count||0)}`,
+    ``,
+    `*Personel Sıralaması (Net)*`
+  ];
+  rank.forEach((r,i)=>{
+    lines.push(`${i+1}) ${r.name} — Net ${salesMoney(r.net)} · ${r.count} adet · Prim ${salesMoney(r.commission)}`);
+  });
+  if(!rank.length)lines.push('Kayıt yok.');
+  lines.push('','Atak Pazarlama');
+  return lines.join('\n');
+}
+function openWhatsAppShare(text){
+  const url='https://wa.me/?text='+encodeURIComponent(text);
+  window.open(url,'_blank','noopener');
+}
+function openPrimPdf(board,title){
+  const s=board?.summary||{},rank=board?.ranking||[],rows=board?.rows||[];
+  const periodLabel=board?.period==='month'?'Aylık':'Günlük';
+  const rankHtml=rank.map((r,i)=>`<tr class="r${i+1}"><td>${i+1}</td><td><b>${salesEsc(r.name)}</b></td><td>${r.count}</td><td>${salesMoney(r.gross)}</td><td><b>${salesMoney(r.net)}</b></td><td>${salesMoney(r.commission)}</td></tr>`).join('')||'<tr><td colspan="6">Kayıt yok</td></tr>';
+  const detailHtml=rows.slice(0,200).map(r=>`<tr><td>${salesEsc(r.date||'')}</td><td>${salesEsc(r.customerName||r.dealerName||'-')}</td><td>${salesEsc(r.salespersonName||'')}</td><td>${salesMoney(r.total)}</td><td>${salesMoney(r.commissionAmount||0)}</td></tr>`).join('');
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${salesEsc(title)}</title>
+  <style>
+    body{font-family:Arial,sans-serif;color:#0b2a4a;padding:24px}
+    h1{margin:0 0 4px;font-size:22px} .sub{color:#667;margin:0 0 16px}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+    .kpis div{border:1px solid #dce4ef;border-radius:10px;padding:10px}
+    .kpis small{display:block;color:#667;font-size:11px;font-weight:700}
+    .kpis b{font-size:18px}.net b{color:#0b4f96}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+    th,td{border-bottom:1px solid #e7edf4;padding:8px;text-align:left}
+    th{background:#f7f9fc;font-size:11px;text-transform:uppercase;color:#667}
+    .r1 td{background:#fff8df}.r2 td{background:#f3f7ff}.r3 td{background:#f6fbf4}
+    @media print{button{display:none}}
+  </style></head><body>
+  <button onclick="window.print()">Yazdır / PDF</button>
+  <h1>${salesEsc(title)}</h1>
+  <p class="sub">${periodLabel} rapor · Dönem: ${salesEsc(board?.label||'-')} · ${salesEsc(board?.from||'')} → ${salesEsc(board?.to||'')}</p>
+  <div class="kpis">
+    <div class="net"><small>NET Satış</small><b>${salesMoney(s.net||0)}</b></div>
+    <div><small>Brüt</small><b>${salesMoney(s.gross||0)}</b></div>
+    <div><small>İptal/İade</small><b>${salesMoney(s.cancelled||0)}</b></div>
+    <div><small>Prim</small><b>${salesMoney(s.commission||0)}</b></div>
+  </div>
+  <h2>Personel Sıralaması</h2>
+  <table><thead><tr><th>#</th><th>Personel</th><th>Adet</th><th>Brüt</th><th>Net</th><th>Prim</th></tr></thead><tbody>${rankHtml}</tbody></table>
+  <h2>Satış Detayı</h2>
+  <table><thead><tr><th>Tarih</th><th>Müşteri/Bayi</th><th>Satıcı</th><th>Net</th><th>Prim</th></tr></thead><tbody>${detailHtml||'<tr><td colspan="5">Satış yok</td></tr>'}</tbody></table>
+  <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script>
+  </body></html>`;
+  const w=window.open('','_blank','noopener,width=900,height=700');
+  if(!w){toast('Popup engellendi');return}
+  w.document.write(html);w.document.close();
+}
+function renderRankTable(targetSel,ranking=[],opts={}){
+  const el=q(targetSel); if(!el)return;
+  el.innerHTML=(ranking||[]).map((r,i)=>`<tr class="rank-${Math.min(i+1,3)}">
+    <td><b>${i+1}</b></td>
+    <td><b>${salesEsc(r.name)}</b></td>
+    <td>${r.count||0}</td>
+    <td>${salesMoney(r.gross)}</td>
+    <td><b>${salesMoney(r.net)}</b></td>
+    <td>${salesMoney(r.commission)}</td>
+    <td><button type="button" class="wa-mini" data-wa-person="${salesEsc(r.name)}" data-wa-net="${r.net}" data-wa-prim="${r.commission}" data-wa-count="${r.count||0}">Gönder</button></td>
+  </tr>`).join('')||'<tr><td colspan="7">Bu dönemde satış yok.</td></tr>';
+  qa(`${targetSel} [data-wa-person]`).forEach(b=>{
+    b.onclick=()=>{
+      const text=[
+        '*ATAK PAZARLAMA*',
+        `Personel: ${b.dataset.waPerson}`,
+        `Dönem: ${opts.label||'-'}`,
+        `Net satış: ${salesMoney(b.dataset.waNet)}`,
+        `Satış adedi: ${b.dataset.waCount}`,
+        `Prim: ${salesMoney(b.dataset.waPrim)}`,
+        '',
+        'Kolay gelsin 💪'
+      ].join('\n');
+      openWhatsAppShare(text);
+    };
+  });
+}
 let reasonModalState=null;
 function openReasonModal({title,hint,onSubmit}){
   reasonModalState={onSubmit};
@@ -2389,26 +2528,55 @@ function reportSaleActions(r){
 }
 async function loadMySalesReport(){
   const st=q('#mySalesStatus');
-  try{const d=await api('/web-api/admin/sales-performance');q('#mySalesSummary').innerHTML=reportKpis(d.summary);
-    q('#mySalesTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.date||'-'}</td><td>${r.dealerName||'-'}</td><td>${r.salespersonName||r.createdBy||'-'}</td><td><b>${salesMoney(r.total)}</b></td><td>%${Number(r.discountPct||0)}</td><td><b>${salesMoney(r.commissionAmount||0)}</b></td><td>${reportSaleActions(r)}</td></tr>`).join('');
-    qa('[data-report-cancel],[data-my-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportCancel||b.dataset.myCancel,b.dataset.ref));
-    qa('[data-sale-edit]').forEach(b=>b.onclick=()=>openSaleEditModal(b.dataset.saleEdit));
-    st.textContent=`${d.rows?.length||0} satış.`;st.className='form-status success';
+  if(q('#mySalesDate') && !q('#mySalesDate').value)q('#mySalesDate').value=isoToday();
+  if(q('#mySalesMonth') && !q('#mySalesMonth').value)q('#mySalesMonth').value=isoMonth();
+  const period=(q('#mySalesPeriodToggle .period-btn.active')?.dataset.period)||'day';
+  setPeriodUi('mySales',period);
+  try{
+    const d=await api('/web-api/admin/sales-prim-board?'+primBoardQuery('mySales').toString());
+    mySalesBoard=d;
+    q('#mySalesSummary').innerHTML=reportKpis(d.summary);
+    renderRankTable('#mySalesRankTable',d.ranking,{label:d.label});
+    q('#mySalesRankHint').textContent=`${d.period==='month'?'Aylık':'Günlük'} · ${d.label||''} · çok satan üstte`;
+    q('#mySalesTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.date||'-'}</td><td>${r.dealerName||'-'}</td><td>${r.salespersonName||'-'}</td><td><b>${salesMoney(r.total)}</b></td><td>%${Number(r.discountPct||0)}</td><td><b>${salesMoney(r.commissionAmount||0)}</b></td><td>${reportSaleActions(r)}</td></tr>`).join('')||'<tr><td colspan="7">Satış yok.</td></tr>';
+    qa('#mySalesTable [data-report-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportCancel,b.dataset.ref));
+    qa('#mySalesTable [data-sale-edit]').forEach(b=>b.onclick=()=>openSaleEditModal(b.dataset.saleEdit));
+    st.textContent=`NET ${salesMoney(d.summary?.net||0)} · ${d.ranking?.length||0} personel · ${d.rows?.length||0} satış`;
+    st.className='form-status success';
   }catch(e){st.textContent=e.message;st.className='form-status error'}
 }
 async function loadStaffSalesReport(){
-  const st=q('#staffSalesStatus'),params=new URLSearchParams(),person=q('#staffSalesPersonFilter')?.value||'',dealer=q('#staffSalesDealerFilter')?.value||'',from=q('#staffSalesFrom')?.value||'',to=q('#staffSalesTo')?.value||'';
-  if(person)params.set('salespersonId',person);if(dealer)params.set('dealerId',dealer);if(from)params.set('from',from);if(to)params.set('to',to);
-  try{const d=await api('/web-api/admin/sales-performance?'+params.toString());
-    const current=person;q('#staffSalesPersonFilter').innerHTML='<option value="">Tüm personel</option>'+(d.people||[]).map(p=>`<option value="${p.id}">${p.name}</option>`).join('');if(current)q('#staffSalesPersonFilter').value=current;
+  const st=q('#staffSalesStatus');
+  if(q('#staffSalesDate') && !q('#staffSalesDate').value)q('#staffSalesDate').value=isoToday();
+  if(q('#staffSalesMonth') && !q('#staffSalesMonth').value)q('#staffSalesMonth').value=isoMonth();
+  const period=(q('#staffSalesPeriodToggle .period-btn.active')?.dataset.period)||'day';
+  setPeriodUi('staffSales',period);
+  try{
+    const params=primBoardQuery('staffSales');
+    const d=await api('/web-api/admin/sales-prim-board?'+params.toString());
+    staffSalesBoard=d;
+    const current=q('#staffSalesPersonFilter')?.value||'';
+    q('#staffSalesPersonFilter').innerHTML='<option value="">Tüm personel</option>'+(d.people||[]).map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+    if(current)q('#staffSalesPersonFilter').value=current;
     q('#staffSalesSummary').innerHTML=reportKpis(d.summary);
-    q('#staffSalesTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.date||'-'}</td><td><b>${r.customerName||'-'}</b><small>${r.reference||''}</small></td><td><b>${r.salespersonName||r.createdBy||'-'}</b></td><td>${r.dealerName||'-'}</td><td>${salesMoney(r.grossTotal||r.total)}</td><td><b>${salesMoney(r.total)}</b></td><td>${salesMoney(r.commissionAmount||0)}</td><td>${reportSaleActions(r)}</td></tr>`).join('');
-    q('#staffCollectionsTable').innerHTML=(d.collections||[]).map(c=>`<tr><td>${c.date||'-'}</td><td>${c.customerName||'-'}</td><td><b>${salesMoney(c.amount)}</b></td><td>${c.accountName||c.category||'-'}</td><td>${c.reference||'-'}</td><td>${c.pendingCancel?'<span class="approval-status pending">Onay bekliyor</span>':`<button type="button" data-col-cancel="${c.id}" data-ref="${c.reference||''}">İptal</button>`}</td></tr>`).join('');
-    qa('[data-report-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportCancel,b.dataset.ref));
+    renderRankTable('#staffSalesRankTable',d.ranking,{label:d.label});
+    q('#staffSalesTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.date||'-'}</td><td><b>${r.customerName||'-'}</b><small>${r.reference||''}</small></td><td><b>${r.salespersonName||'-'}</b></td><td>${r.dealerName||'-'}</td><td>${salesMoney(r.grossTotal||r.total)}</td><td><b>${salesMoney(r.total)}</b></td><td>${salesMoney(r.commissionAmount||0)}</td><td>${reportSaleActions(r)}</td></tr>`).join('')||'<tr><td colspan="8">Satış yok.</td></tr>';
+    // tahsilatlar: kısa dönem için performance'dan çek
+    try{
+      const p2=new URLSearchParams();
+      if(d.from)p2.set('from',d.from); if(d.to)p2.set('to',d.to);
+      const person=q('#staffSalesPersonFilter')?.value||''; const dealer=q('#staffSalesDealerFilter')?.value||'';
+      if(person)p2.set('salespersonId',person); if(dealer)p2.set('dealerId',dealer);
+      const perf=await api('/web-api/admin/sales-performance?'+p2.toString());
+      const cols=(perf.collections||[]).filter(c=>!d.from|| (String(c.date||'')>=d.from && String(c.date||'')<=d.to));
+      q('#staffCollectionsTable').innerHTML=cols.map(c=>`<tr><td>${c.date||'-'}</td><td>${c.customerName||'-'}</td><td><b>${salesMoney(c.amount)}</b></td><td>${c.accountName||c.category||'-'}</td><td>${c.reference||'-'}</td><td>${c.pendingCancel?'<span class="approval-status pending">Onay bekliyor</span>':`<button type="button" data-col-cancel="${c.id}" data-ref="${c.reference||''}">İptal</button>`}</td></tr>`).join('')||'<tr><td colspan="6">Tahsilat yok.</td></tr>';
+    }catch(_){q('#staffCollectionsTable').innerHTML='<tr><td colspan="6">Tahsilat yüklenemedi.</td></tr>'}
+    qa('#staffSalesTable [data-report-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportCancel,b.dataset.ref));
     qa('[data-col-cancel]').forEach(b=>b.onclick=()=>requestCancellation('collection',b.dataset.colCancel,b.dataset.ref));
-    qa('[data-sale-edit]').forEach(b=>b.onclick=()=>openSaleEditModal(b.dataset.saleEdit));
+    qa('#staffSalesTable [data-sale-edit]').forEach(b=>b.onclick=()=>openSaleEditModal(b.dataset.saleEdit));
     if(!d.canManage){q('[data-tab="staffSalesReport"]')?.classList.add('hidden');q('[data-tab="managerApprovals"]')?.classList.add('hidden')}
-    st.textContent=d.canManage?'İptal ve düzenleme talepleri Yönetici Onayları’na düşer.':'Yalnız kendi satışlarınız.';st.className='form-status success';
+    st.textContent=`NET ${salesMoney(d.summary?.net||0)} · sıralama net satışa göre`;
+    st.className='form-status success';
   }catch(e){st.textContent=e.message;st.className='form-status error'}
 }
 function approvalTypeLabel(type=''){
@@ -2440,8 +2608,17 @@ async function loadApprovals(){
     info.textContent='İptal, satış düzenleme ve müşteri değişiklikleri burada onaylanır. Onaylanmadan finans değişmez.';info.className='form-status success';
   }catch(e){info.textContent=e.message;info.className='form-status error'}
 }
-q('#mySalesRefresh')?.addEventListener('click',loadMySalesReport);q('#staffSalesRefresh')?.addEventListener('click',loadStaffSalesReport);q('#approvalRefresh')?.addEventListener('click',loadApprovals);
-['#staffSalesPersonFilter','#staffSalesDealerFilter','#staffSalesFrom','#staffSalesTo'].forEach(id=>q(id)?.addEventListener('change',loadStaffSalesReport));
+q('#mySalesRefresh')?.addEventListener('click',loadMySalesReport);
+q('#staffSalesRefresh')?.addEventListener('click',loadStaffSalesReport);
+q('#approvalRefresh')?.addEventListener('click',loadApprovals);
+q('#mySalesPdfBtn')?.addEventListener('click',()=>mySalesBoard?openPrimPdf(mySalesBoard,'Satışlarım & Prim'):toast('Önce raporu yükleyin'));
+q('#mySalesWaBtn')?.addEventListener('click',()=>mySalesBoard?openWhatsAppShare(buildPrimWhatsAppText(mySalesBoard,'ATAK PAZARLAMA — Satış & Prim')):toast('Önce raporu yükleyin'));
+q('#staffSalesPdfBtn')?.addEventListener('click',()=>staffSalesBoard?openPrimPdf(staffSalesBoard,'Personel Satış Raporu'):toast('Önce raporu yükleyin'));
+q('#staffSalesWaBtn')?.addEventListener('click',()=>staffSalesBoard?openWhatsAppShare(buildPrimWhatsAppText(staffSalesBoard,'ATAK PAZARLAMA — Personel Raporu')):toast('Önce raporu yükleyin'));
+qa('#mySalesPeriodToggle .period-btn').forEach(b=>b.onclick=()=>{setPeriodUi('mySales',b.dataset.period);loadMySalesReport()});
+qa('#staffSalesPeriodToggle .period-btn').forEach(b=>b.onclick=()=>{setPeriodUi('staffSales',b.dataset.period);loadStaffSalesReport()});
+['#mySalesDate','#mySalesMonth'].forEach(id=>q(id)?.addEventListener('change',loadMySalesReport));
+['#staffSalesPersonFilter','#staffSalesDealerFilter','#staffSalesDate','#staffSalesMonth'].forEach(id=>q(id)?.addEventListener('change',loadStaffSalesReport));
 
 
 let salesTrackingRows=[];

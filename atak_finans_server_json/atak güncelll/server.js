@@ -562,7 +562,7 @@ function financeTx(s,data){
 app.set('trust proxy',1); app.use(helmet({contentSecurityPolicy:false})); app.use(compression()); app.use(express.json({limit:'2mb'})); app.use(express.urlencoded({extended:true}));
 app.use(session({
   name:'atakhome.sid',
-  secret:process.env.SESSION_SECRET||crypto.randomBytes(24).toString('hex'),
+  secret:process.env.SESSION_SECRET||'CHANGE-ME-SET-IN-ENV',
   resave:false,
   saveUninitialized:false,
   cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:12*60*60*1000}
@@ -1615,50 +1615,167 @@ app.get('/web-api/admin/sale/:id',requireAdmin,(req,res)=>{
     pending,canManage:isSystemManager(req)
   });
 });
-app.get('/web-api/admin/sales-performance',requireAdmin,(req,res)=>{
-  const s=readStore(),u=currentSessionUser(req),canManage=isSystemManager(req);
-  let rows=(s.financeTransactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled);
-  const salespersonId=String(req.query.salespersonId||''),dealerId=String(req.query.dealerId||''),from=String(req.query.from||''),to=String(req.query.to||'');
-  if(!canManage){
-    rows=rows.filter(t=>String(t.salespersonId||'')===String(u?.id||'') || String(t.salespersonName||'').toLocaleLowerCase('tr-TR')===String(u?.name||'').toLocaleLowerCase('tr-TR'));
-  }else if(salespersonId)rows=rows.filter(t=>String(t.salespersonId||'')===salespersonId);
-  if(dealerId)rows=rows.filter(t=>String(t.dealerId||'')===dealerId);
-  if(from)rows=rows.filter(t=>String(t.date||'')>=from);
-  if(to)rows=rows.filter(t=>String(t.date||'')<=to);
-  rows=rows.sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
-  const pendingByTarget=new Map();
-  (s.cancellationRequests||[]).filter(r=>r.status==='pending').forEach(r=>{
-    pendingByTarget.set(`${r.targetType}:${r.targetId}`,r);
-  });
+function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId='',dealerId=''}={}){
+  const u=currentSessionUser(req)||currentActor(req);
+  const canManage=isSystemManager(req)||actorIsManager(req);
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  let from,to,label;
+  if(period==='month'){
+    const mb=monthBounds(month);
+    from=mb.from;to=mb.to;label=mb.month;
+  }else{
+    const d=String(date||todayISO()).slice(0,10);
+    from=to=d;label=d;period='day';
+  }
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
-  rows=rows.map(t=>{
+  let all=(s.financeTransactions||[]).filter(t=>t.kind==='sale' && String(t.date||'').slice(0,10)>=from && String(t.date||'').slice(0,10)<=to);
+  if(!canManage){
+    all=all.filter(t=>txBelongsToActor(t,u)||String(t.salespersonId||'')===String(u?.id||''));
+  }else if(salespersonId){
+    all=all.filter(t=>String(t.salespersonId||'')===salespersonId);
+  }
+  if(dealerId)all=all.filter(t=>String(t.dealerId||'')===dealerId);
+
+  const byPerson=new Map();
+  let gross=0,grossCount=0,net=0,netCount=0,cancelled=0,cancelledCount=0,discount=0,commission=0,primLost=0;
+  for(const t of all){
+    const amount=Number(t.total||0);
+    const g=Number(t.grossTotal||t.total||0);
+    const comm=Number(t.commissionAmount||0);
+    const pid=String(t.salespersonId||t.salespersonName||t.createdBy||'unknown');
+    const pname=String(t.salespersonName||t.createdBy||'Personel');
+    if(!byPerson.has(pid))byPerson.set(pid,{id:pid,name:pname,gross:0,net:0,count:0,cancelled:0,cancelledCount:0,commission:0,primLost:0,discount:0});
+    const row=byPerson.get(pid);
+    gross+=g;grossCount+=1;discount+=Math.max(0,g-amount);
+    if(t.cancelled){
+      cancelled+=amount;cancelledCount+=1;
+      row.cancelled+=amount;row.cancelledCount+=1;
+      const lost=Number(t.cancelledCommissionAmount!=null?t.cancelledCommissionAmount:comm);
+      primLost+=lost;row.primLost+=lost;
+    }else{
+      net+=amount;netCount+=1;commission+=comm;
+      row.gross+=g;row.net+=amount;row.count+=1;row.commission+=comm;row.discount+=Math.max(0,g-amount);
+    }
+  }
+  const ranking=[...byPerson.values()].map(x=>({
+    ...x,
+    gross:round(x.gross),net:round(x.net),cancelled:round(x.cancelled),
+    commission:round(x.commission),primLost:round(x.primLost),discount:round(x.discount)
+  })).sort((a,b)=>b.net-a.net||b.count-a.count||a.name.localeCompare(b.name,'tr'));
+
+  const pendingByTarget=new Map();
+  (s.cancellationRequests||[]).filter(r=>r.status==='pending').forEach(r=>pendingByTarget.set(`${r.targetType}:${r.targetId}`,r));
+  const rows=all.filter(t=>!t.cancelled).map(t=>{
     const c=customerMap.get(String(t.customerId));
     const pendCancel=pendingByTarget.get(`sale:${t.id}`);
     const pendEdit=pendingByTarget.get(`sale_edit:${t.id}`);
     return{
-      ...t,
-      customerName:c?.name||'',
-      customerEmail:c?.email||'',
-      pendingCancel:Boolean(pendCancel),
-      pendingEdit:Boolean(pendEdit),
+      id:t.id,date:t.date,reference:t.reference||'',dealerId:t.dealerId||'',dealerName:t.dealerName||'',
+      salespersonId:t.salespersonId||'',salespersonName:t.salespersonName||t.createdBy||'',
+      customerName:c?.name||'',grossTotal:Number(t.grossTotal||t.total||0),total:Number(t.total||0),
+      discountPct:Number(t.discountPct||0),commissionAmount:Number(t.commissionAmount||0),
+      pendingCancel:Boolean(pendCancel),pendingEdit:Boolean(pendEdit),
       pendingReason:pendCancel?.reason||pendEdit?.reason||''
     };
-  });
-  const summary={
-    count:rows.length,
-    gross:Math.round(rows.reduce((a,x)=>a+Number(x.grossTotal||x.total||0),0)*100)/100,
-    net:Math.round(rows.reduce((a,x)=>a+Number(x.total||0),0)*100)/100,
-    discount:Math.round(rows.reduce((a,x)=>a+(Number(x.grossTotal||x.total||0)-Number(x.total||0)),0)*100)/100,
-    commission:Math.round(rows.reduce((a,x)=>a+Number(x.commissionAmount||0),0)*100)/100
+  }).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+
+  return{
+    ok:true,canManage,period,label,from,to,
+    summary:{
+      count:netCount,
+      gross:round(gross),
+      net:round(net),
+      cancelled:round(cancelled),
+      cancelledCount,
+      discount:round(discount),
+      commission:round(commission),
+      primLost:round(primLost)
+    },
+    ranking,
+    rows,
+    people:salesPeople(s,req)
   };
+}
+app.get('/web-api/admin/sales-prim-board',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const board=buildSalesPrimBoard(s,req,{
+    period:String(req.query.period||'day'),
+    date:String(req.query.date||''),
+    month:String(req.query.month||''),
+    salespersonId:String(req.query.salespersonId||''),
+    dealerId:String(req.query.dealerId||'')
+  });
+  res.json(board);
+});
+app.get('/web-api/admin/sales-performance',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const from=String(req.query.from||'');
+  const to=String(req.query.to||'');
+  let period='day',date='',month='';
+  if(from && to && from.slice(0,7)===to.slice(0,7) && from.endsWith('-01') && to===monthBounds(from.slice(0,7)).to){
+    period='month';month=from.slice(0,7);
+  }else if(from&&to&&from===to){
+    period='day';date=from;
+  }else if(from||to){
+    // custom range: reuse board day logic via filter after
+    period='day';date=from||to||todayISO();
+  }
+  const board=buildSalesPrimBoard(s,req,{
+    period:req.query.month?'month':(from&&to&&from!==to?'day':period),
+    date:from||date,
+    month:req.query.month||month||(from?String(from).slice(0,7):''),
+    salespersonId:String(req.query.salespersonId||''),
+    dealerId:String(req.query.dealerId||'')
+  });
+  // If custom from-to spanning days, re-filter from all active sales in range
+  let rows,summary,ranking=board.ranking;
+  if(from&&to&&!(from===to) && !(req.query.month)){
+    const u=currentSessionUser(req)||currentActor(req);
+    const canManage=board.canManage;
+    const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
+    const pendingByTarget=new Map();
+    (s.cancellationRequests||[]).filter(r=>r.status==='pending').forEach(r=>pendingByTarget.set(`${r.targetType}:${r.targetId}`,r));
+    let all=(s.financeTransactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled&&String(t.date||'')>=from&&String(t.date||'')<=to);
+    if(!canManage)all=all.filter(t=>txBelongsToActor(t,u));
+    if(req.query.salespersonId)all=all.filter(t=>String(t.salespersonId||'')===String(req.query.salespersonId));
+    if(req.query.dealerId)all=all.filter(t=>String(t.dealerId||'')===String(req.query.dealerId));
+    rows=all.map(t=>{
+      const c=customerMap.get(String(t.customerId));
+      const pendCancel=pendingByTarget.get(`sale:${t.id}`);
+      const pendEdit=pendingByTarget.get(`sale_edit:${t.id}`);
+      return{...t,customerName:c?.name||'',pendingCancel:Boolean(pendCancel),pendingEdit:Boolean(pendEdit),pendingReason:pendCancel?.reason||pendEdit?.reason||''};
+    }).sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
+    summary={
+      count:rows.length,
+      gross:Math.round(rows.reduce((a,x)=>a+Number(x.grossTotal||x.total||0),0)*100)/100,
+      net:Math.round(rows.reduce((a,x)=>a+Number(x.total||0),0)*100)/100,
+      discount:Math.round(rows.reduce((a,x)=>a+(Number(x.grossTotal||x.total||0)-Number(x.total||0)),0)*100)/100,
+      commission:Math.round(rows.reduce((a,x)=>a+Number(x.commissionAmount||0),0)*100)/100
+    };
+    const byPerson=new Map();
+    for(const t of rows){
+      const pid=String(t.salespersonId||t.salespersonName||t.createdBy||'unknown');
+      const pname=String(t.salespersonName||t.createdBy||'Personel');
+      if(!byPerson.has(pid))byPerson.set(pid,{id:pid,name:pname,gross:0,net:0,count:0,commission:0,cancelled:0,cancelledCount:0,primLost:0,discount:0});
+      const r=byPerson.get(pid);
+      r.gross+=Number(t.grossTotal||t.total||0);r.net+=Number(t.total||0);r.count+=1;r.commission+=Number(t.commissionAmount||0);
+    }
+    ranking=[...byPerson.values()].map(x=>({...x,gross:Math.round(x.gross*100)/100,net:Math.round(x.net*100)/100,commission:Math.round(x.commission*100)/100})).sort((a,b)=>b.net-a.net);
+  }else{
+    rows=board.rows;
+    summary={count:board.summary.count,gross:board.summary.gross,net:board.summary.net,discount:board.summary.discount,commission:board.summary.commission,cancelled:board.summary.cancelled};
+  }
+  const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
   const accountMap=new Map((s.financeAccounts||[]).map(a=>[String(a.id),a.name]));
+  const pendingByTarget=new Map();
+  (s.cancellationRequests||[]).filter(r=>r.status==='pending').forEach(r=>pendingByTarget.set(`${r.targetType}:${r.targetId}`,r));
   const collections=(s.financeTransactions||[]).filter(t=>t.kind==='collection'&&!t.cancelled).map(t=>({
     ...t,
     customerName:customerMap.get(String(t.customerId))?.name||'',
     accountName:accountMap.get(String(t.accountId))||'',
     pendingCancel:Boolean(pendingByTarget.get(`collection:${t.id}`))
   }));
-  res.json({ok:true,canManage,summary,rows,collections,people:salesPeople(s,req)});
+  res.json({ok:true,canManage:board.canManage,summary,rows,collections,people:board.people,ranking,period:board.period,label:board.label,from:board.from,to:board.to});
 });
 app.get('/web-api/admin/staff-sales-month',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
   const s=readStore();

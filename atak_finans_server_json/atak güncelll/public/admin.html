@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=logo-v1" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=prim-board-v1" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -895,21 +895,54 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 </section><section class="tab" id="mySalesReport">
 <div class="panel">
-<div class="panel-head"><div><small class="eyebrow">PERSONEL</small><h2>Satışlarım & Primim</h2><p>Kendi satış, ciro, iskonto ve prim özetiniz.</p></div><button id="mySalesRefresh" class="secondary-btn" type="button">Yenile</button></div>
+<div class="panel-head">
+  <div><small class="eyebrow">PERSONEL</small><h2>Satışlarım &amp; Primim</h2><p>Personel bazlı net satış ve prim — günlük / aylık. En çok satan üstte.</p></div>
+  <div class="prim-actions">
+    <button id="mySalesPdfBtn" class="secondary-btn" type="button">PDF Al</button>
+    <button id="mySalesWaBtn" class="secondary-btn" type="button">WhatsApp Paylaş</button>
+    <button id="mySalesRefresh" class="secondary-btn" type="button">Yenile</button>
+  </div>
+</div>
+<div class="sales-report-filters prim-period-bar">
+  <div class="period-toggle" id="mySalesPeriodToggle">
+    <button type="button" class="period-btn active" data-period="day">Günlük</button>
+    <button type="button" class="period-btn" data-period="month">Aylık</button>
+  </div>
+  <label id="mySalesDateWrap">Gün<input id="mySalesDate" type="date"/></label>
+  <label id="mySalesMonthWrap" class="hidden">Ay<input id="mySalesMonth" type="month"/></label>
+</div>
 <div id="mySalesSummary" class="sales-kpi-grid"></div>
+<div class="section-title-row"><h3>Personel Sıralaması (Net Satış)</h3><small id="mySalesRankHint">Çok satan üstte</small></div>
+<div class="table-wrap"><table><thead><tr><th>#</th><th>Personel</th><th>Adet</th><th>Brüt</th><th>Net</th><th>Prim</th><th>WhatsApp</th></tr></thead><tbody id="mySalesRankTable"></tbody></table></div>
+<div class="section-title-row"><h3>Satış Detayı</h3></div>
 <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Bayi</th><th>Satıcı</th><th>Net Satış</th><th>İskonto</th><th>Prim</th><th>İşlem</th></tr></thead><tbody id="mySalesTable"></tbody></table></div>
 <div id="mySalesStatus" class="form-status"></div>
 </div></section>
 
 <section class="tab" id="staffSalesReport">
 <div class="panel">
-<div class="panel-head"><div><small class="eyebrow">YÖNETİM</small><h2>Personel Satış Raporu</h2><p>Personel bazında ciro, iskonto ve prim takibi.</p></div><button id="staffSalesRefresh" class="secondary-btn" type="button">Yenile</button></div>
-<div class="sales-report-filters">
-<label>Personel<select id="staffSalesPersonFilter"><option value="">Tüm personel</option></select></label>
-<label>Bayi<select id="staffSalesDealerFilter"><option value="">Tüm bayiler</option><option value="atak-beko">Atak Beko</option><option value="atak-istikbal">Atak İstikbal</option></select></label>
-<label>Başlangıç<input id="staffSalesFrom" type="date"/></label><label>Bitiş<input id="staffSalesTo" type="date"/></label>
+<div class="panel-head">
+  <div><small class="eyebrow">YÖNETİM</small><h2>Personel Satış Raporu</h2><p>Günlük / aylık personel sıralaması, net satış ve prim. PDF ve WhatsApp çıktısı.</p></div>
+  <div class="prim-actions">
+    <button id="staffSalesPdfBtn" class="secondary-btn" type="button">PDF Al</button>
+    <button id="staffSalesWaBtn" class="secondary-btn" type="button">WhatsApp Paylaş</button>
+    <button id="staffSalesRefresh" class="secondary-btn" type="button">Yenile</button>
+  </div>
+</div>
+<div class="sales-report-filters prim-period-bar">
+  <div class="period-toggle" id="staffSalesPeriodToggle">
+    <button type="button" class="period-btn active" data-period="day">Günlük</button>
+    <button type="button" class="period-btn" data-period="month">Aylık</button>
+  </div>
+  <label id="staffSalesDateWrap">Gün<input id="staffSalesDate" type="date"/></label>
+  <label id="staffSalesMonthWrap" class="hidden">Ay<input id="staffSalesMonth" type="month"/></label>
+  <label>Personel<select id="staffSalesPersonFilter"><option value="">Tüm personel</option></select></label>
+  <label>Bayi<select id="staffSalesDealerFilter"><option value="">Tüm bayiler</option><option value="atak-beko">Atak Beko</option><option value="atak-istikbal">Atak İstikbal</option></select></label>
 </div>
 <div id="staffSalesSummary" class="sales-kpi-grid"></div>
+<div class="section-title-row"><h3>Personel Sıralaması (Net)</h3><small>En yüksek net satış üstte</small></div>
+<div class="table-wrap"><table><thead><tr><th>#</th><th>Personel</th><th>Adet</th><th>Brüt</th><th>Net</th><th>Prim</th><th>WhatsApp</th></tr></thead><tbody id="staffSalesRankTable"></tbody></table></div>
+<div class="section-title-row"><h3>Satış Detayı</h3></div>
 <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Müşteri</th><th>Satıcı</th><th>Bayi</th><th>Brüt</th><th>Net</th><th>Prim</th><th>İşlem</th></tr></thead><tbody id="staffSalesTable"></tbody></table></div>
 <h3>Tahsilatlar</h3>
 <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Hesap</th><th>Referans</th><th>İşlem</th></tr></thead><tbody id="staffCollectionsTable"></tbody></table></div>
@@ -1580,5 +1613,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=664-restore"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=prim-board-v1"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

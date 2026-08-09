@@ -382,6 +382,23 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 
 /* V6.3.1 Satıcı raporu ve iptal onayı */
 .sales-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:9px;margin:12px 0}.sales-kpi-grid article{border:1px solid var(--line);border-radius:10px;padding:12px;background:#f8fafc}.sales-kpi-grid small,.sales-kpi-grid b{display:block}.sales-kpi-grid small{color:var(--muted)}.sales-kpi-grid b{font-size:21px;margin-top:4px;color:var(--navy)}.sales-kpi-grid .commission{background:#fff8df;border-color:#e1bc55}.sales-kpi-grid .commission b{color:#8b6200}
+.sales-kpi-grid .net-kpi{background:linear-gradient(180deg,#fff,#eef8ff);border-color:#9fc0e8}
+.sales-kpi-grid .net-kpi b{color:#0b4f96;font-size:24px}
+.sales-kpi-grid .deduct-kpi{background:#fff1f2;border-color:#f0c0c8}
+.prim-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.prim-period-bar{align-items:end}
+.period-toggle{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.period-btn{border:0;background:transparent;padding:8px 14px;font-weight:800;cursor:pointer;color:#5b6b82}
+.period-btn.active{background:#0b4f96;color:#fff}
+.section-title-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:14px 0 6px}
+.section-title-row h3{margin:0;font-size:14px}
+.section-title-row small{color:var(--muted)}
+.rank-1 td{background:#fff8df}
+.rank-2 td{background:#f3f7ff}
+.rank-3 td{background:#f6fbf4}
+.wa-mini{border:0;border-radius:8px;padding:6px 10px;background:#25d366;color:#fff;font-weight:800;cursor:pointer;font-size:11px}
+.stat.net-today{background:linear-gradient(180deg,#fff,#e8f5ff);border:1px solid #9fc0e8}
+.stat.net-today strong{color:#0b4f96;font-size:22px}
 .sales-report-filters{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:8px;margin:12px 0}.sales-report-filters label{display:grid;gap:5px;font-size:11px;font-weight:800}
 .approval-status{padding:4px 8px;border-radius:999px;font-size:11px;font-weight:900}.approval-status.pending{background:#fff4d7;color:#8b6200}.approval-status.approved{background:#e6f7ee;color:#087c47}.approval-status.rejected{background:#ffe7e7;color:#a52222}
 @media(max-width:900px){.sales-kpi-grid{grid-template-columns:repeat(2,1fr)}.sales-report-filters{grid-template-columns:1fr 1fr}}@media(max-width:560px){.sales-kpi-grid,.sales-report-filters{grid-template-columns:1fr}}
