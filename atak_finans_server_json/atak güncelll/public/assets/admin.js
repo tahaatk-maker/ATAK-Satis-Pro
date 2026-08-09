@@ -1289,6 +1289,11 @@ let activeSalesDraft=null;
 function openSalesPreview(){
   const d=collectSalesDraft();if(d.error){d.status.textContent=d.error;d.status.className='form-status error';return}
   activeSalesDraft=d;q('#salesPreviewBody').innerHTML=salesPreviewHtml(d);q('#salesPreviewModal').classList.remove('hidden');q('#salesPreviewModal').setAttribute('aria-hidden','false');document.body.classList.add('modal-open');
+  const docsBtn=q('#salesPreviewDocsBtn');
+  if(docsBtn){
+    docsBtn.classList.toggle('has-senet',Boolean(d.promissory));
+    docsBtn.textContent=d.promissory?'📄 Sözleşme + Senet Yazdır':'📄 Sözleşme Yazdır';
+  }
 }
 function closeSalesPreview(){q('#salesPreviewModal').classList.add('hidden');q('#salesPreviewModal').setAttribute('aria-hidden','true');document.body.classList.remove('modal-open')}
 function salesEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
