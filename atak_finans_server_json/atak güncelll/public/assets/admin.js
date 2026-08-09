@@ -737,13 +737,14 @@ function salesCalculate(){
     else if(c.remaining>0){bal.className='sales-pay-balance warn';bal.textContent=`⚠ Henüz ${salesMoney(c.remaining)} dağıtılmadı. Nakit/kart/havale/senet/vadeli girin.`;}
     else{bal.className='sales-pay-balance bad';bal.textContent=`⚠ Dağıtılan tutar netten ${salesMoney(Math.abs(c.remaining))} fazla.`;}
   }
-  if(q('#salesDiscountLimit'))q('#salesDiscountLimit').textContent=c.dealer?`${c.dealer.name} · ${c.method} · İskonto serbest · Kâr bölü %${String(c.dealer.marginDividePct??0).replace('.',',')}`:'Bayi seçin';
-  if(q('#salesCommissionPreview'))q('#salesCommissionPreview').textContent=c.dealer?`Tahmini prim: ${salesMoney(c.commission)}  →  net ${salesMoney(c.net)} × %${String(c.commissionPct).replace('.',',')}`:'Tahmini prim: bayi seçin';
+  if(q('#salesDiscountLimit'))q('#salesDiscountLimit').textContent=c.dealer?`${c.dealer.name}${c.method?` · ${c.method}`:''}`:'Bayi seçin';
+  if(q('#salesCommissionPreview'))q('#salesCommissionPreview').textContent=`Prim: ${salesMoney(c.commission)}`;
   const hint=q('#salesCalcHint');
   if(hint){
-    if(!c.dealer){hint.className='warn';hint.textContent='Bayi seçilmeden prim hesaplanamaz.';}
-    else if(c.gross<=0){hint.className='ok';hint.textContent='Ürün tutarı girin; iskonto ve çoklu ödeme anlık hesaplanır.';}
-    else{hint.className='ok';hint.textContent=`✓ Brüt ${salesMoney(c.gross)} − iskonto ${salesMoney(c.discountAmount)} = net ${salesMoney(c.net)} · tahsil ${salesMoney(c.paid)} · senet/vadeli ${salesMoney(c.splits.note+c.splits.credit)}`;}
+    hint.classList.add('hidden');
+    if(!c.dealer)hint.textContent='Bayi seçilmeden prim hesaplanamaz.';
+    else if(c.gross<=0)hint.textContent='Ürün tutarı girin.';
+    else hint.textContent=`Brüt ${salesMoney(c.gross)} − iskonto ${salesMoney(c.discountAmount)} = net ${salesMoney(c.net)}`;
   }
   salesPaymentChanged();
 }
