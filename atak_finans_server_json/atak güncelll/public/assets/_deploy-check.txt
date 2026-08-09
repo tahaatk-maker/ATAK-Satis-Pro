@@ -1,5 +1,6 @@
-fix-v4
-expect-health=6.3.5-customer-search
+fix-v5
+expect-health=6.3.6-fix-v5
 customer-from-finance-center
-dashboard-pos-fallback
+kesilmeyen-under-finance
+dashboard-refresh-after-sale
 2026-08-09

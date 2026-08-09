@@ -405,11 +405,18 @@ function setSalesStep(step){
 function salesReset(){
   salesCart=[];
   lastSaleDocsUrl='';
-  salesCustomers=[];
+  // Müşteri listesini silme — finance-center'dan gelenleri koru
+  salesCustomers=(salesCustomerFallback||[]).slice(0,500);
   if($('#customerSearchSale'))$('#customerSearchSale').value='';
-  if($('#salesCustomerSelect'))$('#salesCustomerSelect').innerHTML='<option value="">Önce arayın, sonra seçin</option>';
-  if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=(salesCustomerTotal||0)+' kayıt';
-  if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent=`Toplam ${salesCustomerTotal||0} müşteri. Ad / telefon / VKN ile arayıp seçin (tüm liste yüklenmez).`;
+  if($('#salesCustomerSelect')){
+    $('#salesCustomerSelect').innerHTML=salesCustomers.length
+      ?('<option value="">Müşteri seçin</option>'+salesCustomers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' · '+c.phone:''}</option>`).join(''))
+      :'<option value="">Önce arayın, sonra seçin</option>';
+  }
+  if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=(salesCustomerTotal||salesCustomers.length||0)+' kayıt';
+  if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent=
+    salesCustomers.length?`Toplam ${salesCustomerTotal||salesCustomers.length} müşteri. Yazarak süzün veya listeden seçin.`
+    :'Müşteri yok — önce ekleyin.';
   if($('#salesDiscountPct'))$('#salesDiscountPct').value='0';
   ['#payCash','#payCard','#payTransfer','#payCredit','#payNote'].forEach(id=>{if($(id))$(id).value=''});
   if($('#salesDate'))$('#salesDate').value=new Date().toISOString().slice(0,10);

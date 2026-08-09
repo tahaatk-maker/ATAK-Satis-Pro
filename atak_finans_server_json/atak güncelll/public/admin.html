@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v4" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v5" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -79,15 +79,17 @@
 #salesCenter .sales-products-panel,
 #salesCenter .sales-summary-panel,
 #salesCenter #salesPaymentStep{
-  display:block!important;width:100%!important;max-width:none!important;position:static!important;top:auto!important;max-height:none!important;
+  width:100%!important;max-width:none!important;position:static!important;top:auto!important;max-height:none!important;
   border:1px solid #d5e0ee;border-radius:18px;padding:0!important;overflow:hidden;background:#fff;
   box-shadow:0 10px 28px rgba(15,42,77,.06);
 }
+#salesCenter .sales-customer-panel.pos-step-visible,
+#salesCenter .sales-products-panel.pos-step-visible{display:block!important}
+#salesCenter #salesPaymentStep.pos-step-visible,
+#salesCenter .sales-summary-panel.pos-step-visible{display:flex!important;flex-direction:column!important}
 #salesCenter .sales-customer-panel{border-top:5px solid var(--blue)}
 #salesCenter .sales-products-panel{border-top:5px solid var(--teal)}
-#salesCenter .sales-summary-panel,#salesCenter #salesPaymentStep{
-  border-top:5px solid var(--amber);display:flex!important;flex-direction:column!important;
-}
+#salesCenter .sales-summary-panel,#salesCenter #salesPaymentStep{border-top:5px solid var(--amber)}
 
 #salesCenter .pos-block-head{
   display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;color:#fff;
@@ -566,7 +568,7 @@ body.inv-full #pageTitle{font-size:18px}
 <button class="active" data-tab="dashboard" type="button">⌂ Dashboard</button>
 <button data-tab="foundation" type="button">◆ Foundation Yönetimi</button>
 <button data-tab="financeCenter" type="button">₺ Finans &amp; Cari</button>
-<button data-tab="financeCenter" data-finance-jump="uninvoiced" type="button">🧾 Kesilmeyen Faturalar</button>
+<button class="nav-sub-item" data-tab="financeCenter" data-finance-jump="uninvoiced" type="button">↳ Kesilmeyen Faturalar</button>
 <button data-tab="customerPayments" type="button">💳 Müşteri Ödemeleri</button>
 <button data-tab="customersPage" type="button">👥 Müşteriler</button>
 <button data-tab="salesCenter" type="button">🛒 Satış Merkezi</button>
@@ -1691,5 +1693,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v4"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v5"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

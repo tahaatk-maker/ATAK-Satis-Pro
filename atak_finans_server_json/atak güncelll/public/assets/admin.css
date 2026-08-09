@@ -519,4 +519,6 @@ button.primary,.primary,button{font-size:12px}
 @media(max-width:900px){.customer-billing-cards{grid-template-columns:1fr}}
 
 #financeUninvoicedPanel.pulse-highlight{outline:3px solid #1769ff;box-shadow:0 0 0 6px rgba(23,105,255,.15)}
+aside nav button.nav-sub-item{padding-left:28px;font-size:13px;opacity:.95;color:#dbe7ff}
+aside nav button.nav-sub-item.active{background:rgba(253,186,116,.18);color:#fff}
 .stat.net-today{border-top:4px solid #0b2a4a}
