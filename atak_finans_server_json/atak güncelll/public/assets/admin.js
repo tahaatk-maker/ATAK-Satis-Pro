@@ -609,6 +609,47 @@ function renderCustomerPageList(){
   }).join('');
   qa('#customerPageList [data-customer-id]').forEach(btn=>btn.addEventListener('click',()=>selectCustomerPage(btn.dataset.customerId)));
 }
+function customerTxKindLabel(kind=''){
+  return({sale:'Mağaza satışı',sale_cancel:'Satış iptali',collection:'Cari tahsilat',collection_cancel:'Tahsilat iptali',payment:'Ödeme',expense:'Gider',reversal:'Ters kayıt'}[kind]||kind||'Hareket');
+}
+function renderCustomerSaleItems(items=[]){
+  if(!items.length)return '<div class="customer-sale-empty">Ürün kalemi yok</div>';
+  return `<div class="customer-sale-items">${items.map(i=>{
+    const name=i.productName||i.materialCode||i.productCode||'Ürün';
+    const code=[i.itemCode,i.productCode].filter(Boolean).join(' · ');
+    const qty=Number(i.quantity||1);
+    const line=Number(i.total!=null?i.total:(qty*Number(i.unitPrice||0)));
+    return `<div class="customer-sale-item"><div><b>${qty}× ${name}</b>${code?`<small>${code}</small>`:''}<small>Birim: ${money2(i.unitPrice||0)}</small></div><strong>${money2(line)}</strong></div>`;
+  }).join('')}</div>`;
+}
+function renderCustomerTransaction(t){
+  const kind=String(t.kind||'');
+  const isSale=kind==='sale'||kind==='sale_cancel';
+  const cancelled=t.cancelled||kind.endsWith('_cancel');
+  const label=customerTxKindLabel(kind);
+  if(isSale){
+    const net=Number(t.displayAmount!=null?t.displayAmount:(t.total!=null?t.total:Math.abs(Number(t.customerDelta||0))));
+    const gross=Number(t.grossTotal!=null?t.grossTotal:net);
+    const disc=Number(t.discountAmount!=null?t.discountAmount:Math.max(0,gross-net));
+    const meta=[t.reference,t.salespersonName||t.createdBy,t.paymentMethod,t.dealerName].filter(Boolean).join(' · ');
+    return `<article class="customer-tx customer-tx-sale${cancelled?' is-cancelled':''}">
+      <div class="customer-tx-sale-head">
+        <div><b>${t.date||'-'} · ${label}</b><small>${meta||t.description||''}</small></div>
+        <strong class="${kind==='sale_cancel'?'credit':'debt'}">${money2(net)}</strong>
+      </div>
+      ${renderCustomerSaleItems(t.items||[])}
+      <div class="customer-sale-totals">
+        <span>Brüt ${money2(gross)}</span>
+        ${disc>0?`<span>İskonto %${Number(t.discountPct||0)} (−${money2(disc)})</span>`:''}
+        <span><b>Net ${money2(net)}</b></span>
+      </div>
+    </article>`;
+  }
+  const amt=Number(t.displayAmount!=null?t.displayAmount:t.amount||0);
+  const cls=amt<0||kind==='collection'||kind==='collection_cancel'?(amt<=0&&kind==='collection'?'credit':(amt<0?'credit':'debt')):(Number(t.customerDelta||0)<0?'credit':'debt');
+  const showAmt=kind==='collection'?Math.abs(amt):amt;
+  return `<div class="customer-tx${cancelled?' is-cancelled':''}"><div><b>${t.date||'-'} · ${label}</b><small>${[t.reference,t.description,t.accountName,t.category].filter(Boolean).join(' · ')||'-'}</small></div><strong class="${cls}">${money2(showAmt)}</strong></div>`;
+}
 async function selectCustomerPage(id){
   customersPageData.selectedId=id;
   renderCustomerPageList();
@@ -624,16 +665,19 @@ async function selectCustomerPage(id){
     const addr=[c.address,c.district,c.city].filter(Boolean).join(', ');
     const deliv=c.deliverySameAsBilling!==false?'Teslimat = fatura adresi':[c.deliveryAddress,c.deliveryDistrict,c.deliveryCity].filter(Boolean).join(', ');
     const tx=d.transactions||[];
-    if(q('#customerTransactionCount'))q('#customerTransactionCount').textContent=`${tx.length} hareket`;
+    const saleCount=tx.filter(t=>t.kind==='sale'&&!t.cancelled).length;
+    if(q('#customerTransactionCount'))q('#customerTransactionCount').textContent=`${tx.length} hareket · ${saleCount} satış`;
     const list=q('#customerTransactionList');
     if(list){
-      list.innerHTML=`<div class="customer-info-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      const pending=d.pendingEdit?`<div class="customer-pending-banner">Bekleyen düzenleme onayı var · ${d.pendingEdit.requestedByName||'Personel'} · ${String(d.pendingEdit.requestedAt||'').replace('T',' ').slice(0,16)}</div>`:'';
+      list.innerHTML=pending+`<div class="customer-info-grid">
         <div class="note"><b>Fatura adresi</b><br>${addr||'-'}</div>
         <div class="note"><b>Teslimat</b><br>${deliv||'-'}</div>
         ${c.invoiceType==='corporate'?`<div class="note"><b>Firma</b><br>${c.companyName||'-'}<br>${c.taxOffice||''} · VKN ${c.taxNo||''}</div>`:''}
-      </div>`+(tx.length?tx.slice(0,80).map(t=>`<div class="customer-tx"><div><b>${t.date||''}</b> · ${t.kind||''}<small>${t.description||t.reference||''}</small></div><strong>${money2(t.amount)}</strong></div>`).join(''):'<div class="note">Henüz cari hareket yok.</div>');
+      </div>`+(tx.length?tx.slice(0,80).map(renderCustomerTransaction).join(''):'<div class="note">Henüz cari hareket yok.</div>');
     }
     customersPageData._selected=c;
+    customersPageData._canManage=Boolean(d.canManage);
   }catch(e){toast(e.message);empty?.classList.remove('hidden');content?.classList.add('hidden')}
 }
 async function loadCustomersPage(){
@@ -663,10 +707,24 @@ q('#customerPageSaveBtn')?.addEventListener('click',async()=>{
   const st=q('#customerPageStatus');
   try{
     const payload=collectCustomerPayload('customerPage',{requireActive:true});
-    st.textContent='Kaydediliyor...';st.className='form-status';
+    const isEdit=Boolean(payload.id);
+    if(isEdit&&!customersPageData._canManage){
+      const reason=prompt('Düzenleme sebebi (yönetici onayına gidecek):','Müşteri bilgisi güncelleme');
+      if(reason===null)return;
+      payload.reason=String(reason||'').trim()||'Müşteri bilgisi güncelleme';
+    }
+    st.textContent=isEdit?'Onaya / kayda gönderiliyor...':'Kaydediliyor...';st.className='form-status';
     const r=await api('/web-api/admin/customer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    st.textContent='Müşteri kaydedildi.';st.className='form-status success';
     q('#customerModal')?.classList.add('hidden');
+    if(r.pendingApproval){
+      st.textContent='Düzenleme yönetici onayına gönderildi.';st.className='form-status success';
+      toast('Müşteri düzenlemesi yönetici onayına gönderildi');
+      await loadCustomersPage();
+      if(payload.id)await selectCustomerPage(payload.id);
+      await loadApprovals().catch(()=>{});
+      return;
+    }
+    st.textContent='Müşteri kaydedildi.';st.className='form-status success';
     toast('Müşteri kaydedildi');
     await loadCustomersPage();
     if(r.row?.id)await selectCustomerPage(r.row.id);
@@ -1515,13 +1573,29 @@ async function loadStaffSalesReport(){
     st.textContent=d.canManage?'Yönetici raporu hazır.':'Yalnız kendi satışlarınız.';st.className='form-status success';
   }catch(e){st.textContent=e.message;st.className='form-status error'}
 }
+function approvalTypeLabel(type=''){
+  return({sale:'Satış iptali',collection:'Tahsilat iptali',customer_edit:'Müşteri düzenleme'}[type]||type||'-');
+}
+function approvalDetailHtml(r){
+  if(r.targetType!=='customer_edit'||!r.payload?.after)return r.reason||'-';
+  const b=r.payload.before||{},a=r.payload.after||{};
+  const keys=['name','phone','email','city','district','address','invoiceType','companyName','taxOffice','taxNo','tckn','note','active'];
+  const changes=keys.filter(k=>String(b[k]??'')!==String(a[k]??'')).map(k=>`<div><small>${k}</small>: <s>${b[k]??'-'}</s> → <b>${a[k]??'-'}</b></div>`).join('');
+  return `<div class="approval-edit-detail"><div>${r.reason||'Müşteri düzenleme'}</div>${changes||'<small>Alan farkı yok</small>'}</div>`;
+}
 async function loadApprovals(){
   const info=q('#approvalInfo');
   try{const d=await api('/web-api/admin/cancellation-requests');if(!d.canManage){q('[data-tab="managerApprovals"]')?.classList.add('hidden');info.textContent='Yalnız yönetici.';return}
-    q('#approvalTable').innerHTML=(d.rows||[]).map(r=>`<tr><td><span class="approval-status ${r.status}">${r.status==='pending'?'Bekliyor':r.status==='approved'?'Onaylandı':'Reddedildi'}</span></td><td>${r.targetType==='sale'?'Satış':'Tahsilat'}</td><td>${r.targetReference||'-'}</td><td>${r.requestedByName||'-'}</td><td>${r.reason||'-'}</td><td>${String(r.requestedAt||'').replace('T',' ').slice(0,16)}</td><td>${r.status==='pending'?`<button type="button" data-appr="${r.id}">Onayla</button> <button type="button" data-rej="${r.id}">Reddet</button>`:(r.reviewedBy||'-')}</td></tr>`).join('');
-    qa('[data-appr]').forEach(b=>b.onclick=async()=>{if(!confirm('Onaylansın mı? Satış ise tahsilat, cari, stok ve prim de düzeltilecek.'))return;try{await api('/web-api/admin/cancellation-request/'+b.dataset.appr+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve'})});toast('Onaylandı');await loadApprovals();await loadStaffSalesReport()}catch(e){toast(e.message)}});
+    q('#approvalTable').innerHTML=(d.rows||[]).map(r=>`<tr><td><span class="approval-status ${r.status}">${r.status==='pending'?'Bekliyor':r.status==='approved'?'Onaylandı':'Reddedildi'}</span></td><td>${approvalTypeLabel(r.targetType)}</td><td>${r.targetReference||'-'}</td><td>${r.requestedByName||'-'}</td><td>${approvalDetailHtml(r)}</td><td>${String(r.requestedAt||'').replace('T',' ').slice(0,16)}</td><td>${r.status==='pending'?`<button type="button" data-appr="${r.id}" data-type="${r.targetType||''}">Onayla</button> <button type="button" data-rej="${r.id}">Reddet</button>`:(r.reviewedBy||'-')}</td></tr>`).join('');
+    qa('[data-appr]').forEach(b=>b.onclick=async()=>{
+      const msg=b.dataset.type==='customer_edit'
+        ?'Müşteri düzenlemesi uygulansın mı?'
+        :'Onaylansın mı? Satış ise tahsilat, cari, stok ve prim de düzeltilecek.';
+      if(!confirm(msg))return;
+      try{await api('/web-api/admin/cancellation-request/'+b.dataset.appr+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve'})});toast('Onaylandı');await loadApprovals();await loadStaffSalesReport();if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId)}catch(e){toast(e.message)}
+    });
     qa('[data-rej]').forEach(b=>b.onclick=async()=>{const note=prompt('Red açıklaması:','')||'';try{await api('/web-api/admin/cancellation-request/'+b.dataset.rej+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reject',note})});toast('Reddedildi');await loadApprovals()}catch(e){toast(e.message)}});
-    info.textContent='Personel iptal talepleri burada onaylanır. Kayıtlar silinmez, ters kayıtla düzeltilir.';info.className='form-status success';
+    info.textContent='Satış/tahsilat iptalleri ve müşteri düzenlemeleri burada onaylanır.';info.className='form-status success';
   }catch(e){info.textContent=e.message;info.className='form-status error'}
 }
 q('#mySalesRefresh')?.addEventListener('click',loadMySalesReport);q('#staffSalesRefresh')?.addEventListener('click',loadStaffSalesReport);q('#approvalRefresh')?.addEventListener('click',loadApprovals);

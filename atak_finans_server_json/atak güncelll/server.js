@@ -651,8 +651,18 @@ app.post('/web-api/admin/finance-account',requireAdmin,(req,res)=>{
   if(row)Object.assign(row,data);else{row={id:slug(name)||crypto.randomUUID(),createdAt:new Date().toISOString(),...data};if(s.financeAccounts.some(v=>v.id===row.id))row.id=`${row.id}-${Date.now()}`;s.financeAccounts.push(row)}
   audit(s,'Finans hesabı kaydedildi',row.name,{type});writeStore(s);res.json({ok:true,row:{...row,balance:accountBalance(s,row.id)}});
 });
-app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,res)=>{
-  const s=readStore(),x=req.body||{};
+function customerSnapshot(c={}){
+  return {
+    name:c.name||'',phone:c.phone||'',email:c.email||'',taxNo:c.taxNo||'',tckn:c.tckn||'',
+    city:c.city||'',district:c.district||'',address:c.address||'',
+    deliverySameAsBilling:c.deliverySameAsBilling!==false,deliveryCity:c.deliveryCity||'',
+    deliveryDistrict:c.deliveryDistrict||'',deliveryAddress:c.deliveryAddress||'',
+    invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
+    companyName:c.companyName||'',taxOffice:c.taxOffice||'',note:c.note||'',
+    active:c.active!==false
+  };
+}
+function parseCustomerPayload(x={}){
   const name=String(x.name||'').trim();
   const phone=String(x.phone||'').trim();
   const city=String(x.city||'').trim();
@@ -666,19 +676,18 @@ app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,
   const companyName=String(x.companyName||'').trim();
   const taxOffice=String(x.taxOffice||'').trim();
   const taxNo=String(x.taxNo||x.corporateTaxNo||x.tckn||'').trim();
-  if(!name)return res.status(400).json({error:'Müşteri adı zorunludur'});
-  if(!phone)return res.status(400).json({error:'Telefon zorunludur'});
-  if(!city||!district||!address)return res.status(400).json({error:'Fatura adresi (il, ilçe, açık adres) zorunludur'});
+  if(!name)throw new Error('Müşteri adı zorunludur');
+  if(!phone)throw new Error('Telefon zorunludur');
+  if(!city||!district||!address)throw new Error('Fatura adresi (il, ilçe, açık adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress)){
-    return res.status(400).json({error:'Teslimat adresi fatura adresinden farklıysa il, ilçe ve açık adres zorunludur'});
+    throw new Error('Teslimat adresi fatura adresinden farklıysa il, ilçe ve açık adres zorunludur');
   }
   if(invoiceType==='corporate'){
-    if(!companyName)return res.status(400).json({error:'Kurumsal faturada firma ünvanı zorunludur'});
-    if(!taxOffice)return res.status(400).json({error:'Kurumsal faturada vergi dairesi zorunludur'});
-    if(!taxNo||taxNo.replace(/\D/g,'').length<10)return res.status(400).json({error:'Kurumsal faturada geçerli VKN zorunludur'});
+    if(!companyName)throw new Error('Kurumsal faturada firma ünvanı zorunludur');
+    if(!taxOffice)throw new Error('Kurumsal faturada vergi dairesi zorunludur');
+    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal faturada geçerli VKN zorunludur');
   }
-  let row=s.customers.find(v=>v.id===x.id);
-  const data={
+  return {
     name,phone,
     email:String(x.email||'').trim(),
     taxNo,
@@ -695,8 +704,40 @@ app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,
     active:x.active!==false&&x.active!=='false',
     updatedAt:new Date().toISOString()
   };
-  if(row)Object.assign(row,data);else{row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),...data};s.customers.push(row)}
-  audit(s,'Müşteri kaydedildi',row.name);writeStore(s);res.json({ok:true,row:{...row,balance:customerBalance(s,row.id)}});
+}
+function applyCustomerData(row,data){Object.assign(row,data);return row}
+app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,res)=>{
+  const s=readStore(),x=req.body||{};
+  let data;
+  try{data=parseCustomerPayload(x)}catch(e){return res.status(400).json({error:e.message})}
+  let row=s.customers.find(v=>v.id===x.id);
+  // Yeni müşteri: doğrudan kaydet
+  if(!row){
+    row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),...data};
+    s.customers.push(row);
+    audit(s,'Müşteri kaydedildi',row.name);writeStore(s);
+    return res.json({ok:true,row:{...row,balance:customerBalance(s,row.id)}});
+  }
+  // Düzenleme: yönetici değilse onay kuyruğuna
+  if(!isSystemManager(req)){
+    if((s.cancellationRequests||[]).some(r=>r.status==='pending'&&r.targetType==='customer_edit'&&String(r.targetId)===String(row.id)))
+      return res.status(409).json({error:'Bu müşteri için bekleyen düzenleme onayı var'});
+    const u=currentSessionUser(req);
+    const reqRow={
+      id:crypto.randomUUID(),targetType:'customer_edit',targetId:String(row.id),
+      targetReference:row.name||row.id,reason:String(x.reason||'Müşteri bilgisi düzenleme').trim()||'Müşteri bilgisi düzenleme',
+      status:'pending',requestedById:u?.id||'',requestedByName:u?.name||'Personel',
+      requestedAt:new Date().toISOString(),reviewedBy:'',reviewedAt:'',reviewNote:'',
+      payload:{before:customerSnapshot(row),after:customerSnapshot({...data,active:data.active})}
+    };
+    s.cancellationRequests.unshift(reqRow);
+    audit(s,'Müşteri düzenleme onayı istendi',row.name,{personel:reqRow.requestedByName});
+    writeStore(s);
+    return res.json({ok:true,pendingApproval:true,row:reqRow});
+  }
+  applyCustomerData(row,data);
+  audit(s,'Müşteri kaydedildi',row.name);writeStore(s);
+  res.json({ok:true,row:{...row,balance:customerBalance(s,row.id)}});
 });
 app.post('/web-api/admin/finance-transaction',requireAdminOrStaff('finance_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{},kind=String(x.kind||''),amount=cleanMoney(x.amount);
@@ -723,14 +764,30 @@ app.post('/web-api/admin/finance-transfer',requireAdminOrStaff('finance_manage')
 app.get('/web-api/admin/customer-detail/:id',requireAdmin,(req,res)=>{
   const s=readStore(),customer=s.customers.find(x=>x.id===req.params.id);
   if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
-  const transactions=s.financeTransactions.filter(x=>x.customerId===customer.id).map(x=>({
-    ...x,
-    accountName:s.financeAccounts.find(a=>a.id===x.accountId)?.name||'',
-    receiptUrl:`/web-api/admin/receipt/${x.id}`
-  }));
+  const transactions=s.financeTransactions
+    .filter(x=>x.customerId===customer.id)
+    .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')))
+    .map(x=>{
+      const items=Array.isArray(x.items)?x.items:[];
+      const net=Number(x.total!=null?x.total:(x.kind==='sale'||x.kind==='sale_cancel'?Math.abs(Number(x.customerDelta||0)):Number(x.amount||0)));
+      const displayAmount=x.kind==='sale'||x.kind==='sale_cancel'
+        ?Number(x.total!=null?x.total:Math.abs(Number(x.customerDelta||0)))
+        :Number(x.amount||0);
+      return{
+        ...x,
+        items,
+        accountName:s.financeAccounts.find(a=>a.id===x.accountId)?.name||'',
+        receiptUrl:`/web-api/admin/receipt/${x.id}`,
+        displayAmount,
+        itemSummary:items.map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', ')
+      };
+    });
+  const pendingEdit=(s.cancellationRequests||[]).find(r=>r.status==='pending'&&r.targetType==='customer_edit'&&String(r.targetId)===String(customer.id))||null;
   res.json({
     customer:{...customer,balance:customerBalance(s,customer.id)},
     transactions,
+    pendingEdit,
+    canManage:isSystemManager(req),
     accounts:s.financeAccounts.filter(x=>x.active!==false).map(x=>({...x,balance:accountBalance(s,x.id)})),
     products:(s.products||[]).filter(x=>x.active!==false).map(x=>({code:x.code,name:x.name,price:Number(x.cashPrice||x.salePrice||x.price||0),cardPrice:Number(x.cardPrice||x.cashPrice||x.salePrice||0),brand:x.brand||''})),
     warehouses:(s.warehouses||[]).filter(x=>x.active!==false),
@@ -1113,9 +1170,21 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdmin,(req,res)
   const action=String(req.body?.action||''),note=String(req.body?.note||''),actor=currentSessionUser(req)?.name||'Yönetici';
   if(action==='reject'){
     row.status='rejected';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
-    audit(s,'İptal talebi reddedildi',row.targetReference||row.targetId,{note});writeStore(s);return res.json({ok:true,row});
+    audit(s,row.targetType==='customer_edit'?'Müşteri düzenleme reddedildi':'İptal talebi reddedildi',row.targetReference||row.targetId,{note});
+    writeStore(s);return res.json({ok:true,row});
   }
   if(action!=='approve')return res.status(400).json({error:'Geçersiz işlem'});
+  if(row.targetType==='customer_edit'){
+    const customer=(s.customers||[]).find(c=>String(c.id)===String(row.targetId));
+    if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
+    try{
+      const data=parseCustomerPayload({...(row.payload?.after||{}),id:customer.id});
+      applyCustomerData(customer,data);
+      row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
+      audit(s,'Müşteri düzenleme onaylandı',customer.name,{reason:row.reason,personel:row.requestedByName});
+      writeStore(s);return res.json({ok:true,row,customer:{...customer,balance:customerBalance(s,customer.id)}});
+    }catch(e){return res.status(400).json({error:e.message})}
+  }
   const target=(s.financeTransactions||[]).find(t=>String(t.id)===String(row.targetId));
   if(!target)return res.status(404).json({error:'Bağlı işlem bulunamadı'});
   try{
