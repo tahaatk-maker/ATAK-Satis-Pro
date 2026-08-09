@@ -1,0 +1,6 @@
+node_modules/
+.atak-transfer/
+*.log
+.DS_Store
+uploads/
+*.tmp
