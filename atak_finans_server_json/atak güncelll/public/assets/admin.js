@@ -846,6 +846,21 @@ q('#salesAddRowBtn')?.addEventListener('click',()=>salesAddRow());q('#salesReset
   q(id)?.addEventListener('input',salesCalculate);
   q(id)?.addEventListener('change',salesCalculate);
 });
+function salesFillRemainingTo(fieldId){
+  const map={payCash:'cash',payCard:'card',payTransfer:'transfer',payCredit:'credit',payNote:'note'};
+  const key=map[fieldId];if(!key)return;
+  const c=salesCalcState();
+  const current=Math.max(0,salesNum(c.splits[key]));
+  const others=Math.round((c.allocated-current)*100)/100;
+  const fill=Math.max(0,Math.round((c.net-others)*100)/100);
+  const el=q('#'+fieldId);if(!el)return;
+  el.value=String(fill);
+  salesCalculate();
+  el.focus();el.select?.();
+}
+qa('[data-pay-fill]').forEach(btn=>{
+  btn.addEventListener('click',()=>salesFillRemainingTo(btn.getAttribute('data-pay-fill')));
+});
 ['#salesPromissoryInstallments','#salesPromissoryInterval','#salesPromissoryFirstDue'].forEach(id=>{
   q(id)?.addEventListener('input',salesRenderPromissorySchedule);
   q(id)?.addEventListener('change',salesRenderPromissorySchedule);

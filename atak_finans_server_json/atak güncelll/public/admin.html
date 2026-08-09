@@ -11,17 +11,35 @@
 .sales-rule-live{display:flex;flex-direction:column;gap:6px;margin-top:8px;font-size:.92rem}
 .sales-rule-live .ok{color:#0f766e}.sales-rule-live .warn{color:#b45309;font-weight:700}.sales-rule-live .bad{color:#b91c1c;font-weight:700}
 .sales-discount-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.sales-payments-box{margin:12px 0;padding:12px;border:1px solid #d7e0ea;border-radius:14px;background:#f8fbff}
-.sales-payments-title{margin-bottom:10px}.sales-payments-title small{display:block;color:#64748b;margin-top:4px}
-.sales-pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.sales-pay-hint{display:flex;align-items:end;color:#64748b;font-size:.85rem;padding-bottom:8px}
-.sales-pay-sum{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.sales-pay-sum>div{background:#fff;border:1px solid #e5edf5;border-radius:10px;padding:8px}
-.sales-pay-sum span{display:block;font-size:.8rem;color:#64748b}.sales-pay-sum b{font-size:1.05rem}
-.sales-pay-balance{margin-top:8px;font-size:.9rem}.sales-pay-balance.ok{color:#0f766e}.sales-pay-balance.warn{color:#b45309;font-weight:700}.sales-pay-balance.bad{color:#b91c1c;font-weight:700}
-.sales-promissory-schedule{margin-top:8px;font-size:.9rem;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:8px}
+.sales-payments-box{margin:12px 0;padding:14px;border:1px solid #c9d7e6;border-radius:16px;background:linear-gradient(180deg,#f7fafc,#eef4fa)}
+.sales-payments-title{margin-bottom:12px}.sales-payments-title b{display:block;font-size:1.05rem;color:#07366c}.sales-payments-title small{display:block;color:#64748b;margin-top:4px;line-height:1.35}
+.sales-pay-list{display:flex;flex-direction:column;gap:10px}
+.pay-method{border:1px solid #d5e0ec;border-radius:14px;background:#fff;padding:10px 12px;box-shadow:0 1px 0 rgba(7,54,108,.04)}
+.pay-method-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.pay-method-badge{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;padding:5px 10px;border-radius:999px;line-height:1}
+.pay-method-badge::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.9}
+.pay-cash .pay-method-badge{color:#0f766e;background:#ecfdf5}
+.pay-card .pay-method-badge{color:#1d4ed8;background:#eff6ff}
+.pay-transfer .pay-method-badge{color:#7c3aed;background:#f5f3ff}
+.pay-credit .pay-method-badge{color:#b45309;background:#fffbeb}
+.pay-note .pay-method-badge{color:#be123c;background:#fff1f2}
+.pay-fill-btn{border:1px solid #c9d7e6;background:#f8fafc;color:#07366c;border-radius:8px;padding:4px 8px;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap}
+.pay-fill-btn:hover{background:#e8f1fb;border-color:#9db7d4}
+.pay-method-body{display:grid;grid-template-columns:1fr 1.2fr;gap:8px}
+.pay-method-body.single{grid-template-columns:1fr}
+.pay-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pay-field-label{display:block !important;font-size:.72rem !important;font-weight:700 !important;color:#475569 !important;letter-spacing:.02em;line-height:1.2;margin:0 !important;padding:0 !important}
+.pay-field input,.pay-field select{width:100%;margin:0}
+.pay-method-note{margin-top:6px;font-size:.78rem;color:#64748b;line-height:1.3}
+.sales-pay-sum{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.sales-pay-sum>div{background:#fff;border:1px solid #d5e0ec;border-radius:12px;padding:10px}
+.sales-pay-sum span{display:block;font-size:.78rem;color:#64748b;font-weight:600}.sales-pay-sum b{font-size:1.1rem;color:#07366c}
+.sales-pay-balance{margin-top:10px;font-size:.9rem;padding:8px 10px;border-radius:10px;background:#fff}.sales-pay-balance.ok{color:#0f766e;border:1px solid #99f6e4}.sales-pay-balance.warn{color:#b45309;font-weight:700;border:1px solid #fcd34d;background:#fffbeb}.sales-pay-balance.bad{color:#b91c1c;font-weight:700;border:1px solid #fca5a5;background:#fef2f2}
+.sales-promissory-options{margin:12px 0;padding:14px;border:1px solid #fdba74;border-radius:16px;background:linear-gradient(180deg,#fff7ed,#ffedd5)}
+.sales-promissory-title{margin-bottom:10px}.sales-promissory-title b{display:block;color:#9a3412}.sales-promissory-title small{display:block;color:#9a3412;margin-top:4px;line-height:1.35}
+.sales-promissory-schedule{margin-top:8px;font-size:.9rem;background:#fff;border:1px solid #fdba74;border-radius:10px;padding:8px}
 .sales-promissory-schedule table{width:100%;border-collapse:collapse}.sales-promissory-schedule th,.sales-promissory-schedule td{padding:4px 6px;border-bottom:1px solid #fed7aa;text-align:left}
-@media(max-width:720px){.sales-discount-row,.sales-pay-grid,.sales-pay-sum{grid-template-columns:1fr}}
+@media(max-width:720px){.sales-discount-row,.sales-pay-sum,.pay-method-body{grid-template-columns:1fr}}
 </style>
 </head><body>
 <div class="login-view" id="loginView"><form class="login-card" id="loginForm"><a class="login-brand-link" href="/web-admin"><img alt="Atak Home" src="/assets/atak-pazarlama-full.svg"/></a><h1>Atak Pazarlama Yönetim Merkezi</h1><p>Yönetim merkezi</p><input autocomplete="username" id="username" placeholder="Kullanıcı adı (boşsa yönetici)"/><input autocomplete="current-password" id="password" placeholder="Şifre" required="" type="password"/><button type="submit">Giriş Yap</button></form></div>
@@ -145,18 +163,85 @@
   <label id="salesWarehouseWrap" class="hidden">Satış Deposu<select id="salesWarehouse"></select><small>Seçilen ürünler bu depodan düşülür.</small></label>
 </div>
 <div class="sales-payments-box">
-  <div class="sales-payments-title"><b>💳 Ödeme Dağılımı</b><small>Nakit + kart + havale + senet + vadeli aynı anda girilebilir. Toplam net satışa eşit olmalı.</small></div>
-  <div class="sales-pay-grid">
-    <label>Nakit (₺)<input id="payCash" min="0" step="0.01" type="number" value="0" inputmode="decimal"/></label>
-    <label>Nakit Kasası<select id="payCashAccount"></select></label>
-    <label>Kredi Kartı (₺)<input id="payCard" min="0" step="0.01" type="number" value="0" inputmode="decimal"/></label>
-    <label>Kart Hesabı<select id="payCardAccount"></select></label>
-    <label>Havale (₺)<input id="payTransfer" min="0" step="0.01" type="number" value="0" inputmode="decimal"/></label>
-    <label>Havale Bankası<select id="payTransferAccount"></select></label>
-    <label>Vadeli / Cari (₺)<input id="payCredit" min="0" step="0.01" type="number" value="0" inputmode="decimal"/></label>
-    <label class="sales-pay-hint">Hesap seçilmez · cariye kalır</label>
-    <label>Senet (₺)<input id="payNote" min="0" step="0.01" type="number" value="0" inputmode="decimal"/></label>
-    <label class="sales-pay-hint">Aşağıda vade/taksit girilir</label>
+  <div class="sales-payments-title">
+    <b>Ödeme Planı</b>
+    <small>Her satır ayrı ödeme yöntemi. İstediğiniz kadarını birlikte kullanın; toplam net satışa eşit olmalı.</small>
+  </div>
+  <div class="sales-pay-list">
+    <div class="pay-method pay-cash">
+      <div class="pay-method-head">
+        <span class="pay-method-badge">Nakit</span>
+        <button type="button" class="pay-fill-btn" data-pay-fill="payCash">Kalanı buraya</button>
+      </div>
+      <div class="pay-method-body">
+        <div class="pay-field">
+          <span class="pay-field-label">Tutar (₺)</span>
+          <input id="payCash" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0"/>
+        </div>
+        <div class="pay-field">
+          <span class="pay-field-label">Nakit Kasası</span>
+          <select id="payCashAccount"></select>
+        </div>
+      </div>
+    </div>
+    <div class="pay-method pay-card">
+      <div class="pay-method-head">
+        <span class="pay-method-badge">Kredi Kartı</span>
+        <button type="button" class="pay-fill-btn" data-pay-fill="payCard">Kalanı buraya</button>
+      </div>
+      <div class="pay-method-body">
+        <div class="pay-field">
+          <span class="pay-field-label">Tutar (₺)</span>
+          <input id="payCard" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0"/>
+        </div>
+        <div class="pay-field">
+          <span class="pay-field-label">Kart / POS Hesabı</span>
+          <select id="payCardAccount"></select>
+        </div>
+      </div>
+    </div>
+    <div class="pay-method pay-transfer">
+      <div class="pay-method-head">
+        <span class="pay-method-badge">Havale / EFT</span>
+        <button type="button" class="pay-fill-btn" data-pay-fill="payTransfer">Kalanı buraya</button>
+      </div>
+      <div class="pay-method-body">
+        <div class="pay-field">
+          <span class="pay-field-label">Tutar (₺)</span>
+          <input id="payTransfer" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0"/>
+        </div>
+        <div class="pay-field">
+          <span class="pay-field-label">Banka Hesabı</span>
+          <select id="payTransferAccount"></select>
+        </div>
+      </div>
+    </div>
+    <div class="pay-method pay-credit">
+      <div class="pay-method-head">
+        <span class="pay-method-badge">Vadeli / Cari</span>
+        <button type="button" class="pay-fill-btn" data-pay-fill="payCredit">Kalanı buraya</button>
+      </div>
+      <div class="pay-method-body single">
+        <div class="pay-field">
+          <span class="pay-field-label">Cariye kalan tutar (₺)</span>
+          <input id="payCredit" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0"/>
+        </div>
+      </div>
+      <div class="pay-method-note">Hesap seçilmez · müşteri carisine borç olarak kalır</div>
+    </div>
+    <div class="pay-method pay-note">
+      <div class="pay-method-head">
+        <span class="pay-method-badge">Senet</span>
+        <button type="button" class="pay-fill-btn" data-pay-fill="payNote">Kalanı buraya</button>
+      </div>
+      <div class="pay-method-body single">
+        <div class="pay-field">
+          <span class="pay-field-label">Senet toplam tutarı (₺)</span>
+          <input id="payNote" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0"/>
+        </div>
+      </div>
+      <div class="pay-method-note">Tutar girince aşağıda vade tarihi ve taksit planı açılır</div>
+    </div>
   </div>
   <div class="sales-pay-sum">
     <div><span>Dağıtılan</span><b id="payAllocated">₺0,00</b></div>
@@ -169,7 +254,7 @@
 <input id="salesPaymentMethod" type="hidden" value="Karma"/>
 <select id="salesAccount" class="hidden"></select>
 <div class="sales-promissory-options hidden" id="salesPromissoryOptions">
-  <div class="sales-promissory-title"><b>🧾 Senet Düzenlemesi</b><small id="salesPromissoryWarn">Senet tutarı için vade ve taksit girin.</small></div>
+  <div class="sales-promissory-title"><b>Senet Vade / Taksit Planı</b><small id="salesPromissoryWarn">Senet tutarı için vade ve taksit girin.</small></div>
   <div class="sales-discount-row">
     <label>Senet Adedi (Taksit)<input id="salesPromissoryInstallments" max="36" min="1" type="number" value="1"/></label>
     <label>Taksit Aralığı (Ay)<input id="salesPromissoryInterval" max="12" min="1" type="number" value="1"/></label>
@@ -698,5 +783,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=639-multi-pay"></script><script src="/web-admin-assets/customer-sales.js?v=639-multi-pay"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=640-pay-ui"></script><script src="/web-admin-assets/customer-sales.js?v=640-pay-ui"></script>
 </body></html>
