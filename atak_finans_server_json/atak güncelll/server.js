@@ -695,7 +695,7 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.12-tckn-optional',
+  version:'6.3.13-fatura-tipi',
   build:'fix-v6',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()

@@ -540,10 +540,10 @@
       <div class="field wide" style="display:grid;gap:8px">
         <small style="font-weight:800;color:#0b2a4a">Fatura tipi *</small>
         <div style="display:flex;gap:14px;flex-wrap:wrap">
-          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="individual" checked/> Bireysel (TCKN)</label>
-          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="corporate"/> Kurumsal (VKN)</label>
+          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="individual" checked/> Bireysel</label>
+          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="corporate"/> Kurumsal</label>
         </div>
-        <small class="muted">Senet şahsa kalır. Fatura tipi zorunludur.</small>
+        <small class="muted">Senet şahsa kalır. Bireysel’de TCKN isteğe bağlı; kurumsal’da firma bilgileri zorunlu.</small>
       </div>
       <label class="field" id="qcIndividualSec">TCKN<input id="qcTckn" placeholder="11 hane (zorunlu değil)" inputmode="numeric"></label>
       <label class="field hidden" id="qcCompanyWrap">Firma ünvanı *<input id="qcCompanyName" placeholder="Şirket ünvanı"></label>
