@@ -1762,8 +1762,7 @@ q('#promissorySettingsForm')?.addEventListener('submit',async e=>{e.preventDefau
 async function loadInvoiceIntegration(){
  try{const d=await api('/web-api/admin/invoice-integration'),s=d.settings||{};if(q('#invoiceProvider'))q('#invoiceProvider').value=s.provider||'qnb-solist';q('#invoiceEnvironment').value=s.environment||'test';q('#invoiceCompanyVkn').value=s.companyVkn||'';q('#invoiceCompanyTitle').value=s.companyTitle||'';q('#invoiceSenderAlias').value=s.senderAlias||s.gbAlias||'';if(q('#invoicePkAlias'))q('#invoicePkAlias').value=s.pkAlias||'';q('#invoiceServiceUrl').value=s.webServiceUrl||'';q('#invoiceUsername').value=s.username||'';q('#invoicePassword').value=s.password||'';q('#invoiceEnabled').checked=!!s.enabled;q('#invoiceDraftMode').checked=s.draftMode!==false;q('#invoiceAutoDetect').checked=s.autoDetectType!==false}catch(e){toast(e.message)}
 }
-q('[data-tab="settings"]')?.addEventListener('click',()=>setTimeout(loadInvoiceIntegration,40));
-q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{e.preventDefault();const st=q('#invoiceIntegrationStatus');try{await api('/web-api/admin/invoice-integration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:q('#invoiceProvider')?.value||'qnb-solist',environment:q('#invoiceEnvironment').value,companyVkn:q('#invoiceCompanyVkn').value,companyTitle:q('#invoiceCompanyTitle').value,senderAlias:q('#invoiceSenderAlias').value,gbAlias:q('#invoiceSenderAlias').value,pkAlias:q('#invoicePkAlias')?.value||'',webServiceUrl:q('#invoiceServiceUrl').value,username:q('#invoiceUsername').value,password:q('#invoicePassword').value,enabled:q('#invoiceEnabled').checked,draftMode:q('#invoiceDraftMode').checked,autoDetectType:q('#invoiceAutoDetect').checked})});st.textContent='QNB Solist altyapı ayarları kaydedildi.';st.className='form-status success'}catch(err){st.textContent=err.message;st.className='form-status error'}});
+q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{e.preventDefault();const st=q('#invoiceIntegrationStatus');try{await api('/web-api/admin/invoice-integration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:q('#invoiceProvider')?.value||'qnb-solist',environment:q('#invoiceEnvironment').value,companyVkn:q('#invoiceCompanyVkn').value,companyTitle:q('#invoiceCompanyTitle').value,senderAlias:q('#invoiceSenderAlias').value,gbAlias:q('#invoiceSenderAlias').value,pkAlias:q('#invoicePkAlias')?.value||'',webServiceUrl:q('#invoiceServiceUrl').value,username:q('#invoiceUsername').value,password:q('#invoicePassword').value,enabled:q('#invoiceEnabled').checked,draftMode:q('#invoiceDraftMode').checked,autoDetectType:q('#invoiceAutoDetect').checked})});st.textContent='QNB Solist altyapı ayarları kaydedildi.';st.className='form-status success';invoiceConnectionTestForCenter()}catch(err){st.textContent=err.message;st.className='form-status error'}});
 q('#invoiceConnectionTestBtn')?.addEventListener('click',async()=>{const box=q('#invoiceConnectionTestResult');box.innerHTML='<p>Kontrol ediliyor…</p>';try{const r=await api('/web-api/admin/invoice-integration/test');box.innerHTML=(r.checks||[]).map(c=>`<div class="self-test-row ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${c.name}</b><small>${c.detail}</small></div>`).join('')+`<div class="self-test-row"><small>${r.note||''}</small></div>`}catch(e){box.innerHTML=`<div class="self-test-row bad"><b>Test çalışmadı</b><small>${e.message}</small></div>`}});
 
 let dynamicsPreviewData=null;
@@ -1936,8 +1935,8 @@ const INV_VIEW_META={
   in_responses:{title:'Uygulama Yanıtları',hint:'Ticari fatura kabul/red yanıtları (QNB bağlanınca).'},
   in_archive:{title:'Gelen Arşiv',hint:'Arşivlenmiş gelen faturalar.'},
   earsiv_all:{title:'e-Arşiv Faturalar',hint:'docType = earsiv olan giden kayıtlar.'},
-  setup_ready:{title:'Kurulum / Hazırlık',hint:'QNB Çözüm Merkezi kurulumu için checklist. Yeşil = hazır.'},
-  setup_settings:{title:'QNB Ayarları',hint:'Ayarlar sekmesindeki QNB Solist formuna yönlendirilir.'}
+  setup_ready:{title:'Kurulum / Hazırlık',hint:'QNB checklist. Senet ve bayi ayarları burada değil — Ayarlar menüsünde.'},
+  setup_settings:{title:'QNB Ayarları',hint:'Yalnız e-Fatura / QNB Solist. Senet ve kâr-prim Ayarlar’dadır.'}
 };
 function invEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function invStatusBadge(st){
@@ -1991,8 +1990,11 @@ function invRenderSetup(checks=[]){
   q('#invTableWrap')?.classList.add('hidden');
   q('#invToolbar')?.classList.add('hidden');
   q('#invSetupBox')?.classList.remove('hidden');
-  q('#invReadyChecks').innerHTML=(checks||[]).map(c=>`<div class="inv-check ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${invEsc(c.name)}</b><span>${invEsc(c.detail||'')}</span></div>`).join('')||'<div class="inv-empty">Test sonucu yok</div>';
-  q('#invFootCount').textContent=`${(checks||[]).filter(c=>c.ok).length}/${(checks||[]).length} hazır`;
+  loadInvoiceIntegration().catch(()=>{});
+  if(q('#invReadyChecks')){
+    q('#invReadyChecks').innerHTML=(checks||[]).map(c=>`<div class="inv-check ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${invEsc(c.name)}</b><span>${invEsc(c.detail||'')}</span></div>`).join('')||'<div class="inv-empty">Test çalıştırılmadı — “Altyapıyı Test Et”e basın</div>';
+  }
+  q('#invFootCount').textContent=(checks||[]).length?`${(checks||[]).filter(c=>c.ok).length}/${(checks||[]).length} hazır`:'QNB kurulum';
 }
 function invRenderTable(rows){
   q('#invSetupBox')?.classList.add('hidden');
@@ -2053,11 +2055,11 @@ function invPaintCurrentView(){
   if(q('#invViewTitle'))q('#invViewTitle').textContent=meta.title;
   if(q('#invViewHint'))q('#invViewHint').textContent=meta.hint;
   qa('[data-inv-view]').forEach(b=>b.classList.toggle('active',b.dataset.invView===view));
-  if(view==='setup_settings'){goTab('settings');setTimeout(()=>{q('#invoiceIntegrationForm')?.scrollIntoView({behavior:'smooth',block:'start'});loadInvoiceIntegration()},80);return}
-  if(view==='setup_ready'){
+  if(view==='setup_settings'||view==='setup_ready'){
     invRenderSetup([]);
-    q('#invFootStatus').textContent='Hazırlık kontrolü';
-    invoiceConnectionTestForCenter();
+    q('#invFootStatus').textContent=view==='setup_ready'?'Hazırlık kontrolü':'QNB ayarları';
+    if(view==='setup_ready')invoiceConnectionTestForCenter();
+    else setTimeout(()=>q('#invoiceIntegrationForm')?.scrollIntoView({behavior:'smooth',block:'start'}),40);
     return;
   }
   const d=invoiceCenterState.data||{};
@@ -2137,7 +2139,6 @@ q('#invIssueSelectedBtn')?.addEventListener('click',async()=>{
   await loadInvoiceCenter();
 });
 q('#invRunReadyTestBtn')?.addEventListener('click',()=>invoiceConnectionTestForCenter());
-q('#invGoSettingsBtn')?.addEventListener('click',()=>invSetView('setup_settings'));
 q('[data-tab="invoiceCenter"]')?.addEventListener('click',()=>setTimeout(()=>loadInvoiceCenter().catch(e=>toast(e.message)),20));
 // Geriye uyumluluk
 async function loadUninvoicedSales(){await loadInvoiceCenter()}
