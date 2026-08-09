@@ -214,13 +214,16 @@
 <div id="salesStatus" class="status"></div>
 
 <div id="salesStep1" class="pos-step-panel">
-  <div class="toolbar">
-    <input id="customerSearchSale" placeholder="Ad, telefon veya VKN/TCKN ara">
-    <button id="salesNewCustomerBtn" class="primary-btn" type="button">+ Yeni Müşteri</button>
+  <div class="toolbar sales-customer-search-bar">
+    <input id="customerSearchSale" placeholder="Ad, telefon, VKN veya TCKN (en az 2 karakter)" autocomplete="off">
+    <button id="customerSearchSaleBtn" class="primary-btn" type="button">🔍 Ara</button>
+    <button id="salesNewCustomerBtn" class="ghost-btn" type="button">+ Yeni Müşteri</button>
   </div>
-  <label class="field">Müşteri
-    <select id="salesCustomerSelect"><option value="">Müşteri seçin</option></select>
+  <p class="sales-customer-hint" id="salesCustomerSearchHint">10.000+ müşteri için tüm liste yüklenmez. Ara butonuyla bulun, sonra seçin.</p>
+  <label class="field">Sonuçlar
+    <select id="salesCustomerSelect"><option value="">Önce arayın, sonra seçin</option></select>
   </label>
+  <small id="salesCustomerCount" class="muted">0 sonuç</small>
   <div id="salesCustomerInfo" class="info-box hidden"></div>
   <div class="pos-nav">
     <span id="salesHint1">Müşteri seçmeden devam edilemez</span>
@@ -360,6 +363,10 @@
 </main>
 </div>
 
+<<<<<<< HEAD
 <script src="/assets/personel.js?v=staff-sale-fix-v1"></script>
+=======
+<script src="/assets/personel.js?v=customer-search-v1"></script>
+>>>>>>> 0e1d757 (Satış müşteri seçimine sunucu taraflı Ara butonu ekle)
 </body>
 </html>

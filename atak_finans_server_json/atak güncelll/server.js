@@ -961,10 +961,14 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
   }
 
   const ownCustomerIds=new Set(txs.map(t=>String(t.customerId||'')).filter(Boolean));
-  const customers=((staffPortal && (!canManage || salespersonId || dealerFilter))
+  // Satış ekranı gibi yerlerde 10k+ müşteri listesini gönderme (customers=0 / light=1)
+  const omitCustomers=['0','false','no'].includes(String(req.query.customers||'').toLowerCase())
+    || ['1','true','yes'].includes(String(req.query.light||'').toLowerCase());
+  const customers=omitCustomers?[]:((staffPortal && (!canManage || salespersonId || dealerFilter))
     ? (s.customers||[]).filter(c=>ownCustomerIds.has(String(c.id)))
     : (s.customers||[])
   ).map(x=>({...x,balance:customerBalance(s,x.id)}));
+  const customerTotal=(s.customers||[]).filter(c=>c.active!==false).length;
 
   const transactions=txs.slice(0,1000).map(x=>({
     ...x,
@@ -986,7 +990,7 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
     ? {
         cash:canManage?fullSummary.cash:0,
         bank:canManage?fullSummary.bank:0,
-        receivable:Math.round(customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0)*100)/100,
+        receivable:omitCustomers?0:Math.round(customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0)*100)/100,
         todayExpense:0,
         mySalesTotal:ownNet,
         mySalesCount:ownCount,
@@ -998,6 +1002,8 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
     summary,
     accounts, // satış ödemesi için hesap listesi personelde de gerekli
     customers,
+    customerTotal,
+    customersOmitted:omitCustomers,
     transactions,
     sales:saleRows,
     stores:s.stores,
@@ -1071,6 +1077,35 @@ function parseCustomerPayload(x={}){
   };
 }
 function applyCustomerData(row,data){Object.assign(row,data);return row}
+app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),(req,res)=>{
+  const s=readStore();
+  const q=String(req.query.q||req.query.query||'').trim().toLocaleLowerCase('tr-TR');
+  const limit=Math.min(100,Math.max(1,Number(req.query.limit)||40));
+  const id=String(req.query.id||'').trim();
+  let rows=(s.customers||[]).filter(c=>c.active!==false);
+  if(id){
+    rows=rows.filter(c=>String(c.id)===id);
+  }else if(q.length>=2){
+    rows=rows.filter(c=>{
+      const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.email||''}`.toLocaleLowerCase('tr-TR');
+      return hay.includes(q);
+    });
+  }else if(!q){
+    // Boş aramada tüm listeyi yollama — 10k+ kayıt için güvenli
+    return res.json({ok:true,total:(s.customers||[]).filter(c=>c.active!==false).length,rows:[],needQuery:true});
+  }
+  const total=rows.length;
+  rows=rows
+    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'tr'))
+    .slice(0,limit)
+    .map(c=>({
+      id:c.id,name:c.name||'',phone:c.phone||'',email:c.email||'',
+      taxNo:c.taxNo||'',tckn:c.tckn||'',city:c.city||'',district:c.district||'',
+      address:c.address||'',companyName:c.companyName||'',note:c.note||'',
+      balance:customerBalance(s,c.id)
+    }));
+  res.json({ok:true,total,rows,needQuery:false,limit});
+});
 app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{};
   let data;

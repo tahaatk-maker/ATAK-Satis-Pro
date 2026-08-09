@@ -13,6 +13,7 @@ let financeData=null;
 let monthData=null;
 let salesData=null;
 let salesCustomers=[];
+let salesCustomerTotal=0;
 let salesAccounts=[];
 let salesCart=[];
 let salesStep=1;
@@ -397,7 +398,11 @@ function salesReset(){
   salesCart=[];
   selectedPayMethod='';
   lastSaleDocsUrl='';
-  if($('#salesCustomerSelect'))$('#salesCustomerSelect').value='';
+  salesCustomers=[];
+  if($('#customerSearchSale'))$('#customerSearchSale').value='';
+  if($('#salesCustomerSelect'))$('#salesCustomerSelect').innerHTML='<option value="">Önce arayın, sonra seçin</option>';
+  if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=(salesCustomerTotal||0)+' kayıt';
+  if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent=`Toplam ${salesCustomerTotal||0} müşteri. Ad / telefon / VKN ile arayıp seçin (tüm liste yüklenmez).`;
   if($('#salesDiscountPct'))$('#salesDiscountPct').value='0';
   ['#payCash','#payCard','#payTransfer','#payNote','#payAmount'].forEach(id=>{if($(id))$(id).value='0'});
   if($('#salesDate'))$('#salesDate').value=new Date().toISOString().slice(0,10);
@@ -406,12 +411,13 @@ function salesReset(){
   document.querySelectorAll('.pay-method-btn').forEach(b=>b.classList.remove('active'));
   $('#salesSavePrintSenetBtn')?.classList.add('hidden');
   closePayScreen();
-  renderSalesCustomers();
+  salesCustomerChanged();
   renderProducts();
   renderCart();
   setSalesStep(1);
   salesRecalcPay();
   $('#salesStatus').textContent='';
+  $('#customerSearchSale')?.focus();
 }
 
 $('#salesCard').onclick=async()=>{
@@ -423,11 +429,13 @@ async function loadSales(){
   const st=$('#salesStatus');
   st.textContent='Satış verileri yükleniyor...';
   try{
-    const [cat,fin]=await Promise.all([
+    const [cat,fin,custMeta]=await Promise.all([
       api('/web-api/admin/sales-catalog'),
-      api('/web-api/admin/finance-center')
+      api('/web-api/admin/finance-center?customers=0'),
+      api('/web-api/admin/customers/search?limit=1').catch(()=>({total:0,rows:[]}))
     ]);
     salesData=cat;
+<<<<<<< HEAD
     // Satış kataloğundaki tüm cariler + finans kapsamındaki cariler
     const byId=new Map();
     [...(cat.customers||[]),...(fin.customers||[])].forEach(c=>{
@@ -435,6 +443,11 @@ async function loadSales(){
     });
     salesCustomers=[...byId.values()];
     salesAccounts=(cat.accounts&&cat.accounts.length?cat.accounts:fin.accounts)||[];
+=======
+    salesCustomers=[];
+    salesCustomerTotal=Number(custMeta.total||fin.customerTotal||0);
+    salesAccounts=fin.accounts||[];
+>>>>>>> 0e1d757 (Satış müşteri seçimine sunucu taraflı Ara butonu ekle)
     if($('#salesDealer')){
       $('#salesDealer').innerHTML=(cat.dealerSettings||[]).filter(d=>d.active!==false)
         .map(d=>`<option value="${d.id}">${d.name}</option>`).join('')||'<option value="">Bayi yok</option>';
@@ -449,21 +462,45 @@ async function loadSales(){
     };
     fillAcc($('#payCashAccount'),cashOpts);
     fillAcc($('#payBankAccount'),bankOpts);
-    $('#salesScopeHint').textContent=`Satışlar sizin adınıza kaydedilir · ${(cat.products||[]).length} ürün`;
+    $('#salesScopeHint').textContent=`Satışlar sizin adınıza kaydedilir · ${(cat.products||[]).length} ürün · ${salesCustomerTotal} müşteri`;
     salesReset();
     st.textContent='';
   }catch(e){st.textContent=e.message}
 }
-function renderSalesCustomers(){
-  const term=($('#customerSearchSale')?.value||'').toLocaleLowerCase('tr-TR');
+async function salesSearchCustomers(){
+  const term=String($('#customerSearchSale')?.value||'').trim();
+  const btn=$('#customerSearchSaleBtn');
+  const hint=$('#salesCustomerSearchHint');
   const current=$('#salesCustomerSelect')?.value||'';
-  const rows=salesCustomers.filter(c=>`${c.name||''} ${c.phone||''} ${c.taxNo||''}`.toLocaleLowerCase('tr-TR').includes(term));
-  $('#salesCustomerSelect').innerHTML='<option value="">Müşteri seçin</option>'+rows.map(c=>
-    `<option value="${c.id}" ${String(c.id)===String(current)?'selected':''}>${c.name}${c.phone?' · '+c.phone:''}</option>`
-  ).join('');
-  if(current && rows.some(c=>String(c.id)===String(current)))$('#salesCustomerSelect').value=current;
-  salesCustomerChanged();
+  if(term.length<2){
+    if(hint)hint.textContent='Aramak için en az 2 karakter yazın (ad, telefon, VKN veya TCKN).';
+    stToast('Aramak için en az 2 karakter girin');
+    return;
+  }
+  if(btn)btn.disabled=true;
+  if(hint)hint.textContent='Aranıyor…';
+  try{
+    const d=await api('/web-api/admin/customers/search?q='+encodeURIComponent(term)+'&limit=50');
+    const rows=d.rows||[];
+    const map=new Map(salesCustomers.map(c=>[String(c.id),c]));
+    rows.forEach(c=>map.set(String(c.id),c));
+    salesCustomers=[...map.values()];
+    if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=d.total>rows.length?`${rows.length}/${d.total} sonuç`:`${rows.length} sonuç`;
+    $('#salesCustomerSelect').innerHTML=(rows.length?'':'<option value="">Sonuç yok — farklı kelime deneyin</option>')+
+      rows.map(c=>`<option value="${c.id}" ${String(c.id)===String(current)?'selected':''}>${c.name}${c.phone?' · '+c.phone:''}${c.taxNo?' · '+c.taxNo:''}</option>`).join('');
+    if(current && rows.some(c=>String(c.id)===String(current)))$('#salesCustomerSelect').value=current;
+    else if(rows.length===1)$('#salesCustomerSelect').value=rows[0].id;
+    if(hint)hint.textContent=rows.length
+      ?`${rows.length} sonuç listelendi${d.total>rows.length?' (ilk 50)':''}. Listeden müşteriyi seçin.`
+      :'Eşleşen müşteri yok. Yeni müşteri ekleyebilirsiniz.';
+    salesCustomerChanged();
+  }catch(e){
+    if(hint)hint.textContent=e.message||'Arama yapılamadı';
+    stToast(e.message||'Müşteri araması başarısız');
+  }finally{if(btn)btn.disabled=false}
 }
+function renderSalesCustomers(){return salesSearchCustomers()}
+function stToast(msg){const st=$('#salesStatus');if(st)st.textContent=msg||''}
 function salesCustomerChanged(){
   const c=salesCustomers.find(x=>String(x.id)===String($('#salesCustomerSelect')?.value||''));
   const box=$('#salesCustomerInfo');
@@ -635,7 +672,8 @@ $('#salesNext2')?.addEventListener('click',()=>{if(salesCart.length)setSalesStep
 $('#salesBack2')?.addEventListener('click',()=>setSalesStep(1));
 $('#salesBack3')?.addEventListener('click',()=>setSalesStep(2));
 $('#salesResetBtn')?.addEventListener('click',salesReset);
-$('#customerSearchSale')?.addEventListener('input',renderSalesCustomers);
+$('#customerSearchSaleBtn')?.addEventListener('click',salesSearchCustomers);
+$('#customerSearchSale')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();salesSearchCustomers()}});
 $('#salesCustomerSelect')?.addEventListener('change',salesCustomerChanged);
 $('#productSearch')?.addEventListener('input',renderProducts);
 $('#productRows')?.addEventListener('click',e=>{
@@ -691,12 +729,17 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
         deliverySameAsBilling:true,invoiceType:'individual'
       })
     });
-    const row=r.row;
-    salesCustomers.unshift(row);
+    const row=r.row||{};
+    const map=new Map(salesCustomers.map(c=>[String(c.id),c]));
+    map.set(String(row.id),row);
+    salesCustomers=[...map.values()];
+    salesCustomerTotal=Number(salesCustomerTotal||0)+1;
     $('#salesQuickCustomerModal')?.classList.add('hidden');
-    if($('#customerSearchSale'))$('#customerSearchSale').value='';
-    renderSalesCustomers();
+    if($('#customerSearchSale'))$('#customerSearchSale').value=row.name||'';
+    $('#salesCustomerSelect').innerHTML=`<option value="${row.id}">${row.name||''}${row.phone?' · '+row.phone:''}</option>`;
     $('#salesCustomerSelect').value=row.id;
+    if($('#salesCustomerCount'))$('#salesCustomerCount').textContent='1 sonuç';
+    if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent='Yeni müşteri kaydedildi ve seçildi.';
     salesCustomerChanged();
     st.textContent='';
   }catch(err){st.textContent=err.message}

@@ -40,6 +40,10 @@ main{max-width:1250px;margin:auto;padding:22px 20px 40px}
 
 .toolbar{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:end}
 .toolbar input,.toolbar select,.finance-filters label select{padding:11px;border:1px solid #d6e0ec;border-radius:8px;flex:1;min-width:160px;font:inherit;background:#fff}
+.sales-customer-search-bar #customerSearchSaleBtn{flex:0 0 auto;white-space:nowrap;min-height:44px}
+.sales-customer-search-bar #customerSearchSaleBtn:disabled{opacity:.6;cursor:wait}
+.sales-customer-hint{margin:0 0 10px;font-size:12px;color:#66758a;font-weight:650}
+#salesCustomerCount.muted{display:block;margin:-4px 0 10px;color:#7a879a;font-size:12px;font-weight:700}
 .finance-filters label{display:grid;gap:5px;font-size:11px;font-weight:800;color:#5d6c82;flex:1}
 .ghost-btn,.primary-btn{border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
 .ghost-btn{background:#edf3fb;color:#174a80}
