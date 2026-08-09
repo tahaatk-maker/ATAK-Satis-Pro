@@ -85,6 +85,7 @@ function goTab(id,{remember=true}={}){
   if(id==='managerApprovals')setTimeout(loadApprovals,20);
   if(id==='salesTracking')setTimeout(loadSalesTracking,20);
   if(id==='dynamicsExcelImport')setTimeout(()=>loadDynamicsImport(),20);
+  document.body.classList.toggle('inv-full',id==='invoiceCenter');
   if(id==='invoiceCenter')setTimeout(()=>loadInvoiceCenter().catch(e=>toast(e.message)),20);
   return true
 }
@@ -1938,8 +1939,9 @@ const INV_VIEW_META={
   ea_out_archive:{title:'e-Arşiv · Giden Arşiv',hint:'Arşivlenmiş giden e-Arşiv.'},
   ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv (portal bağlanınca).'},
   ea_in_archive:{title:'e-Arşiv · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Arşiv.'},
+  pending_sales:{title:'Kesilmeyen Faturalar',hint:'Geç kesilen satışlar. Manuel kesebilir veya QNB kuyruğuna alabilirsiniz. Finans & Cari’de de vardır.'},
   setup_ready:{title:'Kurulum / Hazırlık',hint:'QNB checklist. Senet ve bayi ayarları Ayarlar menüsünde.'},
-  setup_settings:{title:'QNB Ayarları',hint:'Yalnız e-Fatura / QNB Solist entegrasyonu.'}
+  setup_settings:{title:'QNB Ayarları',hint:'Yalnız e-Fatura / QNB Solist entegrasyonu. Form tam genişliktedir.'}
 };
 function invEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function invStatusBadge(st){
@@ -1982,7 +1984,8 @@ function invSetCounts(c={}){
     invCountEfOutPending:'ef_out_pending',invCountEfOutSent:'ef_out_sent',invCountEfOutError:'ef_out_error',invCountEfOutArchive:'ef_out_archive',
     invCountEfInIncoming:'ef_in_incoming',invCountEfInResponses:'ef_in_responses',invCountEfInArchive:'ef_in_archive',
     invCountEaOutPending:'ea_out_pending',invCountEaOutSent:'ea_out_sent',invCountEaOutError:'ea_out_error',invCountEaOutArchive:'ea_out_archive',
-    invCountEaInIncoming:'ea_in_incoming',invCountEaInArchive:'ea_in_archive'
+    invCountEaInIncoming:'ea_in_incoming',invCountEaInArchive:'ea_in_archive',
+    invCountPendingSales:'sales_pending',invCountPendingMod:'sales_pending'
   };
   Object.entries(map).forEach(([id,key])=>{if(q('#'+id))q('#'+id).textContent=String(c[key]||0)});
 }
@@ -2008,6 +2011,46 @@ function invRenderTable(rows){
   q('#invToolbar')?.classList.remove('hidden');
   const view=invoiceCenterState.view;
   const head=q('#invTableHead'),body=q('#invTableBody'),empty=q('#invEmpty');
+  if(view==='pending_sales'){
+    head.innerHTML=`<tr><th></th><th>Satış No</th><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Ödeme</th><th>Durum</th><th>İşlem</th></tr>`;
+    body.innerHTML=rows.map(r=>`<tr data-inv-id="${invEsc(r.id)}">
+      <td><input type="checkbox" data-inv-check="${invEsc(r.id)}"/></td>
+      <td><b>${invEsc(r.reference||'-')}</b></td>
+      <td>${invEsc(r.date||'-')}</td>
+      <td>${invEsc(r.customerName||'-')}</td>
+      <td>${salesMoney(r.total)}</td>
+      <td>${invEsc(r.paymentMethod||'-')}</td>
+      <td>${invStatusBadge(r.invoiceStatus)}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="inv-btn" data-inv-qnb="${invEsc(r.id)}">QNB’ye Al</button>
+        <button type="button" class="inv-btn" data-mark-invoiced="${invEsc(r.id)}">Manuel Kes</button>
+      </td>
+    </tr>`).join('');
+    empty?.classList.toggle('hidden',rows.length>0);
+    q('#invFootCount').textContent=`${rows.length} kesilmeyen`;
+    invoiceCenterState.selected=new Set();
+    qa('[data-inv-check]').forEach(chk=>chk.onchange=()=>{
+      const id=chk.dataset.invCheck;
+      if(chk.checked)invoiceCenterState.selected.add(id);else invoiceCenterState.selected.delete(id);
+      chk.closest('tr')?.classList.toggle('selected',chk.checked);
+    });
+    qa('[data-inv-qnb]').forEach(btn=>btn.onclick=async()=>{
+      try{
+        const out=await api('/web-api/admin/sale/'+encodeURIComponent(btn.dataset.invQnb)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+        toast(`QNB kuyruk: ${out.result?.docType||''}`);await loadInvoiceCenter();
+      }catch(e){toast(e.message)}
+    });
+    qa('[data-mark-invoiced]').forEach(btn=>btn.onclick=async()=>{
+      const row=(invoiceCenterState.data?.salesPending||[]).find(x=>String(x.id)===String(btn.dataset.markInvoiced));if(!row)return;
+      const invoiceNumber=prompt(`${row.reference} için fatura numarası:`,'');if(!invoiceNumber)return;
+      const invoiceDate=prompt('Fatura tarihi (YYYY-MM-DD):',new Date().toISOString().slice(0,10));if(!invoiceDate)return;
+      try{
+        await api('/web-api/admin/sale/'+encodeURIComponent(row.id)+'/mark-invoiced',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoiceNumber,invoiceDate})});
+        toast('Manuel fatura işlendi');await loadInvoiceCenter();
+      }catch(e){toast(e.message)}
+    });
+    return;
+  }
   const isInbox=view.includes('_in_');
   if(isInbox){
     head.innerHTML=`<tr><th></th><th>Okundu</th><th>Fatura Tarihi</th><th>Fatura No</th><th>Müşteri / Tedarikçi</th><th>Profil</th><th>Tutar</th><th>ERP</th></tr>`;
@@ -2063,6 +2106,7 @@ function invSetModule(mod,{keepView=false}={}){
   if(!keepView){
     if(mod==='efatura')invoiceCenterState.view='ef_out_pending';
     else if(mod==='earsiv')invoiceCenterState.view='ea_out_pending';
+    else if(mod==='pending')invoiceCenterState.view='pending_sales';
     else invoiceCenterState.view='setup_settings';
   }
   invPaintCurrentView();
@@ -2086,7 +2130,8 @@ function invPaintCurrentView(){
   }
   const d=invoiceCenterState.data||{};
   let rows=[];
-  if(view==='ef_in_incoming')rows=(d.inbox||[]).filter(r=>!invIsEa(r)&&r.status!=='archived');
+  if(view==='pending_sales')rows=d.salesPending||[];
+  else if(view==='ef_in_incoming')rows=(d.inbox||[]).filter(r=>!invIsEa(r)&&r.status!=='archived');
   else if(view==='ef_in_responses')rows=d.responses||[];
   else if(view==='ef_in_archive')rows=(d.inbox||[]).filter(r=>!invIsEa(r)&&r.status==='archived');
   else if(view==='ea_in_incoming')rows=(d.inbox||[]).filter(r=>invIsEa(r)&&r.status!=='archived');
@@ -2119,10 +2164,11 @@ function invSetView(view){
   invoiceCenterState.view=view;
   if(view.startsWith('ef_'))invoiceCenterState.module='efatura';
   else if(view.startsWith('ea_'))invoiceCenterState.module='earsiv';
+  else if(view==='pending_sales')invoiceCenterState.module='pending';
   else if(view.startsWith('setup'))invoiceCenterState.module='setup';
   qa('[data-inv-module]').forEach(b=>b.classList.toggle('active',b.dataset.invModule===invoiceCenterState.module));
   qa('[data-inv-pane]').forEach(p=>p.classList.toggle('active',p.dataset.invPane===invoiceCenterState.module));
-  const folderKey=view.startsWith('ef_out')?'ef_out':view.startsWith('ef_in')?'ef_in':view.startsWith('ea_out')?'ea_out':view.startsWith('ea_in')?'ea_in':view.startsWith('setup')?'setup':'';
+  const folderKey=view.startsWith('ef_out')?'ef_out':view.startsWith('ef_in')?'ef_in':view.startsWith('ea_out')?'ea_out':view.startsWith('ea_in')?'ea_in':view==='pending_sales'?'pending':view.startsWith('setup')?'setup':'';
   if(folderKey){const f=q(`[data-inv-folder="${folderKey}"]`);f?.classList.add('open');const t=f?.querySelector('[data-inv-toggle] span:last-child');if(t)t.textContent='▾'}
   invPaintCurrentView();
 }
@@ -2158,10 +2204,17 @@ q('#invRetrySelectedBtn')?.addEventListener('click',async()=>{
 q('#invIssueSelectedBtn')?.addEventListener('click',async()=>{
   const ids=[...invoiceCenterState.selected];
   if(!ids.length)return toast('Önce satır seçin');
-  for(const id of ids){
-    try{await api('/web-api/admin/invoice-queue/'+encodeURIComponent(id)+'/retry',{method:'POST',body:'{}'})}catch(_){}
+  if(invoiceCenterState.view==='pending_sales'){
+    for(const id of ids){
+      try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})}catch(_){}
+    }
+    toast(`${ids.length} satış QNB kuyruğuna alındı`);
+  }else{
+    for(const id of ids){
+      try{await api('/web-api/admin/invoice-queue/'+encodeURIComponent(id)+'/retry',{method:'POST',body:'{}'})}catch(_){}
+    }
+    toast(`${ids.length} fatura işlendi`);
   }
-  toast(`${ids.length} fatura işlendi`);
   await loadInvoiceCenter();
 });
 q('#invRunReadyTestBtn')?.addEventListener('click',()=>invoiceConnectionTestForCenter());
