@@ -20,6 +20,25 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 *
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const COMMERCE_SYNC_URL = process.env.COMMERCE_SYNC_URL || 'http://127.0.0.1:3200/api/sync/beko';
 
+/** KDV: beyaz eşya %20; X30 TR / yazar kasa %10; İstikbal mobilya %10 */
+function resolveVatRate(p={}){
+  const cat=String(p.category||'').toLocaleLowerCase('tr-TR');
+  const brand=String(p.brand||'').toLocaleLowerCase('tr-TR');
+  const text=`${p.code||''} ${p.name||''} ${p.searchName||''} ${p.itemCode||''} ${p.barcode||''} ${p.dynamicsName||''}`
+    .toLocaleLowerCase('tr-TR')
+    .replace(/\s+/g,' ')
+    .trim();
+  const compact=text.replace(/\s/g,'');
+  // Yazar kasa / X30 TR → %10
+  if(cat==='yazar-kasa' || cat==='yazarkasa') return 10;
+  if(/\bx30\s*tr\b/.test(text) || compact.includes('x30tr') || /yazar\s*kasa/.test(text) || compact.includes('yazarkasa')) return 10;
+  // İstikbal mobilya → %10
+  if(cat==='mobilya') return 10;
+  if(brand.includes('istikbal')) return 10;
+  // Beyaz eşya ve diğer tüm ürünler → %20
+  return 20;
+}
+
 function ensureStore(store) {
   store.settings ||= { siteName:'Atak Home', tagline:'Eviniz için her şey', whatsapp:'905433585060', phone:'02122232871', email:'tarabyabeko@gmail.com', address:'Sarıyer / İstanbul' };
   store.categories = Array.isArray(store.categories) ? store.categories : [];
@@ -69,13 +88,29 @@ function ensureStore(store) {
 
   if(!store.stores.length) store.stores.push({id:'atak-tarabya',name:'Atak Tarabya',code:'TRB',active:true,address:'Sarıyer / İstanbul',createdAt:new Date().toISOString()});
 
+  // KDV kuralları için temel kategoriler / markalar
+  const ensureCat=(id,name,sort)=>{
+    if(!(store.categories||[]).some(c=>c.id===id||String(c.name||'').toLocaleLowerCase('tr-TR')===name.toLocaleLowerCase('tr-TR'))){
+      store.categories.push({id,name,active:true,sort,description:''});
+    }
+  };
+  ensureCat('yazar-kasa','Yazar Kasa',90);
+  ensureCat('mobilya','Mobilya',50);
+  ensureCat('beyaz-esya','Beyaz Eşya',10);
+  if(!(store.brands||[]).some(b=>/istikbal/i.test(b.name||''))){
+    store.brands.push({id:'istikbal',name:'İstikbal',active:true,sort:(store.brands||[]).length,logo:''});
+  }
   store.categories = store.categories.map((c,i)=>({ id:c.id||slug(c.name)||crypto.randomUUID(), name:c.name||'Kategori', active:c.active!==false, sort:Number(c.sort??i), description:c.description||'' }));
   store.brands = store.brands.map((b,i)=>({ id:b.id||slug(b.name)||crypto.randomUUID(), name:b.name||'Marka', active:b.active!==false, sort:Number(b.sort??i), logo:b.logo||'' }));
-  store.products = store.products.map(p=>({
-    tags:[], campaignId:'', barcode:'', purchasePrice:0, listPrice:Number(p.oldPrice||p.bekoPrice||0),
-    cashPrice:Number(p.salePrice||0), cardPrice:Number(p.salePrice||0), minimumSalePrice:0,
-    vatRate:p.category==='yazar-kasa'?10:20, ...p
-  }));
+  store.products = store.products.map(p=>{
+    const row={
+      tags:[], campaignId:'', barcode:'', purchasePrice:0, listPrice:Number(p.oldPrice||p.bekoPrice||0),
+      cashPrice:Number(p.salePrice||0), cardPrice:Number(p.salePrice||0), minimumSalePrice:0,
+      ...p
+    };
+    row.vatRate=resolveVatRate(row);
+    return row;
+  });
   store.campaigns = store.campaigns.map((c,i)=>({ id:c.id||crypto.randomUUID(), title:c.title||'Kampanya', subtitle:c.subtitle||'', label:c.label||'FIRSAT', startDate:c.startDate||'', endDate:c.endDate||'', active:c.active!==false, homepage:c.homepage!==false, sort:Number(c.sort??i), productIds:Array.isArray(c.productIds)?c.productIds:[] }));
   if (!store.banners.length) store.banners.push({ id:crypto.randomUUID(), headline:'Evinizi sadece döşemeyin. Yaşatın.', subheadline:'Beko ürünleri, mobilya, klima, TV ve ev yaşam çözümleri Atak Home’da.', ctaText:'Ürünleri keşfet', ctaUrl:'#products', desktopImage:'', mobileImage:'', active:true, sort:0 });
   return store;
@@ -105,7 +140,7 @@ function sanitizeProduct(row,current={}){
   p.cashPrice=normalizeNumber(row.cashPrice??current.cashPrice??row.salePrice??current.salePrice??0);
   p.cardPrice=normalizeNumber(row.cardPrice??current.cardPrice??row.salePrice??current.salePrice??0);
   p.minimumSalePrice=normalizeNumber(row.minimumSalePrice??current.minimumSalePrice??0);
-  p.vatRate=p.category==='yazar-kasa'?10:20;
+  p.vatRate=resolveVatRate(p);
   p.bekoPrice=normalizeNumber(row.bekoPrice??current.bekoPrice); p.oldPrice=normalizeNumber(row.oldPrice??current.oldPrice??p.bekoPrice);
   p.priceMode=String(row.priceMode??current.priceMode??'same'); p.priceValue=normalizeNumber(row.priceValue??current.priceValue??0);
   p.stock=Math.max(0,Math.round(normalizeNumber(row.stock??current.stock))); p.active=row.active===undefined?(current.active??true):Boolean(row.active);
@@ -1205,6 +1240,8 @@ function normKey(v){return String(v||'').trim().toLocaleUpperCase('tr-TR').repla
 function dynamicsCategory(searchName='',dynamicsName=''){
   const s=normKey(`${searchName} ${dynamicsName}`).replace(/^BEKO\s+/,'');
   const rules=[
+    [/\bX30\s*TR\b|YAZAR\s*KASA/i,'Yazar Kasa'],
+    [/ISTIKBAL|İSTİKBAL|KOLTUK|YATAK|DOLAP|BAZA|KANEPE|MOB[İI]LYA/i,'Mobilya'],
     [/^(CMX|CM)\s*\d/i,'Çamaşır Makinesi'],
     [/^BM\s*\d/i,'Bulaşık Makinesi'],
     [/^(KMX|KM)\s*\d/i,'Kurutma Makinesi'],
@@ -1219,6 +1256,12 @@ function dynamicsCategory(searchName='',dynamicsName=''){
   ];
   for(const [rx,name] of rules)if(rx.test(s))return name;
   return 'Diğer';
+}
+function dynamicsBrand(searchName='',dynamicsName=''){
+  const blob=`${searchName} ${dynamicsName}`;
+  if(/GRUNDIG/i.test(blob))return 'Grundig';
+  if(/İSTİKBAL|ISTIKBAL/i.test(blob))return 'İstikbal';
+  return 'Beko';
 }
 function dynamicsReadableCode(searchName,itemCode){
   let s=String(searchName||'').trim().replace(/^BEKO\s*/i,'').replace(/^GRUNDIG\s*/i,'');
@@ -1290,6 +1333,9 @@ function ensureDynamicsCoreCategories(s){
     buzdolabi:ensureCategoryByName(s,'Buzdolabı',['Buzdolabi']),
     pisiriciler:ensureCategoryByName(s,'Pişiriciler',['Pisiriciler','Pişirici','Pisirici']),
     dondurucu:ensureCategoryByName(s,'Dondurucu',['Derin Dondurucu']),
+    mobilya:ensureCategoryByName(s,'Mobilya',['İstikbal Mobilya']),
+    yazarKasa:ensureCategoryByName(s,'Yazar Kasa',['Yazarkasa','X30 TR']),
+    beyazEsya:ensureCategoryByName(s,'Beyaz Eşya',['Beyaz Esya']),
     diger:ensureCategoryByName(s,'Diğer',['Diger'])
   };
   return ids;
@@ -1300,6 +1346,11 @@ function dynamicsSuggestedCategoryId(s,searchName=''){
   let code=original.toLocaleUpperCase('tr-TR')
     .replace(/\s+/g,' ')
     .trim();
+
+  // Yazar kasa X30 TR → %10 KDV kategorisi
+  if(/\bX30\s*TR\b|X30TR|YAZAR\s*KASA/.test(code)) return ids.yazarKasa;
+  // İstikbal / mobilya → %10 KDV
+  if(/ISTIKBAL|İSTİKBAL|MOB[İI]LYA|KOLTUK|YATAK|BAZA|KANEPE|DOLAP/.test(code)) return ids.mobilya;
 
   // "BEKO C...", "BEKOC...", "Beko BM...", "BEKOBM..." hepsini aynı forma getir.
   code=code.replace(/^BEKO[\s\-_]*/,'').trim();
@@ -1382,7 +1433,7 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,dynamicsUpload.sing
       const cat=(s.categories||[]).find(c=>String(c.id)===selected&&c.active!==false);
       if(!cat){categoryMissing++;continue}
 
-      const brand=/GRUNDIG/i.test(`${r.searchName} ${r.dynamicsName}`)?'Grundig':'Beko';
+      const brand=dynamicsBrand(r.searchName,r.dynamicsName);
       const p=sanitizeProduct({
         code:searchName,
         name:searchName,
