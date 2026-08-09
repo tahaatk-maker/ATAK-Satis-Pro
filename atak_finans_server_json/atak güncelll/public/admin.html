@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=659-a4-fatura" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=660-efatura" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -408,6 +408,104 @@
   #salesCenter .sales-row .sales-price{grid-column:1/-1}
   #salesCenter .dock-meta > div:nth-child(2){display:none}
 }
+
+/* ===== e-Fatura Merkezi v660 — QNB kutusu mantığı, Atak paneli ===== */
+#invoiceCenter{
+  --navy:#0b2a4a;--ink:#15233a;--muted:#667890;--line:#d5e0ee;--soft:#f3f6fa;--ok:#15803d;--warn:#b45309;--bad:#b91c1c;--blue:#1d4ed8;
+  margin:0 -22px;padding:12px 16px 40px;background:linear-gradient(180deg,#e8eef5,#f4f7fb 40%,#eef2f7);
+  font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif;
+}
+#invoiceCenter .inv-shell{display:grid;grid-template-columns:240px minmax(0,1fr);gap:12px;min-height:70vh}
+#invoiceCenter .inv-side{
+  background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 10px;box-shadow:0 8px 22px rgba(11,42,74,.06);
+  display:flex;flex-direction:column;gap:4px;align-content:start;
+}
+#invoiceCenter .inv-side-brand{padding:8px 10px 12px;border-bottom:1px solid var(--line);margin-bottom:6px}
+#invoiceCenter .inv-side-brand small{display:block;color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.1em}
+#invoiceCenter .inv-side-brand b{display:block;margin-top:4px;color:var(--navy);font-size:15px}
+#invoiceCenter .inv-env{
+  display:inline-flex;margin-top:8px;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:800;
+  background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;
+}
+#invoiceCenter .inv-env.test{background:#fff7ed;color:#c2410c;border-color:#fdba74}
+#invoiceCenter .inv-env.off{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+#invoiceCenter .inv-folder{margin:2px 0}
+#invoiceCenter .inv-folder>button{
+  width:100%;text-align:left;border:0;background:transparent;padding:8px 10px;border-radius:10px;
+  font:inherit;font-weight:800;font-size:13px;color:var(--navy);cursor:pointer;display:flex;justify-content:space-between;gap:8px;
+}
+#invoiceCenter .inv-folder>button:hover{background:#f1f5f9}
+#invoiceCenter .inv-folder.open>button{background:#e8f1fb;color:#0b3d74}
+#invoiceCenter .inv-sub{display:none;padding:2px 0 6px 8px}
+#invoiceCenter .inv-folder.open .inv-sub{display:grid;gap:2px}
+#invoiceCenter .inv-sub button{
+  border:0;background:transparent;text-align:left;padding:7px 10px;border-radius:8px;cursor:pointer;
+  font:inherit;font-size:12px;font-weight:700;color:#3b4d66;display:flex;justify-content:space-between;align-items:center;gap:6px;
+}
+#invoiceCenter .inv-sub button:hover{background:#f8fafc}
+#invoiceCenter .inv-sub button.active{background:#0b2a4a;color:#fff}
+#invoiceCenter .inv-count{
+  min-width:22px;padding:1px 6px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:10px;font-weight:800;text-align:center;
+}
+#invoiceCenter .inv-sub button.active .inv-count{background:#334155;color:#fff}
+#invoiceCenter .inv-main{display:grid;grid-template-rows:auto auto 1fr auto;gap:10px;min-width:0}
+#invoiceCenter .inv-head{
+  background:linear-gradient(115deg,#071a33,#0d3b6d 55%,#125ea3);color:#fff;border-radius:16px;padding:16px 18px;
+  display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;
+  box-shadow:0 14px 30px rgba(7,26,51,.18);
+}
+#invoiceCenter .inv-head small{display:block;color:#9ec0ef;font-size:11px;font-weight:800;letter-spacing:.1em}
+#invoiceCenter .inv-head h2{margin:4px 0 0;font-size:22px}
+#invoiceCenter .inv-head p{margin:4px 0 0;color:#d5e6fb;font-size:12px;font-weight:600}
+#invoiceCenter .inv-head-actions{display:flex;gap:8px;flex-wrap:wrap}
+#invoiceCenter .inv-btn{
+  border:0;border-radius:10px;padding:9px 12px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;
+  background:#fff;color:#0b2a4a;
+}
+#invoiceCenter .inv-btn.primary{background:#dda20c;color:#1a1300}
+#invoiceCenter .inv-btn.ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25)}
+#invoiceCenter .inv-toolbar{
+  background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+}
+#invoiceCenter .inv-toolbar input,#invoiceCenter .inv-toolbar select{
+  border:1px solid var(--line);border-radius:9px;padding:8px 10px;font:inherit;font-size:12px;min-width:0;
+}
+#invoiceCenter .inv-toolbar input[type="search"]{flex:1;min-width:180px}
+#invoiceCenter .inv-toolbar .inv-btn{background:#eef4fb}
+#invoiceCenter .inv-toolbar .inv-btn.primary{background:#1d4ed8;color:#fff}
+#invoiceCenter .inv-panel{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:auto;min-height:360px}
+#invoiceCenter .inv-panel table{width:100%;border-collapse:collapse;font-size:12px}
+#invoiceCenter .inv-panel th{
+  position:sticky;top:0;background:#f1f5f9;color:#334155;text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);
+  font-size:11px;font-weight:800;white-space:nowrap;
+}
+#invoiceCenter .inv-panel td{padding:9px 8px;border-bottom:1px solid #eef2f7;color:var(--ink);vertical-align:middle}
+#invoiceCenter .inv-panel tr:hover td{background:#f8fafc}
+#invoiceCenter .inv-panel tr.selected td{background:#fff7ed}
+#invoiceCenter .inv-badge{
+  display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:800;border:1px solid transparent;
+}
+#invoiceCenter .inv-badge.pending,#invoiceCenter .inv-badge.ready{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+#invoiceCenter .inv-badge.queued,#invoiceCenter .inv-badge.draft_sent,#invoiceCenter .inv-badge.queued_remote{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+#invoiceCenter .inv-badge.issued{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
+#invoiceCenter .inv-badge.error{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+#invoiceCenter .inv-badge.cancelled{background:#f8fafc;color:#64748b;border-color:#e2e8f0}
+#invoiceCenter .inv-empty{padding:48px 20px;text-align:center;color:var(--muted);font-weight:700}
+#invoiceCenter .inv-foot{
+  background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  font-size:12px;font-weight:700;color:#475569;
+}
+#invoiceCenter .inv-settings-box{padding:16px;display:grid;gap:10px}
+#invoiceCenter .inv-settings-box .note{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+#invoiceCenter .inv-checks{display:grid;gap:6px}
+#invoiceCenter .inv-check{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px solid #eef2f7;font-size:12px}
+#invoiceCenter .inv-check.ok{border-color:#bbf7d0;background:#f0fdf4}
+#invoiceCenter .inv-check.bad{border-color:#fecaca;background:#fef2f2}
+@media(max-width:980px){
+  #invoiceCenter{margin:0 -12px;padding:8px 10px 30px}
+  #invoiceCenter .inv-shell{grid-template-columns:1fr}
+  #invoiceCenter .inv-folder.open .inv-sub{grid-template-columns:1fr 1fr}
+}
 </style>
 </head><body>
 <div class="login-view" id="loginView"><form class="login-card" id="loginForm"><a class="login-brand-link" href="/web-admin"><img alt="Atak Home" src="/assets/atak-pazarlama-full.svg"/></a><h1>Atak Pazarlama Yönetim Merkezi</h1><p>Yönetim merkezi</p><input autocomplete="username" id="username" placeholder="Kullanıcı adı (boşsa yönetici)"/><input autocomplete="current-password" id="password" placeholder="Şifre" required="" type="password"/><button type="submit">Giriş Yap</button></form></div>
@@ -425,7 +523,7 @@
 <button data-tab="mySalesReport" type="button">📈 Satışlarım & Primim</button>
 <button data-tab="staffSalesReport" type="button">👥 Personel Satış Raporu</button>
 <button data-tab="managerApprovals" type="button">✅ Yönetici Onayları</button>
-<button data-tab="uninvoicedSales" type="button">🧾 Faturalar</button>
+<button data-tab="invoiceCenter" type="button">🧾 e-Fatura Merkezi</button>
 <small class="menu-label">ÜRÜN &amp; STOK</small>
 <button data-tab="products" type="button">▦ Tüm Ürünler</button>
 <button data-tab="dynamicsExcelImport" type="button">⇩ Dynamics Excel Aktar</button>
@@ -996,21 +1094,91 @@ Bulunamayan → Diğer.
   </div>
   <div class="panel table-wrap dynamics-preview-wrap"><table><thead><tr><th>DURUM</th><th>ARAMA ADI / SATIŞ ÜRÜN KODU</th><th>KATEGORİ</th></tr></thead><tbody id="dynamicsPreviewTable"></tbody></table><div id="dynamicsPreviewEmpty" class="empty">Excel seçip “Excel'i Önizle” butonuna basın.</div></div>
 </section>
-<section class="tab" id="uninvoicedSales">
-  <div class="panel">
-    <div class="panel-head">
-      <div><small class="eyebrow">FATURA TAKİBİ</small><h2>Faturalar</h2><p>Bekleyen faturaları buradan tamamlayın. İptal edilen satışlar bu listede gösterilmez.</p></div>
-      <button id="uninvoicedRefreshBtn" class="secondary-btn" type="button">Yenile</button>
+<section class="tab" id="invoiceCenter">
+  <div class="inv-shell">
+    <aside class="inv-side">
+      <div class="inv-side-brand">
+        <small>QNB SOLIST · ATAK</small>
+        <b>e-Fatura Merkezi</b>
+        <span class="inv-env test" id="invEnvBadge">Test Ortamı</span>
+      </div>
+      <div class="inv-folder open" data-inv-folder="outbox">
+        <button type="button" data-inv-toggle="outbox"><span>Giden Kutusu</span><span>▾</span></button>
+        <div class="inv-sub">
+          <button type="button" class="active" data-inv-view="out_pending">Gönderilecek <span class="inv-count" id="invCountOutPending">0</span></button>
+          <button type="button" data-inv-view="out_sent">Gönderilen <span class="inv-count" id="invCountOutSent">0</span></button>
+          <button type="button" data-inv-view="out_error">Hatalı <span class="inv-count" id="invCountOutError">0</span></button>
+          <button type="button" data-inv-view="out_archive">Arşiv <span class="inv-count" id="invCountOutArchive">0</span></button>
+          <button type="button" data-inv-view="sales_pending">Kesilecek Satışlar <span class="inv-count" id="invCountSalesPending">0</span></button>
+        </div>
+      </div>
+      <div class="inv-folder open" data-inv-folder="inbox">
+        <button type="button" data-inv-toggle="inbox"><span>Gelen Kutusu</span><span>▾</span></button>
+        <div class="inv-sub">
+          <button type="button" data-inv-view="in_incoming">Gelen Faturalar <span class="inv-count" id="invCountInIncoming">0</span></button>
+          <button type="button" data-inv-view="in_responses">Uygulama Yanıtları <span class="inv-count" id="invCountInResponses">0</span></button>
+          <button type="button" data-inv-view="in_archive">Arşiv <span class="inv-count" id="invCountInArchive">0</span></button>
+        </div>
+      </div>
+      <div class="inv-folder" data-inv-folder="earsiv">
+        <button type="button" data-inv-toggle="earsiv"><span>e-Arşiv</span><span>▸</span></button>
+        <div class="inv-sub">
+          <button type="button" data-inv-view="earsiv_all">e-Arşiv Faturalar <span class="inv-count" id="invCountEarsiv">0</span></button>
+        </div>
+      </div>
+      <div class="inv-folder" data-inv-folder="setup">
+        <button type="button" data-inv-toggle="setup"><span>Kurulum / Ayar</span><span>▸</span></button>
+        <div class="inv-sub">
+          <button type="button" data-inv-view="setup_ready">Hazırlık Kontrolü</button>
+          <button type="button" data-inv-view="setup_settings">QNB Ayarlarına Git</button>
+        </div>
+      </div>
+    </aside>
+    <div class="inv-main">
+      <div class="inv-head">
+        <div>
+          <small>ATAK PAZARLAMA · QNB ESOLUTIONS / SOLIST</small>
+          <h2 id="invViewTitle">Gönderilecek Faturalar</h2>
+          <p id="invViewHint">Satıştan kesilen faturalar burada kuyruğa düşer. QNB WSDL bağlanınca portala gider.</p>
+        </div>
+        <div class="inv-head-actions">
+          <button class="inv-btn ghost" id="invRefreshBtn" type="button">Sayfayı Yenile</button>
+          <button class="inv-btn primary" id="invPortalQueryBtn" type="button">Portaldan Sorgula</button>
+        </div>
+      </div>
+      <div class="inv-toolbar" id="invToolbar">
+        <input id="invSearch" type="search" placeholder="Fatura no, müşteri, satış no ara…"/>
+        <select id="invDocTypeFilter">
+          <option value="all">Tüm tipler</option>
+          <option value="efatura">e-Fatura</option>
+          <option value="earsiv">e-Arşiv</option>
+        </select>
+        <label class="check" style="margin:0;font-size:12px;font-weight:700;color:#475569"><input id="invUnreadOnly" type="checkbox"/> Okunmamışları göster</label>
+        <button class="inv-btn" id="invRetrySelectedBtn" type="button">Seçilileri Tekrar Dene</button>
+        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri QNB’ye Al</button>
+      </div>
+      <div class="inv-panel">
+        <div id="invTableWrap">
+          <table>
+            <thead id="invTableHead"></thead>
+            <tbody id="invTableBody"></tbody>
+          </table>
+          <div class="inv-empty hidden" id="invEmpty">Bu klasörde kayıt yok.</div>
+        </div>
+        <div class="inv-settings-box hidden" id="invSetupBox">
+          <p class="note">QNB Çözüm Merkezi kurulumunda buradaki checklist yeşile döner. Ayarlar → QNB Solist formuna WSDL / kullanıcı / alias yazılır.</p>
+          <div class="inv-checks" id="invReadyChecks"></div>
+          <div class="button-row" style="margin-top:8px">
+            <button class="inv-btn primary" id="invRunReadyTestBtn" type="button">Altyapıyı Test Et</button>
+            <button class="inv-btn" id="invGoSettingsBtn" type="button">QNB Ayarlarını Aç</button>
+          </div>
+        </div>
+      </div>
+      <div class="inv-foot">
+        <span id="invFootStatus">Hazır</span>
+        <span id="invFootCount">0 kayıt</span>
+      </div>
     </div>
-    <div class="uninvoiced-summary"><b id="uninvoicedCount">0</b><span>bekleyen satış</span></div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Satış No</th><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Ödeme</th><th>İşlem</th></tr></thead>
-        <tbody id="uninvoicedTable"></tbody>
-      </table>
-      <div id="uninvoicedEmpty" class="empty">Bekleyen fatura yok.</div>
-    </div>
-    <div id="uninvoicedStatus" class="form-status"></div>
   </div>
 </section>
 
@@ -1312,10 +1480,10 @@ Bulunamayan → Diğer.
     <div class="sales-preview-actions">
       <button id="salesPreviewOfferBtn" class="secondary-btn" type="button">📨 Teklif WhatsApp</button>
       <button id="salesPreviewPrintBtn" class="secondary-btn" type="button">🖨 Teklif PDF</button>
-      <button id="salesPreviewDocsBtn" class="secondary-btn" type="button">📄 Sözleşme + Senet</button>
+      <button id="salesPreviewDocsBtn" class="secondary-btn" type="button">📄 Sözleşme + Senet (Tek A4)</button>
       <button id="salesPreviewConfirmBtn" class="primary" type="button">✓ Kontrol Ettim, Satışı Yap</button>
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=659-a4-fatura"></script><script src="/web-admin-assets/customer-sales.js?v=659-a4-fatura"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=660-efatura"></script><script src="/web-admin-assets/customer-sales.js?v=660-efatura"></script>
 </body></html>

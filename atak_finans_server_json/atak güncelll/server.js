@@ -76,6 +76,8 @@ function ensureStore(store) {
 
   store.cancellationRequests = Array.isArray(store.cancellationRequests) ? store.cancellationRequests : [];
   store.invoiceQueue = Array.isArray(store.invoiceQueue) ? store.invoiceQueue : [];
+  store.invoiceInbox = Array.isArray(store.invoiceInbox) ? store.invoiceInbox : [];
+  store.invoiceAppResponses = Array.isArray(store.invoiceAppResponses) ? store.invoiceAppResponses : [];
   if(!store.financeAccounts.length){
     store.financeAccounts.push(
       {id:'merkez-kasa',name:'Merkez Kasa',type:'cash',storeId:store.stores[0]?.id||'',active:true,openingBalance:0,createdAt:new Date().toISOString()},
@@ -1435,6 +1437,63 @@ app.post('/web-api/admin/invoice-integration/test',requireAdmin,(req,res)=>{
   res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,endpoints:ep,note:'Dış servise belge göndermez. QNB Solist WSDL/kullanıcı gelince SOAP gönderim açılır.'});
 });
 app.get('/web-api/admin/invoice-queue',requireAdmin,(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
+/** e-Fatura Merkezi özet: QNB kutusu klasör sayıları + kuyruk + gelen (placeholder) */
+app.get('/web-api/admin/invoice-center',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const cfg=s.invoiceIntegration||{};
+  const queue=(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const inbox=(s.invoiceInbox||[]).slice().sort((a,b)=>String(b.invoiceDate||b.createdAt||'').localeCompare(String(a.invoiceDate||a.createdAt||'')));
+  const responses=(s.invoiceAppResponses||[]).slice();
+  const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
+  const salesPending=(s.financeTransactions||[])
+    .filter(t=>t.kind==='sale'&&!t.cancelled&&(t.invoiceStatus||'pending')!=='issued')
+    .map(t=>({
+      id:t.id,reference:t.reference||'',date:t.date||'',customerId:t.customerId||'',
+      customerName:customerMap.get(String(t.customerId))?.name||'',total:Number(t.total||0),
+      paymentMethod:t.paymentMethod||'',invoiceStatus:t.invoiceStatus||'pending',
+      invoiceQueueId:t.invoiceQueueId||''
+    }))
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const isSent=r=>['issued','draft_sent','queued_remote','queued'].includes(String(r.status||''));
+  const isPending=r=>['pending','ready'].includes(String(r.status||''))||!r.status;
+  const isError=r=>String(r.status||'')==='error';
+  const isArchive=r=>['cancelled','archived','issued'].includes(String(r.status||''));
+  const counts={
+    out_pending:queue.filter(isPending).length,
+    out_sent:queue.filter(isSent).length,
+    out_error:queue.filter(isError).length,
+    out_archive:queue.filter(r=>['cancelled','archived'].includes(String(r.status||''))).length,
+    sales_pending:salesPending.length,
+    in_incoming:inbox.filter(r=>r.status!=='archived').length,
+    in_responses:responses.length,
+    in_archive:inbox.filter(r=>r.status==='archived').length,
+    earsiv_all:queue.filter(r=>String(r.docType||r.invoiceType||'')==='earsiv').length
+  };
+  res.json({
+    ok:true,
+    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||''},
+    counts,queue,inbox,responses,salesPending,
+    note:'Gelen kutusu QNB portal senkronu bağlanınca dolar. Giden kutu yerel kuyruk + UBL taslağıdır.'
+  });
+});
+app.post('/web-api/admin/invoice-center/portal-query',requireAdmin,async(req,res)=>{
+  const s=readStore(),cfg=s.invoiceIntegration||{};
+  const checks=qnbSolist.readinessChecks(cfg);
+  const ready=checks.filter(c=>['Firma VKN','WSDL / servis URL','Kullanıcı','Şifre'].includes(c.name)).every(c=>c.ok)&&cfg.enabled;
+  if(!ready){
+    return res.json({
+      ok:true,mode:'local_only',synced:0,
+      message:'QNB portal sorgusu henüz açık değil. WSDL + kullanıcı + “etkin” gelince Gelen Kutusu portaldan dolacak. Şimdilik yerel kuyruk yenilendi.',
+      checks
+    });
+  }
+  // SOAP: QNB gelen fatura listesi buraya bağlanır.
+  res.json({
+    ok:true,mode:'stub',synced:0,
+    message:'Portal sorgu noktası hazır (SOAP stub). QNB Çözüm Merkezi WSDL metodunu bağlayınca canlı çekim başlar.',
+    checks
+  });
+});
 app.post('/web-api/admin/invoice-queue/:id/retry',requireAdmin,async(req,res)=>{
   const s=readStore(),r=(s.invoiceQueue||[]).find(x=>x.id===req.params.id);
   if(!r)return res.status(404).json({error:'Fatura kaydı bulunamadı'});
