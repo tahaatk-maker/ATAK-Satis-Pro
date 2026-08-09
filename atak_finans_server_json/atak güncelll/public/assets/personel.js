@@ -10,6 +10,7 @@ async function api(url,opt={}){
 
 let currentUser=null;
 let financeData=null;
+let monthData=null;
 let salesData=null;
 let salesCustomers=[];
 let salesAccounts=[];
@@ -17,6 +18,12 @@ let salesCart=[];
 let salesStep=1;
 let selectedPayMethod='';
 let lastSaleDocsUrl='';
+let cancelDraft=null;
+
+function currentMonthValue(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
 
 function has(permission){
   const p=currentUser?.permissions||[];
@@ -97,10 +104,173 @@ async function loadFinance(){
   const st=$('#financeStatus');
   st.textContent='Finans ve cari bilgiler yükleniyor...';
   try{
+    if($('#financeMonth') && !$('#financeMonth').value)$('#financeMonth').value=currentMonthValue();
     financeData=await api('/web-api/admin/finance-center'+financeQuery());
     renderFinance();
+    await loadMonthSales();
+    if(financeData?.canManage)await loadManagerApprovals();
     st.textContent='';
   }catch(e){st.textContent=e.message}
+}
+
+function monthQuery(){
+  const q=new URLSearchParams();
+  const month=$('#financeMonth')?.value||currentMonthValue();
+  q.set('month',month);
+  const person=$('#monthSalesperson')?.value||'';
+  if(person)q.set('salespersonId',person);
+  return `?${q.toString()}`;
+}
+
+async function loadMonthSales(){
+  try{
+    monthData=await api('/web-api/admin/staff-sales-month'+monthQuery());
+    renderMonthSales();
+  }catch(e){
+    $('#monthStats').innerHTML=`<div class="stat deduct"><small>Ay özeti</small><b>${e.message}</b></div>`;
+    $('#monthSaleRows').innerHTML=`<tr><td colspan="6">${e.message}</td></tr>`;
+  }
+}
+
+function renderMonthSales(){
+  const d=monthData||{};
+  const s=d.summary||{};
+  const canManage=Boolean(d.canManage);
+  $('#monthPersonWrap')?.classList.toggle('hidden',!canManage);
+  if(canManage){
+    const people=d.people||[];
+    const cur=$('#monthSalesperson')?.value||'';
+    $('#monthSalesperson').innerHTML='<option value="">Tüm personel</option>'+people.map(p=>`<option value="${p.id}" ${String(p.id)===String(cur)?'selected':''}>${p.name}</option>`).join('');
+  }
+  $('#monthPrimHint').textContent=canManage
+    ?'Seçilen ayda brüt satıştan iptal/iade düşülür; personel primi net üzerinden hesaplanır.'
+    :'Bu ay yaptığınız satışlar. İptal/iade onaylanınca düşer; alacağınız prim net tutara göredir.';
+  $('#monthStats').innerHTML=`
+    <div class="stat"><small>Brüt Satış</small><b>${money(s.grossSales)}</b><small>${s.grossCount||0} adet</small></div>
+    <div class="stat deduct"><small>İptal + İade</small><b>- ${money(s.deductedSales)}</b><small>${s.deductedCount||0} adet · İptal ${s.cancelledCount||0} / İade ${s.returnedCount||0}</small></div>
+    <div class="stat net"><small>Net Satış</small><b>${money(s.netSales)}</b><small>${s.netCount||0} adet</small></div>
+    <div class="stat prim"><small>Prim (Alacağınız)</small><b>${money(s.primEarned)}</b><small>Düşen prim: ${money(s.primLost)}</small></div>
+    <div class="stat"><small>Ay</small><b>${d.month||'—'}</b><small>${(d.from||'') } → ${(d.to||'')}</small></div>`;
+  $('#monthSaleRows').innerHTML=(d.rows||[]).map(t=>{
+    let status='<span class="badge ok">Aktif</span>';
+    if(t.cancelled){
+      status=t.cancelKind==='return'
+        ?`<span class="badge return">İade</span><small>${t.cancelReason||''}</small>`
+        :`<span class="badge cancel">İptal</span><small>${t.cancelReason||''}</small>`;
+    }else if(t.pendingRequest){
+      const k=String(t.pendingRequest.requestKind||'')==='return'||String(t.pendingRequest.targetType||'')==='sale_return'?'İade':'İptal';
+      status=`<span class="badge wait">${k} onayı bekliyor</span><small>${t.pendingRequest.reason||''}</small>`;
+    }
+    const acts=(!t.cancelled && !t.pendingRequest)
+      ?`<div class="row-acts">
+          <button type="button" class="mini-btn danger" data-cancel-sale="${t.id}" data-kind="cancel" data-ref="${t.reference||''}" data-total="${t.total}" data-prim="${t.commissionAmount}">İptal</button>
+          <button type="button" class="mini-btn return" data-cancel-sale="${t.id}" data-kind="return" data-ref="${t.reference||''}" data-total="${t.total}" data-prim="${t.commissionAmount}">İade</button>
+        </div>`
+      :'<small>—</small>';
+    return`<tr>
+      <td>${t.date||'—'}<small>${t.reference||''}</small></td>
+      <td><b>${t.customerName||'—'}</b><small>${t.salespersonName||''}</small></td>
+      <td><b>${money(t.total)}</b></td>
+      <td>${money(t.commissionAmount)}<small>%${Number(t.commissionPct||0)}</small></td>
+      <td>${status}</td>
+      <td>${acts}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="6">Bu ay satış yok.</td></tr>';
+  document.querySelectorAll('[data-cancel-sale]').forEach(btn=>{
+    btn.onclick=()=>openCancelModal({
+      id:btn.dataset.cancelSale,
+      kind:btn.dataset.kind||'cancel',
+      ref:btn.dataset.ref||'',
+      total:btn.dataset.total||0,
+      prim:btn.dataset.prim||0
+    });
+  });
+}
+
+function openCancelModal(draft){
+  cancelDraft=draft;
+  const isReturn=String(draft.kind)==='return';
+  $('#cancelModalTitle').textContent=isReturn?'İade Talebi — Yönetici Onayı':'İptal Talebi — Yönetici Onayı';
+  $('#cancelModalHint').textContent=isReturn
+    ?'İade talebi yöneticiye uyarı olarak gider. Onaylanmadan satış ve priminiz düşmez. Nedeni yazın ki sonra hatırlayasınız.'
+    :'İptal talebi yöneticiye uyarı olarak gider. Onaylanmadan satış ve priminiz düşmez. Nedeni yazın ki sonra hatırlayasınız.';
+  $('#cancelModalRef').textContent=draft.ref||draft.id;
+  $('#cancelModalTotal').textContent=money(draft.total);
+  $('#cancelModalPrim').textContent=money(draft.prim);
+  $('#cancelReasonInput').value='';
+  $('#cancelModalStatus').textContent='';
+  $('#cancelReasonModal')?.classList.remove('hidden');
+  $('#cancelReasonInput')?.focus();
+}
+function closeCancelModal(){
+  cancelDraft=null;
+  $('#cancelReasonModal')?.classList.add('hidden');
+}
+async function submitCancelRequest(){
+  if(!cancelDraft)return;
+  const reason=($('#cancelReasonInput')?.value||'').trim();
+  const st=$('#cancelModalStatus');
+  if(reason.length<3){st.textContent='Sebep zorunlu (en az 3 karakter).';return}
+  if(!confirm(`${String(cancelDraft.kind)==='return'?'İADE':'İPTAL'} talebi yöneticiye gidecek.\n\nSatış: ${cancelDraft.ref||cancelDraft.id}\nTutar: ${money(cancelDraft.total)}\nDüşecek prim: ${money(cancelDraft.prim)}\n\nOnaylanmadan işlem yapılmaz. Devam?`))return;
+  st.textContent='Talep gönderiliyor...';
+  try{
+    const d=await api('/web-api/admin/cancellation-request',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        targetType:'sale',
+        targetId:cancelDraft.id,
+        requestKind:cancelDraft.kind==='return'?'return':'cancel',
+        reason
+      })
+    });
+    st.textContent=d.message||'Talep yöneticiye iletildi.';
+    closeCancelModal();
+    await loadMonthSales();
+    if(financeData?.canManage)await loadManagerApprovals();
+    $('#financeStatus').textContent=d.message||'Talep yönetici onayına düştü.';
+  }catch(e){st.textContent=e.message}
+}
+
+async function loadManagerApprovals(){
+  const wrap=$('#managerApprovalsWrap');
+  if(!wrap)return;
+  try{
+    const d=await api('/web-api/admin/cancellation-requests');
+    if(!d.canManage){wrap.classList.add('hidden');return}
+    wrap.classList.remove('hidden');
+    const pending=(d.rows||[]).filter(r=>r.status==='pending'&&['sale','sale_return','collection'].includes(r.targetType));
+    $('#approvalRows').innerHTML=pending.map(r=>{
+      const isReturn=r.requestKind==='return'||r.targetType==='sale_return';
+      return`<div class="approval-card">
+        <div><span class="badge ${isReturn?'return':'cancel'}">${isReturn?'İADE TALEBİ':'İPTAL TALEBİ'}</span>
+          <b style="margin-left:8px">${r.targetReference||r.targetId}</b>
+          <small>${r.customerName||''} · ${money(r.saleTotal||0)} · Prim ${money(r.commissionAmount||0)}</small>
+        </div>
+        <div><b>${r.requestedByName||'Personel'}</b> istedi · ${(r.requestedAt||'').slice(0,16).replace('T',' ')}
+          <small>Neden: ${r.reason||'—'}</small>
+        </div>
+        <div class="acts">
+          <button type="button" class="mini-btn ok" data-appr="${r.id}">Onayla (satış/prim düşer)</button>
+          <button type="button" class="mini-btn danger" data-rej="${r.id}">Reddet</button>
+        </div>
+      </div>`;
+    }).join('')||'<div class="soft-hint">Bekleyen iptal/iade talebi yok.</div>';
+    document.querySelectorAll('[data-appr]').forEach(b=>b.onclick=async()=>{
+      if(!confirm('Onaylarsanız satış iptal/iade edilir ve personel primi düşer. Emin misiniz?'))return;
+      try{
+        await api('/web-api/admin/cancellation-request/'+b.dataset.appr+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve'})});
+        await loadMonthSales();await loadManagerApprovals();await loadFinance();
+      }catch(e){alert(e.message)}
+    });
+    document.querySelectorAll('[data-rej]').forEach(b=>b.onclick=async()=>{
+      const note=prompt('Red açıklaması:','')||'';
+      try{
+        await api('/web-api/admin/cancellation-request/'+b.dataset.rej+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reject',note})});
+        await loadManagerApprovals();
+      }catch(e){alert(e.message)}
+    });
+  }catch(_){wrap.classList.add('hidden')}
 }
 
 function renderFinance(){
@@ -112,9 +282,10 @@ function renderFinance(){
 
   $('#adminCiroWrap')?.classList.toggle('hidden',!canManage);
   $('#personnelCiroWrap')?.classList.toggle('hidden',!canManage);
+  $('#managerApprovalsWrap')?.classList.toggle('hidden',!canManage);
 
   if(canManage){
-    $('#financeScopeHint').textContent='Yönetici görünümü: Beko / İstikbal / Total ve personel bazlı ciro';
+    $('#financeScopeHint').textContent='Yönetici görünümü: Beko / İstikbal / Total, personel ciro, aylık prim ve iptal/iade onayları';
     $('#ciroBrandGrid').innerHTML=`
       <div class="ciro-card beko"><small>Beko Ciro</small><b>${money(brand.beko)}</b></div>
       <div class="ciro-card istikbal"><small>İstikbal Ciro</small><b>${money(brand.istikbal)}</b></div>
@@ -137,7 +308,7 @@ function renderFinance(){
       <div class="stat"><small>Alacak</small><b>${money(summary.receivable||0)}</b></div>
       <div class="stat"><small>Müşteri</small><b>${(d.customers||[]).length}</b></div>`;
   }else{
-    $('#financeScopeHint').textContent='Sadece sizin yaptığınız satış ve tahsilatlar görünür';
+    $('#financeScopeHint').textContent='Satışlarınız ay bazında toplanır; iptal/iade düşülür. Prim net satışa göredir.';
     $('#financeStats').innerHTML=`
       <div class="stat"><small>Satışlarım (Net)</small><b>${money(summary.mySalesTotal||brand.total||0)}</b></div>
       <div class="stat"><small>Satış Adedi</small><b>${Number(summary.mySalesCount||brand.count||0)}</b></div>
@@ -179,10 +350,17 @@ function renderTransactions(){
 $('#financeCard').onclick=async()=>{
   hidePanels();
   $('#financePanel').classList.remove('hidden');
+  if($('#financeMonth') && !$('#financeMonth').value)$('#financeMonth').value=currentMonthValue();
   await loadFinance();
 };
 $('#financeRefresh')?.addEventListener('click',loadFinance);
 $('#financeFilterApply')?.addEventListener('click',loadFinance);
+$('#monthRefresh')?.addEventListener('click',loadMonthSales);
+$('#financeMonth')?.addEventListener('change',loadMonthSales);
+$('#monthSalesperson')?.addEventListener('change',loadMonthSales);
+$('#cancelModalClose')?.addEventListener('click',closeCancelModal);
+$('#cancelModalCancel')?.addEventListener('click',closeCancelModal);
+$('#cancelSubmitBtn')?.addEventListener('click',submitCancelRequest);
 $('#customerSearch')?.addEventListener('input',renderCustomers);
 $('#txSearch')?.addEventListener('input',renderTransactions);
 

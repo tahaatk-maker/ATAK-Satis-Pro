@@ -118,16 +118,38 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .modal-card{width:min(560px,100%);background:#fff;border-radius:16px;padding:18px;max-height:90vh;overflow:auto}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form-grid .wide{grid-column:1/-1}
+.month-prim-box,.approvals-box{margin:0 0 18px;padding:14px;border:1px solid #e0e7ef;border-radius:12px;background:#f8fbff}
+.month-stats{grid-template-columns:repeat(5,minmax(0,1fr))}
+.stat.prim{background:linear-gradient(180deg,#fff,#eefbf3);border-color:#b7e4c7}
+.stat.deduct{background:linear-gradient(180deg,#fff,#fff1f2);border-color:#f0c0c8}
+.stat.net{background:linear-gradient(180deg,#fff,#eef5ff);border-color:#b7d0ef}
+.soft-hint{margin:4px 0 0;color:#66758a;font-size:12px}
+.warn-banner{margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#fff7ed;border:1px solid #f0d2a8;color:#9a3412;font-size:12px;font-weight:700}
+.danger-btn,.mini-btn{border:0;border-radius:8px;padding:8px 10px;font-weight:800;cursor:pointer;font:inherit}
+.danger-btn{background:linear-gradient(180deg,#e11d48,#9f1239);color:#fff;padding:11px 14px}
+.mini-btn{background:#edf3fb;color:#174a80}
+.mini-btn.danger{background:#fff1f2;color:#9f1239}
+.mini-btn.return{background:#fff7ed;color:#9a3412}
+.mini-btn.ok{background:#ecfdf5;color:#047857}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800}
+.badge.ok{background:#ecfdf5;color:#047857}
+.badge.wait{background:#eff6ff;color:#1d4ed8}
+.badge.cancel{background:#fff1f2;color:#9f1239}
+.badge.return{background:#fff7ed;color:#9a3412}
+.approval-list{display:grid;gap:10px}
+.approval-card{display:grid;gap:8px;padding:12px;border:1px solid #f0c0c8;border-radius:12px;background:#fff}
+.approval-card .acts{display:flex;gap:8px;flex-wrap:wrap}
+.row-acts{display:flex;gap:6px;flex-wrap:wrap}
 
 @media(max-width:980px){
-  .modules,.stat-grid,.ciro-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .modules,.stat-grid,.ciro-grid,.month-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .split-panels,.sales-grid{grid-template-columns:1fr}
   .pay-grid,.totals-box,.info-box,.pay-method-grid{grid-template-columns:1fr 1fr}
 }
 @media(max-width:640px){
   header{padding:8px 12px}
   header img{width:110px}
-  .modules,.stat-grid,.ciro-grid,.pay-grid,.totals-box,.info-box,.form-grid,.pay-method-grid{grid-template-columns:1fr}
+  .modules,.stat-grid,.ciro-grid,.month-stats,.pay-grid,.totals-box,.info-box,.form-grid,.pay-method-grid{grid-template-columns:1fr}
   .toolbar{flex-direction:column;align-items:stretch}
   .cart-row{grid-template-columns:minmax(0,1fr) 60px 34px}
   .cart-row input[data-price]{grid-column:1/-1}

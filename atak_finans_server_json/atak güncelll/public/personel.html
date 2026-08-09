@@ -98,6 +98,39 @@
 
 <div id="financeStats" class="stat-grid"></div>
 
+<div class="month-prim-box">
+  <div class="panel-head" style="margin-bottom:10px">
+    <div>
+      <div class="section-title" style="margin:0">Ay Bazlı Satış &amp; Prim</div>
+      <p id="monthPrimHint" class="soft-hint">İptal ve iade düşülmüş net satış ile priminiz.</p>
+    </div>
+    <div class="toolbar" style="margin:0">
+      <label class="field" style="min-width:150px">Ay
+        <input id="financeMonth" type="month">
+      </label>
+      <label id="monthPersonWrap" class="field hidden" style="min-width:170px">Personel
+        <select id="monthSalesperson"><option value="">Tümü / Ben</option></select>
+      </label>
+      <button id="monthRefresh" class="primary-btn" type="button">Ayı Getir</button>
+    </div>
+  </div>
+  <div id="monthStats" class="stat-grid month-stats"></div>
+  <div class="warn-banner" id="cancelWarnBanner">İptal / iade talebi yöneticiye gider. Onaylanmadan satış ve prim düşmez. Sebep yazmak zorunludur.</div>
+  <div class="section-title">Bu Ayın Satışları</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tarih</th><th>Müşteri</th><th>Net</th><th>Prim</th><th>Durum</th><th>İşlem</th></tr></thead>
+      <tbody id="monthSaleRows"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="managerApprovalsWrap" class="approvals-box hidden">
+  <div class="section-title">Yönetici Onayları — İptal / İade Uyarıları</div>
+  <p class="soft-hint">Personel iptal veya iade istediğinde burada onaylamanız gerekir. Prim ancak onay sonrası düşer.</p>
+  <div id="approvalRows" class="approval-list"></div>
+</div>
+
 <div class="split-panels">
 <div>
 <div class="section-title">Satışlarım / Hareketler</div>
@@ -134,6 +167,32 @@
 </div>
 </div>
 <div id="financeStatus" class="status"></div>
+
+<div id="cancelReasonModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="panel-head">
+      <div>
+        <small class="eyebrow">YÖNETİCİ ONAYI GEREKLİ</small>
+        <h2 id="cancelModalTitle">İptal / İade Talebi</h2>
+      </div>
+      <button id="cancelModalClose" class="ghost-btn" type="button">Kapat</button>
+    </div>
+    <p id="cancelModalHint" class="soft-hint">Bu talep yöneticiye uyarı olarak gider. Onaylanmadan satış ve priminiz düşmez.</p>
+    <div class="info-box" style="margin-bottom:12px">
+      <div><small>Satış</small><b id="cancelModalRef">—</b></div>
+      <div><small>Tutar</small><b id="cancelModalTotal">—</b></div>
+      <div><small>Prim</small><b id="cancelModalPrim">—</b></div>
+    </div>
+    <label class="field wide">Neden * (zorunlu — sonra hatırlamanız için)
+      <textarea id="cancelReasonInput" rows="3" placeholder="Örn: Müşteri vazgeçti / yanlış ürün / iade talebi..."></textarea>
+    </label>
+    <div class="pay-screen-actions">
+      <button id="cancelSubmitBtn" class="danger-btn" type="button">Talebi Yöneticiye Gönder</button>
+      <button id="cancelModalCancel" class="ghost-btn" type="button">Vazgeç</button>
+    </div>
+    <div id="cancelModalStatus" class="status"></div>
+  </div>
+</div>
 </section>
 
 <section id="salesPanel" class="panel hidden">
@@ -301,6 +360,6 @@
 </main>
 </div>
 
-<script src="/assets/personel.js?v=staff-pay-v4"></script>
+<script src="/assets/personel.js?v=staff-month-prim-v1"></script>
 </body>
 </html>

@@ -322,6 +322,74 @@ function buildSalesCiro(salesRows){
     personnel:[...byPerson.values()].map(x=>({...x,beko:round(x.beko),istikbal:round(x.istikbal),other:round(x.other),total:round(x.total)})).sort((a,b)=>b.total-a.total)
   };
 }
+function monthBounds(month=''){
+  const m=String(month||'').trim();
+  if(!/^\d{4}-\d{2}$/.test(m)){
+    const d=new Date();
+    const fallback=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    return monthBounds(fallback);
+  }
+  const [y,mo]=m.split('-').map(Number);
+  const from=`${m}-01`;
+  const last=new Date(y,mo,0).getDate();
+  const to=`${m}-${String(last).padStart(2,'0')}`;
+  return{month:m,from,to};
+}
+function buildMonthSalesPrim(salesRows=[],pendingMap=new Map()){
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  let gross=0,grossCount=0,cancelled=0,cancelledCount=0,returned=0,returnedCount=0,net=0,netCount=0,prim=0,primLost=0;
+  const rows=(salesRows||[]).map(t=>{
+    const amount=Number(t.total||0);
+    const commission=Number(t.commissionAmount||0);
+    const isCancelled=Boolean(t.cancelled);
+    const cancelKind=String(t.cancelKind||t.requestKind||'').toLowerCase()==='return'?'return':'cancel';
+    const pend=pendingMap.get(String(t.id))||null;
+    gross+=amount;grossCount+=1;
+    if(isCancelled){
+      if(cancelKind==='return'){returned+=amount;returnedCount+=1}else{cancelled+=amount;cancelledCount+=1}
+      primLost+=Number(t.cancelledCommissionAmount!=null?t.cancelledCommissionAmount:commission);
+    }else{
+      net+=amount;netCount+=1;prim+=commission;
+    }
+    return{
+      id:t.id,
+      reference:t.reference||'',
+      date:(t.date||'').slice(0,10),
+      customerId:t.customerId||'',
+      customerName:t.customerName||'',
+      dealerId:t.dealerId||'',
+      dealerName:t.dealerName||'',
+      salespersonId:t.salespersonId||'',
+      salespersonName:t.salespersonName||t.createdBy||'',
+      total:round(amount),
+      commissionPct:Number(t.commissionPct||0),
+      commissionAmount:round(commission),
+      cancelled:isCancelled,
+      cancelKind:isCancelled?cancelKind:'',
+      cancelReason:t.cancelReason||'',
+      cancelledAt:t.cancelledAt||'',
+      pendingRequest:pend?{id:pend.id,requestKind:pend.requestKind||pend.targetType||'cancel',reason:pend.reason||'',requestedAt:pend.requestedAt||'',requestedByName:pend.requestedByName||''}:null
+    };
+  }).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  return{
+    summary:{
+      grossSales:round(gross),
+      grossCount,
+      cancelledSales:round(cancelled),
+      cancelledCount,
+      returnedSales:round(returned),
+      returnedCount,
+      deductedSales:round(cancelled+returned),
+      deductedCount:cancelledCount+returnedCount,
+      netSales:round(net),
+      netCount,
+      primEarned:round(prim),
+      primLost:round(primLost),
+      primNet:round(prim)
+    },
+    rows
+  };
+}
 
 function publicUser(user){
   return{id:user.id,name:user.name,username:user.username,role:user.role,roleName:ROLE_PRESETS[user.role]?.name||user.role,permissions:user.permissions||[],active:user.active!==false,createdAt:user.createdAt||'',updatedAt:user.updatedAt||''};
@@ -1437,14 +1505,63 @@ app.get('/web-api/admin/sales-performance',requireAdmin,(req,res)=>{
   }));
   res.json({ok:true,canManage,summary,rows,collections,people:salesPeople(s,req)});
 });
-app.post('/web-api/admin/cancellation-request',requireAdmin,(req,res)=>{
-  const s=readStore(),x=req.body||{},u=currentSessionUser(req),targetType=String(x.targetType||''),targetId=String(x.targetId||''),reason=String(x.reason||'').trim();
+app.get('/web-api/admin/staff-sales-month',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+  const s=readStore();
+  const actor=currentActor(req);
+  const canManage=actorIsManager(req);
+  const staffPortal=Boolean(req.session?.staffUser) && req.session?.admin!==true;
+  const {month,from,to}=monthBounds(req.query.month);
+  const salespersonId=String(req.query.salespersonId||'');
+  const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
+  let sales=(s.financeTransactions||[]).filter(t=>t.kind==='sale' && String(t.date||'').slice(0,10)>=from && String(t.date||'').slice(0,10)<=to);
+  if(staffPortal && !canManage){
+    sales=sales.filter(t=>txBelongsToActor(t,actor));
+  }else if(staffPortal && canManage && salespersonId){
+    const people=salesPeople(s,req);
+    const person=people.find(p=>String(p.id)===salespersonId);
+    const fakeActor={id:salespersonId,name:person?.name||'',username:''};
+    sales=sales.filter(t=>txBelongsToActor(t,fakeActor)||String(t.salespersonId||'')===salespersonId);
+  }else if(!staffPortal && !canManage){
+    sales=sales.filter(t=>txBelongsToActor(t,actor));
+  }else if(!staffPortal && salespersonId){
+    sales=sales.filter(t=>String(t.salespersonId||'')===salespersonId);
+  }
+  sales=sales.map(t=>({...t,customerName:customerMap.get(String(t.customerId||''))?.name||''}));
+  const pendingMap=new Map();
+  (s.cancellationRequests||[]).filter(r=>r.status==='pending'&&['sale','sale_return'].includes(r.targetType)).forEach(r=>{
+    pendingMap.set(String(r.targetId),r);
+  });
+  const built=buildMonthSalesPrim(sales,pendingMap);
+  const myRequests=(s.cancellationRequests||[]).filter(r=>{
+    if(!['sale','sale_return','collection'].includes(r.targetType))return false;
+    if(canManage)return true;
+    return String(r.requestedById)===String(actor?.id||'')||String(r.requestedByName)===String(actor?.name||'');
+  }).slice(0,80);
+  res.json({
+    ok:true,
+    month,from,to,
+    canManage,
+    summary:built.summary,
+    rows:built.rows,
+    requests:myRequests,
+    people:(canManage||!staffPortal)?salesPeople(s,req):[],
+    warning:'İptal ve iade talepleri yönetici onayına düşer. Onaylanmadan satış ve prim düşmez.'
+  });
+});
+app.post('/web-api/admin/cancellation-request',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+  const s=readStore(),x=req.body||{},u=currentActor(req),canManage=actorIsManager(req);
+  let targetType=String(x.targetType||'');
+  const requestKind=String(x.requestKind||x.kind||'').toLowerCase()==='return'?'return':'cancel';
+  if(targetType==='sale_return'){targetType='sale'}
+  const targetId=String(x.targetId||''),reason=String(x.reason||'').trim();
   if(!['sale','collection','sale_edit'].includes(targetType))return res.status(400).json({error:'Geçersiz işlem türü'});
-  if(!reason)return res.status(400).json({error:'Sebep zorunludur'});
+  if(!reason || reason.length<3)return res.status(400).json({error:'Sebep zorunludur (en az 3 karakter). Yönetici bu sebebi görür.'});
   const target=(s.financeTransactions||[]).find(t=>String(t.id)===targetId);
   if(!target)return res.status(404).json({error:'İşlem bulunamadı'});
-  if(target.cancelled)return res.status(400).json({error:'İşlem zaten iptal edilmiş'});
-  if((s.cancellationRequests||[]).some(r=>r.status==='pending'&&['sale','sale_edit','collection'].includes(r.targetType)&&String(r.targetId)===targetId))
+  if(target.cancelled)return res.status(400).json({error:'İşlem zaten iptal/iade edilmiş'});
+  if(!canManage && !txBelongsToActor(target,u))
+    return res.status(403).json({error:'Yalnız kendi satışlarınız için iptal/iade talebi açabilirsiniz'});
+  if((s.cancellationRequests||[]).some(r=>r.status==='pending'&&['sale','sale_return','sale_edit','collection'].includes(r.targetType)&&String(r.targetId)===targetId))
     return res.status(409).json({error:'Bu işlem için bekleyen onay talebi var'});
 
   if(targetType==='sale_edit'){
@@ -1462,30 +1579,49 @@ app.post('/web-api/admin/cancellation-request',requireAdmin,(req,res)=>{
     };
     s.cancellationRequests.unshift(row);
     audit(s,'Satış düzenleme onayı istendi',target.reference||target.id,{reason,personel:row.requestedByName});
-    writeStore(s);return res.json({ok:true,direct:false,pendingApproval:true,row});
+    writeStore(s);return res.json({ok:true,direct:false,pendingApproval:true,row,managerWarning:true});
   }
 
-  // İptal her zaman yönetici onayına düşer
-  const row={id:crypto.randomUUID(),targetType,targetId,targetReference:target.reference||'',reason,status:'pending',
-    requestedById:u?.id||'',requestedByName:u?.name||'Personel',requestedAt:new Date().toISOString(),reviewedBy:'',reviewedAt:'',reviewNote:''};
-  s.cancellationRequests.unshift(row);audit(s,'İptal talebi oluşturuldu',target.reference||target.id,{targetType,reason,personel:row.requestedByName});
-  writeStore(s);res.json({ok:true,direct:false,pendingApproval:true,row});
+  // İptal / iade her zaman yönetici onayına düşer — satıcı sebebini yazar, yönetici uyarılır
+  const storedType=targetType==='sale'?(requestKind==='return'?'sale_return':'sale'):targetType;
+  const row={
+    id:crypto.randomUUID(),targetType:storedType,targetId,targetReference:target.reference||'',
+    requestKind:targetType==='sale'?requestKind:'cancel',
+    reason,status:'pending',
+    requestedById:u?.id||'',requestedByName:u?.name||'Personel',
+    requestedAt:new Date().toISOString(),reviewedBy:'',reviewedAt:'',reviewNote:'',
+    saleTotal:Number(target.total||0),commissionAmount:Number(target.commissionAmount||0),
+    customerName:(s.customers||[]).find(c=>String(c.id)===String(target.customerId||''))?.name||'',
+    managerAlert:true
+  };
+  if(!Array.isArray(s.cancellationRequests))s.cancellationRequests=[];
+  s.cancellationRequests.unshift(row);
+  const label=requestKind==='return'?'İade talebi oluşturuldu':'İptal talebi oluşturuldu';
+  audit(s,label,target.reference||target.id,{targetType:storedType,requestKind,reason,personel:row.requestedByName,commissionAmount:row.commissionAmount});
+  writeStore(s);
+  res.json({
+    ok:true,direct:false,pendingApproval:true,row,
+    managerWarning:true,
+    message:requestKind==='return'
+      ?'İade talebi yöneticiye gönderildi. Onaylanmadan satış ve prim düşmez.'
+      :'İptal talebi yöneticiye gönderildi. Onaylanmadan satış ve prim düşmez.'
+  });
 });
-app.get('/web-api/admin/cancellation-requests',requireAdmin,(req,res)=>{
-  const s=readStore(),u=currentSessionUser(req),canManage=isSystemManager(req);
+app.get('/web-api/admin/cancellation-requests',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+  const s=readStore(),u=currentActor(req),canManage=actorIsManager(req);
   let rows=s.cancellationRequests||[];
   if(!canManage)rows=rows.filter(r=>String(r.requestedById)===String(u?.id||'')||String(r.requestedByName)===String(u?.name||''));
-  res.json({ok:true,canManage,rows});
+  res.json({ok:true,canManage,rows,managerAlert:canManage&&rows.some(r=>r.status==='pending')});
 });
-app.post('/web-api/admin/cancellation-request/:id/review',requireAdmin,(req,res)=>{
-  if(!isSystemManager(req))return res.status(403).json({error:'Yönetici onayı gerekli'});
+app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','users_manage'),(req,res)=>{
+  if(!actorIsManager(req))return res.status(403).json({error:'Yönetici onayı gerekli'});
   const s=readStore(),row=(s.cancellationRequests||[]).find(r=>String(r.id)===String(req.params.id));
-  if(!row)return res.status(404).json({error:'İptal talebi bulunamadı'});
+  if(!row)return res.status(404).json({error:'İptal/iade talebi bulunamadı'});
   if(row.status!=='pending')return res.status(400).json({error:'Talep daha önce sonuçlandırılmış'});
-  const action=String(req.body?.action||''),note=String(req.body?.note||''),actor=currentSessionUser(req)?.name||'Yönetici';
+  const action=String(req.body?.action||''),note=String(req.body?.note||''),actor=currentActor(req)?.name||'Yönetici';
   if(action==='reject'){
     row.status='rejected';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
-    const rejectLabel=row.targetType==='customer_edit'?'Müşteri düzenleme reddedildi':row.targetType==='sale_edit'?'Satış düzenleme reddedildi':'İptal talebi reddedildi';
+    const rejectLabel=row.targetType==='customer_edit'?'Müşteri düzenleme reddedildi':row.targetType==='sale_edit'?'Satış düzenleme reddedildi':(row.requestKind==='return'||row.targetType==='sale_return')?'İade talebi reddedildi':'İptal talebi reddedildi';
     audit(s,rejectLabel,row.targetReference||row.targetId,{note});
     writeStore(s);return res.json({ok:true,row});
   }
@@ -1514,9 +1650,14 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdmin,(req,res)
   const target=(s.financeTransactions||[]).find(t=>String(t.id)===String(row.targetId));
   if(!target)return res.status(404).json({error:'Bağlı işlem bulunamadı'});
   try{
-    const result=row.targetType==='sale'?cancelSaleInStore(s,target,actor,row.reason):cancelCollectionInStore(s,target,actor,row.reason);
+    const isSaleCancel=row.targetType==='sale'||row.targetType==='sale_return';
+    const result=isSaleCancel?cancelSaleInStore(s,target,actor,row.reason):cancelCollectionInStore(s,target,actor,row.reason);
+    if(isSaleCancel && target){
+      target.cancelKind=(row.requestKind==='return'||row.targetType==='sale_return')?'return':'cancel';
+    }
     row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
-    audit(s,'İptal talebi onaylandı',row.targetReference||row.targetId,{targetType:row.targetType,reason:row.reason});
+    const okLabel=(row.requestKind==='return'||row.targetType==='sale_return')?'İade talebi onaylandı':'İptal talebi onaylandı';
+    audit(s,okLabel,row.targetReference||row.targetId,{targetType:row.targetType,reason:row.reason,commissionCancelled:target.cancelledCommissionAmount||0});
     writeStore(s);res.json({ok:true,row,result});
   }catch(e){res.status(400).json({error:e.message})}
 });
