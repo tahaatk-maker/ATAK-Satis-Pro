@@ -31,6 +31,21 @@ function toast(t){q('#toast').textContent=t;q('#toast').classList.remove('hidden
 async function api(url,opt={}){const r=await fetch(url,{credentials:'same-origin',...opt});const d=await r.json().catch(()=>({}));if(!r.ok){if(r.status===401)throw new Error('Oturum süresi dolmuş. Lütfen tekrar giriş yapın.');throw new Error(d.error||'İşlem başarısız')}return d}
 async function check(){const m=await api('/web-api/me');if(m.authenticated){showApp();await load()}else q('#loginView').classList.remove('hidden')}
 q('#loginForm').onsubmit=async e=>{e.preventDefault();try{await api('/web-api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:q('#username').value.trim(),password:q('#password').value})});await loadCurrentAdminPermissions();showApp();await load()}catch(e){toast(e.message)}};
+function applyUiScale(v){
+  const scale=String(v||'0.8');
+  document.documentElement.style.zoom=scale;
+  document.documentElement.setAttribute('data-ui-scale',scale);
+  try{localStorage.setItem('atak-ui-scale',scale)}catch(_){}
+  const sel=q('#uiScaleSelect');if(sel&&sel.value!==scale)sel.value=scale;
+}
+function initUiScale(){
+  let scale='0.8';
+  try{scale=localStorage.getItem('atak-ui-scale')||'0.8'}catch(_){}
+  if(!['0.7','0.8','0.9','1'].includes(scale))scale='0.8';
+  applyUiScale(scale);
+  q('#uiScaleSelect')?.addEventListener('change',e=>applyUiScale(e.target.value));
+}
+initUiScale();
 function showApp(){q('#loginView').classList.add('hidden');q('#appView').classList.remove('hidden');const saved=sessionStorage.getItem('atakAdminTab');if(saved&&q('#'+saved))setTimeout(()=>goTab(saved,{remember:false}),0)}
 async function load(){store=await api('/web-api/admin/store');renderAll()}
 const productTabs=new Set(['products','productImport','prices']);
