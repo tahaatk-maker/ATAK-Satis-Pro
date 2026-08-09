@@ -403,9 +403,9 @@ button.primary,.primary,button{font-size:12px}
 .sales-product-filterbar{gap:6px;margin:4px 0 6px}
 .sales-product-filterbar input,.sales-product-filterbar select{min-height:30px!important;padding:0 7px!important}
 .sales-product-filter-actions button{min-height:30px;padding:0 9px}
-.sales-product-results{grid-template-columns:repeat(4,minmax(0,1fr));max-height:160px;gap:5px;margin:4px 0 6px}
-.sales-product-card{padding:5px 6px;border-radius:7px;font-size:11px}
-.sales-product-card em{font-size:10px}
+.sales-product-results{max-height:220px;gap:0;margin:4px 0 6px}
+.sales-product-card{padding:8px 10px;border-radius:0;font-size:12px}
+.sales-product-card em{font-size:11px}
 .sales-row select,.sales-row input{min-height:30px!important}
 .sales-row-delete{min-height:30px!important}
 .sales-save-btn{height:36px!important;font-size:13px!important}

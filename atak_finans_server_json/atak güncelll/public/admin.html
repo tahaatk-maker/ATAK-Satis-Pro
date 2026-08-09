@@ -1,51 +1,106 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=643-fit100" rel="stylesheet"/>
-<script>(function(){try{var s=localStorage.getItem('atak-ui-scale-v3')||'0.75';document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;}catch(e){document.documentElement.style.zoom='0.75';}})();</script>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=644-pro-sales" rel="stylesheet"/>
+<script>(function(){try{var s=localStorage.getItem('atak-ui-scale-v4')||'0.85';document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;}catch(e){document.documentElement.style.zoom='0.85';}})();</script>
 <style>
-.sales-calc-box{margin:8px 0;padding:8px 10px;border:1px solid #d7e0ea;border-radius:10px;background:linear-gradient(180deg,#f8fbff,#f3f7fc)}
-.sales-calc-box .sales-total-line{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px dashed #e5edf5;font-size:12px}
-.sales-calc-box .sales-total-line:last-child{border-bottom:0}
-.sales-calc-box .sales-total-line.discount b{color:#b45309}
-.sales-calc-box .sales-total-line.commission b{color:#0f766e}
-.sales-calc-box .sales-total-line.net{padding-top:6px;margin-top:2px;border-top:1px solid #c9d7e6;border-bottom:0}
-.sales-calc-box .sales-total-line.net strong{font-size:1.05rem;color:#07366c}
-.sales-rule-live{display:flex;flex-direction:column;gap:3px;margin-top:4px;font-size:11px}
-.sales-rule-live .ok{color:#0f766e}.sales-rule-live .warn{color:#b45309;font-weight:700}.sales-rule-live .bad{color:#b91c1c;font-weight:700}
-.sales-discount-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.sales-payments-box{margin:8px 0;padding:8px 10px;border:1px solid #c9d7e6;border-radius:12px;background:linear-gradient(180deg,#f7fafc,#eef4fa)}
-.sales-payments-title{margin-bottom:6px}.sales-payments-title b{display:block;font-size:13px;color:#07366c}.sales-payments-title small{display:block;color:#64748b;margin-top:2px;line-height:1.3;font-size:11px}
-.sales-pay-list{display:flex;flex-direction:column;gap:5px}
-.pay-method{display:grid;grid-template-columns:86px minmax(72px,.85fr) minmax(90px,1.25fr) auto;gap:5px;align-items:center;border:1px solid #d5e0ec;border-radius:9px;background:#fff;padding:5px 6px}
-.pay-method.pay-method-simple{grid-template-columns:86px minmax(90px,1fr) auto auto}
-.pay-method-badge{display:inline-flex;align-items:center;justify-content:center;gap:4px;font-weight:800;font-size:10px;letter-spacing:.03em;text-transform:uppercase;padding:4px 6px;border-radius:999px;line-height:1;white-space:nowrap;min-width:0}
-.pay-method-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
-.pay-cash .pay-method-badge{color:#0f766e;background:#ecfdf5}
-.pay-card .pay-method-badge{color:#1d4ed8;background:#eff6ff}
-.pay-transfer .pay-method-badge{color:#7c3aed;background:#f5f3ff}
-.pay-credit .pay-method-badge{color:#b45309;background:#fffbeb}
-.pay-note .pay-method-badge{color:#be123c;background:#fff1f2}
-.pay-method input,.pay-method select{width:100%;min-width:0;min-height:30px!important;padding:4px 6px!important;font-size:12px!important;margin:0}
-.pay-fill-btn{border:1px solid #c9d7e6;background:#f8fafc;color:#07366c;border-radius:7px;padding:4px 7px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;min-height:30px}
-.pay-fill-btn:hover{background:#e8f1fb;border-color:#9db7d4}
-.pay-method-hint{font-size:10px;color:#64748b;white-space:nowrap}
-.sales-pay-sum{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}
-.sales-pay-sum>div{background:#fff;border:1px solid #d5e0ec;border-radius:8px;padding:6px 8px}
-.sales-pay-sum span{display:block;font-size:10px;color:#64748b;font-weight:700}.sales-pay-sum b{font-size:13px;color:#07366c}
-.sales-pay-balance{margin-top:6px;font-size:11px;padding:6px 8px;border-radius:8px;background:#fff}.sales-pay-balance.ok{color:#0f766e;border:1px solid #99f6e4}.sales-pay-balance.warn{color:#b45309;font-weight:700;border:1px solid #fcd34d;background:#fffbeb}.sales-pay-balance.bad{color:#b91c1c;font-weight:700;border:1px solid #fca5a5;background:#fef2f2}
-.sales-promissory-options{margin:8px 0;padding:8px 10px;border:1px solid #fdba74;border-radius:12px;background:linear-gradient(180deg,#fff7ed,#ffedd5)}
-.sales-promissory-title{margin-bottom:6px}.sales-promissory-title b{display:block;color:#9a3412;font-size:13px}.sales-promissory-title small{display:block;color:#9a3412;margin-top:2px;line-height:1.3;font-size:11px}
-.sales-promissory-schedule{margin-top:6px;font-size:11px;background:#fff;border:1px solid #fdba74;border-radius:8px;padding:6px}
-.sales-promissory-schedule table{width:100%;border-collapse:collapse}.sales-promissory-schedule th,.sales-promissory-schedule td{padding:3px 5px;border-bottom:1px solid #fed7aa;text-align:left}
-.sales-invoice-box{margin:8px 0;padding:8px 10px;border:1px solid #d7e0ea;border-radius:10px}
-.sales-invoice-title b{font-size:13px}.sales-invoice-title small{display:block;font-size:11px;color:#64748b;margin-top:2px}
-.sales-date-stock-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0}
-.sales-summary-panel .sales-save-btn{position:sticky;bottom:0;z-index:5;margin-top:6px;box-shadow:0 -8px 16px rgba(7,54,108,.18)}
-.sales-summary-panel .form-status{position:sticky;bottom:36px;z-index:4;background:#fff}
-@media(max-width:720px){
-  .sales-discount-row,.sales-pay-sum{grid-template-columns:1fr}
-  .pay-method,.pay-method.pay-method-simple{grid-template-columns:1fr 1fr;gap:4px}
-  .pay-method-badge{grid-column:1/-1;justify-content:flex-start}
-  .pay-fill-btn{grid-column:1/-1}
+/* ===== Satış Merkezi — Pro POS / ERP ===== */
+#salesCenter{--sc-navy:#0b2a55;--sc-ink:#13233f;--sc-muted:#66768d;--sc-line:#d7e2ef;--sc-soft:#f4f7fb;--sc-cash:#0f766e;--sc-card:#1d4ed8;--sc-havale:#6d28d9;--sc-vadeli:#b45309;--sc-senet:#be123c}
+#salesCenter .sales-center-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding:12px 14px!important;border:1px solid var(--sc-line);border-radius:12px;background:linear-gradient(120deg,#0b2a55,#13407a);color:#fff;box-shadow:0 8px 24px rgba(11,42,85,.18)}
+#salesCenter .sales-center-head small{color:#9ec0ef;font-size:10px;letter-spacing:.08em;font-weight:800}
+#salesCenter .sales-center-head h2{margin:2px 0;font-size:18px;color:#fff}
+#salesCenter .sales-center-head p{margin:0;color:#c7daf3;font-size:12px}
+#salesCenter .sales-center-head-actions .secondary-btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:#fff}
+#salesCenter .sales-center-layout{grid-template-columns:minmax(0,1.55fr) minmax(340px,380px);gap:12px}
+#salesCenter .sales-main-column{gap:10px}
+#salesCenter .sales-customer-panel,#salesCenter .sales-products-panel{border:1px solid var(--sc-line);border-radius:12px;padding:12px!important;background:#fff}
+#salesCenter .panel-head h3{margin:0;font-size:15px;color:var(--sc-navy)}
+#salesCenter .eyebrow{color:#7a8aa3;font-size:10px;letter-spacing:.08em;font-weight:800}
+#salesCenter .sales-product-results{display:flex;flex-direction:column;gap:0;max-height:220px;overflow:auto;border:1px solid var(--sc-line);border-radius:10px;background:#fff;margin:6px 0 8px;padding:0}
+#salesCenter .sales-product-card{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;border:0;border-bottom:1px solid #e8eef6;border-radius:0;background:#fff;padding:8px 10px;text-align:left;cursor:pointer}
+#salesCenter .sales-product-card:last-child{border-bottom:0}
+#salesCenter .sales-product-card:hover{background:#f5f9ff}
+#salesCenter .sales-product-card span{display:grid;gap:2px;min-width:0}
+#salesCenter .sales-product-card b{font-size:12px;color:var(--sc-navy);font-variant-numeric:tabular-nums}
+#salesCenter .sales-product-card small{color:var(--sc-muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#salesCenter .sales-product-card strong{font-size:12px;color:var(--sc-ink);font-variant-numeric:tabular-nums}
+#salesCenter .sales-product-card em{font-style:normal;font-size:11px;font-weight:800;color:#0b4d8a;background:#eef5ff;border:1px solid #d3e4fb;border-radius:6px;padding:4px 8px}
+#salesCenter .sales-product-results-empty{padding:18px;color:var(--sc-muted);text-align:center}
+
+/* Checkout column */
+#salesCenter .sales-summary-panel{display:flex;flex-direction:column;gap:0;padding:0!important;border:1px solid var(--sc-line);border-radius:14px;overflow:hidden;background:#fff;position:sticky;top:58px;max-height:calc(100vh - 68px)}
+#salesCenter .sc-checkout-scroll{flex:1;min-height:0;overflow:auto;padding:12px}
+#salesCenter .sc-sec{margin-bottom:12px}
+#salesCenter .sc-sec-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7a8aa3}
+#salesCenter .sc-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#salesCenter .sales-summary-panel label{display:grid;gap:3px;font-size:11px;font-weight:700;color:var(--sc-muted)}
+#salesCenter .sales-summary-panel input,#salesCenter .sales-summary-panel select,#salesCenter .sales-summary-panel textarea{width:100%;min-height:34px;border:1px solid var(--sc-line);border-radius:8px;background:#fff;padding:6px 8px!important;font-size:12px!important;color:var(--sc-ink)}
+#salesCenter .sales-rule-live{display:none}
+#salesCenter .sc-meta{margin-top:6px;font-size:11px;color:var(--sc-muted);line-height:1.35}
+#salesCenter .sc-meta b{color:var(--sc-navy)}
+
+/* Payment table */
+#salesCenter .sales-payments-box{margin:0;padding:0;border:1px solid var(--sc-line);border-radius:10px;background:var(--sc-soft);overflow:hidden}
+#salesCenter .sales-payments-title{padding:9px 10px;border-bottom:1px solid var(--sc-line);background:#fff}
+#salesCenter .sales-payments-title b{display:block;font-size:13px;color:var(--sc-navy)}
+#salesCenter .sales-payments-title small{display:block;margin-top:2px;font-size:11px;color:var(--sc-muted)}
+#salesCenter .sc-pay-cols{display:grid;grid-template-columns:72px minmax(70px,.9fr) minmax(90px,1.3fr) 52px;gap:6px;padding:6px 8px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#8a97ab;border-bottom:1px solid var(--sc-line);background:#eef3f9}
+#salesCenter .sales-pay-list{display:flex;flex-direction:column;gap:0;background:#fff}
+#salesCenter .pay-method{display:grid;grid-template-columns:72px minmax(70px,.9fr) minmax(90px,1.3fr) 52px;gap:6px;align-items:center;border:0;border-bottom:1px solid #e8eef6;border-radius:0;background:#fff;padding:7px 8px;box-shadow:none}
+#salesCenter .pay-method:last-child{border-bottom:0}
+#salesCenter .pay-method.pay-method-simple{grid-template-columns:72px minmax(70px,.9fr) minmax(90px,1.3fr) 52px}
+#salesCenter .pay-method-badge{justify-content:flex-start;gap:5px;font-size:10px;padding:0;border-radius:0;background:transparent!important;letter-spacing:.02em}
+#salesCenter .pay-method-badge::before{width:7px;height:7px}
+#salesCenter .pay-cash{border-left:3px solid var(--sc-cash)}
+#salesCenter .pay-card{border-left:3px solid var(--sc-card)}
+#salesCenter .pay-transfer{border-left:3px solid var(--sc-havale)}
+#salesCenter .pay-credit{border-left:3px solid var(--sc-vadeli)}
+#salesCenter .pay-note{border-left:3px solid var(--sc-senet)}
+#salesCenter .pay-cash .pay-method-badge{color:var(--sc-cash)}
+#salesCenter .pay-card .pay-method-badge{color:var(--sc-card)}
+#salesCenter .pay-transfer .pay-method-badge{color:var(--sc-havale)}
+#salesCenter .pay-credit .pay-method-badge{color:var(--sc-vadeli)}
+#salesCenter .pay-note .pay-method-badge{color:var(--sc-senet)}
+#salesCenter .pay-method input,#salesCenter .pay-method select{min-height:32px!important;border:1px solid var(--sc-line);border-radius:7px;background:#fbfdff;font-size:12px!important;font-variant-numeric:tabular-nums}
+#salesCenter .pay-method input:focus,#salesCenter .pay-method select:focus{outline:2px solid #bfd4f5;outline-offset:0;border-color:#8eb4e8;background:#fff}
+#salesCenter .pay-fill-btn{min-height:32px;border:1px solid #c9d7e6;background:#fff;color:var(--sc-navy);border-radius:7px;padding:0;font-size:10px;font-weight:800}
+#salesCenter .pay-fill-btn:hover{background:#eef5ff;border-color:#9db7d4}
+#salesCenter .pay-method-hint{font-size:10px;color:var(--sc-muted);padding:0 2px}
+#salesCenter .sales-pay-sum{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:0;border-top:1px solid var(--sc-line)}
+#salesCenter .sales-pay-sum>div{background:#fff;border:0;border-radius:0;padding:8px 10px}
+#salesCenter .sales-pay-sum>div+div{border-left:1px solid var(--sc-line)}
+#salesCenter .sales-pay-sum span{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#8a97ab}
+#salesCenter .sales-pay-sum b{font-size:14px;color:var(--sc-navy);font-variant-numeric:tabular-nums}
+#salesCenter .sales-pay-balance{margin:0;border:0;border-top:1px solid var(--sc-line);border-radius:0;padding:8px 10px;font-size:11px;background:#fff}
+#salesCenter .sales-pay-balance.ok{color:var(--sc-cash);background:#f0fdf8}
+#salesCenter .sales-pay-balance.warn{color:#9a6700;background:#fffbeb}
+#salesCenter .sales-pay-balance.bad{color:#b91c1c;background:#fef2f2}
+
+#salesCenter .sales-promissory-options{margin:10px 0 0;padding:10px;border:1px solid #f0c28a;border-radius:10px;background:#fff8ef}
+#salesCenter .sales-promissory-title b{color:#9a3412;font-size:12px}
+#salesCenter .sales-promissory-title small{display:block;margin-top:3px;color:#9a3412;font-size:11px}
+#salesCenter .sales-promissory-schedule{margin-top:8px;font-size:11px;background:#fff;border:1px solid #f0c28a;border-radius:8px;padding:6px}
+#salesCenter .sales-invoice-box{margin:0;padding:0;border:0}
+#salesCenter .sales-discount-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#salesCenter .sales-date-stock-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+
+/* Sticky checkout footer */
+#salesCenter .sc-checkout-foot{border-top:1px solid var(--sc-line);background:linear-gradient(180deg,#f8fbff,#eef4fb);padding:10px 12px 12px;flex:0 0 auto}
+#salesCenter .sales-calc-box{margin:0 0 8px;padding:0;border:0;border-radius:0;background:transparent}
+#salesCenter .sales-calc-box .sales-total-line{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border:0;font-size:12px;color:var(--sc-muted)}
+#salesCenter .sales-calc-box .sales-total-line b{color:var(--sc-ink);font-variant-numeric:tabular-nums}
+#salesCenter .sales-calc-box .sales-total-line.discount b{color:var(--sc-vadeli)}
+#salesCenter .sales-calc-box .sales-total-line.commission b{color:var(--sc-cash)}
+#salesCenter .sales-calc-box .sales-total-line.net{padding-top:6px;margin-top:4px;border-top:1px solid #c9d7e6}
+#salesCenter .sales-calc-box .sales-total-line.net span{color:var(--sc-navy);font-weight:800}
+#salesCenter .sales-calc-box .sales-total-line.net strong{font-size:20px;color:var(--sc-navy);font-variant-numeric:tabular-nums}
+#salesCenter .sc-foot-mini{display:flex;justify-content:space-between;gap:8px;margin:0 0 8px;font-size:11px;color:var(--sc-muted)}
+#salesCenter .sc-foot-mini b{color:var(--sc-ink)}
+#salesCenter .sales-save-btn{height:42px!important;width:100%;border:0;border-radius:10px!important;background:linear-gradient(180deg,#1456a8,#0b2a55)!important;color:#fff!important;font-size:14px!important;font-weight:800;letter-spacing:.02em;box-shadow:0 8px 18px rgba(11,42,85,.25)}
+#salesCenter .sales-save-btn:hover{filter:brightness(1.05)}
+#salesCenter .form-status{margin-top:6px;font-size:11px}
+@media(max-width:1100px){
+  #salesCenter .sales-center-layout{grid-template-columns:1fr}
+  #salesCenter .sales-summary-panel{position:static;max-height:none}
+  #salesCenter .sc-pay-cols,.pay-method,.pay-method.pay-method-simple{grid-template-columns:70px 1fr 1fr 48px}
 }
 </style>
 </head><body>
@@ -85,16 +140,16 @@
 <button data-tab="users" type="button">♙ Kullanıcılar &amp; Yetkiler</button>
 <button data-tab="settings" type="button">⚙ Ayarlar</button>
 </nav><button class="logout" id="logoutBtn" type="button">Çıkış</button></aside>
-<main><header class="v4-topbar"><div class="v4-page-heading"><button aria-label="Menüyü aç" class="v4-icon-btn" id="mobileMenuBtn" type="button">☰</button><div><small>ATAK PAZARLAMA PLATFORM</small><h1 id="pageTitle">Dashboard</h1></div></div><div class="v4-top-actions"><label class="ui-scale-wrap" title="Yazılım ekran boyutu (tarayıcı zoom %100 kalsın)"><span>Ekran</span><select id="uiScaleSelect"><option value="0.7">70%</option><option value="0.75" selected>75% (normal)</option><option value="0.85">85%</option><option value="1">100%</option></select></label><div class="v4-search-wrap"><span>⌕</span><input id="globalSearch" placeholder="Müşteri, ürün, sipariş veya fatura ara"/></div><button class="v4-icon-btn" id="refreshBtn" title="Yenile" type="button">↻</button><button class="v4-icon-btn v4-notification" title="Bildirimler" type="button">♧<em>0</em></button><div class="v4-admin-chip"><span>WA</span><div><b>Web Admin</b><small>Süper Admin</small></div></div></div></header>
+<main><header class="v4-topbar"><div class="v4-page-heading"><button aria-label="Menüyü aç" class="v4-icon-btn" id="mobileMenuBtn" type="button">☰</button><div><small>ATAK PAZARLAMA PLATFORM</small><h1 id="pageTitle">Dashboard</h1></div></div><div class="v4-top-actions"><label class="ui-scale-wrap" title="Yazılım ekran boyutu (tarayıcı %100 kalsın)"><span>Boyut</span><select id="uiScaleSelect"><option value="0.75">Küçük</option><option value="0.85" selected>Normal</option><option value="0.95">Büyük</option><option value="1">Tam</option></select></label><div class="v4-search-wrap"><span>⌕</span><input id="globalSearch" placeholder="Müşteri, ürün, sipariş veya fatura ara"/></div><button class="v4-icon-btn" id="refreshBtn" title="Yenile" type="button">↻</button><button class="v4-icon-btn v4-notification" title="Bildirimler" type="button">♧<em>0</em></button><div class="v4-admin-chip"><span>WA</span><div><b>Web Admin</b><small>Süper Admin</small></div></div></div></header>
 <section class="tab active v4-dashboard" id="dashboard"><div class="stats v4-metric-grid" id="stats"></div><div class="v4-dashboard-grid"><div class="panel v4-finance-card"><div class="panel-head"><div><small class="v4-kicker">HIZLI FİNANS</small><h2>₺ Kasa / Banka</h2></div><button class="v4-link-btn" data-go="financeCenter" type="button">Finans Merkezi →</button></div><div class="v4-account-preview"><div><small>Toplam Kasa</small><strong id="v4CashPreview">Yükleniyor…</strong></div><div><small>Toplam Banka</small><strong id="v4BankPreview">Yükleniyor…</strong></div></div><div class="v4-quick-form"><button data-go="financeCenter" type="button">+ Tahsilat Al</button><button data-go="financeCenter" type="button">+ Masraf Gir</button><button data-go="financeCenter" type="button">↔ Para Transferi</button></div></div><div class="panel v4-activity-card"><div class="panel-head"><div><small class="v4-kicker">SON HAREKETLER</small><h2>Güncel İşlemler</h2></div><button class="v4-link-btn" data-go="financeCenter" type="button">Tümü →</button></div><div class="activity-list v4-activity-list" id="auditList"></div></div></div><div class="panel v4-actions-panel"><div class="panel-head"><div><small class="v4-kicker">HIZLI İŞLEMLER</small><h2>En Çok Kullanılanlar</h2></div></div><div class="quick-actions v4-quick-actions"><button data-go="customersPage" type="button"><span>👤</span><b>Yeni Müşteri</b><small>Müşteri kartı oluştur</small></button><button data-go="salesCenter" type="button"><span>🛒</span><b>Satış Yap</b><small>Müşteriye ürün sat</small></button><button data-go="customersPage" type="button"><span>💳</span><b>Tahsilat Al</b><small>Cari borcu düş</small></button><button data-go="productImport" type="button"><span>📦</span><b>Ürün Aktar</b><small>Beko linkinden getir</small></button><button data-go="stockCenter" type="button"><span>↔</span><b>Stok Transferi</b><small>Depolar arası aktar</small></button><button data-go="campaigns" type="button"><span>％</span><b>Kampanya</b><small>Yeni kampanya oluştur</small></button><button id="systemSelfTestBtn" type="button"><span>✓</span><b>Sistem Testi</b><small>Buton, satış, tahsilat ve stok</small></button></div></div><div class="panel v4-health-panel"><div class="panel-head"><div><small class="v4-kicker">SİSTEM SAĞLIĞI</small><h2>Ürün ve Operasyon Kontrolleri</h2></div></div><div class="health-cards" id="healthCards"></div></div><footer class="v4-footer"><span>© 2026 Atak Pazarlama. Tüm hakları saklıdır.</span><span>ATAK PAZARLAMA ERP V6.2 · <i></i> Sistem Aktif</span></footer></section><section class="tab" id="salesCenter">
-<div class="sales-center-head panel">
-<div><small>MAĞAZA SATIŞI</small><h2>Satış Merkezi</h2><p>Müşteri · ürün · ödeme · stok</p></div>
+<div class="sales-center-head">
+<div><small>ATAK PAZARLAMA · POS</small><h2>Satış Merkezi</h2><p>Müşteri seç · ürün ekle · ödemeyi dağıt · satışı tamamla</p></div>
 <div class="sales-center-head-actions"><button class="secondary-btn" id="salesTrackingShortcut" type="button">Sipariş Takibi</button><button class="secondary-btn" id="salesResetBtn" type="button">Yeni Satış</button></div>
 </div>
 <div class="sales-center-layout">
 <div class="sales-main-column">
 <section class="panel sales-customer-panel">
-<div class="panel-head"><div><small class="eyebrow">1. ADIM</small><h3>Müşteri</h3></div><button class="secondary-btn" id="salesNewCustomerBtn" type="button">+ Yeni Müşteri</button></div>
+<div class="panel-head"><div><small class="eyebrow">1 · MÜŞTERİ</small><h3>Müşteri Seçimi</h3></div><button class="secondary-btn" id="salesNewCustomerBtn" type="button">+ Yeni Müşteri</button></div>
 <input id="salesCustomerSearch" placeholder="Ad, telefon veya VKN/TCKN ara"/>
 <div class="sales-customer-select-row"><select id="salesCustomerSelect"><option value="">Müşteri seçin</option></select><span class="sales-customer-count" id="salesCustomerCount">0 müşteri</span></div>
 <div class="sales-customer-info hidden" id="salesCustomerInfo"></div>
@@ -114,19 +169,19 @@
 </div>
 <div class="sales-customer-note hidden" id="salesCustomerNoteWrap">
   <label>Müşteri Notu
-    <textarea id="salesCustomerNote" rows="2" placeholder="Teslimat, adres, özel istek veya müşteriyle ilgili not..."></textarea>
+    <textarea id="salesCustomerNote" rows="2" placeholder="Teslimat, adres, özel istek..."></textarea>
   </label>
   <button id="salesCustomerNoteSave" type="button" class="secondary-btn">Notu Kaydet</button>
 </div>
 </section>
 <section class="panel sales-products-panel">
-<div class="panel-head"><div><small class="eyebrow">2. ADIM</small><h3>Ürünler</h3></div><button class="secondary-btn" id="salesAddRowBtn" type="button">+ Ürün Ekle</button></div>
+<div class="panel-head"><div><small class="eyebrow">2 · ÜRÜN</small><h3>Ürün Seçimi</h3></div><button class="secondary-btn" id="salesAddRowBtn" type="button">+ Satır Ekle</button></div>
 <div class="sales-product-filterbar">
   <label>Madde Kodu
     <input id="salesItemCodeFilter" type="search" placeholder="Örn. 457100000010"/>
   </label>
-  <label>Malzeme / Arama Kodu
-    <input id="salesMaterialCodeFilter" type="search" placeholder="Örn. CMX 10120 veya BEKO..."/>
+  <label>Malzeme / Arama
+    <input id="salesMaterialCodeFilter" type="search" placeholder="Örn. BKK 2145"/>
   </label>
   <label>Kategori
     <select id="salesCategoryFilter"><option value="">Tüm kategoriler</option></select>
@@ -138,116 +193,136 @@
   </div>
 </div>
 <div class="sales-product-results" id="salesProductResults">
-  <div class="sales-product-results-empty">Kategori seçin veya kod yazarak ürünleri görüntüleyin.</div>
+  <div class="sales-product-results-empty">Kod veya kategori ile ürün arayın.</div>
 </div>
 <div class="sales-rows" id="salesRows"></div>
 </section>
 </div>
 <aside class="panel sales-summary-panel">
-<div><small class="eyebrow">3. ADIM</small><h3>Ödeme ve Özet</h3></div>
-<div class="sales-dealer-rules">
-<label>Satış Bayisi<select id="salesDealer"></select></label>
-<label>Satış Personeli<select id="salesSalesperson"><option value="">Satıcı seçin</option></select></label>
-<div class="sales-discount-row">
-<label>İskonto %<input id="salesDiscountPct" type="number" min="0" step="0.01" value="0" inputmode="decimal"/></label>
-<label>İskonto Tutarı (₺)<input id="salesDiscountAmount" type="number" min="0" step="0.01" value="0" inputmode="decimal" readonly/></label>
-</div>
-<div class="sales-rule-live">
-  <span id="salesDiscountLimit">İskonto limiti: -</span>
-  <span id="salesCommissionPreview">Tahmini prim: ₺0,00</span>
-  <span id="salesCalcHint" class="ok">Tutar ve iskonto girildiğinde prim anlık hesaplanır.</span>
-</div>
-</div>
-<div class="sales-date-stock-row">
-<label>Satış Tarihi<input id="salesDate" type="date"/></label>
-<label>Stok
-  <select id="salesDeductStock">
-    <option value="no">Değişmesin</option>
-    <option value="yes">Stoktan düş</option>
-  </select>
-</label>
-</div>
-<label id="salesWarehouseWrap" class="hidden">Satış Deposu<select id="salesWarehouse"></select></label>
-<div class="sales-payments-box">
-  <div class="sales-payments-title">
-    <b>Ödeme Planı</b>
-    <small>Nakit / Kart / Havale / Vadeli / Senet — toplam nete eşit olmalı.</small>
-  </div>
-  <div class="sales-pay-list">
-    <div class="pay-method pay-cash">
-      <span class="pay-method-badge">Nakit</span>
-      <input id="payCash" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="Tutar ₺" title="Nakit tutar"/>
-      <select id="payCashAccount" title="Nakit kasası"></select>
-      <button type="button" class="pay-fill-btn" data-pay-fill="payCash">Kalan</button>
+  <div class="sc-checkout-scroll">
+    <div class="sc-sec">
+      <div class="sc-sec-title"><span>Satış bilgisi</span></div>
+      <div class="sc-grid-2">
+        <label>Bayi<select id="salesDealer"></select></label>
+        <label>Personel<select id="salesSalesperson"><option value="">Satıcı seçin</option></select></label>
+      </div>
+      <div class="sales-discount-row" style="margin-top:8px">
+        <label>İskonto %<input id="salesDiscountPct" type="number" min="0" step="0.01" value="0" inputmode="decimal"/></label>
+        <label>İskonto ₺<input id="salesDiscountAmount" type="number" min="0" step="0.01" value="0" inputmode="decimal" readonly/></label>
+      </div>
+      <div class="sales-date-stock-row" style="margin-top:8px">
+        <label>Tarih<input id="salesDate" type="date"/></label>
+        <label>Stok
+          <select id="salesDeductStock">
+            <option value="no">Değişmesin</option>
+            <option value="yes">Stoktan düş</option>
+          </select>
+        </label>
+      </div>
+      <label id="salesWarehouseWrap" class="hidden" style="margin-top:8px">Depo<select id="salesWarehouse"></select></label>
+      <div class="sc-meta">
+        <span id="salesDiscountLimit">Bayi seçin</span> ·
+        <span id="salesCommissionPreview">Prim: ₺0,00</span>
+      </div>
+      <span id="salesCalcHint" class="hidden" aria-hidden="true"></span>
     </div>
-    <div class="pay-method pay-card">
-      <span class="pay-method-badge">Kart</span>
-      <input id="payCard" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="Tutar ₺" title="Kredi kartı tutar"/>
-      <select id="payCardAccount" title="Kart / POS hesabı"></select>
-      <button type="button" class="pay-fill-btn" data-pay-fill="payCard">Kalan</button>
+
+    <div class="sc-sec">
+      <div class="sales-payments-box">
+        <div class="sales-payments-title">
+          <b>Ödeme dağılımı</b>
+          <small>Her satır bir yöntem · toplam net satışa eşit olmalı</small>
+        </div>
+        <div class="sc-pay-cols"><span>Yöntem</span><span>Tutar</span><span>Hesap</span><span></span></div>
+        <div class="sales-pay-list">
+          <div class="pay-method pay-cash">
+            <span class="pay-method-badge">Nakit</span>
+            <input id="payCash" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0,00" title="Nakit tutar"/>
+            <select id="payCashAccount" title="Nakit kasası"></select>
+            <button type="button" class="pay-fill-btn" data-pay-fill="payCash">Kalan</button>
+          </div>
+          <div class="pay-method pay-card">
+            <span class="pay-method-badge">Kart</span>
+            <input id="payCard" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0,00" title="Kredi kartı tutar"/>
+            <select id="payCardAccount" title="Kart / POS hesabı"></select>
+            <button type="button" class="pay-fill-btn" data-pay-fill="payCard">Kalan</button>
+          </div>
+          <div class="pay-method pay-transfer">
+            <span class="pay-method-badge">Havale</span>
+            <input id="payTransfer" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0,00" title="Havale tutar"/>
+            <select id="payTransferAccount" title="Banka hesabı"></select>
+            <button type="button" class="pay-fill-btn" data-pay-fill="payTransfer">Kalan</button>
+          </div>
+          <div class="pay-method pay-credit pay-method-simple">
+            <span class="pay-method-badge">Vadeli</span>
+            <input id="payCredit" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0,00" title="Vadeli / cari tutar"/>
+            <span class="pay-method-hint">Cariye yazılır</span>
+            <button type="button" class="pay-fill-btn" data-pay-fill="payCredit">Kalan</button>
+          </div>
+          <div class="pay-method pay-note pay-method-simple">
+            <span class="pay-method-badge">Senet</span>
+            <input id="payNote" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="0,00" title="Senet toplam tutarı"/>
+            <span class="pay-method-hint">Vade planı</span>
+            <button type="button" class="pay-fill-btn" data-pay-fill="payNote">Kalan</button>
+          </div>
+        </div>
+        <div class="sales-pay-sum">
+          <div><span>Dağıtılan</span><b id="payAllocated">₺0,00</b></div>
+          <div><span>Kalan</span><b id="payRemaining">₺0,00</b></div>
+        </div>
+        <div id="payBalanceHint" class="sales-pay-balance ok">Ödemeyi net tutara eşitleyin.</div>
+      </div>
     </div>
-    <div class="pay-method pay-transfer">
-      <span class="pay-method-badge">Havale</span>
-      <input id="payTransfer" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="Tutar ₺" title="Havale tutar"/>
-      <select id="payTransferAccount" title="Banka hesabı"></select>
-      <button type="button" class="pay-fill-btn" data-pay-fill="payTransfer">Kalan</button>
+
+    <input id="salesPaidAmount" type="hidden" value="0"/>
+    <input id="salesPaymentMethod" type="hidden" value="Karma"/>
+    <select id="salesAccount" class="hidden"></select>
+
+    <div class="sales-promissory-options hidden" id="salesPromissoryOptions">
+      <div class="sales-promissory-title"><b>Senet planı</b><small id="salesPromissoryWarn">Vade ve taksit girin.</small></div>
+      <div class="sales-discount-row">
+        <label>Taksit adedi<input id="salesPromissoryInstallments" max="36" min="1" type="number" value="1"/></label>
+        <label>Aralık (ay)<input id="salesPromissoryInterval" max="12" min="1" type="number" value="1"/></label>
+      </div>
+      <label style="margin-top:8px">İlk vade<input id="salesPromissoryFirstDue" type="date"/></label>
+      <label style="margin-top:8px">Açıklama<input id="salesPromissoryDescription" placeholder="Ürün satışı senet planı"/></label>
+      <div id="salesPromissorySchedule" class="sales-promissory-schedule"></div>
     </div>
-    <div class="pay-method pay-credit pay-method-simple">
-      <span class="pay-method-badge">Vadeli</span>
-      <input id="payCredit" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="Cari tutar ₺" title="Vadeli / cari tutar"/>
-      <span class="pay-method-hint">Cariye kalır</span>
-      <button type="button" class="pay-fill-btn" data-pay-fill="payCredit">Kalan</button>
-    </div>
-    <div class="pay-method pay-note pay-method-simple">
-      <span class="pay-method-badge">Senet</span>
-      <input id="payNote" min="0" step="0.01" type="number" value="0" inputmode="decimal" placeholder="Senet tutar ₺" title="Senet toplam tutarı"/>
-      <span class="pay-method-hint">Vade aşağıda</span>
-      <button type="button" class="pay-fill-btn" data-pay-fill="payNote">Kalan</button>
+
+    <div class="sc-sec" style="margin-top:12px">
+      <div class="sc-sec-title"><span>Fatura & not</span></div>
+      <div class="sales-invoice-box">
+        <label>Fatura durumu
+          <select id="salesInvoiceStatus">
+            <option value="pending">Daha sonra kes</option>
+            <option value="issued">Şimdi faturalandı</option>
+          </select>
+        </label>
+        <div id="salesInvoiceIssuedFields" class="hidden" style="margin-top:8px">
+          <div class="sc-grid-2">
+            <label>Fatura no<input id="salesInvoiceNumber" placeholder="Fatura no"/></label>
+            <label>Fatura tarihi<input id="salesInvoiceDate" type="date"/></label>
+          </div>
+        </div>
+      </div>
+      <label style="margin-top:8px">Açıklama<textarea id="salesDescription" placeholder="Mağaza satışı" rows="2"></textarea></label>
     </div>
   </div>
-  <div class="sales-pay-sum">
-    <div><span>Dağıtılan</span><b id="payAllocated">₺0,00</b></div>
-    <div><span>Kalan</span><b id="payRemaining">₺0,00</b></div>
+
+  <div class="sc-checkout-foot">
+    <div class="sales-calc-box" id="salesCalcBox">
+      <div class="sales-total-line"><span>Brüt</span><b id="salesGrossPreview">₺0,00</b></div>
+      <div class="sales-total-line discount"><span>İskonto <i id="salesDiscountPctLabel">(%0)</i></span><b id="salesDiscountPreview">-₺0,00</b></div>
+      <div class="sales-total-line net"><span>Net satış</span><strong id="salesGrandTotal">₺0,00</strong></div>
+      <div class="sales-total-line commission"><span>Prim <i id="salesCommissionPctLabel">(%0)</i></span><b id="salesCommissionAmountPreview">₺0,00</b></div>
+    </div>
+    <div class="sc-foot-mini">
+      <span>Tahsil <b id="salesPaidPreview">₺0,00</b></span>
+      <span>Cari / senet <b id="salesDuePreview">₺0,00</b></span>
+    </div>
+    <button class="primary sales-save-btn" id="salesSaveBtn" type="button">Satışı Önizle</button>
+    <div class="form-status" id="salesStatus"></div>
   </div>
-  <div id="payBalanceHint" class="sales-pay-balance ok">Ödeme dağılımını net tutara eşitleyin.</div>
-</div>
-<!-- Geriye uyumluluk için gizli alanlar -->
-<input id="salesPaidAmount" type="hidden" value="0"/>
-<input id="salesPaymentMethod" type="hidden" value="Karma"/>
-<select id="salesAccount" class="hidden"></select>
-<div class="sales-promissory-options hidden" id="salesPromissoryOptions">
-  <div class="sales-promissory-title"><b>Senet Vade / Taksit Planı</b><small id="salesPromissoryWarn">Senet tutarı için vade ve taksit girin.</small></div>
-  <div class="sales-discount-row">
-    <label>Senet Adedi (Taksit)<input id="salesPromissoryInstallments" max="36" min="1" type="number" value="1"/></label>
-    <label>Taksit Aralığı (Ay)<input id="salesPromissoryInterval" max="12" min="1" type="number" value="1"/></label>
-  </div>
-  <label>İlk Vade Tarihi<input id="salesPromissoryFirstDue" type="date"/></label>
-  <label>Senet Açıklaması<input id="salesPromissoryDescription" placeholder="Ürün satışı senet planı"/></label>
-  <div id="salesPromissorySchedule" class="sales-promissory-schedule"></div>
-</div>
-<div class="sales-invoice-box">
-  <label>Fatura
-    <select id="salesInvoiceStatus">
-      <option value="pending">Daha sonra kes</option>
-      <option value="issued">Şimdi faturalandı</option>
-    </select>
-  </label>
-  <div id="salesInvoiceIssuedFields" class="hidden">
-    <label>Fatura No<input id="salesInvoiceNumber" placeholder="Fatura numarası"/></label>
-    <label>Fatura Tarihi<input id="salesInvoiceDate" type="date"/></label>
-  </div>
-</div>
-<label>Açıklama<textarea id="salesDescription" placeholder="Mağaza satışı" rows="2"></textarea></label>
-<div class="sales-calc-box" id="salesCalcBox">
-  <div class="sales-total-line"><span>Brüt Toplam</span><b id="salesGrossPreview">₺0,00</b></div>
-  <div class="sales-total-line discount"><span>İskonto <i id="salesDiscountPctLabel">(%0)</i></span><b id="salesDiscountPreview">-₺0,00</b></div>
-  <div class="sales-total-line net"><span>Net Satış</span><strong id="salesGrandTotal">₺0,00</strong></div>
-  <div class="sales-total-line commission"><span>Personel Prim <i id="salesCommissionPctLabel">(%0)</i></span><b id="salesCommissionAmountPreview">₺0,00</b></div>
-</div>
-<div class="sales-total-line"><span>Tahsil Edilen</span><b id="salesPaidPreview">₺0,00</b></div>
-<div class="sales-total-line"><span>Cariye Kalacak</span><b id="salesDuePreview">₺0,00</b></div>
-<button class="primary sales-save-btn" id="salesSaveBtn" type="button">Satışı Önizle</button>
-<div class="form-status" id="salesStatus"></div>
 </aside>
 </div>
 </section><section class="tab" id="mySalesReport">
@@ -744,5 +819,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=643-fit100"></script><script src="/web-admin-assets/customer-sales.js?v=643-fit100"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=644-pro-sales"></script><script src="/web-admin-assets/customer-sales.js?v=644-pro-sales"></script>
 </body></html>

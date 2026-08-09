@@ -32,17 +32,17 @@ async function api(url,opt={}){const r=await fetch(url,{credentials:'same-origin
 async function check(){const m=await api('/web-api/me');if(m.authenticated){showApp();await load()}else q('#loginView').classList.remove('hidden')}
 q('#loginForm').onsubmit=async e=>{e.preventDefault();try{await api('/web-api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:q('#username').value.trim(),password:q('#password').value})});await loadCurrentAdminPermissions();showApp();await load()}catch(e){toast(e.message)}};
 function applyUiScale(v){
-  const scale=String(v||'0.75');
+  const scale=String(v||'0.85');
   document.documentElement.style.zoom=scale;
   document.documentElement.setAttribute('data-ui-scale',scale);
-  try{localStorage.setItem('atak-ui-scale-v3',scale)}catch(_){}
+  try{localStorage.setItem('atak-ui-scale-v4',scale)}catch(_){}
   const sel=q('#uiScaleSelect');if(sel&&sel.value!==scale)sel.value=scale;
 }
 function initUiScale(){
-  // Tarayıcı %100 kalsın; yazılım varsayılan %75 ile sığdırır (Satışı Önizle görünür)
-  let scale='0.75';
-  try{scale=localStorage.getItem('atak-ui-scale-v3')||'0.75'}catch(_){}
-  if(!['0.7','0.75','0.85','1'].includes(scale))scale='0.75';
+  // Pro POS görünüm; tarayıcı %100, yazılım varsayılan Normal (0.85)
+  let scale='0.85';
+  try{scale=localStorage.getItem('atak-ui-scale-v4')||'0.85'}catch(_){}
+  if(!['0.75','0.85','0.95','1'].includes(scale))scale='0.85';
   applyUiScale(scale);
   q('#uiScaleSelect')?.addEventListener('change',e=>applyUiScale(e.target.value));
 }
@@ -813,7 +813,7 @@ function renderSalesProductResults(){
     return `<button type="button" class="sales-product-card" data-sales-product-add="${p.code}">
       <span><b>${madde}</b><small>${malzeme}${categoryName?` · ${categoryName}`:''}</small></span>
       <strong>${salesMoney(salesProductUnitPrice(p,salesPreferredPriceMethod()))}</strong>
-      <em>+ Ekle</em>
+      <em>Ekle</em>
     </button>`;
   }).join('');
   qa('[data-sales-product-add]').forEach(btn=>btn.onclick=()=>salesAddRow(btn.dataset.salesProductAdd));
