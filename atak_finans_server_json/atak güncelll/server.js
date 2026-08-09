@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { runBekoSync } = require('./lib/beko-sync');
+const qnbSolist = require('./qnb-solist-adapter');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3100);
@@ -65,7 +66,8 @@ function ensureStore(store) {
   store.receivables = Array.isArray(store.receivables) ? store.receivables : [];
   store.promissoryNotes = Array.isArray(store.promissoryNotes) ? store.promissoryNotes : [];
   store.promissorySettings ||= {creditorName:store.settings?.siteName||'Atak Pazarlama',paymentPlace:'İstanbul',issuePlace:'İstanbul',prefix:'ATAK',defaultInstallments:1,firstDueDays:30,intervalMonths:1,copies:1,footer:''};
-  store.invoiceIntegration ||= {provider:'qnb-efinans',environment:'test',enabled:false,companyVkn:'',companyTitle:'',senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true};
+  store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:'',companyTitle:'',senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:''};
+  if(store.invoiceIntegration && !store.invoiceIntegration.provider)store.invoiceIntegration.provider='qnb-solist';
 
   store.dealerSettings ||= [
     {id:'atak-beko',name:'Atak Beko',marginDividePct:25,commissionPct:0.50,cashMaxDiscountPct:10,cardMaxDiscountPct:5,active:true},
@@ -933,7 +935,8 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   sale.invoiceNumber=sale.invoiceStatus==='issued'?String(x.invoiceNumber||'').trim():'';
   sale.invoiceDate=sale.invoiceStatus==='issued'?String(x.invoiceDate||x.date||''):'';
   sale.invoiceIssuedAt=sale.invoiceStatus==='issued'?new Date().toISOString():'';
-  const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:customer.name||'',phone:customer.phone||'',email:customer.email||'',taxNumber:customer.taxNumber||customer.vkn||customer.tckn||'',taxOffice:customer.taxOffice||'',address:customer.address||''},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',provider:'qnb-efinans',providerDocumentId:'',uuid:'',invoiceNumber:sale.invoiceNumber||'',invoiceDate:sale.invoiceDate||'',error:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const invCfg=s.invoiceIntegration||{};
+  const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:customer.name||'',phone:customer.phone||'',email:customer.email||'',taxNumber:customer.taxNumber||customer.taxNo||customer.vkn||customer.tckn||'',taxOffice:customer.taxOffice||'',address:customer.address||''},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',provider:invCfg.provider||'qnb-solist',providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:sale.invoiceNumber||'',invoiceDate:sale.invoiceDate||'',error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
   s.invoiceQueue.push(invoiceRecord);
   sale.invoiceQueueId=invoiceRecord.id;
 
@@ -1408,21 +1411,88 @@ app.get('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
 app.post('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},old=s.invoiceIntegration||{};
   const env=['test','live'].includes(String(x.environment))?String(x.environment):'test';
-  s.invoiceIntegration={provider:'qnb-efinans',environment:env,enabled:x.enabled===true||String(x.enabled)==='true',companyVkn:String(x.companyVkn||'').trim(),companyTitle:String(x.companyTitle||'').trim(),senderAlias:String(x.senderAlias||'').trim(),webServiceUrl:String(x.webServiceUrl||'').trim(),username:String(x.username||'').trim(),password:String(x.password||'')==='********'?String(old.password||''):String(x.password||''),draftMode:x.draftMode!==false&&String(x.draftMode)!=='false',autoDetectType:x.autoDetectType!==false&&String(x.autoDetectType)!=='false'};
-  audit(s,'QNB eFinans entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,draftMode:s.invoiceIntegration.draftMode});writeStore(s);res.json({ok:true});
+  const provider=['qnb-solist','qnb-esolutions','qnb-efinans'].includes(String(x.provider))?String(x.provider):'qnb-solist';
+  s.invoiceIntegration={
+    provider,environment:env,
+    enabled:x.enabled===true||String(x.enabled)==='true',
+    companyVkn:String(x.companyVkn||'').trim(),
+    companyTitle:String(x.companyTitle||'').trim(),
+    senderAlias:String(x.senderAlias||'').trim(),
+    gbAlias:String(x.gbAlias||x.senderAlias||'').trim(),
+    pkAlias:String(x.pkAlias||'').trim(),
+    webServiceUrl:String(x.webServiceUrl||'').trim(),
+    username:String(x.username||'').trim(),
+    password:String(x.password||'')==='********'?String(old.password||''):String(x.password||''),
+    draftMode:x.draftMode!==false&&String(x.draftMode)!=='false',
+    autoDetectType:x.autoDetectType!==false&&String(x.autoDetectType)!=='false'
+  };
+  audit(s,'QNB Solist entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider});writeStore(s);res.json({ok:true});
 });
 app.post('/web-api/admin/invoice-integration/test',requireAdmin,(req,res)=>{
   const s=readStore(),c=s.invoiceIntegration||{};
-  const checks=[
-    {name:'Sağlayıcı',ok:c.provider==='qnb-efinans',detail:'QNB eFinans adapter hazır'},
-    {name:'Şirket VKN',ok:!!c.companyVkn,detail:c.companyVkn?'Tanımlı':'Henüz girilmedi'},
-    {name:'Servis adresi',ok:!!c.webServiceUrl,detail:c.webServiceUrl?'Tanımlı':'QNB test servis adresi bekleniyor'},
-    {name:'Kimlik bilgileri',ok:!!c.username&&!!c.password,detail:(c.username&&c.password)?'Tanımlı':'QNB kullanıcı/şifre bekleniyor'}
-  ];
-  res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,note:'Bu test dış servise belge göndermez; yalnızca ERP tarafındaki QNB bağlantı hazırlığını doğrular.'});
+  const checks=qnbSolist.readinessChecks(c);
+  const ep=qnbSolist.defaultEndpoints(c.environment||'test');
+  res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,endpoints:ep,note:'Dış servise belge göndermez. QNB Solist WSDL/kullanıcı gelince SOAP gönderim açılır.'});
 });
 app.get('/web-api/admin/invoice-queue',requireAdmin,(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
-app.post('/web-api/admin/invoice-queue/:id/retry',requireAdmin,(req,res)=>{const s=readStore(),r=(s.invoiceQueue||[]).find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'Fatura kaydı bulunamadı'});r.status='ready';r.error='';r.updatedAt=new Date().toISOString();writeStore(s);res.json({ok:true,row:r})});
+app.post('/web-api/admin/invoice-queue/:id/retry',requireAdmin,async(req,res)=>{
+  const s=readStore(),r=(s.invoiceQueue||[]).find(x=>x.id===req.params.id);
+  if(!r)return res.status(404).json({error:'Fatura kaydı bulunamadı'});
+  const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(r.saleId)&&t.kind==='sale');
+  const customer=(s.customers||[]).find(c=>String(c.id)===String(r.customerId||sale?.customerId))||{};
+  const cfg=s.invoiceIntegration||{};
+  try{
+    const out=await qnbSolist.sendOrQueueInvoice({record:r,sale:sale||r,customer,cfg});
+    r.status=out.status||'ready';
+    r.docType=out.docType||r.docType;
+    r.ublXml=out.ublXml||r.ublXml;
+    r.providerMessage=out.message||'';
+    r.error='';
+    r.updatedAt=new Date().toISOString();
+    writeStore(s);
+    res.json({ok:true,row:r,result:out});
+  }catch(e){
+    r.status='error';r.error=e.message;r.updatedAt=new Date().toISOString();writeStore(s);
+    res.status(500).json({error:e.message});
+  }
+});
+app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_manage'),async(req,res)=>{
+  const s=readStore();
+  const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale'&&!t.cancelled);
+  if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
+  const customer=(s.customers||[]).find(c=>String(c.id)===String(sale.customerId));
+  if(!customer)return res.status(400).json({error:'Satış müşterisi bulunamadı'});
+  if(!customer.email&&!customer.taxNo&&!customer.tckn){
+    return res.status(400).json({error:'Fatura için müşteride e-posta veya VKN/TCKN olmalı'});
+  }
+  const cfg=s.invoiceIntegration||{};
+  let record=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id));
+  if(!record){
+    record={
+      id:crypto.randomUUID(),saleId:sale.id,reference:sale.reference||'',customerId:customer.id,
+      customer:{name:customer.name||'',phone:customer.phone||'',email:customer.email||'',taxNumber:customer.taxNo||customer.tckn||'',taxOffice:customer.taxOffice||'',address:customer.address||''},
+      items:(sale.items||[]).map(i=>({...i})),total:Number(sale.total||0),
+      status:'pending',invoiceType:'auto',provider:cfg.provider||'qnb-solist',
+      providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:'',invoiceDate:todayISO(),
+      error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
+    };
+    s.invoiceQueue.push(record);
+    sale.invoiceQueueId=record.id;
+  }
+  const out=await qnbSolist.sendOrQueueInvoice({record,sale,customer,cfg});
+  record.status=out.status||'ready';
+  record.docType=out.docType;
+  record.ublXml=out.ublXml;
+  record.providerMessage=out.message||'';
+  record.updatedAt=new Date().toISOString();
+  sale.invoiceStatus=out.status==='issued'?'issued':'queued';
+  sale.invoiceType=out.docType;
+  sale.invoiceUuid=record.uuid;
+  sale.updatedAt=new Date().toISOString();
+  audit(s,'Fatura kes / QNB kuyruğa alındı',customer.name,{saleId:sale.id,status:record.status,docType:out.docType});
+  writeStore(s);
+  res.json({ok:true,record,result:out,sale:{id:sale.id,invoiceStatus:sale.invoiceStatus,invoiceType:sale.invoiceType}});
+});
 
 function htmlEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function moneyTR(v){return Number(v||0).toLocaleString('tr-TR',{style:'currency',currency:'TRY'})}
@@ -1438,7 +1508,9 @@ body{margin:0;background:#d9e2ec;color:#13233f;font:13px/1.45 "Segoe UI",Arial,s
 .toolbar button,.toolbar a{appearance:none;border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer;text-decoration:none;color:#0b2a55;background:#fff}
 .toolbar button.primary{background:#dda20c;color:#1a1300}
 .sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:14mm 14mm 12mm;box-shadow:0 10px 30px #0002;page-break-after:always}
-.sheet:last-child{page-break-after:auto}
+.sheet:last-child,.sheet.a4-one{page-break-after:auto}
+.sheet.a4-one{min-height:auto;padding:8mm;margin:8px auto}
+@media print{body{background:#fff}.toolbar{display:none}.sheet,.sheet.a4-one{margin:0;box-shadow:none;width:auto;min-height:auto}}
 .doc-head{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid #0b2a55;padding-bottom:12px;margin-bottom:14px}
 .brand{font-size:22px;font-weight:900;color:#0b2a55;letter-spacing:.02em}
 .brand small{display:block;font-size:11px;font-weight:600;color:#66768d;margin-top:3px}
@@ -1513,56 +1585,102 @@ function amountToTrWords(n){
   return out.replace(/\s+/g,' ').trim();
 }
 function buildSenetCardsHtml(notes,customer,cfg){
-  return (notes||[]).map((n,idx)=>`<section class="sheet senet">
-    <div class="top"><div><b>SENET</b><div class="hint">Taksit ${idx+1} / ${notes.length}</div></div><div class="doc-meta"><span>Seri No</span><b>${htmlEsc(n.serial||'-')}</b><div>Düzenleme: ${htmlEsc(n.issueDate||'')}</div><div>Vade: <b>${htmlEsc(n.dueDate||'')}</b></div></div></div>
-    <div class="amount">${moneyTR(n.amount)}</div>
-    <div class="words">Yalnız: ${htmlEsc(amountToTrWords(n.amount))}</div>
-    <p class="body">İşbu senet mukabilinde <b>${htmlEsc(cfg.creditorName||'Atak Pazarlama')}</b> veya emrine, yukarıda yazılı bedeli vadesinde kayıtsız şartsız ödemeyi taahhüt ederim. Protesto keşide edilmesini ve ihtar çekilmesini peşinen kabul ederim.</p>
-    <div class="grid2">
-      <div class="box"><small>Borçlu</small><b>${htmlEsc(customer?.name||'')}</b></div>
-      <div class="box"><small>VKN / TCKN</small><b>${htmlEsc(customer?.taxNo||customer?.tckn||'-')}</b></div>
-      <div class="box"><small>Telefon</small><b>${htmlEsc(customer?.phone||'-')}</b></div>
-      <div class="box"><small>Ödeme / Düzenleme Yeri</small><b>${htmlEsc(cfg.paymentPlace||cfg.issuePlace||'-')}</b></div>
-      <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${htmlEsc([customer?.address,customer?.district,customer?.city].filter(Boolean).join(', ')||'-')}</b></div>
-    </div>
-    ${n.description?`<div class="note-line">${htmlEsc(n.description)}</div>`:''}
-    <p class="footer">${htmlEsc(cfg.footer||'İşbu senet 6102 sayılı TTK hükümlerine tabidir. Bedelsiz / karşılıksızdır iddiası ileri sürülemez.')}</p>
-    <div class="signs"><div class="sig"><small>Keşideci / Borçlu İmza</small>${htmlEsc(customer?.name||'')}</div><div class="sig"><small>Lehtar / Alacaklı</small>${htmlEsc(cfg.creditorName||'Atak Pazarlama')}</div></div>
-  </section>`).join('');
+  // Geriye uyumluluk: tek sayfa birleşik çıktıya yönlendir
+  return buildCombinedContractSenetA4Html({items:[],payments:[],promissoryAmount:(notes||[]).reduce((a,n)=>a+Number(n.amount||0),0),date:notes?.[0]?.issueDate},customer,cfg,{},notes);
 }
 function buildSaleContractHtml(sale,customer,cfg,settings){
+  const notes=[];
+  return buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes);
+}
+/** Sözleşme + Senet tek A4 sayfada */
+function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const items=Array.isArray(sale.items)?sale.items:[];
-  const rows=items.map(i=>`<tr><td>${htmlEsc(i.itemCode||i.productCode||'-')}</td><td>${htmlEsc(i.productName||i.materialCode||i.productCode||'')}</td><td class="num">${Number(i.quantity||1)}</td><td class="num">${moneyTR(i.unitPrice)}</td><td class="num">${moneyTR(i.total!=null?i.total:Number(i.quantity||1)*Number(i.unitPrice||0))}</td></tr>`).join('');
-  const pays=(sale.payments||[]).map(p=>`<div><span>${htmlEsc(p.method||'')}</span><b>${moneyTR(p.amount)}</b></div>`).join('');
+  const rows=items.slice(0,12).map(i=>`<tr><td>${htmlEsc(i.itemCode||i.productCode||'-')}</td><td>${htmlEsc(i.productName||i.materialCode||i.productCode||'')}</td><td class="num">${Number(i.quantity||1)}</td><td class="num">${moneyTR(i.unitPrice)}</td><td class="num">${moneyTR(i.total!=null?i.total:Number(i.quantity||1)*Number(i.unitPrice||0))}</td></tr>`).join('');
+  const pays=(sale.payments||[]).map(p=>`${htmlEsc(p.method||'')}: ${moneyTR(p.amount)}`).join(' · ');
   const gross=Number(sale.grossTotal!=null?sale.grossTotal:sale.total||0);
   const net=Number(sale.total||0);
   const disc=Number(sale.discountAmount!=null?sale.discountAmount:Math.max(0,gross-net));
   const site=settings?.siteName||cfg.creditorName||'ATAK PAZARLAMA';
-  return `<section class="sheet">
-    <div class="doc-head"><div class="brand">${htmlEsc(site)}<small>Satış Sözleşmesi / Teslim Tutanağı</small></div>
+  const noteList=Array.isArray(notes)?notes:[];
+  const senetTotal=noteList.length?noteList.reduce((a,n)=>a+Number(n.amount||0),0):Number(sale.promissoryAmount||0);
+  const scheduleRows=noteList.length
+    ? noteList.map((n,idx)=>`<tr><td>${idx+1}</td><td>${htmlEsc(n.serial||'-')}</td><td>${htmlEsc(n.dueDate||'')}</td><td class="num">${moneyTR(n.amount)}</td></tr>`).join('')
+    : '';
+  const addr=[customer?.address,customer?.district,customer?.city].filter(Boolean).join(', ')||'-';
+  return `<section class="sheet a4-one">
+<style>
+.a4-one{padding:8mm!important;font-size:11px;line-height:1.35}
+.a4-one .doc-head{padding-bottom:6px;margin-bottom:8px;border-bottom-width:2px}
+.a4-one .brand{font-size:16px}.a4-one .brand small{font-size:10px}
+.a4-one .doc-meta{font-size:10px}.a4-one .doc-meta b{font-size:13px;margin-bottom:2px}
+.a4-one h2{font-size:13px;margin:0 0 6px}
+.a4-one .grid2{gap:6px;margin:6px 0}
+.a4-one .box{padding:6px 8px;border-radius:6px}
+.a4-one .box small{font-size:9px;margin-bottom:1px}
+.a4-one .box b{font-size:11px}
+.a4-one table.items{margin:6px 0;font-size:10px}
+.a4-one table.items th,.a4-one table.items td{padding:3px 4px}
+.a4-one .totals{width:260px;margin-top:4px;font-size:10px}
+.a4-one .totals div{padding:3px 0}
+.a4-one .totals .net{font-size:12px;padding-top:4px}
+.a4-one .terms{margin-top:6px;font-size:9px}
+.a4-one .terms ol{margin:3px 0 0;padding-left:14px}
+.a4-one .signs{gap:20px;margin-top:10px}
+.a4-one .signs .sig{min-height:42px}
+.a4-one .signs small{margin-bottom:16px;font-size:9px}
+.a4-one .split{display:grid;grid-template-columns:1.15fr .85fr;gap:8px;margin-top:8px;border-top:2px solid #0b2a55;padding-top:8px}
+.a4-one .senet-box{border:1px solid #0b2a55;border-radius:8px;padding:8px}
+.a4-one .senet-box h3{margin:0 0 4px;font-size:13px;color:#0b2a55}
+.a4-one .senet-box .amount{font-size:18px;font-weight:900;color:#0b2a55;margin:4px 0}
+.a4-one .senet-box .words{font-size:9px;color:#4b5b73;margin-bottom:4px}
+.a4-one .senet-box p{margin:4px 0;font-size:9px}
+.a4-one table.sched{width:100%;border-collapse:collapse;font-size:9px;margin-top:4px}
+.a4-one table.sched th,.a4-one table.sched td{border-bottom:1px solid #e3ebf4;padding:2px 3px;text-align:left}
+.a4-one table.sched .num{text-align:right}
+.a4-one .payline{font-size:10px;margin-top:4px;color:#4b5b73}
+@media print{.a4-one{page-break-after:avoid!important;min-height:auto!important}}
+</style>
+    <div class="doc-head"><div class="brand">${htmlEsc(site)}<small>Sözleşme + Senet · Tek A4</small></div>
       <div class="doc-meta"><b>${htmlEsc(sale.reference||'SATIŞ')}</b><div>Tarih: ${htmlEsc(sale.date||'')}</div><div>Bayi: ${htmlEsc(sale.dealerName||'')}</div><div>Satıcı: ${htmlEsc(sale.salespersonName||sale.createdBy||'')}</div></div></div>
     <h2 class="doc-title">SATIŞ SÖZLEŞMESİ</h2>
     <div class="grid2">
       <div class="box"><small>Müşteri / Alıcı</small><b>${htmlEsc(customer?.name||'')}</b><div>${htmlEsc(customer?.phone||'')}</div></div>
       <div class="box"><small>VKN / TCKN</small><b>${htmlEsc(customer?.taxNo||customer?.tckn||'-')}</b></div>
-      <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${htmlEsc([customer?.address,customer?.district,customer?.city].filter(Boolean).join(', ')||'-')}</b></div>
+      <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${htmlEsc(addr)}</b></div>
     </div>
-    <table class="items"><thead><tr><th>Kod</th><th>Ürün / Malzeme</th><th class="num">Adet</th><th class="num">Birim</th><th class="num">Tutar</th></tr></thead><tbody>${rows||'<tr><td colspan="5">Ürün yok</td></tr>'}</tbody></table>
+    <table class="items"><thead><tr><th>Kod</th><th>Ürün</th><th class="num">Adet</th><th class="num">Birim</th><th class="num">Tutar</th></tr></thead><tbody>${rows||'<tr><td colspan="5">Ürün yok</td></tr>'}${items.length>12?`<tr><td colspan="5">… +${items.length-12} kalem</td></tr>`:''}</tbody></table>
     <div class="totals">
-      <div><span>Brüt Toplam</span><b>${moneyTR(gross)}</b></div>
-      <div><span>İskonto (%${htmlEsc(String(sale.discountPct||0).replace('.',','))})</span><b>-${moneyTR(disc)}</b></div>
-      <div class="net"><span>Net Satış</span><b>${moneyTR(net)}</b></div>
-      ${pays}
-      <div><span>Ödeme şekli</span><b>${htmlEsc(sale.paymentMethod||'-')}</b></div>
+      <div><span>Brüt</span><b>${moneyTR(gross)}</b></div>
+      <div><span>İskonto</span><b>-${moneyTR(disc)}</b></div>
+      <div class="net"><span>Net</span><b>${moneyTR(net)}</b></div>
     </div>
-    ${sale.promissoryAmount?`<div class="note-line"><b>Senet:</b> ${moneyTR(sale.promissoryAmount)} tutarında senet/senetler işbu sözleşmenin eki ve ayrılmaz parçasıdır.</div>`:''}
+    <div class="payline"><b>Ödeme:</b> ${htmlEsc(sale.paymentMethod||'-')}${pays?` · ${pays}`:''}</div>
     <div class="terms"><b>Şartlar</b><ol>
-      <li>İşbu sözleşme kapsamında satılan ürünlerin bedeli yukarıdaki ödeme planına göre tahsil edilir.</li>
-      <li>Müşteri, ürünleri teslim almadan önce kontrol ettiğini / teslim sırasında kontrol edeceğini kabul eder.</li>
-      <li>Senetli satışlarda her bir senet ayrı bir ödeme taahhüdüdür; vadesinde ödenmeyen senetler için yasal yollara başvurulabilir.</li>
-      <li>Bu belge mali fatura yerine geçmez; fatura ayrıca düzenlenir.</li>
+      <li>Ürün bedeli yukarıdaki ödeme planına göre tahsil edilir.</li>
+      <li>Müşteri ürünleri teslim sırasında kontrol eder.</li>
+      <li>Senetler bu sözleşmenin eki ve ayrılmaz parçasıdır.</li>
+      <li>Bu belge mali fatura yerine geçmez.</li>
     </ol></div>
-    <div class="signs"><div class="sig"><small>Satıcı Kaşe / İmza</small>${htmlEsc(site)}</div><div class="sig"><small>Müşteri İmza</small>${htmlEsc(customer?.name||'')}</div></div>
+    <div class="split">
+      <div>
+        <div class="signs" style="margin-top:8px"><div class="sig"><small>Satıcı Kaşe / İmza</small>${htmlEsc(site)}</div><div class="sig"><small>Müşteri İmza</small>${htmlEsc(customer?.name||'')}</div></div>
+      </div>
+      <div class="senet-box">
+        <h3>SENET</h3>
+        ${senetTotal>0?`
+          <div class="amount">${moneyTR(senetTotal)}</div>
+          <div class="words">Yalnız: ${htmlEsc(amountToTrWords(senetTotal))}</div>
+          <p>İşbu senet mukabilinde <b>${htmlEsc(cfg.creditorName||site)}</b> veya emrine bedeli vadesinde kayıtsız şartsız ödemeyi taahhüt ederim.</p>
+          <div class="grid2" style="margin:4px 0">
+            <div class="box"><small>Borçlu</small><b>${htmlEsc(customer?.name||'')}</b></div>
+            <div class="box"><small>Ödeme yeri</small><b>${htmlEsc(cfg.paymentPlace||cfg.issuePlace||'-')}</b></div>
+          </div>
+          ${scheduleRows?`<table class="sched"><thead><tr><th>#</th><th>Seri</th><th>Vade</th><th class="num">Tutar</th></tr></thead><tbody>${scheduleRows}</tbody></table>`:''}
+          <p style="margin-top:6px">${htmlEsc(cfg.footer||'TTK hükümlerine tabidir.')}</p>
+          <div class="signs" style="margin-top:8px;gap:12px"><div class="sig"><small>Keşideci</small>${htmlEsc(customer?.name||'')}</div><div class="sig"><small>Lehtar</small>${htmlEsc(cfg.creditorName||site)}</div></div>
+        `:`<p>Bu satışta senet tutarı yok.</p>`}
+      </div>
+    </div>
   </section>`;
 }
 
@@ -1591,8 +1709,8 @@ app.get('/web-api/admin/sale/:id/print-docs',requireAdminOrStaff('orders_manage'
   const cfg=s.promissorySettings||{};
   const settings=s.settings||{};
   const notes=(s.promissoryNotes||[]).filter(n=>n.saleId===sale.id||n.planId===sale.promissoryPlanId).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
-  const body=buildSaleContractHtml(sale,customer,cfg,settings)+buildSenetCardsHtml(notes,customer,cfg);
-  res.type('html').send(printDocShell(`Sözleşme & Senet · ${sale.reference||''}`,body));
+  const body=buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes);
+  res.type('html').send(printDocShell(`Sözleşme & Senet · ${sale.reference||''}`,body,{autoPrint:true}));
 });
 app.get('/web-api/admin/self-test',requireAdmin,(req,res)=>{
  try{
