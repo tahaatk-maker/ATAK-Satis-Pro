@@ -1,0 +1,74 @@
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f3f6fa;color:#13233b}
+.hidden{display:none!important}
+
+.login-shell{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(135deg,#062f65,#0c66b5)}
+.login-card{width:min(430px,100%);background:#fff;padding:32px;border-radius:22px;display:grid;gap:13px;box-shadow:0 24px 70px #001e3f66}
+.login-card img{width:210px;height:90px;object-fit:contain;margin:auto}
+.login-card h1,.login-card p{margin:0;text-align:center}
+.login-card p{color:#69778e}
+.login-card input,.login-card button{height:50px;border-radius:11px;font:inherit}
+.login-card input{border:1px solid #d8e0eb;padding:0 14px}
+.login-card button{border:0;background:#075eae;color:#fff;font-weight:800;cursor:pointer}
+#loginError{color:#b32626;text-align:center;min-height:18px}
+
+header{height:72px;background:#fff;display:flex;align-items:center;gap:14px;padding:10px 4vw;border-bottom:1px solid #dfe6ef;position:sticky;top:0;z-index:5}
+header img{width:150px;height:52px;object-fit:contain}
+header .user{display:grid;margin-right:auto}
+header .user small{color:#68758a}
+header button{border:1px solid #d6e0ec;border-radius:10px;padding:10px 14px;background:#fff;color:#174a80;font-weight:800;cursor:pointer}
+
+main{max-width:1250px;margin:auto;padding:22px 20px 40px}
+.hero{background:linear-gradient(135deg,#07366c,#1269a9);color:#fff;border-radius:16px;padding:24px 26px}
+.hero small{letter-spacing:.08em;font-weight:800;opacity:.9}
+.hero h1{margin:6px 0}
+.hero p{margin:0;color:#d7e7f8}
+
+.modules{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
+.module-card{background:#fff;border:1px solid #dfe6ef;border-radius:14px;padding:20px;cursor:pointer;text-align:left;display:grid;gap:6px}
+.module-card:hover{box-shadow:0 7px 22px rgba(0,0,0,.08)}
+.module-card .mod-ico{font-size:22px}
+.module-card b{font-size:17px}
+.module-card small{color:#68778c;line-height:1.35}
+
+.panel{background:#fff;border:1px solid #dfe6ef;border-radius:14px;padding:20px;margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:14px}
+.panel-head h2{margin:4px 0}
+.panel-head p{margin:0;color:#66758a;font-size:13px}
+.eyebrow{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;color:#9a7b2f}
+
+.toolbar{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:end}
+.toolbar input,.toolbar select,.finance-filters label select{padding:11px;border:1px solid #d6e0ec;border-radius:8px;flex:1;min-width:160px;font:inherit;background:#fff}
+.finance-filters label{display:grid;gap:5px;font-size:11px;font-weight:800;color:#5d6c82;flex:1}
+.ghost-btn,.primary-btn{border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
+.ghost-btn{background:#edf3fb;color:#174a80}
+.primary-btn{background:#075eae;color:#fff}
+
+.stat-grid,.ciro-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.stat,.ciro-card{background:#f7f9fc;border:1px solid #e0e7ef;padding:15px;border-radius:12px}
+.stat small,.ciro-card small{display:block;color:#66758a;font-size:11px;font-weight:800}
+.stat b,.ciro-card b{display:block;font-size:20px;margin-top:4px;color:#0b2a4a}
+.ciro-card.beko{background:linear-gradient(180deg,#fff,#eef6ff);border-color:#b7d0ef}
+.ciro-card.istikbal{background:linear-gradient(180deg,#fff,#fff7ed);border-color:#f0d2a8}
+.ciro-card.total{background:linear-gradient(180deg,#fff,#eefbf3);border-color:#b7e4c7}
+
+.split-panels{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+.section-title{font-size:13px;font-weight:900;color:#0b2a4a;margin:0 0 8px}
+.table-wrap{overflow:auto;border:1px solid #e7edf4;border-radius:10px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px;border-bottom:1px solid #e7edf4;text-align:left;font-size:13px;vertical-align:top}
+th{background:#f7f9fc;color:#66758a;font-size:11px;text-transform:uppercase}
+td small{display:block;color:#7a879a;margin-top:2px}
+.status{padding:10px 0;color:#66758a;font-size:13px}
+
+@media(max-width:980px){
+  .modules,.stat-grid,.ciro-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .split-panels{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  header{padding:8px 12px}
+  header img{width:110px}
+  .modules,.stat-grid,.ciro-grid{grid-template-columns:1fr}
+  .toolbar{flex-direction:column;align-items:stretch}
+  main{padding:14px}
+}

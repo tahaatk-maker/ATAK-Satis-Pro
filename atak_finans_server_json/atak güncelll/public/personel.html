@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atak Home Personel</title>
+<link rel="icon" href="/assets/favicon.png">
+<link rel="stylesheet" href="/assets/personel.css?v=staff-finance-v2">
+</head>
+<body>
+
+<div id="login" class="login-shell">
+<form id="loginForm" class="login-card">
+<img src="/assets/atak-header-logo.png" alt="Atak Home">
+<h1>Personel Girişi</h1>
+<p>Mağaza hesabınızla giriş yapın.</p>
+<input id="username" autocomplete="username" placeholder="Kullanıcı adı" required>
+<input id="password" autocomplete="current-password" placeholder="Şifre" type="password" required>
+<button type="submit">Giriş Yap</button>
+<div id="loginError"></div>
+</form>
+</div>
+
+<div id="app" class="hidden">
+<header>
+<img src="/assets/atak-header-logo.png" alt="">
+<div class="user">
+<b id="welcome"></b>
+<small id="roleName"></small>
+</div>
+<button id="homeBtn" type="button">Ana Sayfa</button>
+<button id="logout" type="button">Çıkış</button>
+</header>
+
+<main>
+<section id="home">
+<div class="hero">
+<div>
+<small>ATAK PAZARLAMA PERSONEL</small>
+<h1>İşlem Merkezi</h1>
+<p id="permissionText">Yetkilerinize göre kullanabileceğiniz modüller aşağıdadır.</p>
+</div>
+</div>
+
+<div class="modules">
+<button id="salesCard" class="module-card hidden" type="button">
+<span class="mod-ico">🛒</span>
+<b>Satış Merkezi</b>
+<small>Müşteri ve ürün işlemleri</small>
+</button>
+
+<button id="financeCard" class="module-card hidden" type="button">
+<span class="mod-ico">₺</span>
+<b>Finans &amp; Cari</b>
+<small>Cari, hareketler ve ciro özeti</small>
+</button>
+
+<button id="stockCard" class="module-card hidden" type="button">
+<span class="mod-ico">📦</span>
+<b>Stok &amp; Depo</b>
+<small>Ürün ve depo stoklarını görüntüle</small>
+</button>
+
+<button id="announceCard" class="module-card" type="button">
+<span class="mod-ico">🔔</span>
+<b>Duyurular</b>
+<small>Atak Pazarlama duyuruları</small>
+</button>
+</div>
+</section>
+
+<section id="financePanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">FİNANS</small>
+<h2>Finans &amp; Cari</h2>
+<p id="financeScopeHint">Hareketleriniz yükleniyor…</p>
+</div>
+<button id="financeRefresh" class="ghost-btn" type="button">Yenile</button>
+</div>
+
+<div id="adminCiroWrap" class="hidden">
+<div class="ciro-grid" id="ciroBrandGrid"></div>
+<div class="toolbar finance-filters">
+<label>Bayi / Marka
+<select id="dealerFilter">
+<option value="">Tümü (Total)</option>
+<option value="atak-beko">Beko</option>
+<option value="atak-istikbal">İstikbal</option>
+</select>
+</label>
+<label>Personel
+<select id="salespersonFilter"><option value="">Tüm personel</option></select>
+</label>
+<button id="financeFilterApply" class="primary-btn" type="button">Uygula</button>
+</div>
+</div>
+
+<div id="financeStats" class="stat-grid"></div>
+
+<div class="split-panels">
+<div>
+<div class="section-title">Satışlarım / Hareketler</div>
+<div class="toolbar">
+<input id="txSearch" placeholder="Müşteri, referans veya açıklama ara">
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Tarih</th><th>Tür</th><th>Müşteri</th><th>Bayi</th><th>Tutar</th></tr></thead>
+<tbody id="txRows"></tbody>
+</table>
+</div>
+</div>
+<div>
+<div class="section-title">Cariler</div>
+<div class="toolbar">
+<input id="customerSearch" placeholder="Müşteri, telefon veya vergi no ara">
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Müşteri</th><th>Telefon</th><th>Bakiye</th></tr></thead>
+<tbody id="customerRows"></tbody>
+</table>
+</div>
+<div id="personnelCiroWrap" class="hidden">
+<div class="section-title" style="margin-top:16px">Personel Bazlı Ciro</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Personel</th><th>Beko</th><th>İstikbal</th><th>Toplam</th><th>Adet</th></tr></thead>
+<tbody id="personnelCiroRows"></tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+<div id="financeStatus" class="status"></div>
+</section>
+
+<section id="salesPanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">SATIŞ</small>
+<h2>Satış Merkezi</h2>
+<p>Ürün kataloğu (hızlı bakış). Tam satış için yönetim panelini kullanın.</p>
+</div>
+<a class="primary-btn" href="/web-admin" id="salesGoAdmin">Tam Satış Ekranı →</a>
+</div>
+<div id="salesStatus" class="status">Yükleniyor...</div>
+<div class="toolbar">
+<input id="productSearch" placeholder="Ürün kodu veya ürün adı ara">
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Kod</th><th>Ürün</th><th>Marka</th></tr></thead>
+<tbody id="productRows"></tbody>
+</table>
+</div>
+</section>
+
+<section id="stockPanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">STOK</small>
+<h2>Stok &amp; Depo</h2>
+</div>
+</div>
+<div id="stockStatus" class="status">Yükleniyor...</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Ürün</th><th>Depo</th><th>Stok</th><th>Kullanılabilir</th></tr></thead>
+<tbody id="stockRows"></tbody>
+</table>
+</div>
+</section>
+
+<section id="announcementPanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">DUYURU</small>
+<h2>Duyurular</h2>
+</div>
+</div>
+<div id="announcementList"></div>
+</section>
+</main>
+</div>
+
+<script src="/assets/personel.js?v=staff-finance-v2"></script>
+</body>
+</html>

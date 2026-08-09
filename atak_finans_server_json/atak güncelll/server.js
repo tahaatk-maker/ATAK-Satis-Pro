@@ -207,9 +207,10 @@ async function fetchImportedBekoProduct(url){
 const ROLE_PRESETS={
   owner:{name:'Sahip / Tam Yetki',permissions:['*']},
   admin:{name:'Yönetici',permissions:['dashboard_view','products_manage','marketing_manage','finance_manage','sync_manage','users_manage']},
-  sales:{name:'Satış Personeli',permissions:['dashboard_view','products_view','orders_manage','customers_manage']},
+  super_admin:{name:'Süper Admin',permissions:['*']},
+  sales:{name:'Satış Personeli',permissions:['dashboard_view','products_view','orders_manage','customers_manage','finance_view']},
   warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','orders_view']},
-  accounting:{name:'Muhasebe',permissions:['dashboard_view','finance_manage','orders_view']},
+  accounting:{name:'Muhasebe',permissions:['dashboard_view','finance_manage','orders_view','finance_view']},
   service:{name:'Servis',permissions:['dashboard_view','orders_view','service_manage']},
   viewer:{name:'Sadece Görüntüleme',permissions:['dashboard_view','products_view','orders_view']}
 };
@@ -260,6 +261,65 @@ function requireAdminOrStaff(permission){
     if(!actorHasPermission(req,permission))
       return res.status(403).json({error:'Bu işlem için yetkiniz yok'});
     next();
+  };
+}
+function requireAdminOrStaffAny(...permissions){
+  return (req,res,next)=>{
+    if(req.session?.admin===true)return next();
+    if(!req.session?.staffUser)return res.status(401).json({error:'Oturum gerekli'});
+    if(permissions.some(p=>actorHasPermission(req,p)))
+      return next();
+    return res.status(403).json({error:'Bu işlem için yetkiniz yok'});
+  };
+}
+function actorIsManager(req){
+  const a=currentActor(req);
+  if(!a)return Boolean(req.session?.systemOwner===true);
+  if(req.session?.systemOwner===true)return true;
+  const role=String(a.role||'').toLowerCase();
+  if(['owner','admin','super_admin'].includes(role))return true;
+  const perms=Array.isArray(a.permissions)?a.permissions:[];
+  return perms.includes('*')||perms.includes('finance_manage')||perms.includes('users_manage');
+}
+function txBelongsToActor(tx,actor){
+  if(!tx||!actor)return false;
+  const id=String(actor.id||'');
+  const name=String(actor.name||'').trim().toLocaleLowerCase('tr-TR');
+  const username=String(actor.username||'').trim().toLocaleLowerCase('tr-TR');
+  if(id&&(String(tx.salespersonId||'')===id||String(tx.createdById||'')===id||String(tx.createdBy||'')===id))return true;
+  const by=String(tx.createdBy||'').trim().toLocaleLowerCase('tr-TR');
+  const sp=String(tx.salespersonName||'').trim().toLocaleLowerCase('tr-TR');
+  if(name&&(by===name||sp===name||by.includes(name)||sp.includes(name)))return true;
+  if(username&&(by===username||sp===username))return true;
+  return false;
+}
+function dealerBrandKey(dealerId=''){
+  const d=String(dealerId||'').toLowerCase();
+  if(d.includes('istikbal'))return 'istikbal';
+  if(d.includes('beko'))return 'beko';
+  return 'other';
+}
+function buildSalesCiro(salesRows){
+  const brand={beko:0,istikbal:0,other:0,total:0,count:0};
+  const byPerson=new Map();
+  for(const t of salesRows||[]){
+    const amount=Number(t.total||t.grossTotal||0);
+    const key=dealerBrandKey(t.dealerId);
+    brand[key]=(brand[key]||0)+amount;
+    brand.total+=amount;
+    brand.count+=1;
+    const pid=String(t.salespersonId||t.salespersonName||t.createdBy||'unknown');
+    const pname=String(t.salespersonName||t.createdBy||'Personel');
+    if(!byPerson.has(pid))byPerson.set(pid,{id:pid,name:pname,beko:0,istikbal:0,other:0,total:0,count:0});
+    const row=byPerson.get(pid);
+    row[key]=(row[key]||0)+amount;
+    row.total+=amount;
+    row.count+=1;
+  };
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  return{
+    brand:{beko:round(brand.beko),istikbal:round(brand.istikbal),other:round(brand.other),total:round(brand.total),count:brand.count},
+    personnel:[...byPerson.values()].map(x=>({...x,beko:round(x.beko),istikbal:round(x.istikbal),other:round(x.other),total:round(x.total)})).sort((a,b)=>b.total-a.total)
   };
 }
 
@@ -637,15 +697,86 @@ app.patch('/web-api/admin/web-orders/:id/status',requireAdmin,(req,res)=>{
   writeStore(store);res.json({ok:true,status});
 });
 
-app.get('/web-api/admin/finance-center',requireAdminOrStaff('finance_manage'),(req,res)=>{
+app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
   const s=readStore();
-  const customers=s.customers.map(x=>({...x,balance:customerBalance(s,x.id)}));
+  const actor=currentActor(req);
+  const canManage=actorIsManager(req);
+  // Personel portalı oturumu: kapsam uygula. /web-admin oturumu: klasik tam finans.
+  const staffPortal=Boolean(req.session?.staffUser) && req.session?.admin!==true;
+  const salespersonId=String(req.query.salespersonId||'');
+  const dealerFilter=String(req.query.dealerId||'');
   const accounts=s.financeAccounts.map(x=>({...x,balance:accountBalance(s,x.id)}));
-  const transactions=s.financeTransactions.slice(0,1000).map(x=>({
-    ...x,accountName:accounts.find(a=>a.id===x.accountId)?.name||'',counterAccountName:accounts.find(a=>a.id===x.counterAccountId)?.name||'',
-    customerName:customers.find(c=>c.id===x.customerId)?.name||''
+  const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
+
+  let sales=(s.financeTransactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled);
+  let txs=(s.financeTransactions||[]).filter(t=>!t.cancelled);
+
+  if(staffPortal && !canManage){
+    sales=sales.filter(t=>txBelongsToActor(t,actor));
+    const saleCustomerIds=new Set(sales.map(t=>String(t.customerId||'')).filter(Boolean));
+    txs=txs.filter(t=>txBelongsToActor(t,actor) || (t.kind==='collection'&&saleCustomerIds.has(String(t.customerId||''))));
+  }else if(staffPortal && canManage){
+    if(salespersonId){
+      const people=salesPeople(s,req);
+      const person=people.find(p=>String(p.id)===salespersonId);
+      const fakeActor={id:salespersonId,name:person?.name||'',username:''};
+      sales=sales.filter(t=>txBelongsToActor(t,fakeActor)||String(t.salespersonId||'')===salespersonId);
+      txs=txs.filter(t=>txBelongsToActor(t,fakeActor)||String(t.salespersonId||'')===salespersonId||String(t.createdById||'')===salespersonId);
+    }
+    if(dealerFilter){
+      sales=sales.filter(t=>String(t.dealerId||'')===dealerFilter);
+      const saleCustomerIds=new Set(sales.map(t=>String(t.customerId||'')).filter(Boolean));
+      txs=txs.filter(t=>t.kind==='sale' ? String(t.dealerId||'')===dealerFilter : (t.kind==='collection'&&saleCustomerIds.has(String(t.customerId||''))));
+    }
+  }
+
+  const ownCustomerIds=new Set(txs.map(t=>String(t.customerId||'')).filter(Boolean));
+  const customers=((staffPortal && (!canManage || salespersonId || dealerFilter))
+    ? (s.customers||[]).filter(c=>ownCustomerIds.has(String(c.id)))
+    : (s.customers||[])
+  ).map(x=>({...x,balance:customerBalance(s,x.id)}));
+
+  const transactions=txs.slice(0,1000).map(x=>({
+    ...x,
+    accountName:accounts.find(a=>a.id===x.accountId)?.name||'',
+    counterAccountName:accounts.find(a=>a.id===x.counterAccountId)?.name||'',
+    customerName:customerMap.get(String(x.customerId||''))?.name||''
   }));
-  res.json({summary:financeSnapshot(s),accounts,customers,transactions,stores:s.stores});
+
+  const saleRows=(staffPortal?transactions.filter(t=>t.kind==='sale'):sales).map(x=>({
+    ...x,
+    customerName:customerMap.get(String(x.customerId||''))?.name||x.customerName||''
+  }));
+  const ciro=buildSalesCiro(saleRows);
+  const ownNet=Math.round(saleRows.reduce((a,t)=>a+Number(t.total||0),0)*100)/100;
+  const ownCount=saleRows.length;
+  const ownCollect=Math.round(transactions.filter(t=>t.kind==='collection').reduce((a,t)=>a+Number(t.amount||0),0)*100)/100;
+  const fullSummary=financeSnapshot(s);
+  const summary=(staffPortal && (!canManage || salespersonId || dealerFilter))
+    ? {
+        cash:canManage?fullSummary.cash:0,
+        bank:canManage?fullSummary.bank:0,
+        receivable:Math.round(customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0)*100)/100,
+        todayExpense:0,
+        mySalesTotal:ownNet,
+        mySalesCount:ownCount,
+        myCollections:ownCollect
+      }
+    : fullSummary;
+
+  res.json({
+    summary,
+    accounts:(!staffPortal || canManage)?accounts:[],
+    customers,
+    transactions,
+    sales:saleRows,
+    stores:s.stores,
+    canManage:staffPortal?canManage:true,
+    ciro,
+    people:(staffPortal && canManage)?salesPeople(s,req):[],
+    filters:{salespersonId,dealerId:dealerFilter},
+    scope:staffPortal?(canManage?(salespersonId||dealerFilter?'filtered':'all'):'own'):'admin'
+  });
 });
 app.post('/web-api/admin/finance-account',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},name=String(x.name||'').trim(),type=['cash','bank'].includes(x.type)?x.type:'cash';
@@ -1017,8 +1148,7 @@ app.post('/web-api/admin/customer-collection',requireAdmin,(req,res)=>{
 
 
 function isSystemManager(req){
-  const u=currentSessionUser(req);
-  return Boolean(req.session?.systemOwner===true || u?.role==='owner' || u?.role==='admin' || hasPermission(req,'finance_manage') || hasPermission(req,'users_manage'));
+  return actorIsManager(req);
 }
 function salesPeople(s,req){
   const out=[],seen=new Set();
@@ -1029,7 +1159,7 @@ function salesPeople(s,req){
   };
   (s.staff||[]).forEach(x=>add(x.id,x.name,'staff',x.active!==false,x.storeId));
   (s.users||[]).forEach(x=>add(x.id,x.name,'user',x.active!==false,''));
-  const current=currentSessionUser(req); if(current)add(current.id,current.name,'session',true,'');
+  const current=currentActor(req); if(current)add(current.id,current.name,'session',true,current.storeId||'');
   return out.sort((a,b)=>a.name.localeCompare(b.name,'tr'));
 }
 function cancelCollectionInStore(s,collection,actor,reason=''){
