@@ -1086,12 +1086,19 @@ app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_mana
   if(id){
     rows=rows.filter(c=>String(c.id)===id);
   }else if(q.length>=2){
+    const digits=q.replace(/\D+/g,'');
     rows=rows.filter(c=>{
       const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.email||''}`.toLocaleLowerCase('tr-TR');
-      return hay.includes(q);
+      if(hay.includes(q))return true;
+      if(digits.length>=3){
+        const phoneDigits=String(c.phone||'').replace(/\D+/g,'');
+        const taxDigits=String(c.taxNo||c.tckn||'').replace(/\D+/g,'');
+        if(phoneDigits.includes(digits)||taxDigits.includes(digits))return true;
+      }
+      return false;
     });
-  }else if(!q){
-    // Boş aramada tüm listeyi yollama — 10k+ kayıt için güvenli
+  }else{
+    // Boş / kısa aramada tüm listeyi yollama — 10k+ kayıt için güvenli
     return res.json({ok:true,total:(s.customers||[]).filter(c=>c.active!==false).length,rows:[],needQuery:true});
   }
   const total=rows.length;
