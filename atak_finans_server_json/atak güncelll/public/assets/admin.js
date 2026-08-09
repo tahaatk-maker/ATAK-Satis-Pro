@@ -1019,6 +1019,15 @@ function salesUpdateDock(c){
   }
   const cust=(salesCenterData.customers||[]).find(x=>String(x.id)===String(q('#salesCustomerSelect')?.value||''));
   if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent=cust?(cust.name.length>22?cust.name.slice(0,21)+'…':cust.name):'—';
+  const map={payCash:'cash',payCard:'card',payTransfer:'transfer',payCredit:'credit',payNote:'note'};
+  qa('#posPayTiles .pos-pay-tile').forEach(btn=>{
+    const field=btn.getAttribute('data-pay-fill');
+    const key=map[field];
+    const on=key?Math.max(0,salesNum(c?.splits?.[key]))>0:false;
+    btn.classList.toggle('on',on);
+    const small=btn.querySelector('small');
+    if(small&&key)small.textContent=on?salesMoney(c.splits[key]):(key==='credit'?'Cariye yaz':key==='note'?'Vade planı':'Kalanı yaz');
+  });
 }
 function salesUpdatePosSteps(c){
   const step1=q('#posStep1'),step2=q('#posStep2'),step3=q('#posStep3');
@@ -1142,7 +1151,7 @@ function renderSalesProductResults(){
     return `<button type="button" class="sales-product-card" data-sales-product-add="${p.code}">
       <span><b>${madde}</b><small>${malzeme}${categoryName?` · ${categoryName}`:''}</small></span>
       <strong>${salesMoney(salesProductUnitPrice(p,salesPreferredPriceMethod()))}</strong>
-      <em>Ekle</em>
+      <em>+ EKLE</em>
     </button>`;
   }).join('');
   qa('[data-sales-product-add]').forEach(btn=>btn.onclick=()=>salesAddRow(btn.dataset.salesProductAdd));
@@ -1503,6 +1512,13 @@ async function confirmSalesDraft(){
   }catch(e){status.textContent=e.message;status.className='form-status error'}finally{btn.disabled=false;btn.textContent='✓ Kontrol Ettim, Satışı Yap'}
 }
 q('#salesSaveBtn')?.addEventListener('click',openSalesPreview);
+q('#salesJumpPreviewBtn')?.addEventListener('click',openSalesPreview);
+q('#salesFooterResetBtn')?.addEventListener('click',salesReset);
+q('#salesDockDocsHintBtn')?.addEventListener('click',()=>{
+  openSalesPreview();
+  setTimeout(()=>q('#salesPreviewDocsBtn')?.focus(),80);
+  toast('Önizlemede “Sözleşme + Senet” butonuna basın');
+});
 q('#salesDockPreviewBtn')?.addEventListener('click',()=>{
   q('#salesPaymentStep')?.scrollIntoView({behavior:'smooth',block:'start'});
   openSalesPreview();
