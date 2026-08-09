@@ -766,7 +766,7 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
 
   res.json({
     summary,
-    accounts:(!staffPortal || canManage)?accounts:[],
+    accounts, // satış ödemesi için hesap listesi personelde de gerekli
     customers,
     transactions,
     sales:saleRows,
