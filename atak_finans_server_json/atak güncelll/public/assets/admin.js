@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v6 */
+/* ATAK_ADMIN_BUILD=fix-v7 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1141,7 +1141,7 @@ function salesReset(){
   if(q('#salesDiscountAmount'))q('#salesDiscountAmount').value='0';
   ['#payCash','#payCard','#payTransfer','#payCredit','#payNote','#salesPaidAmount'].forEach(id=>{if(q(id))q(id).value=''});
   if(q('#salesDescription'))q('#salesDescription').value='';
-  if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value='pending';
+  if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value='not_required';
   if(q('#salesInvoiceNumber'))q('#salesInvoiceNumber').value='';
   if(q('#salesCustomerSearch'))q('#salesCustomerSearch').value='';
   if(q('#salesCustomerSelect'))q('#salesCustomerSelect').value='';
@@ -1149,6 +1149,7 @@ function salesReset(){
   if(q('#salesDate'))q('#salesDate').value=new Date().toISOString().slice(0,10);
   if(q('#salesPromissoryDescription'))q('#salesPromissoryDescription').value='';
   if(q('#salesPromissorySchedule'))q('#salesPromissorySchedule').innerHTML='';
+  setSalesPayPlanOpen(false);
   salesCustomerChanged();
   salesInvoiceChanged();
   loadSalesPromissoryDefaults();
@@ -1380,6 +1381,14 @@ function salesCalculate(){
   if(q('#salesDuePreview'))q('#salesDuePreview').textContent=salesMoney(c.due);
   if(q('#payAllocated'))q('#payAllocated').textContent=salesMoney(c.allocated);
   if(q('#payRemaining'))q('#payRemaining').textContent=salesMoney(c.remaining);
+  if(q('#payAllocatedSummary'))q('#payAllocatedSummary').textContent=salesMoney(c.allocated);
+  if(q('#payRemainingSummary'))q('#payRemainingSummary').textContent=salesMoney(Math.max(0,c.remaining));
+  if(q('#payMethodSummary'))q('#payMethodSummary').textContent=c.method&&c.allocated>0?c.method:'Henüz seçilmedi';
+  if(q('#salesPayPlanBtnHint')){
+    q('#salesPayPlanBtnHint').textContent=Math.abs(c.remaining)<0.009&&c.net>0
+      ?`Ödeme tamam · ${c.method||'Karma'}`
+      :(c.remaining>0?`Kalan ${salesMoney(c.remaining)} — planı açın`:'NAKİT · KART · HAVALE · VADELİ · SENET');
+  }
   if(q('#salesCartCount'))q('#salesCartCount').textContent=`${qa('.sales-row').length} kalem`;
   const bal=q('#payBalanceHint');
   if(bal){
@@ -1569,7 +1578,27 @@ q('#salesPosBarcode')?.addEventListener('keydown',e=>{
   q(id)?.addEventListener('input',salesCalculate);
   q(id)?.addEventListener('change',salesCalculate);
 });
+function salesPayPlanIsOpen(){
+  const panel=q('#salesPayPlanPanel');
+  return Boolean(panel && !panel.classList.contains('hidden'));
+}
+function setSalesPayPlanOpen(open){
+  const panel=q('#salesPayPlanPanel');
+  const btn=q('#salesPayPlanToggleBtn');
+  if(!panel)return;
+  panel.classList.toggle('hidden',!open);
+  panel.setAttribute('aria-hidden',open?'false':'true');
+  if(btn){
+    btn.setAttribute('aria-expanded',open?'true':'false');
+    const label=btn.querySelector('span');
+    if(label)label.textContent=open?'ÖDEME PLANINI GİZLE':'ÖDEME PLANI';
+  }
+  if(open){
+    setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'nearest'}),40);
+  }
+}
 function salesFillRemainingTo(fieldId){
+  setSalesPayPlanOpen(true);
   const map={payCash:'cash',payCard:'card',payTransfer:'transfer',payCredit:'credit',payNote:'note'};
   const key=map[fieldId];if(!key)return;
   const c=salesCalcState();
@@ -1584,6 +1613,8 @@ function salesFillRemainingTo(fieldId){
 qa('[data-pay-fill]').forEach(btn=>{
   btn.addEventListener('click',()=>salesFillRemainingTo(btn.getAttribute('data-pay-fill')));
 });
+q('#salesPayPlanToggleBtn')?.addEventListener('click',()=>setSalesPayPlanOpen(!salesPayPlanIsOpen()));
+q('#salesPayPlanCloseBtn')?.addEventListener('click',()=>setSalesPayPlanOpen(false));
 ['#salesPromissoryInstallments','#salesPromissoryInterval','#salesPromissoryFirstDue'].forEach(id=>{
   q(id)?.addEventListener('input',salesRenderPromissorySchedule);
   q(id)?.addEventListener('change',salesRenderPromissorySchedule);

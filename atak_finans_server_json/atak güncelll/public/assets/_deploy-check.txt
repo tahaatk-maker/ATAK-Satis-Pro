@@ -1,8 +1,5 @@
-fix-v6
-expect-health=6.3.7-staff-pos
-staff-madde-malzeme
-pay-tiles-big
-manual-unit-price
-invoice-not-required-default
-auto-corporate-billing
+fix-v7
+expect-health=6.3.8-pay-plan
+pay-plan-button-admin-personel
+sales-pay-plan-panel-gated
 2026-08-09

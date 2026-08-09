@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v6" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v7" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -209,6 +209,21 @@
 #salesCenter .sc-meta{margin-top:8px;font-size:12px;color:#7a5230;line-height:1.35;font-weight:650}
 #salesCenter .sales-discount-row,#salesCenter .sales-date-stock-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
+#salesCenter .sales-pay-plan-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px}
+#salesCenter .sales-pay-plan-summary>div{padding:12px;border-radius:12px;background:#fff;border:1px solid #ecd9c4}
+#salesCenter .sales-pay-plan-summary .wide{grid-column:1/-1}
+#salesCenter .sales-pay-plan-summary small{display:block;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#9a3412}
+#salesCenter .sales-pay-plan-summary b{display:block;margin-top:4px;font-size:18px;color:#0b2a4a}
+#salesCenter .sales-pay-plan-btn{
+  width:100%;min-height:64px;border:0;border-radius:16px;cursor:pointer;font:inherit;
+  background:linear-gradient(180deg,#f59e0b,#c2410c);color:#fff;padding:14px 18px;text-align:left;
+  box-shadow:0 10px 24px rgba(194,65,12,.22);
+}
+#salesCenter .sales-pay-plan-btn span{display:block;font-size:18px;font-weight:900;letter-spacing:.04em}
+#salesCenter .sales-pay-plan-btn small{display:block;margin-top:4px;font-size:12px;font-weight:700;opacity:.92}
+#salesCenter .sales-pay-plan-btn[aria-expanded="true"]{background:linear-gradient(180deg,#0f766e,#115e59)}
+#salesCenter .sales-pay-plan-panel{border:2px solid #fdba74;background:#fff}
+#salesCenter .sales-pay-plan-close{border:0;border-radius:10px;background:#fff7ed;color:#9a3412;font-weight:800;padding:8px 12px;cursor:pointer}
 #salesCenter .pos-pay-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0 0 12px}
 #salesCenter .pos-pay-tile{
   display:grid;gap:4px;justify-items:center;padding:13px 8px;border:1.5px solid #e2c9ad;border-radius:14px;background:#fff;
@@ -772,8 +787,23 @@ body.inv-full #pageTitle{font-size:18px}
       <span id="salesCalcHint" class="hidden" aria-hidden="true"></span>
     </div>
 
-    <div class="sc-sec">
-      <div class="sc-sec-title"><span>Ödeme yöntemi seç (kalanı yazar)</span></div>
+    <div class="sc-sec sales-pay-plan-gate">
+      <div class="sc-sec-title"><span>Ödeme planı</span></div>
+      <div class="sales-pay-plan-summary" id="salesPayPlanSummary">
+        <div><small>Dağıtılan</small><b id="payAllocatedSummary">₺0,00</b></div>
+        <div><small>Kalan</small><b id="payRemainingSummary">₺0,00</b></div>
+        <div class="wide"><small>Seçili</small><b id="payMethodSummary">Henüz seçilmedi</b></div>
+      </div>
+      <button type="button" class="sales-pay-plan-btn" id="salesPayPlanToggleBtn" aria-expanded="false">
+        <span>ÖDEME PLANI</span>
+        <small id="salesPayPlanBtnHint">NAKİT · KART · HAVALE · VADELİ · SENET</small>
+      </button>
+    </div>
+
+    <div class="sc-sec sales-pay-plan-panel hidden" id="salesPayPlanPanel" aria-hidden="true">
+      <div class="sc-sec-title"><span>Ödeme yöntemi seç (kalanı yazar)</span>
+        <button type="button" class="sales-pay-plan-close" id="salesPayPlanCloseBtn">Kapat</button>
+      </div>
       <div class="pos-pay-tiles" id="posPayTiles">
         <button type="button" class="pos-pay-tile cash" data-pay-fill="payCash"><b>NAKİT</b><small>Kalanı yaz</small></button>
         <button type="button" class="pos-pay-tile card" data-pay-fill="payCard"><b>KART</b><small>Kalanı yaz</small></button>
@@ -825,23 +855,23 @@ body.inv-full #pageTitle{font-size:18px}
         </div>
         <div id="payBalanceHint" class="sales-pay-balance ok">Ödemeyi net tutara eşitleyin.</div>
       </div>
+
+      <div class="sales-promissory-options hidden" id="salesPromissoryOptions">
+        <div class="sales-promissory-title"><b>Senet planı</b><small id="salesPromissoryWarn">Vade ve taksit girin.</small></div>
+        <div class="sales-discount-row">
+          <label>Taksit adedi<input id="salesPromissoryInstallments" max="36" min="1" type="number" value="1"/></label>
+          <label>Aralık (ay)<input id="salesPromissoryInterval" max="12" min="1" type="number" value="1"/></label>
+        </div>
+        <label style="margin-top:8px">İlk vade<input id="salesPromissoryFirstDue" type="date"/></label>
+        <label style="margin-top:8px">Açıklama<input id="salesPromissoryDescription" placeholder="Ürün satışı senet planı"/></label>
+        <div id="salesPromissorySchedule" class="sales-promissory-schedule"></div>
+        <div class="senet-print-tip">Sözleşme + Senet <b>tek A4</b> sayfada basılır. Aşağıda “Senet + Sözleşme Bas” veya satış sonrası otomatik açılır.</div>
+      </div>
     </div>
 
     <input id="salesPaidAmount" type="hidden" value="0"/>
     <input id="salesPaymentMethod" type="hidden" value="Karma"/>
     <select id="salesAccount" class="hidden"></select>
-
-    <div class="sales-promissory-options hidden" id="salesPromissoryOptions">
-      <div class="sales-promissory-title"><b>Senet planı</b><small id="salesPromissoryWarn">Vade ve taksit girin.</small></div>
-      <div class="sales-discount-row">
-        <label>Taksit adedi<input id="salesPromissoryInstallments" max="36" min="1" type="number" value="1"/></label>
-        <label>Aralık (ay)<input id="salesPromissoryInterval" max="12" min="1" type="number" value="1"/></label>
-      </div>
-      <label style="margin-top:8px">İlk vade<input id="salesPromissoryFirstDue" type="date"/></label>
-      <label style="margin-top:8px">Açıklama<input id="salesPromissoryDescription" placeholder="Ürün satışı senet planı"/></label>
-      <div id="salesPromissorySchedule" class="sales-promissory-schedule"></div>
-      <div class="senet-print-tip">Sözleşme + Senet <b>tek A4</b> sayfada basılır. Aşağıda “Senet + Sözleşme Bas” veya satış sonrası otomatik açılır.</div>
-    </div>
 
     <div class="sc-sec" style="margin-top:12px">
       <div class="sc-sec-title"><span>Fatura & not</span></div>
@@ -1694,5 +1724,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v6"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v7"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Satış Operasyon Personel</title>
 <link rel="icon" href="/assets/favicon.png">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v6">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v7">
 </head>
 <body>
 
@@ -348,10 +348,29 @@
     <div id="payMethodPreview" class="pay-method-preview">Ödeme seçilmedi</div>
   </div>
 
-  <div class="sc-sec pay-inline-box">
+  <div class="sc-sec sales-pay-plan-gate">
     <div class="sales-payments-title">
-      <b>Ödeme yöntemi — butona bas, kalanı yazar</b>
-      <small>Admin ile aynı: NAKİT · KART · HAVALE · VADELİ · SENET</small>
+      <b>Ödeme planı</b>
+      <small>Admin ile aynı — planı açıp yöntem seçin</small>
+    </div>
+    <div class="sales-pay-plan-summary" id="salesPayPlanSummary">
+      <div><small>Dağıtılan</small><b id="payAllocatedSummary">₺0,00</b></div>
+      <div><small>Kalan</small><b id="payRemainingSummary">₺0,00</b></div>
+      <div class="wide"><small>Seçili</small><b id="payMethodSummary">Henüz seçilmedi</b></div>
+    </div>
+    <button type="button" class="sales-pay-plan-btn" id="salesPayPlanToggleBtn" aria-expanded="false">
+      <span>ÖDEME PLANI</span>
+      <small id="salesPayPlanBtnHint">NAKİT · KART · HAVALE · VADELİ · SENET</small>
+    </button>
+  </div>
+
+  <div class="sc-sec sales-pay-plan-panel pay-inline-box hidden" id="salesPayPlanPanel" aria-hidden="true">
+    <div class="sales-payments-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <b>Ödeme yöntemi seç (kalanı yazar)</b>
+        <small>NAKİT · KART · HAVALE · VADELİ · SENET</small>
+      </div>
+      <button type="button" class="sales-pay-plan-close" id="salesPayPlanCloseBtn">Kapat</button>
     </div>
     <div class="pos-pay-tiles" id="posPayTilesInline">
       <button type="button" class="pos-pay-tile cash" data-pay-fill="payCash"><b>NAKİT</b><small>Kalanı yaz</small></button>
@@ -361,6 +380,10 @@
       <button type="button" class="pos-pay-tile note" data-pay-fill="payNote"><b>SENET</b><small>Vade planı</small></button>
     </div>
     <div class="sales-payments-box">
+      <div class="sales-payments-title">
+        <b>Detaylı dağılım</b>
+        <small>İstersen tutarı elle yaz · hesap seç · KALAN butonu</small>
+      </div>
       <div class="sc-pay-cols"><span>Yöntem</span><span>Tutar</span><span>Hesap</span><span></span></div>
       <div class="sales-pay-list">
         <div class="pay-method pay-cash">
@@ -405,13 +428,14 @@
       <label class="field">Aralık (ay)<input id="promissoryInterval" type="number" min="1" max="12" value="1"></label>
       <label class="field">İlk vade<input id="promissoryFirstDue" type="date"></label>
     </div>
-    <label class="field" style="margin-top:12px">Fatura
-      <select id="salesInvoiceStatus">
-        <option value="not_required" selected>Fatura gerekmiyor</option>
-        <option value="pending">Daha sonra kes (Kesilmeyen’e düşer)</option>
-      </select>
-    </label>
   </div>
+
+  <label class="field" style="margin-top:12px">Fatura
+    <select id="salesInvoiceStatus">
+      <option value="not_required" selected>Fatura gerekmiyor</option>
+      <option value="pending">Daha sonra kes (Kesilmeyen’e düşer)</option>
+    </select>
+  </label>
 
   <div class="pos-nav">
     <button id="salesBack3" class="ghost-btn" type="button">← Ürün</button>
@@ -477,6 +501,6 @@
 </main>
 </div>
 
-<script src="/assets/personel.js?v=fix-v6"></script>
+<script src="/assets/personel.js?v=fix-v7"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v6 */
+/* ATAK_PERSONEL_BUILD=fix-v7 */
 const $=s=>document.querySelector(s);
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
 
@@ -444,6 +444,7 @@ function salesReset(){
   if($('#promissoryInterval'))$('#promissoryInterval').value='1';
   $('#salesSavePrintInlineBtn')?.classList.add('hidden');
   if($('#payInlineStatus'))$('#payInlineStatus').textContent='';
+  setSalesPayPlanOpen(false);
   salesCustomerChanged();
   renderProducts();
   renderCart();
@@ -659,7 +660,26 @@ function paySplits(){
     note:Math.max(0,num($('#payNote')?.value))
   };
 }
+function salesPayPlanIsOpen(){
+  return !$('#salesPayPlanPanel')?.classList.contains('hidden');
+}
+function setSalesPayPlanOpen(open){
+  const panel=$('#salesPayPlanPanel');
+  const btn=$('#salesPayPlanToggleBtn');
+  if(!panel)return;
+  panel.classList.toggle('hidden',!open);
+  panel.setAttribute('aria-hidden',open?'false':'true');
+  if(btn){
+    btn.setAttribute('aria-expanded',open?'true':'false');
+    const label=btn.querySelector('span');
+    if(label)label.textContent=open?'ÖDEME PLANINI GİZLE':'ÖDEME PLANI';
+  }
+  if(open){
+    setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'nearest'}),40);
+  }
+}
 function salesFillRemainingTo(fieldId){
+  setSalesPayPlanOpen(true);
   const map={payCash:'cash',payCard:'card',payTransfer:'transfer',payCredit:'credit',payNote:'note'};
   const key=map[fieldId];if(!key)return;
   const net=cartNet();
@@ -685,6 +705,21 @@ function salesRecalcPay(){
   if($('#payNet'))$('#payNet').textContent=money(net);
   if($('#payAllocated'))$('#payAllocated').textContent=money(allocated);
   if($('#payRemaining'))$('#payRemaining').textContent=money(Math.max(0,remaining));
+  if($('#payAllocatedSummary'))$('#payAllocatedSummary').textContent=money(allocated);
+  if($('#payRemainingSummary'))$('#payRemainingSummary').textContent=money(Math.max(0,remaining));
+  const parts=[];
+  if(s.cash>0)parts.push(`Nakit ${money(s.cash)}`);
+  if(s.card>0)parts.push(`Kart ${money(s.card)}`);
+  if(s.transfer>0)parts.push(`Havale ${money(s.transfer)}`);
+  if(s.credit>0)parts.push(`Vadeli ${money(s.credit)}`);
+  if(s.note>0)parts.push(`Senet ${money(s.note)}`);
+  const methodLabel=parts.length?parts.join(' + '):'';
+  if($('#payMethodSummary'))$('#payMethodSummary').textContent=methodLabel||'Henüz seçilmedi';
+  if($('#salesPayPlanBtnHint')){
+    $('#salesPayPlanBtnHint').textContent=Math.abs(remaining)<0.009&&net>0
+      ?`Ödeme tamam · ${methodLabel||'Karma'}`
+      :(remaining>0?`Kalan ${money(remaining)} — planı açın`:'NAKİT · KART · HAVALE · VADELİ · SENET');
+  }
   const dealer=(salesData?.dealerSettings||[]).find(d=>String(d.id)===String($('#salesDealer')?.value||''));
   const prim=Math.round((net*Number(dealer?.commissionPct||0)/100)*100)/100;
   if($('#salesCommissionPreview'))$('#salesCommissionPreview').textContent=`Prim: ${money(prim)}${dealer?` · ${dealer.name}`:''}`;
@@ -694,17 +729,10 @@ function salesRecalcPay(){
     else if(remaining>0){hint.className='sales-pay-balance warn';hint.textContent=`Henüz ${money(remaining)} dağıtılmadı. Nakit/kart/havale/vadeli/senet girin.`;}
     else{hint.className='sales-pay-balance bad';hint.textContent=`Dağıtılan tutar netten ${money(Math.abs(remaining))} fazla.`;}
   }
-  const parts=[];
-  if(s.cash>0)parts.push(`Nakit ${money(s.cash)}`);
-  if(s.card>0)parts.push(`Kart ${money(s.card)}`);
-  if(s.transfer>0)parts.push(`Havale ${money(s.transfer)}`);
-  if(s.credit>0)parts.push(`Vadeli ${money(s.credit)}`);
-  if(s.note>0)parts.push(`Senet ${money(s.note)}`);
   const preview=$('#payMethodPreview');
-  if(preview)preview.textContent=parts.length?`Seçili ödeme: ${parts.join(' + ')}`:'Ödeme seçilmedi — aşağıdan dağıtın veya KALAN kullanın';
+  if(preview)preview.textContent=parts.length?`Seçili ödeme: ${parts.join(' + ')}`:'Ödeme seçilmedi — ÖDEME PLANI butonundan dağıtın';
   $('#promissoryWrap')?.classList.toggle('hidden',s.note<=0);
   $('#salesSavePrintInlineBtn')?.classList.toggle('hidden',s.note<=0);
-  // Aktif yöntemleri vurgula (admin gibi)
   const onMap={payCash:s.cash>0,payCard:s.card>0,payTransfer:s.transfer>0,payCredit:s.credit>0,payNote:s.note>0};
   document.querySelectorAll('.pos-pay-tile[data-pay-fill]').forEach(btn=>{
     btn.classList.toggle('on',Boolean(onMap[btn.getAttribute('data-pay-fill')]));
@@ -712,8 +740,9 @@ function salesRecalcPay(){
 }
 function openPayScreen(){
   syncPayAccounts();
+  setSalesPayPlanOpen(false);
   salesRecalcPay();
-  document.querySelector('#posPayTilesInline')?.scrollIntoView({behavior:'smooth',block:'center'});
+  document.querySelector('#salesPayPlanToggleBtn')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
 function closePayScreen(){ /* inline ödeme — modal yok */ }
 function printSaleDocs(url){
@@ -735,7 +764,7 @@ async function saveSale(printSenet=false){
   if(net<=0){st.textContent='Net tutar 0 olamaz';return}
   const s=paySplits();
   const allocated=Math.round((s.cash+s.card+s.transfer+s.credit+s.note)*100)/100;
-  if(allocated<=0){st.textContent='Ödeme butonlarından birine basın (NAKİT/KART/…) veya tutar girin';return}
+  if(allocated<=0){st.textContent='ÖDEME PLANI butonunu açın — NAKİT/KART/… seçin veya tutar girin';return}
   if(Math.abs(allocated-net)>0.009){st.textContent=`Dağılım nete eşit olmalı. Net ${money(net)} · Dağıtılan ${money(allocated)} · Kalan ${money(net-allocated)}`;return}
   if(s.note>0 && !$('#promissoryFirstDue')?.value){st.textContent='Senet için ilk vade girin';return}
   if(s.cash>0 && !$('#payCashAccount')?.value){st.textContent='Nakit için kasa seçin';return}
@@ -850,6 +879,8 @@ $('#salesDealer')?.addEventListener('change',salesRecalcPay);
 document.querySelectorAll('[data-pay-fill]').forEach(btn=>{
   btn.addEventListener('click',()=>salesFillRemainingTo(btn.getAttribute('data-pay-fill')));
 });
+$('#salesPayPlanToggleBtn')?.addEventListener('click',()=>setSalesPayPlanOpen(!salesPayPlanIsOpen()));
+$('#salesPayPlanCloseBtn')?.addEventListener('click',()=>setSalesPayPlanOpen(false));
 $('#salesSaveInlineBtn')?.addEventListener('click',()=>saveSale(false));
 $('#salesSavePrintInlineBtn')?.addEventListener('click',()=>saveSale(true));
 

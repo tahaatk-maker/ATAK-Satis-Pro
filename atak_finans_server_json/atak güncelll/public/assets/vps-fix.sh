@@ -1,9 +1,9 @@
 #!/bin/bash
-# ATAK VPS kesin deploy (fix-v5) — health 6.3.6 olmadan DONE yazmaz
+# ATAK VPS kesin deploy (fix-v7) — health 6.3.8-pay-plan olmadan DONE yazmaz
 set -euo pipefail
 BRANCH=cursor/satis-merkezi-iskonto-prim-bd99
-EXPECT_HEALTH=6.3.7-staff-pos
-EXPECT_BUILD=fix-v6
+EXPECT_HEALTH=6.3.8-pay-plan
+EXPECT_BUILD=fix-v7
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 exec > >(tee "$OUT") 2>&1
@@ -25,8 +25,12 @@ test -f "$SRC/server.js"
 test -f "$SRC/public/admin.html"
 grep -q "$EXPECT_HEALTH" "$SRC/server.js"
 grep -q "ATAK_ADMIN_BUILD=$EXPECT_BUILD" "$SRC/public/assets/admin.js"
+grep -q "ATAK_PERSONEL_BUILD=$EXPECT_BUILD" "$SRC/public/assets/personel.js"
+grep -q 'id="salesPayPlanToggleBtn"' "$SRC/public/admin.html"
+grep -q 'id="salesPayPlanToggleBtn"' "$SRC/public/personel.html"
 grep -q 'data-finance-jump="uninvoiced"' "$SRC/public/admin.html"
 grep -q "admin.js?v=$EXPECT_BUILD" "$SRC/public/admin.html"
+grep -q "personel.js?v=$EXPECT_BUILD" "$SRC/public/personel.html"
 echo "SRC_OK=$SRC"
 echo "SRC_ADMIN_MD5=$(md5sum "$SRC/public/assets/admin.js" | awk '{print $1}')"
 echo "SRC_HTML_MD5=$(md5sum "$SRC/public/admin.html" | awk '{print $1}')"
