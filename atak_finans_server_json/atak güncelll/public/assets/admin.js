@@ -36,18 +36,33 @@ function isMobileUi(){
 }
 function applyUiScale(v){
   // Mobilde zoom dağınıklık yaratıyor — sabit 1
-  const scale=isMobileUi()?'1':String(v||'0.85');
-  document.documentElement.style.zoom=scale;
-  document.documentElement.setAttribute('data-ui-scale',scale);
-  if(!isMobileUi()){try{localStorage.setItem('atak-ui-scale-v4',String(v||scale))}catch(_){}}
+  let scale=isMobileUi()?'1':String(v||'0.95');
+  // Küçük (0.75) ekranı boşaltıyordu — kaldırıldı
+  if(scale==='0.75')scale='0.95';
+  if(!['0.85','0.95','1'].includes(scale))scale='0.95';
+  const n=Number(scale)||1;
+  const root=document.documentElement;
+  root.style.zoom=scale;
+  // zoom < 1 iken tarayıcı altta/sağda boşluk bırakır — genişlik/yükseklik telafi
+  if(n<1){
+    const fill=(100/n).toFixed(4)+'%';
+    root.style.width=fill;
+    root.style.minHeight=fill;
+    root.style.height='auto';
+  }else{
+    root.style.width='';
+    root.style.minHeight='';
+    root.style.height='';
+  }
+  root.setAttribute('data-ui-scale',scale);
+  if(!isMobileUi()){try{localStorage.setItem('atak-ui-scale-v4',scale)}catch(_){}}
   const sel=q('#uiScaleSelect');if(sel&&sel.value!==scale)sel.value=scale;
 }
 function initUiScale(){
-  let scale='0.85';
+  let scale='0.95';
   try{scale=localStorage.getItem('atak-ui-scale-v4')||'0.95'}catch(_){}
-  // Eski “Küçük” kayıtları boşluk bırakıyordu — Normal’e yükselt
   if(scale==='0.75')scale='0.95';
-  if(!['0.75','0.85','0.95','1'].includes(scale))scale='0.95';
+  if(!['0.85','0.95','1'].includes(scale))scale='0.95';
   applyUiScale(scale);
   q('#uiScaleSelect')?.addEventListener('change',e=>applyUiScale(e.target.value));
   window.addEventListener('resize',()=>{if(isMobileUi())applyUiScale('1')});

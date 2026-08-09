@@ -406,30 +406,42 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 @media(max-width:780px){.permission-grid{grid-template-columns:1fr}.permission-editor-head{align-items:flex-start;flex-direction:column}}
 
 /* ===== Density + UI scale — menü geniş, ekran dolu ===== */
-html{font-size:14px}
+html{font-size:14px;box-sizing:border-box}
+html,body{background:var(--paper)}
+body{margin:0;min-height:100vh}
 .ui-scale-wrap{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--line);border-radius:9px;background:#f7f9fc;font-size:11px;font-weight:800;color:var(--navy);white-space:nowrap}
 .ui-scale-wrap select{min-height:28px!important;padding:2px 6px!important;font-size:12px!important;border:1px solid var(--line);border-radius:7px;background:#fff}
-.app{grid-template-columns:272px minmax(0,1fr);min-height:100vh;align-items:stretch}
-aside{padding:10px 12px 56px;position:sticky;top:0;height:100vh;overflow:hidden}
-.aside-brand.beta-brand{height:96px;margin:0 -12px 8px;padding:8px}
-.aside-brand.beta-brand img{width:100%;height:80px;object-fit:contain}
+.app{grid-template-columns:308px minmax(0,1fr)!important;min-height:100vh;width:100%;align-items:stretch}
+aside{
+  padding:12px 14px 60px!important;position:sticky;top:0;height:100vh;min-height:100vh;
+  width:100%!important;max-width:none!important;overflow:hidden;box-sizing:border-box
+}
+.aside-brand.beta-brand{height:100px;margin:0 -14px 10px;padding:8px 10px}
+.aside-brand.beta-brand img{width:100%;height:84px;object-fit:contain}
 .aside-brand{padding:0 2px 8px}
-.aside-brand img{max-height:44px;width:auto}
-aside nav{height:calc(100vh - 170px);overflow:auto;padding:2px 0 10px;gap:2px}
-.menu-label{padding:10px 12px 4px;font-size:10px;letter-spacing:1.2px}
+.aside-brand img{max-height:48px;width:auto}
+aside nav{height:calc(100vh - 180px);overflow:auto;padding:4px 0 12px;gap:3px}
+.menu-label{padding:12px 14px 5px;font-size:11px;letter-spacing:1.3px;color:#9ec0ea}
 aside nav button,aside nav a,aside summary,
 nav button,nav a,.logout{
-  min-height:40px;padding:8px 12px;border-radius:10px;font-size:13px;font-weight:750;line-height:1.25
+  min-height:44px;padding:10px 14px;border-radius:10px;font-size:14px;font-weight:750;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
 }
-.logout{left:12px;right:12px;bottom:10px;height:44px;font-size:13px}
-main{padding:12px 18px 18px!important;min-width:0;min-height:100vh;box-sizing:border-box}
-.v4-topbar,header{min-height:56px!important;margin:0 -18px 14px!important;padding:8px 18px!important}
+.nav-submenu button,.v4-website-submenu button,.v4-website-submenu a{min-height:38px;font-size:13px;padding-left:18px}
+.logout{left:14px;right:14px;bottom:12px;height:46px;font-size:14px}
+main{padding:12px 20px 20px!important;min-width:0;min-height:100vh;box-sizing:border-box;display:flex;flex-direction:column}
+main>.tab.active{flex:1 1 auto}
+.v4-topbar,header{min-height:56px!important;margin:0 -20px 14px!important;padding:8px 20px!important}
 .v4-page-heading h1,header h1{font-size:20px!important;margin:1px 0 0!important}
-.v4-footer,footer.v4-footer{margin-top:12px;padding:12px 4px;font-size:12px}
-.v4-dashboard .v4-health-panel,.v4-dashboard .v4-actions-panel{margin-bottom:10px}
+.v4-footer,footer.v4-footer{margin-top:auto;padding:14px 4px;font-size:12px}
+.v4-dashboard .v4-health-panel,.v4-dashboard .v4-actions-panel{margin-bottom:12px}
 .v4-metric-grid,.stats{margin-bottom:12px}
 @media(min-width:1200px){
-  .app{grid-template-columns:minmax(272px,18vw) minmax(0,1fr)}
+  .app{grid-template-columns:minmax(308px,20vw) minmax(0,1fr)!important}
+}
+@media(max-width:950px){
+  .app{grid-template-columns:1fr!important}
+  aside{width:min(320px,88vw)!important}
 }
 .v4-search-wrap input{min-height:32px!important;font-size:12px}
 .panel,.stat{padding:10px!important;border-radius:10px!important}
