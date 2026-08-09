@@ -392,7 +392,7 @@ button.primary,.primary,button{font-size:12px}
 .sales-center-head-actions .secondary-btn{min-height:30px;padding:4px 10px}
 .sales-center-layout{grid-template-columns:minmax(0,1.7fr) minmax(280px,340px);gap:8px;align-items:start}
 .sales-main-column{gap:8px}
-.sales-summary-panel{position:sticky;top:56px;gap:6px;max-height:calc(100vh - 64px);overflow:auto;padding:8px!important}
+.sales-summary-panel{position:sticky;top:52px;gap:5px;max-height:calc(100vh - 56px);overflow:auto;padding:8px!important;padding-bottom:48px!important}
 .sales-summary-panel label{gap:2px;font-size:10px}
 .sales-summary-panel h3{margin:0;font-size:14px}
 .sales-summary-panel .eyebrow{font-size:9px}
