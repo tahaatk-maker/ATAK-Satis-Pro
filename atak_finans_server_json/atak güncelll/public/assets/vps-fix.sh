@@ -1,9 +1,9 @@
 #!/bin/bash
-# ATAK VPS kesin deploy (fix-v15) — health 6.3.16-no-finance-uninvoiced olmadan DONE yazmaz
+# ATAK VPS kesin deploy (fix-v16) — health 6.3.17-dashboard-beko-istikbal olmadan DONE yazmaz
 set -euo pipefail
 BRANCH=cursor/satis-merkezi-iskonto-prim-bd99
-EXPECT_HEALTH=6.3.16-no-finance-uninvoiced
-EXPECT_BUILD=fix-v15
+EXPECT_HEALTH=6.3.17-dashboard-beko-istikbal
+EXPECT_BUILD=fix-v16
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 exec > >(tee "$OUT") 2>&1
@@ -158,7 +158,7 @@ done
 echo "PUBLIC https://panel.atakhome.com.tr/web-admin-assets/_deploy-check.txt"
 echo "PUBLIC https://atakhome.com.tr/assets/_deploy-check.txt"
 echo "CHECK_HEALTH https://panel.atakhome.com.tr/health  (must contain $EXPECT_HEALTH)"
-echo "CHECK_HTML https://panel.atakhome.com.tr/web-admin  (must contain fix-v15; must NOT contain finance-jump uninvoiced)"
+echo "CHECK_HTML https://panel.atakhome.com.tr/web-admin  (must contain fix-v16; must NOT contain finance-jump uninvoiced)"
 
 if [ -n "$FAIL_MSG" ]; then
   echo "DEPLOY_FAILED"

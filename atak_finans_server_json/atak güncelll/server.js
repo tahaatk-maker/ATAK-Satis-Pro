@@ -469,8 +469,18 @@ function txBelongsToActor(tx,actor){
   if(username&&(by===username||sp===username))return true;
   return false;
 }
-function dealerBrandKey(dealerId=''){
-  const d=String(dealerId||'').toLowerCase();
+function dealerBrandKey(dealerOrTx=''){
+  // id / name / satış kaydı — İstikbal / Beko ayrımı
+  let blob='';
+  if(dealerOrTx && typeof dealerOrTx==='object'){
+    blob=[
+      dealerOrTx.dealerId,dealerOrTx.dealerName,dealerOrTx.dealer,
+      ...(Array.isArray(dealerOrTx.items)?dealerOrTx.items.map(i=>`${i.brand||''} ${i.productName||''} ${i.productCode||''}`):[])
+    ].join(' ');
+  }else{
+    blob=String(dealerOrTx||'');
+  }
+  const d=blob.toLocaleLowerCase('tr-TR');
   if(d.includes('istikbal'))return 'istikbal';
   if(d.includes('beko'))return 'beko';
   return 'other';
@@ -480,7 +490,7 @@ function buildSalesCiro(salesRows){
   const byPerson=new Map();
   for(const t of salesRows||[]){
     const amount=saleAmount(t);
-    const key=dealerBrandKey(t.dealerId);
+    const key=dealerBrandKey(t);
     brand[key]=(brand[key]||0)+amount;
     brand.total+=amount;
     brand.count+=1;
@@ -700,8 +710,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.16-no-finance-uninvoiced',
-  build:'fix-v15',
+  version:'6.3.17-dashboard-beko-istikbal',
+  build:'fix-v16',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -2098,14 +2108,16 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
   if(dealerId)all=all.filter(t=>String(t.dealerId||'')===dealerId);
 
   const byPerson=new Map();
+  const brand={beko:0,istikbal:0,other:0,bekoCount:0,istikbalCount:0,otherCount:0};
   let gross=0,grossCount=0,net=0,netCount=0,cancelled=0,cancelledCount=0,discount=0,commission=0,primLost=0;
   for(const t of all){
     const amount=saleAmount(t);
     const g=Number(t.grossTotal!=null && t.grossTotal!==''?t.grossTotal:amount)||0;
     const comm=Number(t.commissionAmount||0);
+    const bKey=dealerBrandKey(t);
     const pid=String(t.salespersonId||t.salespersonName||t.createdBy||'unknown');
     const pname=String(t.salespersonName||t.createdBy||'Personel');
-    if(!byPerson.has(pid))byPerson.set(pid,{id:pid,name:pname,gross:0,net:0,count:0,cancelled:0,cancelledCount:0,commission:0,primLost:0,discount:0});
+    if(!byPerson.has(pid))byPerson.set(pid,{id:pid,name:pname,gross:0,net:0,count:0,cancelled:0,cancelledCount:0,commission:0,primLost:0,discount:0,beko:0,istikbal:0,other:0});
     const row=byPerson.get(pid);
     gross+=g;grossCount+=1;discount+=Math.max(0,g-amount);
     if(t.cancelled){
@@ -2116,12 +2128,16 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
     }else{
       net+=amount;netCount+=1;commission+=comm;
       row.gross+=g;row.net+=amount;row.count+=1;row.commission+=comm;row.discount+=Math.max(0,g-amount);
+      brand[bKey]=(brand[bKey]||0)+amount;
+      brand[bKey+'Count']=(brand[bKey+'Count']||0)+1;
+      row[bKey]=(row[bKey]||0)+amount;
     }
   }
   const ranking=[...byPerson.values()].map(x=>({
     ...x,
     gross:round(x.gross),net:round(x.net),cancelled:round(x.cancelled),
-    commission:round(x.commission),primLost:round(x.primLost),discount:round(x.discount)
+    commission:round(x.commission),primLost:round(x.primLost),discount:round(x.discount),
+    beko:round(x.beko),istikbal:round(x.istikbal),other:round(x.other)
   })).sort((a,b)=>b.net-a.net||b.count-a.count||a.name.localeCompare(b.name,'tr'));
 
   const pendingByTarget=new Map();
@@ -2132,6 +2148,7 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
     const pendEdit=pendingByTarget.get(`sale_edit:${t.id}`);
     return{
       id:t.id,date:t.date,reference:t.reference||'',dealerId:t.dealerId||'',dealerName:t.dealerName||'',
+      brand:dealerBrandKey(t),
       salespersonId:t.salespersonId||'',salespersonName:t.salespersonName||t.createdBy||'',
       customerName:c?.name||'',grossTotal:Number(t.grossTotal||t.total||0),total:Number(t.total||0),
       discountPct:Number(t.discountPct||0),commissionAmount:Number(t.commissionAmount||0),
@@ -2150,7 +2167,18 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
       cancelledCount,
       discount:round(discount),
       commission:round(commission),
-      primLost:round(primLost)
+      primLost:round(primLost),
+      beko:round(brand.beko),
+      istikbal:round(brand.istikbal),
+      other:round(brand.other),
+      bekoCount:brand.bekoCount||0,
+      istikbalCount:brand.istikbalCount||0,
+      otherCount:brand.otherCount||0
+    },
+    brand:{
+      beko:{amount:round(brand.beko),orderCount:brand.bekoCount||0},
+      istikbal:{amount:round(brand.istikbal),orderCount:brand.istikbalCount||0},
+      other:{amount:round(brand.other),orderCount:brand.otherCount||0}
     },
     ranking,
     rows,
@@ -3251,12 +3279,26 @@ app.get('/web-api/admin/revenue-summary',requireAdmin,(req,res)=>{
     manual[ch]+=normalizeNumber(x.amount??x.netAmount??0);
     counts[ch]+=Math.max(0,Math.round(normalizeNumber(x.orderCount||0)));
   }
+  // POS satışları (Satış Merkezi) — dealer / ürün markasına göre Beko & İstikbal
+  const pos={beko:0,istikbal:0,other:0};
+  const posCounts={beko:0,istikbal:0,other:0};
+  for(const t of (s.financeTransactions||[])){
+    if(t.kind!=='sale'||t.cancelled)continue;
+    const key=txDateKey(t);
+    if(!key||key<startDate||key>endDate)continue;
+    const b=dealerBrandKey(t);
+    const amount=saleAmount(t);
+    pos[b]=(pos[b]||0)+amount;
+    posCounts[b]=(posCounts[b]||0)+1;
+  }
+  const round=n=>Math.round(Number(n||0)*100)/100;
   const atakhome=atakHomeRevenue(s,startDate,endDate);
   res.json({startDate,endDate,channels:{
-    beko:{amount:manual.beko,orderCount:counts.beko,source:'manual'},
-    istikbal:{amount:manual.istikbal,orderCount:counts.istikbal,source:'manual'},
+    beko:{amount:round(manual.beko+pos.beko),orderCount:counts.beko+posCounts.beko,source:'pos+manual',posAmount:round(pos.beko),manualAmount:round(manual.beko)},
+    istikbal:{amount:round(manual.istikbal+pos.istikbal),orderCount:counts.istikbal+posCounts.istikbal,source:'pos+manual',posAmount:round(pos.istikbal),manualAmount:round(manual.istikbal)},
     atakhome:{amount:atakhome.netAmount,orderCount:atakhome.orderCount,source:'automatic',grossAmount:atakhome.grossAmount,returnAmount:atakhome.returnAmount},
-    hepsiburada:{amount:manual.hepsiburada,orderCount:counts.hepsiburada,source:'manual'}
+    hepsiburada:{amount:round(manual.hepsiburada),orderCount:counts.hepsiburada,source:'manual'},
+    otherPos:{amount:round(pos.other),orderCount:posCounts.other,source:'pos'}
   }});
 });
 

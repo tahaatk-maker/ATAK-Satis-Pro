@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v15 */
+/* ATAK_ADMIN_BUILD=fix-v16 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -123,13 +123,28 @@ async function renderDashboardRevenue(){
     dashboardRevenue=await fetchRevenueSummary(d,d).catch(()=>({channels:{beko:{amount:0,orderCount:0},istikbal:{amount:0,orderCount:0},atakhome:{amount:0,orderCount:0},hepsiburada:{amount:0,orderCount:0}}}));
     const c=dashboardRevenue.channels||{};
     const ch=(k)=>({amount:Number(c[k]?.amount||0),orderCount:Number(c[k]?.orderCount||0)});
-    const beko=ch('beko'),istikbal=ch('istikbal'),atakhome=ch('atakhome'),hb=ch('hepsiburada');
-    let netToday=0,netCount=0,primToday=0;
+    let beko=ch('beko'),istikbal=ch('istikbal');
+    const atakhome=ch('atakhome'),hb=ch('hepsiburada');
+    let netToday=0,netCount=0,primToday=0,otherPos=0,otherPosCount=0;
     try{
       const board=await api('/web-api/admin/sales-prim-board?period=day&date='+encodeURIComponent(d));
       netToday=Number(board.summary?.net||0);
       netCount=Number(board.summary?.count||board.summary?.netCount||0);
       primToday=Number(board.summary?.commission||board.summary?.primEarned||0);
+      // POS bayi ayrımı (Atak Beko / Atak İstikbal) — dashboard kartlarının asıl kaynağı
+      if(board.brand||board.summary?.beko!=null){
+        const b=board.brand||{};
+        beko={
+          amount:Number(b.beko?.amount??board.summary?.beko??beko.amount)||0,
+          orderCount:Number(b.beko?.orderCount??board.summary?.bekoCount??beko.orderCount)||0
+        };
+        istikbal={
+          amount:Number(b.istikbal?.amount??board.summary?.istikbal??istikbal.amount)||0,
+          orderCount:Number(b.istikbal?.orderCount??board.summary?.istikbalCount??istikbal.orderCount)||0
+        };
+        otherPos=Number(b.other?.amount??board.summary?.other??0)||0;
+        otherPosCount=Number(b.other?.orderCount??board.summary?.otherCount??0)||0;
+      }
     }catch(_){
       // Eski sunucu / prim board yok: POS satışlarını finance-center'dan say
       try{
@@ -141,16 +156,28 @@ async function renderDashboardRevenue(){
         },0);
         netCount=sales.length;
         primToday=sales.reduce((a,t)=>a+Number(t.commissionAmount||t.commission||0),0);
+        const split={beko:0,istikbal:0,other:0,bekoCount:0,istikbalCount:0,otherCount:0};
+        for(const t of sales){
+          const blob=`${t.dealerId||''} ${t.dealerName||''}`.toLocaleLowerCase('tr-TR');
+          const key=blob.includes('istikbal')?'istikbal':blob.includes('beko')?'beko':'other';
+          const v=Math.abs(Number(t.total??t.net??t.amount??0));
+          split[key]+=v;split[key+'Count']+=1;
+        }
+        beko={amount:split.beko,orderCount:split.bekoCount};
+        istikbal={amount:split.istikbal,orderCount:split.istikbalCount};
+        otherPos=split.other;otherPosCount=split.otherCount;
       }catch(__){}
     }
-    const channelTotal=beko.amount+istikbal.amount+atakhome.amount+hb.amount;
+    const channelTotal=beko.amount+istikbal.amount+atakhome.amount+hb.amount+otherPos;
     const total=Math.max(channelTotal,netToday);
+    const otherLine=otherPos>0?`<div class="stat channel other"><small>Diğer POS bugün</small><strong>${money(otherPos)}</strong><em>${otherPosCount} satış · bayi seçilmemiş</em></div>`:'';
     q('#stats').innerHTML=`
       <div class="stat net-today"><small>Bugün NET Satış (POS)</small><strong>${money(netToday)}</strong><em>${netCount} satış · Prim ${money(primToday)}</em></div>
       <div class="stat channel beko"><small>Beko Mağaza bugün</small><strong>${money(beko.amount)}</strong><em>${beko.orderCount} satış</em></div>
       <div class="stat channel istikbal"><small>İstikbal bugün</small><strong>${money(istikbal.amount)}</strong><em>${istikbal.orderCount} satış</em></div>
       <div class="stat channel atakhome"><small>AtakHome bugün</small><strong>${money(atakhome.amount)}</strong><em>${atakhome.orderCount} otomatik sipariş</em></div>
       <div class="stat channel hb"><small>Hepsiburada bugün</small><strong>${money(hb.amount)}</strong><em>${hb.orderCount} sipariş</em></div>
+      ${otherLine}
       <div class="stat total"><small>Toplam ciro</small><strong>${money(total)}</strong><em>KDV dahil · POS dahil</em></div>`;
   }catch(e){console.error(e)}
 }
