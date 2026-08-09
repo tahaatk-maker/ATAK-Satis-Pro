@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Satış Operasyon Personel</title>
 <link rel="icon" href="/assets/favicon.png">
-<link rel="stylesheet" href="/assets/personel.css?v=cust-pay-v1">
+<link rel="stylesheet" href="/assets/personel.css?v=pay-split-v1">
 </head>
 <body>
 
@@ -244,7 +244,7 @@
         </table>
       </div>
       <form id="payForm" class="form-grid" style="margin-top:12px">
-        <label>Tutar *<input id="payAmount" type="number" min="0.01" step="0.01" required></label>
+        <label>Tutar *<input id="custPayAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
         <label>Ödeme şekli
           <select id="payMethod"><option>Nakit</option><option>Kredi Kartı</option><option>Havale</option></select>
         </label>
@@ -346,41 +346,76 @@
 </div>
 
 <div id="payScreenModal" class="modal hidden">
-  <div class="modal-card pay-screen">
+  <div class="modal-card pay-screen pay-screen-wide">
     <div class="panel-head">
       <div>
         <small class="eyebrow">ÖDEME</small>
         <h2>Ödeme Ekranı</h2>
-        <p>Ödeme şeklini seçin. Senet seçerseniz kayıttan sonra basabilirsiniz.</p>
+        <p>Tutarı birkaç parçaya bölebilirsiniz (nakit + kart + havale + senet). KALAN kalanı yazar.</p>
       </div>
       <button id="payScreenClose" class="ghost-btn" type="button">Kapat</button>
     </div>
     <div class="pay-net-hero"><span>Net tutar</span><strong id="payScreenNet">₺0,00</strong></div>
-    <div class="pay-method-grid" id="payMethodGrid">
-      <button type="button" class="pay-method-btn" data-method="Nakit"><b>Nakit</b><small>Kasadan tahsil</small></button>
-      <button type="button" class="pay-method-btn" data-method="Kredi Kartı"><b>Kredi Kartı</b><small>POS / banka</small></button>
-      <button type="button" class="pay-method-btn" data-method="Havale"><b>Havale</b><small>Banka transferi</small></button>
-      <button type="button" class="pay-method-btn" data-method="Senet"><b>Senet</b><small>Vadeli / taksit</small></button>
+
+    <div class="pos-pay-tiles" id="posPayTiles">
+      <button type="button" class="pos-pay-tile cash" data-pay-fill="payCash"><b>NAKİT</b><small>Kalanı yaz</small></button>
+      <button type="button" class="pos-pay-tile card" data-pay-fill="payCard"><b>KART</b><small>Kalanı yaz</small></button>
+      <button type="button" class="pos-pay-tile transfer" data-pay-fill="payTransfer"><b>HAVALE</b><small>Kalanı yaz</small></button>
+      <button type="button" class="pos-pay-tile credit" data-pay-fill="payCredit"><b>VADELİ</b><small>Cariye yaz</small></button>
+      <button type="button" class="pos-pay-tile note" data-pay-fill="payNote"><b>SENET</b><small>Vade planı</small></button>
     </div>
-    <div class="pay-grid">
-      <label class="field" id="payAccountWrap">Hesap
-        <select id="payAccountSelect"></select>
-      </label>
-      <label class="field">Tutar
-        <input id="payAmount" type="number" min="0" step="0.01" value="0">
-      </label>
+
+    <div class="sales-payments-box">
+      <div class="sales-payments-title">
+        <b>Detaylı dağılım</b>
+        <small>Her satıra tutar yazın · hesap seçin · KALAN ile kalanı doldurun</small>
+      </div>
+      <div class="sc-pay-cols"><span>Yöntem</span><span>Tutar</span><span>Hesap</span><span></span></div>
+      <div class="sales-pay-list">
+        <div class="pay-method pay-cash">
+          <span class="pay-method-badge">Nakit</span>
+          <input id="payCash" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off" title="Nakit tutar"/>
+          <select id="payCashAccount" title="Nakit kasası"></select>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payCash">KALAN</button>
+        </div>
+        <div class="pay-method pay-card">
+          <span class="pay-method-badge">Kart</span>
+          <input id="payCard" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off" title="Kredi kartı tutar"/>
+          <select id="payCardAccount" title="Kart / POS hesabı"></select>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payCard">KALAN</button>
+        </div>
+        <div class="pay-method pay-transfer">
+          <span class="pay-method-badge">Havale</span>
+          <input id="payTransfer" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off" title="Havale tutar"/>
+          <select id="payTransferAccount" title="Banka hesabı"></select>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payTransfer">KALAN</button>
+        </div>
+        <div class="pay-method pay-credit">
+          <span class="pay-method-badge">Vadeli</span>
+          <input id="payCredit" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off" title="Vadeli / cari"/>
+          <span class="pay-method-hint">Cariye yazılır</span>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payCredit">KALAN</button>
+        </div>
+        <div class="pay-method pay-note">
+          <span class="pay-method-badge">Senet</span>
+          <input id="payNote" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off" title="Senet tutarı"/>
+          <span class="pay-method-hint">Vade planı</span>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payNote">KALAN</button>
+        </div>
+      </div>
+      <div class="sales-pay-sum">
+        <div><span>Dağıtılan</span><b id="payAllocated">₺0,00</b></div>
+        <div><span>Kalan</span><b id="payRemaining">₺0,00</b></div>
+      </div>
+      <div id="payBalanceHint" class="sales-pay-balance warn">Ödemeyi net tutara eşitleyin.</div>
     </div>
-    <div id="promissoryWrap" class="pay-grid hidden">
+
+    <div id="promissoryWrap" class="pay-grid promissory-box hidden">
       <label class="field">Senet taksit<input id="promissoryInstallments" type="number" min="1" max="36" value="1"></label>
+      <label class="field">Aralık (ay)<input id="promissoryInterval" type="number" min="1" max="12" value="1"></label>
       <label class="field">İlk vade<input id="promissoryFirstDue" type="date"></label>
     </div>
-    <!-- gizli alanlar: kayıt için -->
-    <input id="payCash" type="hidden" value="0">
-    <input id="payCard" type="hidden" value="0">
-    <input id="payTransfer" type="hidden" value="0">
-    <input id="payNote" type="hidden" value="0">
-    <select id="payCashAccount" class="hidden"></select>
-    <select id="payBankAccount" class="hidden"></select>
+
     <div class="pay-screen-actions">
       <button id="salesSaveBtn" class="primary-btn" type="button">SATIŞI KAYDET</button>
       <button id="salesSavePrintSenetBtn" class="senet-btn hidden" type="button">KAYDET + SENET BAS</button>
@@ -447,6 +482,6 @@
 </main>
 </div>
 
-<script src="/assets/personel.js?v=customer-dual-billing-v1"></script>
+<script src="/assets/personel.js?v=pay-split-v1"></script>
 </body>
 </html>

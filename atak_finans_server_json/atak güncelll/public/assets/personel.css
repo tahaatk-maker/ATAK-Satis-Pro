@@ -100,18 +100,52 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .pay-summary-card{display:grid;gap:14px;padding:16px;border:1px solid #d5e0ee;border-radius:14px;background:#f8fafc}
 .pay-method-preview{padding:12px 14px;border-radius:10px;background:#eef5ff;border:1px solid #c9dbf2;font-weight:800;color:#0b2a4a}
 .pay-open-btn{min-width:220px;min-height:48px;font-size:15px}
-.pay-screen{width:min(640px,100%)!important}
+.pay-screen{width:min(720px,100%)!important}
+.pay-screen-wide{width:min(760px,100%)!important}
 .pay-net-hero{display:flex;justify-content:space-between;align-items:end;padding:14px 16px;border-radius:14px;background:linear-gradient(135deg,#071a33,#125ea3);color:#fff;margin-bottom:14px}
 .pay-net-hero span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9ec0ef;font-weight:800}
 .pay-net-hero strong{font-size:30px}
-.pay-method-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}
-.pay-method-btn{border:1.5px solid #d5e0ee;border-radius:14px;background:#fff;padding:16px;text-align:left;cursor:pointer;font:inherit}
-.pay-method-btn b{display:block;font-size:16px;color:#0b2a4a}
-.pay-method-btn small{display:block;margin-top:4px;color:#66758a}
-.pay-method-btn.active{border-color:#1565c0;background:#eef5ff;box-shadow:inset 3px 0 0 #1565c0}
-.pay-method-btn[data-method="Senet"].active{border-color:#be123c;background:#fff1f2;box-shadow:inset 3px 0 0 #be123c}
+.pos-pay-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.pos-pay-tile{border:1.5px solid #d5e0ee;border-radius:12px;background:#fff;padding:12px 10px;text-align:left;cursor:pointer;font:inherit}
+.pos-pay-tile b{display:block;font-size:13px;color:#0b2a4a}
+.pos-pay-tile small{display:block;margin-top:3px;color:#66758a;font-size:11px}
+.pos-pay-tile.cash:hover,.pos-pay-tile.cash:focus{border-color:#15803d;background:#f0fdf4}
+.pos-pay-tile.card:hover,.pos-pay-tile.card:focus{border-color:#1565c0;background:#eef5ff}
+.pos-pay-tile.transfer:hover,.pos-pay-tile.transfer:focus{border-color:#0f766e;background:#f0fdfa}
+.pos-pay-tile.credit:hover,.pos-pay-tile.credit:focus{border-color:#a16207;background:#fffbeb}
+.pos-pay-tile.note:hover,.pos-pay-tile.note:focus{border-color:#be123c;background:#fff1f2}
+.sales-payments-box{border:1px solid #ecd9c4;border-radius:14px;background:#fff;overflow:hidden;margin-bottom:12px}
+.sales-payments-title{padding:10px 12px;border-bottom:1px solid #ecd9c4;background:#fff7ed}
+.sales-payments-title b{display:block;font-size:13px;color:#9a3412}
+.sales-payments-title small{display:block;margin-top:2px;font-size:12px;color:#7a5230;font-weight:650}
+.sc-pay-cols{display:grid;grid-template-columns:90px minmax(0,1fr) minmax(0,1.2fr) 72px;gap:8px;padding:8px 12px;font-size:11px;font-weight:800;color:#9a7b2f;text-transform:uppercase;letter-spacing:.04em;background:#fffaf3}
+.sales-pay-list{display:flex;flex-direction:column}
+.pay-method{display:grid;grid-template-columns:90px minmax(0,1fr) minmax(0,1.2fr) 72px;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid #f1e4d4}
+.pay-method-badge{font-size:12px;font-weight:900;color:#0b2a4a}
+.pay-method input{min-height:42px;border:1px solid #d6e0ec;border-radius:8px;padding:8px 10px;font:inherit;font-size:16px;font-variant-numeric:tabular-nums}
+.pay-method select{min-height:42px;border:1px solid #d6e0ec;border-radius:8px;padding:8px;font:inherit;background:#fff}
+.pay-method-hint{font-size:11px;color:#7a879a;font-weight:700}
+.pay-fill-btn{min-height:42px;border:0;border-radius:8px;background:#075eae;color:#fff;font-weight:900;font-size:11px;cursor:pointer;letter-spacing:.03em}
+.pay-fill-btn:hover{background:#0b4d94}
+.sales-pay-sum{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #ecd9c4}
+.sales-pay-sum>div{background:#fff7ed;padding:12px}
+.sales-pay-sum>div+div{border-left:1px solid #ecd9c4}
+.sales-pay-sum span{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#9a3412}
+.sales-pay-sum b{font-size:18px;color:#9a3412;font-variant-numeric:tabular-nums}
+.sales-pay-balance{margin:0;border-top:1px solid #ecd9c4;padding:10px 12px;font-size:12px;font-weight:750;background:#fff}
+.sales-pay-balance.ok{color:#047857;background:#ecfdf5}
+.sales-pay-balance.warn{color:#9a6700;background:#fffbeb}
+.sales-pay-balance.bad{color:#b91c1c;background:#fef2f2}
+.promissory-box{margin-top:4px;padding:12px;border:1px solid #f0c0c8;border-radius:12px;background:#fff1f2}
 .pay-screen-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .senet-btn{border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#e11d48,#9f1239);color:#fff}
+@media(max-width:700px){
+  .pos-pay-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sc-pay-cols{display:none}
+  .pay-method{grid-template-columns:1fr 1fr;gap:8px}
+  .pay-method-badge{grid-column:1/-1}
+  .pay-fill-btn{grid-column:1/-1}
+}
 .totals-box{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
 .totals-box.simple{grid-template-columns:repeat(3,minmax(0,1fr))}
 .totals-box>div{padding:12px;border-radius:10px;background:#fff;border:1px solid #e0e7ef}

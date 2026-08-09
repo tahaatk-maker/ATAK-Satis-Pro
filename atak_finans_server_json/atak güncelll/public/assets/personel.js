@@ -17,7 +17,6 @@ let salesCustomerTotal=0;
 let salesAccounts=[];
 let salesCart=[];
 let salesStep=1;
-let selectedPayMethod='';
 let lastSaleDocsUrl='';
 let cancelDraft=null;
 
@@ -399,7 +398,6 @@ function setSalesStep(step){
 }
 function salesReset(){
   salesCart=[];
-  selectedPayMethod='';
   lastSaleDocsUrl='';
   salesCustomers=[];
   if($('#customerSearchSale'))$('#customerSearchSale').value='';
@@ -407,11 +405,12 @@ function salesReset(){
   if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=(salesCustomerTotal||0)+' kayıt';
   if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent=`Toplam ${salesCustomerTotal||0} müşteri. Ad / telefon / VKN ile arayıp seçin (tüm liste yüklenmez).`;
   if($('#salesDiscountPct'))$('#salesDiscountPct').value='0';
-  ['#payCash','#payCard','#payTransfer','#payNote','#payAmount'].forEach(id=>{if($(id))$(id).value='0'});
+  ['#payCash','#payCard','#payTransfer','#payCredit','#payNote'].forEach(id=>{if($(id))$(id).value=''});
   if($('#salesDate'))$('#salesDate').value=new Date().toISOString().slice(0,10);
   const due=new Date();due.setDate(due.getDate()+30);
   if($('#promissoryFirstDue'))$('#promissoryFirstDue').value=due.toISOString().slice(0,10);
-  document.querySelectorAll('.pay-method-btn').forEach(b=>b.classList.remove('active'));
+  if($('#promissoryInstallments'))$('#promissoryInstallments').value='1';
+  if($('#promissoryInterval'))$('#promissoryInterval').value='1';
   $('#salesSavePrintSenetBtn')?.classList.add('hidden');
   closePayScreen();
   salesCustomerChanged();
@@ -446,16 +445,7 @@ async function loadSales(){
       $('#salesDealer').innerHTML=(cat.dealerSettings||[]).filter(d=>d.active!==false)
         .map(d=>`<option value="${d.id}">${d.name}</option>`).join('')||'<option value="">Bayi yok</option>';
     }
-    const cashOpts=salesAccounts.filter(a=>a.type==='cash'&&a.active!==false);
-    const bankOpts=salesAccounts.filter(a=>a.type==='bank'&&a.active!==false);
-    const allOpts=salesAccounts.filter(a=>a.active!==false);
-    const fillAcc=(sel,rows)=>{
-      if(!sel)return;
-      const list=rows.length?rows:allOpts;
-      sel.innerHTML=list.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Hesap yok</option>';
-    };
-    fillAcc($('#payCashAccount'),cashOpts);
-    fillAcc($('#payBankAccount'),bankOpts);
+    syncPayAccounts();
     $('#salesScopeHint').textContent=`Satışlar sizin adınıza kaydedilir · ${(cat.products||[]).length} ürün · ${salesCustomerTotal} müşteri`;
     salesReset();
     st.textContent='';
@@ -549,59 +539,78 @@ function syncPayAccounts(){
   const cashOpts=salesAccounts.filter(a=>a.type==='cash'&&a.active!==false);
   const bankOpts=salesAccounts.filter(a=>a.type==='bank'&&a.active!==false);
   const all=salesAccounts.filter(a=>a.active!==false);
-  const list=selectedPayMethod==='Nakit'?(cashOpts.length?cashOpts:all):(bankOpts.length?bankOpts:all);
-  const sel=$('#payAccountSelect');
-  if(sel)sel.innerHTML=list.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Hesap yok</option>';
-  if($('#payCashAccount'))$('#payCashAccount').innerHTML=$('#payAccountSelect')?.innerHTML||'';
-  if($('#payBankAccount'))$('#payBankAccount').innerHTML=$('#payAccountSelect')?.innerHTML||'';
+  const fill=(sel,rows)=>{
+    if(!sel)return;
+    const cur=sel.value;
+    const list=rows.length?rows:all;
+    sel.innerHTML=list.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Hesap yok</option>';
+    if(cur && [...sel.options].some(o=>o.value===cur))sel.value=cur;
+  };
+  fill($('#payCashAccount'),cashOpts);
+  fill($('#payCardAccount'),bankOpts);
+  fill($('#payTransferAccount'),bankOpts);
 }
-function applyPayMethod(method){
-  selectedPayMethod=method||'';
+function paySplits(){
+  return {
+    cash:Math.max(0,num($('#payCash')?.value)),
+    card:Math.max(0,num($('#payCard')?.value)),
+    transfer:Math.max(0,num($('#payTransfer')?.value)),
+    credit:Math.max(0,num($('#payCredit')?.value)),
+    note:Math.max(0,num($('#payNote')?.value))
+  };
+}
+function salesFillRemainingTo(fieldId){
+  const map={payCash:'cash',payCard:'card',payTransfer:'transfer',payCredit:'credit',payNote:'note'};
+  const key=map[fieldId];if(!key)return;
   const net=cartNet();
-  ['#payCash','#payCard','#payTransfer','#payNote'].forEach(id=>{if($(id))$(id).value='0'});
-  document.querySelectorAll('.pay-method-btn').forEach(b=>b.classList.toggle('active',b.dataset.method===selectedPayMethod));
-  const isSenet=selectedPayMethod==='Senet';
-  $('#promissoryWrap')?.classList.toggle('hidden',!isSenet);
-  $('#payAccountWrap')?.classList.toggle('hidden',isSenet);
-  $('#salesSavePrintSenetBtn')?.classList.toggle('hidden',!isSenet);
-  if($('#payAmount'))$('#payAmount').value=String(net);
-  if(selectedPayMethod==='Nakit')$('#payCash').value=String(net);
-  if(selectedPayMethod==='Kredi Kartı')$('#payCard').value=String(net);
-  if(selectedPayMethod==='Havale')$('#payTransfer').value=String(net);
-  if(selectedPayMethod==='Senet')$('#payNote').value=String(net);
-  syncPayAccounts();
-  const acc=$('#payAccountSelect')?.value||'';
-  if(selectedPayMethod==='Nakit'&&$('#payCashAccount'))$('#payCashAccount').value=acc;
-  if((selectedPayMethod==='Kredi Kartı'||selectedPayMethod==='Havale')&&$('#payBankAccount'))$('#payBankAccount').value=acc;
+  const s=paySplits();
+  const current=s[key]||0;
+  const allocated=s.cash+s.card+s.transfer+s.credit+s.note;
+  const others=Math.round((allocated-current)*100)/100;
+  const fill=Math.max(0,Math.round((net-others)*100)/100);
+  const el=$('#'+fieldId);if(!el)return;
+  el.value=fill?String(fill):'';
   salesRecalcPay();
+  el.focus();
+  try{el.select()}catch(_){}
 }
 function salesRecalcPay(){
   const net=cartNet();
-  const amount=num($('#payAmount')?.value)||net;
-  if(selectedPayMethod==='Nakit')$('#payCash').value=String(amount);
-  if(selectedPayMethod==='Kredi Kartı')$('#payCard').value=String(amount);
-  if(selectedPayMethod==='Havale')$('#payTransfer').value=String(amount);
-  if(selectedPayMethod==='Senet')$('#payNote').value=String(amount);
-  const cash=num($('#payCash')?.value),card=num($('#payCard')?.value),tr=num($('#payTransfer')?.value),note=num($('#payNote')?.value);
   const gross=cartGross();
+  const s=paySplits();
+  const allocated=Math.round((s.cash+s.card+s.transfer+s.credit+s.note)*100)/100;
+  const remaining=Math.round((net-allocated)*100)/100;
   if($('#payGross'))$('#payGross').textContent=money(gross);
-  if($('#payDiscount'))$('#payDiscount').textContent=money(gross-net);
+  if($('#payDiscount'))$('#payDiscount').textContent=money(Math.max(0,gross-net));
   if($('#payNet'))$('#payNet').textContent=money(net);
   if($('#payScreenNet'))$('#payScreenNet').textContent=money(net);
-  const preview=$('#payMethodPreview');
-  if(preview){
-    preview.textContent=selectedPayMethod
-      ?`Seçili ödeme: ${selectedPayMethod} · ${money(amount)}`
-      :'Ödeme seçilmedi — Ödeme Ekranı’ndan seçin';
+  if($('#payAllocated'))$('#payAllocated').textContent=money(allocated);
+  if($('#payRemaining'))$('#payRemaining').textContent=money(Math.max(0,remaining));
+  const hint=$('#payBalanceHint');
+  if(hint){
+    if(Math.abs(remaining)<0.009){hint.className='sales-pay-balance ok';hint.textContent='Ödeme net tutara eşit — kaydedebilirsiniz.';}
+    else if(remaining>0){hint.className='sales-pay-balance warn';hint.textContent=`Henüz ${money(remaining)} dağıtılmadı. Nakit/kart/havale/vadeli/senet girin.`;}
+    else{hint.className='sales-pay-balance bad';hint.textContent=`Dağıtılan tutar netten ${money(Math.abs(remaining))} fazla.`;}
   }
-  $('#promissoryWrap')?.classList.toggle('hidden',!(selectedPayMethod==='Senet'||note>0));
+  const parts=[];
+  if(s.cash>0)parts.push(`Nakit ${money(s.cash)}`);
+  if(s.card>0)parts.push(`Kart ${money(s.card)}`);
+  if(s.transfer>0)parts.push(`Havale ${money(s.transfer)}`);
+  if(s.credit>0)parts.push(`Vadeli ${money(s.credit)}`);
+  if(s.note>0)parts.push(`Senet ${money(s.note)}`);
+  const preview=$('#payMethodPreview');
+  if(preview)preview.textContent=parts.length?`Seçili ödeme: ${parts.join(' + ')}`:'Ödeme seçilmedi — Ödeme Ekranı’ndan dağıtın';
+  $('#promissoryWrap')?.classList.toggle('hidden',s.note<=0);
+  $('#salesSavePrintSenetBtn')?.classList.toggle('hidden',s.note<=0);
 }
 function openPayScreen(){
+  syncPayAccounts();
   salesRecalcPay();
-  if(!selectedPayMethod)applyPayMethod('Nakit');
-  else applyPayMethod(selectedPayMethod);
   $('#payScreenStatus').textContent='';
   $('#payScreenModal')?.classList.remove('hidden');
+  // İlk boş satıra odak — type=text olduğu için 200 yazarken kesilmez
+  const first=['#payCash','#payCard','#payTransfer','#payCredit','#payNote'].map(id=>$(id)).find(el=>!num(el?.value));
+  (first||$('#payCash'))?.focus();
 }
 function closePayScreen(){$('#payScreenModal')?.classList.add('hidden')}
 function printSaleDocs(url){
@@ -614,20 +623,20 @@ async function saveSale(printSenet=false){
   const customerId=$('#salesCustomerSelect')?.value||'';
   if(!customerId){st.textContent='Müşteri seçin';return}
   if(!salesCart.length){st.textContent='Sepete ürün ekleyin';return}
-  if(!selectedPayMethod){st.textContent='Ödeme şekli seçin';openPayScreen();return}
   const net=cartNet();
-  const amount=num($('#payAmount')?.value);
-  if(amount<=0){st.textContent='Ödeme tutarı girin';return}
-  if(Math.abs(amount-net)>0.009){st.textContent=`Tutar net ile aynı olmalı: ${money(net)}`;return}
-  applyPayMethod(selectedPayMethod);
-  const cash=num($('#payCash')?.value),card=num($('#payCard')?.value),tr=num($('#payTransfer')?.value),note=num($('#payNote')?.value);
-  if(note>0 && !$('#promissoryFirstDue')?.value){st.textContent='Senet için ilk vade girin';return}
-  const acc=$('#payAccountSelect')?.value||'';
-  if(selectedPayMethod!=='Senet' && !acc){st.textContent='Hesap seçin';return}
+  const s=paySplits();
+  const allocated=Math.round((s.cash+s.card+s.transfer+s.credit+s.note)*100)/100;
+  if(allocated<=0){st.textContent='En az bir ödeme satırına tutar girin';return}
+  if(Math.abs(allocated-net)>0.009){st.textContent=`Dağılım nete eşit olmalı. Net ${money(net)} · Dağıtılan ${money(allocated)} · Kalan ${money(net-allocated)}`;return}
+  if(s.note>0 && !$('#promissoryFirstDue')?.value){st.textContent='Senet için ilk vade girin';return}
+  if(s.cash>0 && !$('#payCashAccount')?.value){st.textContent='Nakit için kasa seçin';return}
+  if(s.card>0 && !$('#payCardAccount')?.value){st.textContent='Kart için hesap seçin';return}
+  if(s.transfer>0 && !$('#payTransferAccount')?.value){st.textContent='Havale için banka seçin';return}
   const payments=[];
-  if(cash>0)payments.push({method:'Nakit',amount:cash,accountId:acc||$('#payCashAccount')?.value||''});
-  if(card>0)payments.push({method:'Kredi Kartı',amount:card,accountId:acc||$('#payBankAccount')?.value||''});
-  if(tr>0)payments.push({method:'Havale',amount:tr,accountId:acc||$('#payBankAccount')?.value||''});
+  if(s.cash>0)payments.push({method:'Nakit',amount:s.cash,accountId:$('#payCashAccount')?.value||''});
+  if(s.card>0)payments.push({method:'Kredi Kartı',amount:s.card,accountId:$('#payCardAccount')?.value||''});
+  if(s.transfer>0)payments.push({method:'Havale',amount:s.transfer,accountId:$('#payTransferAccount')?.value||''});
+  if(s.credit>0)payments.push({method:'Vadeli',amount:s.credit,accountId:''});
   const body={
     customerId,
     dealerId:$('#salesDealer')?.value||'',
@@ -637,7 +646,12 @@ async function saveSale(printSenet=false){
     date:$('#salesDate')?.value||new Date().toISOString().slice(0,10),
     items:salesCart.map(r=>({productCode:r.code,itemCode:r.itemCode,materialCode:r.materialCode,productName:r.name,quantity:r.qty,unitPrice:r.unitPrice})),
     payments,
-    promissory:note>0?{amount:note,installments:num($('#promissoryInstallments')?.value)||1,firstDueDate:$('#promissoryFirstDue')?.value,intervalMonths:1}:null,
+    promissory:s.note>0?{
+      amount:s.note,
+      installments:num($('#promissoryInstallments')?.value)||1,
+      firstDueDate:$('#promissoryFirstDue')?.value,
+      intervalMonths:num($('#promissoryInterval')?.value)||1
+    }:null,
     deductStock:false
   };
   st.textContent='Satış kaydediliyor...';
@@ -689,19 +703,16 @@ $('#cartRows')?.addEventListener('click',e=>{
   salesCart.splice(Number(row.dataset.idx),1);
   renderCart();
 });
-$('#salesDiscountPct')?.addEventListener('input',()=>{salesRecalcPay();if(selectedPayMethod)applyPayMethod(selectedPayMethod)});
-$('#payAmount')?.addEventListener('input',salesRecalcPay);
+$('#salesDiscountPct')?.addEventListener('input',salesRecalcPay);
 $('#openPayScreenBtn')?.addEventListener('click',openPayScreen);
 $('#payScreenClose')?.addEventListener('click',closePayScreen);
 $('#payScreenModal')?.addEventListener('click',e=>{if(e.target===$('#payScreenModal'))closePayScreen()});
-$('#payMethodGrid')?.addEventListener('click',e=>{
-  const btn=e.target.closest('[data-method]');
-  if(btn)applyPayMethod(btn.dataset.method);
+['#payCash','#payCard','#payTransfer','#payCredit','#payNote'].forEach(id=>{
+  $(id)?.addEventListener('input',salesRecalcPay);
+  $(id)?.addEventListener('change',salesRecalcPay);
 });
-$('#payAccountSelect')?.addEventListener('change',()=>{
-  const acc=$('#payAccountSelect')?.value||'';
-  if($('#payCashAccount'))$('#payCashAccount').value=acc;
-  if($('#payBankAccount'))$('#payBankAccount').value=acc;
+document.querySelectorAll('[data-pay-fill]').forEach(btn=>{
+  btn.addEventListener('click',()=>salesFillRemainingTo(btn.getAttribute('data-pay-fill')));
 });
 $('#salesSaveBtn')?.addEventListener('click',()=>saveSale(false));
 $('#salesSavePrintSenetBtn')?.addEventListener('click',()=>saveSale(true));
@@ -857,8 +868,8 @@ function selectPayCustomer(customerId,keepAmount=false){
     acc.innerHTML=(payState.accounts||[]).map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Kasa yok</option>';
     if(cur && [...acc.options].some(o=>o.value===cur))acc.value=cur;
   }
-  if(!keepAmount || !Number($('#payAmount')?.value||0)){
-    if($('#payAmount'))$('#payAmount').value=suggest>0?suggest.toFixed(2):'';
+  if(!keepAmount || !Number($('#custPayAmount')?.value||0)){
+    if($('#custPayAmount'))$('#custPayAmount').value=suggest>0?suggest.toFixed(2):'';
   }
   if($('#payDate') && !$('#payDate').value)$('#payDate').value=todayLocal();
   document.querySelectorAll('.pay-note-cb').forEach(cb=>{
@@ -866,7 +877,7 @@ function selectPayCustomer(customerId,keepAmount=false){
       const ids=[...document.querySelectorAll('.pay-note-cb:checked')].map(x=>x.value);
       if(!ids.length)return;
       const total=(row.notes||[]).filter(n=>ids.includes(n.id)).reduce((a,n)=>a+Number(n.remain||0),0);
-      if($('#payAmount'))$('#payAmount').value=total.toFixed(2);
+      if($('#custPayAmount'))$('#custPayAmount').value=total.toFixed(2);
     };
   });
 }
@@ -904,7 +915,7 @@ $('#payForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
   const st=$('#payStatus');
   if(!payState.selectedId){st.textContent='Önce müşteri seçin.';return}
-  const amount=Number($('#payAmount').value||0);
+  const amount=Number($('#custPayAmount').value||0);
   const accountId=$('#payAccount').value;
   if(!(amount>0)||!accountId){st.textContent='Tutar ve kasa zorunlu.';return}
   const noteIds=[...document.querySelectorAll('.pay-note-cb:checked')].map(x=>x.value);
