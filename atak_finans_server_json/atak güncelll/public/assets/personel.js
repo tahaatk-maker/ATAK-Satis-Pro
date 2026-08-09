@@ -217,16 +217,22 @@ function setSalesStep(step){
 }
 function salesReset(){
   salesCart=[];
+  selectedPayMethod='';
+  lastSaleDocsUrl='';
   if($('#salesCustomerSelect'))$('#salesCustomerSelect').value='';
   if($('#salesDiscountPct'))$('#salesDiscountPct').value='0';
-  ['#payCash','#payCard','#payTransfer','#payNote'].forEach(id=>{if($(id))$(id).value='0'});
+  ['#payCash','#payCard','#payTransfer','#payNote','#payAmount'].forEach(id=>{if($(id))$(id).value='0'});
   if($('#salesDate'))$('#salesDate').value=new Date().toISOString().slice(0,10);
   const due=new Date();due.setDate(due.getDate()+30);
   if($('#promissoryFirstDue'))$('#promissoryFirstDue').value=due.toISOString().slice(0,10);
+  document.querySelectorAll('.pay-method-btn').forEach(b=>b.classList.remove('active'));
+  $('#salesSavePrintSenetBtn')?.classList.add('hidden');
+  closePayScreen();
   renderSalesCustomers();
   renderProducts();
   renderCart();
   setSalesStep(1);
+  salesRecalcPay();
   $('#salesStatus').textContent='';
 }
 
