@@ -565,9 +565,42 @@ function salesAvailableStock(productCode){
   if(!row)return 0;
   return Math.max(0,Number(row.quantity||0)-Number(row.reserved||0));
 }
+function salesSyncCartEmpty(){
+  const wrap=q('#salesRows');if(!wrap)return;
+  const rows=qa('.sales-row');
+  const empty=q('#salesCartEmpty');
+  if(q('#salesCartCount'))q('#salesCartCount').textContent=`${rows.length} kalem`;
+  if(!rows.length){
+    if(!empty)wrap.innerHTML='<div class="pos-cart-empty" id="salesCartEmpty">Sepet boş — barkod okutun veya listeden ekleyin.</div>';
+  }else{
+    empty?.remove();
+  }
+}
+function salesPosQuickAdd(){
+  const input=q('#salesPosBarcode');
+  const term=(input?.value||'').trim();
+  if(!term){toast('Barkod veya ürün kodu girin');input?.focus();return}
+  const exact=term.toLocaleLowerCase('tr-TR');
+  const products=salesCenterData.products||[];
+  let p=products.find(x=>String(x.itemCode||'')===term||String(x.code||'')===term);
+  if(!p)p=products.find(x=>String(x.itemCode||'').toLocaleLowerCase('tr-TR')===exact||String(x.code||'').toLocaleLowerCase('tr-TR')===exact||String(x.searchName||'').toLocaleLowerCase('tr-TR')===exact);
+  if(!p)p=products.find(x=>`${x.itemCode||''} ${x.code||''} ${x.searchName||''} ${x.name||''}`.toLocaleLowerCase('tr-TR').includes(exact));
+  if(!p){toast('Ürün bulunamadı: '+term);input?.select();return}
+  const existing=[...qa('.sales-row')].find(r=>String(r.querySelector('.sales-product')?.value||'')===String(p.code));
+  if(existing){
+    const qtyEl=existing.querySelector('.sales-qty');
+    qtyEl.value=String(Math.max(1,salesNum(qtyEl.value)+1));
+    salesCalculate();
+  }else{
+    salesAddRow(p.code);
+  }
+  if(input){input.value='';input.focus()}
+  toast(`${salesMaterialCode(p)||p.code} sepete eklendi`);
+}
 function salesAddRow(selectedCode=''){
   const wrap=q('#salesRows');
   if(!wrap)return;
+  q('#salesCartEmpty')?.remove();
   const product=(salesCenterData.products||[]).find(p=>String(p.code)===String(selectedCode));
   const unit=salesProductUnitPrice(product,salesPreferredPriceMethod());
   const row=document.createElement('div');
@@ -576,9 +609,9 @@ function salesAddRow(selectedCode=''){
     <select class="sales-product">${salesProductOptions(selectedCode)}</select>
     <input class="sales-qty" type="number" min="1" step="1" value="1" title="Adet"/>
     <input class="sales-price" type="number" min="0" step="0.01" value="${unit}" placeholder="Birim fiyat"/>
-    <span class="sales-stock-info">Stok: -</span>
+    <span class="sales-stock-info">-</span>
     <b class="sales-row-total">${salesMoney(unit)}</b>
-    <button class="sales-row-delete" type="button">Sil</button>`;
+    <button class="sales-row-delete" type="button" title="Sil">×</button>`;
   wrap.appendChild(row);
   const sel=row.querySelector('.sales-product');
   const qty=row.querySelector('.sales-qty');
@@ -601,10 +634,12 @@ function salesAddRow(selectedCode=''){
   qty.addEventListener('change',salesCalculate);
   price.addEventListener('input',salesCalculate);
   price.addEventListener('change',salesCalculate);
-  row.querySelector('.sales-row-delete').addEventListener('click',()=>{row.remove();salesCalculate()});
+  row.querySelector('.sales-row-delete').addEventListener('click',()=>{row.remove();salesSyncCartEmpty();salesCalculate()});
   updateStockInfo();
+  salesSyncCartEmpty();
   salesCalculate();
-  price.focus();price.select();
+  if(!selectedCode){price.focus();price.select()}
+  else q('#salesPosBarcode')?.focus();
 }
 function salesRefreshRowStocks(){
   qa('.sales-row').forEach(row=>{
@@ -618,6 +653,8 @@ function salesRefreshRowStocks(){
 
 function salesReset(){
   if(q('#salesRows'))q('#salesRows').innerHTML='';
+  salesSyncCartEmpty();
+  if(q('#salesPosBarcode'))q('#salesPosBarcode').value='';
   if(q('#salesDiscountPct'))q('#salesDiscountPct').value='0';
   if(q('#salesDiscountAmount'))q('#salesDiscountAmount').value='0';
   ['#payCash','#payCard','#payTransfer','#payCredit','#payNote','#salesPaidAmount'].forEach(id=>{if(q(id))q(id).value='0'});
@@ -730,6 +767,7 @@ function salesCalculate(){
   if(q('#salesDuePreview'))q('#salesDuePreview').textContent=salesMoney(c.due);
   if(q('#payAllocated'))q('#payAllocated').textContent=salesMoney(c.allocated);
   if(q('#payRemaining'))q('#payRemaining').textContent=salesMoney(c.remaining);
+  if(q('#salesCartCount'))q('#salesCartCount').textContent=`${qa('.sales-row').length} kalem`;
   const bal=q('#payBalanceHint');
   if(bal){
     if(c.net<=0){bal.className='sales-pay-balance ok';bal.textContent='Ödeme dağılımını net tutara eşitleyin.';}
@@ -859,6 +897,10 @@ function salesDeductStockChanged(){const enabled=q('#salesDeductStock')?.value==
 q('#salesDeductStock')?.addEventListener('change',salesDeductStockChanged);
 q('#salesWarehouse')?.addEventListener('change',salesRefreshRowStocks);
 q('#salesAddRowBtn')?.addEventListener('click',()=>salesAddRow());q('#salesResetBtn')?.addEventListener('click',salesReset);
+q('#salesPosAddBtn')?.addEventListener('click',salesPosQuickAdd);
+q('#salesPosBarcode')?.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();salesPosQuickAdd()}
+});
 ['#payCash','#payCard','#payTransfer','#payCredit','#payNote'].forEach(id=>{
   q(id)?.addEventListener('input',salesCalculate);
   q(id)?.addEventListener('change',salesCalculate);

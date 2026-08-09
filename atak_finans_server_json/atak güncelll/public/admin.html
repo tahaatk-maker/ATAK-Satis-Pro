@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=644-pro-sales" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Atak Pazarlama Platform V4.0</title><link href="/web-admin-assets/admin.css?v=645-pos" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-ui-scale-v4')||'0.85';document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;}catch(e){document.documentElement.style.zoom='0.85';}})();</script>
 <style>
-/* ===== Satış Merkezi — Pro POS / ERP ===== */
+/* ===== Satış Merkezi — POS Kasa ===== */
 #salesCenter{--sc-navy:#0b2a55;--sc-ink:#13233f;--sc-muted:#66768d;--sc-line:#d7e2ef;--sc-soft:#f4f7fb;--sc-cash:#0f766e;--sc-card:#1d4ed8;--sc-havale:#6d28d9;--sc-vadeli:#b45309;--sc-senet:#be123c}
 #salesCenter .sales-center-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding:12px 14px!important;border:1px solid var(--sc-line);border-radius:12px;background:linear-gradient(120deg,#0b2a55,#13407a);color:#fff;box-shadow:0 8px 24px rgba(11,42,85,.18)}
 #salesCenter .sales-center-head small{color:#9ec0ef;font-size:10px;letter-spacing:.08em;font-weight:800}
@@ -14,7 +14,12 @@
 #salesCenter .sales-customer-panel,#salesCenter .sales-products-panel{border:1px solid var(--sc-line);border-radius:12px;padding:12px!important;background:#fff}
 #salesCenter .panel-head h3{margin:0;font-size:15px;color:var(--sc-navy)}
 #salesCenter .eyebrow{color:#7a8aa3;font-size:10px;letter-spacing:.08em;font-weight:800}
-#salesCenter .sales-product-results{display:flex;flex-direction:column;gap:0;max-height:220px;overflow:auto;border:1px solid var(--sc-line);border-radius:10px;background:#fff;margin:6px 0 8px;padding:0}
+#salesCenter .pos-scan-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;margin:0 0 10px;padding:10px;border:1px dashed #9db7d4;border-radius:10px;background:linear-gradient(180deg,#f7fbff,#eef5ff)}
+#salesCenter .pos-scan-bar label{display:grid;gap:3px;font-size:11px;font-weight:800;color:var(--sc-navy)}
+#salesCenter .pos-scan-bar input{min-height:40px!important;font-size:15px!important;font-weight:700;letter-spacing:.02em;border:1px solid #9db7d4!important;border-radius:8px;padding:8px 10px!important}
+#salesCenter .pos-scan-bar button{min-height:40px;padding:0 16px;border:0;border-radius:8px;background:var(--sc-navy);color:#fff;font-weight:800;cursor:pointer}
+#salesCenter .pos-scan-bar small{grid-column:1/-1;color:var(--sc-muted);font-size:11px}
+#salesCenter .sales-product-results{display:flex;flex-direction:column;gap:0;max-height:180px;overflow:auto;border:1px solid var(--sc-line);border-radius:10px;background:#fff;margin:6px 0 10px;padding:0}
 #salesCenter .sales-product-card{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;border:0;border-bottom:1px solid #e8eef6;border-radius:0;background:#fff;padding:8px 10px;text-align:left;cursor:pointer}
 #salesCenter .sales-product-card:last-child{border-bottom:0}
 #salesCenter .sales-product-card:hover{background:#f5f9ff}
@@ -24,6 +29,19 @@
 #salesCenter .sales-product-card strong{font-size:12px;color:var(--sc-ink);font-variant-numeric:tabular-nums}
 #salesCenter .sales-product-card em{font-style:normal;font-size:11px;font-weight:800;color:#0b4d8a;background:#eef5ff;border:1px solid #d3e4fb;border-radius:6px;padding:4px 8px}
 #salesCenter .sales-product-results-empty{padding:18px;color:var(--sc-muted);text-align:center}
+#salesCenter .pos-cart{border:1px solid var(--sc-line);border-radius:10px;overflow:hidden;background:#fff}
+#salesCenter .pos-cart-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#0b2a55;color:#fff}
+#salesCenter .pos-cart-head span{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9ec0ef}
+#salesCenter .pos-cart-head b{font-size:12px}
+#salesCenter .pos-cart-cols{display:grid;grid-template-columns:minmax(180px,1.4fr) 64px 100px 72px 90px 42px;gap:6px;padding:6px 8px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#8a97ab;background:#eef3f9;border-bottom:1px solid var(--sc-line)}
+#salesCenter .sales-rows{display:grid;gap:0;margin:0}
+#salesCenter .sales-row{display:grid;grid-template-columns:minmax(180px,1.4fr) 64px 100px 72px 90px 42px;gap:6px;align-items:center;margin:0;padding:7px 8px;border-bottom:1px solid #e8eef6;background:#fff}
+#salesCenter .sales-row:last-child{border-bottom:0}
+#salesCenter .sales-row select,#salesCenter .sales-row input{min-height:32px!important;width:100%;border:1px solid var(--sc-line);border-radius:7px;padding:0 6px!important;font-size:12px!important}
+#salesCenter .sales-stock-info{font-size:10px;font-weight:700;color:var(--sc-muted);text-align:center}
+#salesCenter .sales-row-total{text-align:right;font-size:12px;color:var(--sc-navy);font-variant-numeric:tabular-nums}
+#salesCenter .sales-row-delete{min-height:32px!important;border:1px solid #f0c4c4;border-radius:7px;background:#fff5f5;color:#a42929;font-weight:800;cursor:pointer}
+#salesCenter .pos-cart-empty{padding:16px;text-align:center;color:var(--sc-muted);font-size:12px}
 
 /* Checkout column */
 #salesCenter .sales-summary-panel{display:flex;flex-direction:column;gap:0;padding:0!important;border:1px solid var(--sc-line);border-radius:14px;overflow:hidden;background:#fff;position:sticky;top:58px;max-height:calc(100vh - 68px)}
@@ -91,16 +109,21 @@
 #salesCenter .sales-calc-box .sales-total-line.commission b{color:var(--sc-cash)}
 #salesCenter .sales-calc-box .sales-total-line.net{padding-top:6px;margin-top:4px;border-top:1px solid #c9d7e6}
 #salesCenter .sales-calc-box .sales-total-line.net span{color:var(--sc-navy);font-weight:800}
-#salesCenter .sales-calc-box .sales-total-line.net strong{font-size:20px;color:var(--sc-navy);font-variant-numeric:tabular-nums}
+#salesCenter .sales-calc-box .sales-total-line.net{display:none}
+#salesCenter .pos-net-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin:0 0 10px;padding:10px 12px;border-radius:10px;background:linear-gradient(135deg,#0b2a55,#1456a8);color:#fff}
+#salesCenter .pos-net-hero span{display:block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9ec0ef}
+#salesCenter .pos-net-hero strong{display:block;margin-top:2px;font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
 #salesCenter .sc-foot-mini{display:flex;justify-content:space-between;gap:8px;margin:0 0 8px;font-size:11px;color:var(--sc-muted)}
 #salesCenter .sc-foot-mini b{color:var(--sc-ink)}
-#salesCenter .sales-save-btn{height:42px!important;width:100%;border:0;border-radius:10px!important;background:linear-gradient(180deg,#1456a8,#0b2a55)!important;color:#fff!important;font-size:14px!important;font-weight:800;letter-spacing:.02em;box-shadow:0 8px 18px rgba(11,42,85,.25)}
+#salesCenter .sales-save-btn{height:46px!important;width:100%;border:0;border-radius:10px!important;background:linear-gradient(180deg,#168653,#0f766e)!important;color:#fff!important;font-size:15px!important;font-weight:800;letter-spacing:.03em;text-transform:uppercase;box-shadow:0 8px 18px rgba(15,118,110,.28)}
 #salesCenter .sales-save-btn:hover{filter:brightness(1.05)}
 #salesCenter .form-status{margin-top:6px;font-size:11px}
 @media(max-width:1100px){
   #salesCenter .sales-center-layout{grid-template-columns:1fr}
   #salesCenter .sales-summary-panel{position:static;max-height:none}
   #salesCenter .sc-pay-cols,.pay-method,.pay-method.pay-method-simple{grid-template-columns:70px 1fr 1fr 48px}
+  #salesCenter .pos-cart-cols,#salesCenter .sales-row{grid-template-columns:minmax(140px,1fr) 56px 88px 42px}
+  #salesCenter .sales-stock-info,#salesCenter .sales-row-total{display:none}
 }
 </style>
 </head><body>
@@ -143,8 +166,8 @@
 <main><header class="v4-topbar"><div class="v4-page-heading"><button aria-label="Menüyü aç" class="v4-icon-btn" id="mobileMenuBtn" type="button">☰</button><div><small>ATAK PAZARLAMA PLATFORM</small><h1 id="pageTitle">Dashboard</h1></div></div><div class="v4-top-actions"><label class="ui-scale-wrap" title="Yazılım ekran boyutu (tarayıcı %100 kalsın)"><span>Boyut</span><select id="uiScaleSelect"><option value="0.75">Küçük</option><option value="0.85" selected>Normal</option><option value="0.95">Büyük</option><option value="1">Tam</option></select></label><div class="v4-search-wrap"><span>⌕</span><input id="globalSearch" placeholder="Müşteri, ürün, sipariş veya fatura ara"/></div><button class="v4-icon-btn" id="refreshBtn" title="Yenile" type="button">↻</button><button class="v4-icon-btn v4-notification" title="Bildirimler" type="button">♧<em>0</em></button><div class="v4-admin-chip"><span>WA</span><div><b>Web Admin</b><small>Süper Admin</small></div></div></div></header>
 <section class="tab active v4-dashboard" id="dashboard"><div class="stats v4-metric-grid" id="stats"></div><div class="v4-dashboard-grid"><div class="panel v4-finance-card"><div class="panel-head"><div><small class="v4-kicker">HIZLI FİNANS</small><h2>₺ Kasa / Banka</h2></div><button class="v4-link-btn" data-go="financeCenter" type="button">Finans Merkezi →</button></div><div class="v4-account-preview"><div><small>Toplam Kasa</small><strong id="v4CashPreview">Yükleniyor…</strong></div><div><small>Toplam Banka</small><strong id="v4BankPreview">Yükleniyor…</strong></div></div><div class="v4-quick-form"><button data-go="financeCenter" type="button">+ Tahsilat Al</button><button data-go="financeCenter" type="button">+ Masraf Gir</button><button data-go="financeCenter" type="button">↔ Para Transferi</button></div></div><div class="panel v4-activity-card"><div class="panel-head"><div><small class="v4-kicker">SON HAREKETLER</small><h2>Güncel İşlemler</h2></div><button class="v4-link-btn" data-go="financeCenter" type="button">Tümü →</button></div><div class="activity-list v4-activity-list" id="auditList"></div></div></div><div class="panel v4-actions-panel"><div class="panel-head"><div><small class="v4-kicker">HIZLI İŞLEMLER</small><h2>En Çok Kullanılanlar</h2></div></div><div class="quick-actions v4-quick-actions"><button data-go="customersPage" type="button"><span>👤</span><b>Yeni Müşteri</b><small>Müşteri kartı oluştur</small></button><button data-go="salesCenter" type="button"><span>🛒</span><b>Satış Yap</b><small>Müşteriye ürün sat</small></button><button data-go="customersPage" type="button"><span>💳</span><b>Tahsilat Al</b><small>Cari borcu düş</small></button><button data-go="productImport" type="button"><span>📦</span><b>Ürün Aktar</b><small>Beko linkinden getir</small></button><button data-go="stockCenter" type="button"><span>↔</span><b>Stok Transferi</b><small>Depolar arası aktar</small></button><button data-go="campaigns" type="button"><span>％</span><b>Kampanya</b><small>Yeni kampanya oluştur</small></button><button id="systemSelfTestBtn" type="button"><span>✓</span><b>Sistem Testi</b><small>Buton, satış, tahsilat ve stok</small></button></div></div><div class="panel v4-health-panel"><div class="panel-head"><div><small class="v4-kicker">SİSTEM SAĞLIĞI</small><h2>Ürün ve Operasyon Kontrolleri</h2></div></div><div class="health-cards" id="healthCards"></div></div><footer class="v4-footer"><span>© 2026 Atak Pazarlama. Tüm hakları saklıdır.</span><span>ATAK PAZARLAMA ERP V6.2 · <i></i> Sistem Aktif</span></footer></section><section class="tab" id="salesCenter">
 <div class="sales-center-head">
-<div><small>ATAK PAZARLAMA · POS</small><h2>Satış Merkezi</h2><p>Müşteri seç · ürün ekle · ödemeyi dağıt · satışı tamamla</p></div>
-<div class="sales-center-head-actions"><button class="secondary-btn" id="salesTrackingShortcut" type="button">Sipariş Takibi</button><button class="secondary-btn" id="salesResetBtn" type="button">Yeni Satış</button></div>
+<div><small>ATAK PAZARLAMA · KASA / POS</small><h2>Satış Kasası</h2><p>Barkod veya kod okut · sepete ekle · ödemeyi dağıt · satışı tamamla</p></div>
+<div class="sales-center-head-actions"><button class="secondary-btn" id="salesTrackingShortcut" type="button">Sipariş Takibi</button><button class="secondary-btn" id="salesResetBtn" type="button">Yeni Fiş</button></div>
 </div>
 <div class="sales-center-layout">
 <div class="sales-main-column">
@@ -175,7 +198,14 @@
 </div>
 </section>
 <section class="panel sales-products-panel">
-<div class="panel-head"><div><small class="eyebrow">2 · ÜRÜN</small><h3>Ürün Seçimi</h3></div><button class="secondary-btn" id="salesAddRowBtn" type="button">+ Satır Ekle</button></div>
+<div class="panel-head"><div><small class="eyebrow">2 · ÜRÜN / BARKOD</small><h3>Ürün Girişi</h3></div><button class="secondary-btn" id="salesAddRowBtn" type="button">+ Satır</button></div>
+<div class="pos-scan-bar">
+  <label>Barkod / Madde / Malzeme kodu
+    <input id="salesPosBarcode" type="search" autocomplete="off" placeholder="Barkod okutun veya kod yazıp Enter’a basın"/>
+  </label>
+  <button id="salesPosAddBtn" type="button">Sepete Ekle</button>
+  <small>Enter = sepete ekle · aynı ürün varsa adet artar</small>
+</div>
 <div class="sales-product-filterbar">
   <label>Madde Kodu
     <input id="salesItemCodeFilter" type="search" placeholder="Örn. 457100000010"/>
@@ -195,7 +225,11 @@
 <div class="sales-product-results" id="salesProductResults">
   <div class="sales-product-results-empty">Kod veya kategori ile ürün arayın.</div>
 </div>
-<div class="sales-rows" id="salesRows"></div>
+<div class="pos-cart">
+  <div class="pos-cart-head"><span>Sepet</span><b id="salesCartCount">0 kalem</b></div>
+  <div class="pos-cart-cols"><span>Ürün</span><span>Adet</span><span>Birim</span><span>Stok</span><span>Tutar</span><span></span></div>
+  <div class="sales-rows" id="salesRows"><div class="pos-cart-empty" id="salesCartEmpty">Sepet boş — barkod okutun veya listeden ekleyin.</div></div>
+</div>
 </section>
 </div>
 <aside class="panel sales-summary-panel">
@@ -310,11 +344,14 @@
   </div>
 
   <div class="sc-checkout-foot">
+    <div class="pos-net-hero">
+      <div><span>Net tahsilat</span><strong id="salesGrandTotal">₺0,00</strong></div>
+      <div style="text-align:right;font-size:11px;color:#9ec0ef">Prim<br><b id="salesCommissionAmountPreview" style="color:#fff;font-size:13px">₺0,00</b></div>
+    </div>
     <div class="sales-calc-box" id="salesCalcBox">
       <div class="sales-total-line"><span>Brüt</span><b id="salesGrossPreview">₺0,00</b></div>
       <div class="sales-total-line discount"><span>İskonto <i id="salesDiscountPctLabel">(%0)</i></span><b id="salesDiscountPreview">-₺0,00</b></div>
-      <div class="sales-total-line net"><span>Net satış</span><strong id="salesGrandTotal">₺0,00</strong></div>
-      <div class="sales-total-line commission"><span>Prim <i id="salesCommissionPctLabel">(%0)</i></span><b id="salesCommissionAmountPreview">₺0,00</b></div>
+      <div class="sales-total-line commission"><span>Prim oranı <i id="salesCommissionPctLabel">(%0)</i></span><b>—</b></div>
     </div>
     <div class="sc-foot-mini">
       <span>Tahsil <b id="salesPaidPreview">₺0,00</b></span>
@@ -819,5 +856,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=644-pro-sales"></script><script src="/web-admin-assets/customer-sales.js?v=644-pro-sales"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=645-pos"></script><script src="/web-admin-assets/customer-sales.js?v=645-pos"></script>
 </body></html>
