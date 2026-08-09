@@ -428,8 +428,13 @@ async function loadSales(){
       api('/web-api/admin/finance-center')
     ]);
     salesData=cat;
-    salesCustomers=(fin.customers||[]).filter(c=>c.active!==false);
-    salesAccounts=fin.accounts||[];
+    // Satış kataloğundaki tüm cariler + finans kapsamındaki cariler
+    const byId=new Map();
+    [...(cat.customers||[]),...(fin.customers||[])].forEach(c=>{
+      if(c && c.active!==false) byId.set(String(c.id),c);
+    });
+    salesCustomers=[...byId.values()];
+    salesAccounts=(cat.accounts&&cat.accounts.length?cat.accounts:fin.accounts)||[];
     if($('#salesDealer')){
       $('#salesDealer').innerHTML=(cat.dealerSettings||[]).filter(d=>d.active!==false)
         .map(d=>`<option value="${d.id}">${d.name}</option>`).join('')||'<option value="">Bayi yok</option>';

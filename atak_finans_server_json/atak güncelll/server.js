@@ -657,8 +657,15 @@ app.post('/foundation-api/login',(req,res)=>{
   const failKey=`staff:${clientIp(req)}:${username||'admin'}`;
   if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
 
-  // Sahip kilidi açıkken yönetici şifresiyle personel portalına da girebilir
-  if((!username||username==='admin'||isOwnerUsername(username)) && password===adminPassword()){
+  const user=(s.users||[]).find(x=>
+    x.active!==false &&
+    String(x.username||'').trim().toLocaleLowerCase('tr-TR')===username
+  );
+
+  // Önce gerçek kullanıcı şifresi; yoksa admin şifresiyle sahip girişi
+  if(user && verifyPassword(password,user.passwordHash)){
+    // aşağıda normal personel oturumu kurulur
+  }else if((!username||username==='admin') && password===adminPassword()){
     clearLoginFails(failKey);
     const branch=(s.stores||[]).find(x=>x.active!==false)||(s.stores||[])[0];
     req.session.staffUser={
@@ -667,14 +674,7 @@ app.post('/foundation-api/login',(req,res)=>{
     };
     req.session.admin=true;req.session.systemOwner=true;delete req.session.user;
     return res.json({ok:true,user:req.session.staffUser,ownerOnly:ownerOnlyEnabled()});
-  }
-
-  const user=(s.users||[]).find(x=>
-    x.active!==false &&
-    String(x.username||'').trim().toLocaleLowerCase('tr-TR')===username
-  );
-
-  if(!user||!verifyPassword(password,user.passwordHash)){
+  }else if(!user||!verifyPassword(password,user.passwordHash)){
     return res.status(401).json({error:'Kullanıcı adı veya şifre yanlış'});
   }
   if(ownerOnlyEnabled() && !isOwnerUsername(user.username) && String(user.role||'').toLowerCase()!=='owner'){
@@ -816,7 +816,14 @@ app.get('/web-api/admin/sales-catalog',requireAdminOrStaff('orders_manage'),(req
     .filter(c=>c.active!==false)
     .map(c=>({id:c.id,name:c.name}))
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
-  res.json({ok:true,products,categories,dealerSettings:s.dealerSettings||[]});
+  // Personel satışında müşteri/hesap boş kalmasın (yeni personel de satabilsin)
+  const customers=(s.customers||[]).filter(c=>c.active!==false).map(c=>({
+    id:c.id,name:c.name,phone:c.phone||'',taxNo:c.taxNo||'',city:c.city||'',balance:customerBalance(s,c.id),active:true
+  })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+  const accounts=(s.financeAccounts||[]).filter(a=>a.active!==false).map(a=>({
+    id:a.id,name:a.name,type:a.type,storeId:a.storeId||'',active:true
+  }));
+  res.json({ok:true,products,categories,dealerSettings:s.dealerSettings||[],customers,accounts});
 });
 
 app.get('/web-api/admin/stock-center',requireAdminOrStaff('stock_manage'),(req,res)=>{
