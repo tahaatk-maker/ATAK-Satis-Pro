@@ -492,20 +492,30 @@ async function loadSalesCenter(){
   }catch(e){if(typeof toast==='function')toast(e.message||'Satış merkezi verileri yüklenemedi')}
 }
 function salesMoney(v){return money2(Number(v||0))}
+function salesMaterialCode(p){return String(p?.searchName||p?.code||'').trim()}
+function salesItemCode(p){return String(p?.itemCode||'').trim()}
+function salesProductLabel(p){
+  const madde=salesItemCode(p)||'-';
+  const malzeme=salesMaterialCode(p)||'-';
+  return `Madde: ${madde} · Malzeme: ${malzeme}`;
+}
+function salesProductDisplayName(p){
+  return String(p?.name||p?.dynamicsName||p?.searchName||p?.code||'').trim();
+}
 function salesProductOptions(selected=''){
   const itemTerm=(q('#salesItemCodeFilter')?.value||'').trim().toLocaleLowerCase('tr-TR');
   const materialTerm=(q('#salesMaterialCodeFilter')?.value||'').trim().toLocaleLowerCase('tr-TR');
   const category=(q('#salesCategoryFilter')?.value||'').trim();
   const source=(salesCenterData.products||[]).filter(p=>{
-    const item=String(p.itemCode||'').toLocaleLowerCase('tr-TR');
-    const material=`${p.code||''} ${p.searchName||''} ${p.name||''}`.toLocaleLowerCase('tr-TR');
+    const item=salesItemCode(p).toLocaleLowerCase('tr-TR');
+    const material=`${salesMaterialCode(p)} ${p.code||''} ${p.name||''}`.toLocaleLowerCase('tr-TR');
     if(itemTerm && !item.includes(itemTerm))return false;
     if(materialTerm && !material.includes(materialTerm))return false;
     if(category && String(p.category||'')!==category)return false;
     return true;
   });
   if(q('#salesProductSearchCount'))q('#salesProductSearchCount').textContent=`${source.length} ürün`;
-  return '<option value="">Ürün seçin</option>'+source.map(p=>`<option value="${p.code}" data-name="${p.name||p.code}" ${String(p.code)===String(selected)?'selected':''}>${p.code} · ${p.name||''}</option>`).join('');
+  return '<option value="">Ürün seçin</option>'+source.map(p=>`<option value="${p.code}" data-name="${salesProductDisplayName(p)}" data-item-code="${salesItemCode(p)}" data-material-code="${salesMaterialCode(p)}" ${String(p.code)===String(selected)?'selected':''}>${salesProductLabel(p)}</option>`).join('');
 }
 
 function salesAvailableStock(productCode){
@@ -695,8 +705,10 @@ function renderSalesProductResults(){
   }
   box.innerHTML=rows.slice(0,600).map(p=>{
     const categoryName=(salesCenterData.categories||[]).find(c=>String(c.id)===String(p.category))?.name||'';
+    const madde=salesItemCode(p)||'-';
+    const malzeme=salesMaterialCode(p)||'-';
     return `<button type="button" class="sales-product-card" data-sales-product-add="${p.code}">
-      <span><b>${p.searchName||p.code}</b><small>${p.itemCode?`Madde: ${p.itemCode} · `:''}${categoryName}</small></span>
+      <span><b>Madde: ${madde}</b><small>Malzeme: ${malzeme}${categoryName?` · ${categoryName}`:''}</small></span>
       <strong>${salesMoney(salesProductUnitPrice(p,q('#salesPaymentMethod')?.value||''))}</strong>
       <em>+ Ekle</em>
     </button>`;
@@ -716,8 +728,10 @@ function refreshSalesProductSelects(){
       if(product){
         const opt=document.createElement('option');
         opt.value=product.code;
-        opt.textContent=`${product.code} · ${product.name||''}`;
-        opt.dataset.name=product.name||product.code;
+        opt.textContent=salesProductLabel(product);
+        opt.dataset.name=salesProductDisplayName(product);
+        opt.dataset.itemCode=salesItemCode(product);
+        opt.dataset.materialCode=salesMaterialCode(product);
         sel.appendChild(opt);
         sel.value=current;
       }
