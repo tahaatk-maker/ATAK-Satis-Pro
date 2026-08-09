@@ -262,16 +262,25 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 }
 @media(max-width:950px){
   .app{grid-template-columns:1fr}
-  aside{position:fixed;z-index:100;left:0;top:0;bottom:0;width:248px;transform:translateX(-105%);transition:.2s}
-  body.v4-menu-open aside{transform:translateX(0)}
-  main{padding:0 12px 16px}
-  .v4-topbar,header{margin:0 -12px 16px;padding:10px 12px}
+  aside{position:fixed;z-index:100;left:0;top:0;bottom:0;width:min(280px,86vw);transform:translateX(-105%);transition:.2s;box-shadow:0 0 0 9999px rgba(0,0,0,0)}
+  body.v4-menu-open aside{transform:translateX(0);box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+  main{padding:0 10px 18px;overflow-x:hidden}
+  .v4-topbar,header{margin:0 -10px 12px;padding:10px;gap:8px;flex-wrap:wrap}
   #mobileMenuBtn{display:block}
   .v4-dashboard-grid,.dashboard-grid,.split,.finance-grid,.customer-page-grid,.foundation-grid{grid-template-columns:1fr}
   .v4-search-wrap,.header-actions input{display:none}
+  .ui-scale-wrap{display:none!important}
+  .table-wrap,.panel .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:640px}
+  .panel{overflow:hidden}
+  .v4-admin-chip small{display:none}
+  .pos-sticky-dock,.sales-sticky-dock{left:0!important}
 }
 @media(max-width:620px){
   .stats,.v4-metric-grid,.v4-quick-actions,.quick-actions,.health-cards,.v4-account-preview,.v4-quick-form{grid-template-columns:1fr}
+  .v4-page-heading h1,header h1{font-size:16px}
+  .v4-top-actions{gap:6px}
+  .modal-card,.customer-modal-card,.sales-preview-dialog{width:min(100vw - 16px,920px)!important;max-height:90vh;overflow:auto}
 }
 
 /* V5.2 Web Sitesi Merkezi */
@@ -283,7 +292,7 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 
 /* V6.0 Satış Merkezi */
 .sales-center-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}.sales-center-head h2{margin:4px 0}.sales-center-head p{margin:5px 0;color:var(--muted)}
-.sales-center-layout,.sales-center-layout.sales-center-flow{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:15px;align-items:stretch;max-width:1180px;width:100%}
+.sales-center-layout,.sales-center-layout.sales-center-flow{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:15px;align-items:stretch;max-width:none;width:100%}
 .sales-main-column{display:flex!important;flex-direction:column!important;gap:15px;width:100%}
 .sales-summary-panel,#salesPaymentStep{position:static!important;flex-direction:column;gap:11px;width:100%;max-height:none!important}
 #salesCenter #salesPaymentStep.pos-step-visible{display:flex!important}
@@ -418,7 +427,7 @@ button.primary,.primary,button{font-size:12px}
 .sales-center-head h2{margin:0;font-size:16px}
 .sales-center-head p{margin:0;font-size:11px}
 .sales-center-head-actions .secondary-btn{min-height:30px;padding:4px 10px}
-.sales-center-layout{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:10px;align-items:stretch;max-width:1180px;width:100%}
+.sales-center-layout{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:10px;align-items:stretch;max-width:none;width:100%}
 .sales-main-column{display:flex!important;flex-direction:column!important;gap:8px;width:100%}
 .sales-summary-panel,#salesPaymentStep{position:static!important;gap:5px;max-height:none!important;overflow:visible!important;padding:8px!important;width:100%}
 .sales-summary-panel label{gap:2px;font-size:10px}
