@@ -1,3 +1,4 @@
 pay-split-v3
 customer-search-fallback
+version-expect=6.3.5-customer-search
 2026-08-09
