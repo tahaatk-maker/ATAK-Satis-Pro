@@ -695,8 +695,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.13-fatura-tipi',
-  build:'fix-v6',
+  version:'6.3.14-basit-fatura',
+  build:'fix-v13',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -1235,14 +1235,13 @@ function parseCustomerPayload(x={}){
     if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
     if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
     if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
-  }else if(tckn&&tckn.replace(/\D/g,'').length!==11){
-    throw new Error('TCKN girildiyse 11 hane olmalıdır');
   }
+  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
   return {
     name,phone,
     email:String(x.email||'').trim(),
     taxNo:invoiceType==='corporate'?taxNo:'',
-    tckn:invoiceType==='individual'?tckn:(tckn||''),
+    tckn:tckn||'',
     city,district,address,
     deliverySameAsBilling:deliverySame,
     deliveryCity:deliverySame?city:deliveryCity,

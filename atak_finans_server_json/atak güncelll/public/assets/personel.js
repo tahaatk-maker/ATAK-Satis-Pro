@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v12 */
+/* ATAK_PERSONEL_BUILD=fix-v13 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1145,7 +1145,8 @@ $('#salesDockPreviewBtn')?.addEventListener('click',()=>{
 function syncQcInvoiceUI(){
   const corp=document.querySelector('input[name="qcInvoiceTypeRadio"]:checked')?.value==='corporate';
   if($('#qcInvoiceType'))$('#qcInvoiceType').value=corp?'corporate':'individual';
-  $('#qcIndividualSec')?.classList.toggle('hidden',corp);
+  // Bireysel bilgiler her zaman görünür; kurumsal alanlar sadece seçilince
+  $('#qcIndividualSec')?.classList.remove('hidden');
   $('#qcCompanyWrap')?.classList.toggle('hidden',!corp);
   $('#qcTaxOfficeWrap')?.classList.toggle('hidden',!corp);
   $('#qcTaxNoWrap')?.classList.toggle('hidden',!corp);
@@ -1178,16 +1179,15 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
       if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
       if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
       if(taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için 10 haneli VKN zorunludur');
-    }else if(tckn&&tckn.replace(/\D/g,'').length!==11){
-      throw new Error('TCKN girildiyse 11 hane olmalıdır');
     }
+    if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         name:$('#qcName').value,phone:$('#qcPhone').value,
         city:$('#qcCity').value,district:$('#qcDistrict').value,address:$('#qcAddress').value,
         deliverySameAsBilling:true,invoiceType,
-        tckn:invoiceType==='individual'?tckn:'',
+        tckn:tckn||'',
         companyName:invoiceType==='corporate'?companyName:'',
         taxOffice:invoiceType==='corporate'?taxOffice:'',
         taxNo:invoiceType==='corporate'?taxNo:''

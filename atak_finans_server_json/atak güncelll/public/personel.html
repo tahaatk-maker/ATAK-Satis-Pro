@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Satış Operasyon Personel</title>
 <link rel="icon" href="/assets/favicon.png">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v11">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v13">
 </head>
 <body>
 
@@ -537,15 +537,15 @@
       <label class="field">İl *<input id="qcCity" required></label>
       <label class="field">İlçe *<input id="qcDistrict" required></label>
       <label class="field wide">Açık adres *<textarea id="qcAddress" rows="2" required></textarea></label>
-      <div class="field wide" style="display:grid;gap:8px">
-        <small style="font-weight:800;color:#0b2a4a">Fatura tipi *</small>
+      <div class="field wide" id="qcIndividualSec" style="display:grid;gap:8px">
+        <small style="font-weight:800;color:#0b2a4a">Bireysel bilgiler</small>
+        <small class="muted">Senet ve sözleşme bu bilgilere yazılır. TCKN zorunlu değildir.</small>
+        <label class="field" style="margin:0">TCKN<input id="qcTckn" placeholder="11 haneli TCKN" inputmode="numeric"></label>
         <div style="display:flex;gap:14px;flex-wrap:wrap">
-          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="individual" checked/> Bireysel</label>
-          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="corporate"/> Kurumsal</label>
+          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="individual" checked/> Bireysel fatura</label>
+          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="corporate"/> Kurumsal fatura</label>
         </div>
-        <small class="muted">Senet şahsa kalır. Bireysel’de TCKN isteğe bağlı; kurumsal’da firma bilgileri zorunlu.</small>
       </div>
-      <label class="field" id="qcIndividualSec">TCKN<input id="qcTckn" placeholder="11 hane (zorunlu değil)" inputmode="numeric"></label>
       <label class="field hidden" id="qcCompanyWrap">Firma ünvanı *<input id="qcCompanyName" placeholder="Şirket ünvanı"></label>
       <label class="field hidden" id="qcTaxOfficeWrap">Vergi dairesi *<input id="qcTaxOffice"></label>
       <label class="field hidden" id="qcTaxNoWrap">VKN *<input id="qcTaxNo" placeholder="10 hane" inputmode="numeric"></label>
@@ -585,6 +585,6 @@
 </main>
 </div>
 
-<script src="/assets/personel.js?v=fix-v11"></script>
+<script src="/assets/personel.js?v=fix-v13"></script>
 </body>
 </html>

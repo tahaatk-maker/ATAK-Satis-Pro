@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v12 */
+/* ATAK_ADMIN_BUILD=fix-v13 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -676,7 +676,8 @@ function syncCustomerFormUI(prefix){
   const same=q(`#${prefix}DeliverySame`)?.checked!==false;
   q(`#${prefix}DeliveryWrap`)?.classList.toggle('hidden',same);
   const corp=customerInvoiceType(prefix)==='corporate';
-  q(`#${prefix}IndividualSec`)?.classList.toggle('hidden',corp);
+  // Bireysel bilgiler (TCKN) her zaman görünür; kurumsal alanlar sadece seçilince
+  q(`#${prefix}IndividualSec`)?.classList.remove('hidden');
   q(`#${prefix}CorporateSec`)?.classList.toggle('hidden',!corp);
   const tckn=q(`#${prefix}Tckn`);
   const company=q(`#${prefix}CompanyName`);
@@ -710,9 +711,8 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
     if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
     if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
     if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
-  }else if(tckn&&tckn.replace(/\D/g,'').length!==11){
-    throw new Error('TCKN girildiyse 11 hane olmalıdır');
   }
+  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
   const email=(q(`#${prefix}Email`)?.value||'').trim();
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Geçerli bir e-posta girin (e-Fatura / e-Arşiv için)');
   const payload={
@@ -725,7 +725,7 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
     companyName:invoiceType==='corporate'?companyName:'',
     taxOffice:invoiceType==='corporate'?taxOffice:'',
     taxNo:invoiceType==='corporate'?taxNo:'',
-    tckn:invoiceType==='individual'?tckn:(tckn||''),
+    tckn:tckn||'',
     note:(q(`#${prefix}Note`)?.value||'').trim(),
     active:true
   };
