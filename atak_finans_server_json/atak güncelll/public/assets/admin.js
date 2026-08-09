@@ -43,16 +43,17 @@ function applyUiScale(v){
   const n=Number(scale)||1;
   const root=document.documentElement;
   root.style.zoom=scale;
-  // zoom < 1 iken tarayıcı altta/sağda boşluk bırakır — genişlik/yükseklik telafi
+  // Sadece dikey telafi — yatay width kaydırma/scroll yapmasın
   if(n<1){
-    const fill=(100/n).toFixed(4)+'%';
-    root.style.width=fill;
-    root.style.minHeight=fill;
+    root.style.width='100%';
+    root.style.minHeight=(100/n).toFixed(4)+'vh';
     root.style.height='auto';
+    root.style.overflowX='hidden';
   }else{
     root.style.width='';
     root.style.minHeight='';
     root.style.height='';
+    root.style.overflowX='';
   }
   root.setAttribute('data-ui-scale',scale);
   if(!isMobileUi()){try{localStorage.setItem('atak-ui-scale-v4',scale)}catch(_){}}
