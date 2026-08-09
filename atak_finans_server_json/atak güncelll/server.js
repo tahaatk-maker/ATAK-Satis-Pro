@@ -279,7 +279,7 @@ const STAFF_DEFAULT_SCREENS=[
 const PERMISSION_CATALOG=[
   {id:'dashboard_view',name:'Dashboard görüntüle',group:'Genel'},
   {id:'screen_finance',name:'Finans & Cari (ana)',group:'Finans & Cari'},
-  {id:'screen_uninvoiced',name:'Kesilmeyen Faturalar',group:'Finans & Cari'},
+  {id:'screen_uninvoiced',name:'Kesilmeyen Faturalar',group:'e-Fatura'},
   {id:'screen_customer_payments',name:'Müşteri Ödemeleri',group:'Finans & Cari'},
   {id:'screen_customers',name:'Müşteriler',group:'Finans & Cari'},
   {id:'screen_sales_center',name:'Satış Merkezi',group:'Finans & Cari'},

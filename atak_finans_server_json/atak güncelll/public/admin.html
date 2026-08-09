@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v14" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v15" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -562,8 +562,6 @@ body.inv-full #pageTitle{font-size:18px}
 #invoiceCenter .inv-check.ok{border-color:#bbf7d0;background:#f0fdf4}
 #invoiceCenter .inv-check.bad{border-color:#fecaca;background:#fef2f2}
 #invoiceCenter #invRunReadyTestBtn{display:none}
-#financeUninvoicedPanel{border:2px solid #fdba74;background:linear-gradient(180deg,#fff,#fff7ed)}
-#financeUninvoicedPanel .panel-head{align-items:flex-start}
 @media(max-width:980px){
   #invoiceCenter .inv-shell{grid-template-columns:1fr;min-height:auto}
   #invoiceCenter .inv-side{border-right:0;border-bottom:1px solid #c9d5e4}
@@ -583,7 +581,6 @@ body.inv-full #pageTitle{font-size:18px}
 <button class="active" data-tab="dashboard" type="button">⌂ Dashboard</button>
 <button data-tab="foundation" type="button">◆ Foundation Yönetimi</button>
 <button data-tab="financeCenter" type="button">₺ Finans &amp; Cari</button>
-<button class="nav-sub-item" data-tab="financeCenter" data-finance-jump="uninvoiced" type="button">↳ Kesilmeyen Faturalar</button>
 <button data-tab="customerPayments" type="button">💳 Müşteri Ödemeleri</button>
 <button data-tab="customersPage" type="button">👥 Müşteriler</button>
 <button data-tab="salesCenter" type="button">🛒 Satış Merkezi</button>
@@ -879,7 +876,7 @@ body.inv-full #pageTitle{font-size:18px}
         <label>Fatura durumu
           <select id="salesInvoiceStatus">
             <option value="not_required" selected>Fatura gerekmiyor</option>
-            <option value="pending">Daha sonra kes (Kesilmeyen’e düşer)</option>
+            <option value="pending">Daha sonra kes (e-Fatura Merkezi’ne düşer)</option>
             <option value="queue_qnb">QNB Solist ile kes (e-Fatura / e-Arşiv)</option>
             <option value="issued">Manuel faturalandı</option>
           </select>
@@ -1410,30 +1407,8 @@ Bulunamayan → Diğer.
 </div>
 </section>
 <section class="tab" id="financeCenter">
-<div class="foundation-head panel"><div><small class="eyebrow">V3.2 FİNANS &amp; CARİ</small><h2>Finans ve Cari Merkezi</h2><p class="note">Kasa, banka, müşteri cari, tahsilat, masraf, transfer ve <b>kesilmeyen faturalar</b> (geç kesilen satışlar) tek ekranda.</p></div></div>
+<div class="foundation-head panel"><div><small class="eyebrow">V3.2 FİNANS &amp; CARİ</small><h2>Finans ve Cari Merkezi</h2><p class="note">Kasa, banka, müşteri cari, tahsilat, masraf ve transfer tek ekranda. Kesilmeyen faturalar <b>e-Fatura Merkezi</b>’ndedir.</p></div></div>
 <div class="foundation-summary" id="financeSummary"></div>
-<div class="panel" id="financeUninvoicedPanel">
-  <div class="panel-head">
-    <div>
-      <small class="eyebrow">GEÇ KESİLEN SATIŞLAR</small>
-      <h2>Kesilmeyen Faturalar</h2>
-      <p class="note" style="margin:4px 0 0">Bazen faturayı sonra kesiyoruz — bekleyen satışlar burada. Manuel işaretleyin veya QNB’ye alın.</p>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <b id="financeUninvoicedCount" style="font-size:22px;color:#0b2a4a">0</b>
-      <button id="financeUninvoicedRefreshBtn" class="secondary-btn" type="button">Yenile</button>
-      <button id="financeGoInvoiceCenterBtn" class="secondary-btn" type="button">e-Fatura Merkezi →</button>
-    </div>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Satış No</th><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Ödeme</th><th>İşlem</th></tr></thead>
-      <tbody id="financeUninvoicedTable"></tbody>
-    </table>
-    <div id="financeUninvoicedEmpty" class="empty">Kesilmeyen fatura yok.</div>
-  </div>
-  <div id="financeUninvoicedStatus" class="form-status"></div>
-</div>
 <div class="finance-grid">
 <form class="panel form-stack" id="financeAccountForm">
 <h2>💵 Kasa / Banka</h2><input id="financeAccountId" type="hidden"/>
@@ -1730,5 +1705,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v14"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v15"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
