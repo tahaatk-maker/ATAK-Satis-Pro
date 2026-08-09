@@ -1,4 +1,5 @@
-pay-split-v3
-customer-search-fallback
-version-expect=6.3.5-customer-search
+fix-v4
+expect-health=6.3.5-customer-search
+customer-from-finance-center
+dashboard-pos-fallback
 2026-08-09

@@ -517,3 +517,6 @@ button.primary,.primary,button{font-size:12px}
 .sales-billing-party select{min-height:42px;border:1px solid #b7d0ef;border-radius:10px;padding:8px 10px;font:inherit;background:#fff}
 .sales-billing-party.hidden{display:none!important}
 @media(max-width:900px){.customer-billing-cards{grid-template-columns:1fr}}
+
+#financeUninvoicedPanel.pulse-highlight{outline:3px solid #1769ff;box-shadow:0 0 0 6px rgba(23,105,255,.15)}
+.stat.net-today{border-top:4px solid #0b2a4a}

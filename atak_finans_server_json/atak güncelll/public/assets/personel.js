@@ -3,7 +3,14 @@ const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',ma
 
 async function api(url,opt={}){
   const r=await fetch(url,{credentials:'same-origin',...opt});
-  const d=await r.json().catch(()=>({}));
+  const ct=String(r.headers.get('content-type')||'');
+  const text=await r.text();
+  let d={};
+  if(ct.includes('application/json')||/^\s*[{[]/.test(text)){
+    try{d=JSON.parse(text||'{}')}catch(_){d={}}
+  }else if(r.redirected||/^\s*</.test(text)){
+    throw new Error('API bulunamadı (sunucu güncellemesi gerekli)');
+  }
   if(!r.ok)throw new Error(d.error||'İşlem başarısız');
   return d;
 }
@@ -446,16 +453,16 @@ async function loadSales(){
   const st=$('#salesStatus');
   st.textContent='Satış verileri yükleniyor...';
   try{
-    const [cat,fin,custMeta]=await Promise.all([
+    const [cat,fin]=await Promise.all([
       api('/web-api/admin/sales-catalog'),
-      api('/web-api/admin/finance-center?customers=0'),
-      api('/web-api/admin/customers/search').catch(()=>api('/web-api/admin/customer-search').catch(()=>({total:0,rows:[]})))
+      api('/web-api/admin/finance-center')
     ]);
     salesData=cat;
-    // 10k+ müşteri select'e basılmaz — Ara ile API'den gelir; küçük listeler fallback
-    salesCustomers=[];
-    salesCustomerFallback=Array.isArray(cat.customers)?cat.customers:[];
-    salesCustomerTotal=Number(fin.customerTotal||custMeta.total||cat.customerTotal||salesCustomerFallback.length||0);
+    const fromFin=Array.isArray(fin.customers)?fin.customers:[];
+    const fromCat=Array.isArray(cat.customers)?cat.customers:[];
+    salesCustomerFallback=fromFin.length?fromFin:fromCat;
+    salesCustomers=salesCustomerFallback.slice(0,500);
+    salesCustomerTotal=Number(fin.customerTotal||salesCustomerFallback.length||0);
     salesAccounts=(cat.accounts&&cat.accounts.length?cat.accounts:fin.accounts)||[];
     if($('#salesDealer')){
       $('#salesDealer').innerHTML=(cat.dealerSettings||[]).filter(d=>d.active!==false)
@@ -464,6 +471,14 @@ async function loadSales(){
     syncPayAccounts();
     $('#salesScopeHint').textContent=`Satışlar sizin adınıza kaydedilir · ${(cat.products||[]).length} ürün · ${salesCustomerTotal} müşteri`;
     salesReset();
+    if(salesCustomers.length && $('#salesCustomerSelect')){
+      $('#salesCustomerSelect').innerHTML='<option value="">Müşteri seçin</option>'+
+        salesCustomers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' · '+c.phone:''}</option>`).join('');
+    }
+    if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=salesCustomerTotal+' kayıt';
+    if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent=
+      salesCustomers.length?`Toplam ${salesCustomerTotal} müşteri yüklendi. Yazarak süzün veya listeden seçin.`
+      :'Müşteri yok — önce ekleyin.';
     st.textContent='';
   }catch(e){st.textContent=e.message}
 }
@@ -472,45 +487,27 @@ async function salesSearchCustomers(){
   const btn=$('#customerSearchSaleBtn');
   const hint=$('#salesCustomerSearchHint');
   const current=$('#salesCustomerSelect')?.value||'';
-  if(term.length<1){
-    if(hint)hint.textContent='Aramak için ad, telefon, VKN veya TCKN yazın.';
-    return;
-  }
   if(btn)btn.disabled=true;
-  if(hint)hint.textContent='Aranıyor…';
-  let rows=[],total=0,apiErr='';
-  try{
-    let d;
-    try{d=await api('/web-api/admin/customers/search?q='+encodeURIComponent(term)+'&limit=50')}
-    catch(_){d=await api('/web-api/admin/customer-search?q='+encodeURIComponent(term)+'&limit=50')}
-    rows=d.rows||[];
-    total=Number(d.total||rows.length||0);
-  }catch(e){apiErr=e.message||'Arama API hatası'}
-  if(!rows.length){
-    let local=filterCustomersLocal(salesCustomerFallback,term);
-    if(!local.length){
-      try{
-        const fin=await api('/web-api/admin/finance-center');
-        salesCustomerFallback=fin.customers||[];
-        if(fin.customerTotal!=null)salesCustomerTotal=Number(fin.customerTotal);
-        local=filterCustomersLocal(salesCustomerFallback,term);
-      }catch(_){}
-    }
-    if(local.length){rows=local;total=local.length}
+  if(hint)hint.textContent=term?'Aranıyor…':'Liste…';
+  if(!salesCustomerFallback.length){
+    try{
+      const fin=await api('/web-api/admin/finance-center');
+      salesCustomerFallback=fin.customers||[];
+      salesCustomerTotal=Number(fin.customerTotal||salesCustomerFallback.length||0);
+    }catch(_){}
   }
+  let rows=term?filterCustomersLocal(salesCustomerFallback,term):(salesCustomerFallback||[]).slice(0,200);
+  const total=rows.length;
   try{
     const map=new Map(salesCustomers.map(c=>[String(c.id),c]));
     rows.forEach(c=>map.set(String(c.id),c));
     salesCustomers=[...map.values()];
-    if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=total>rows.length?`${rows.length}/${total} sonuç`:`${rows.length} sonuç`;
-    $('#salesCustomerSelect').innerHTML=(rows.length?'':'<option value="">Sonuç yok — farklı kelime deneyin</option>')+
-      rows.map(c=>`<option value="${c.id}" ${String(c.id)===String(current)?'selected':''}>${c.name}${c.phone?' · '+c.phone:''}${c.taxNo?' · '+c.taxNo:''}</option>`).join('');
+    if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=`${rows.length} sonuç`;
+    $('#salesCustomerSelect').innerHTML=(rows.length?'':'<option value="">Sonuç yok</option>')+
+      rows.map(c=>`<option value="${c.id}" ${String(c.id)===String(current)?'selected':''}>${c.name}${c.phone?' · '+c.phone:''}</option>`).join('');
     if(current && rows.some(c=>String(c.id)===String(current)))$('#salesCustomerSelect').value=current;
     else if(rows.length===1)$('#salesCustomerSelect').value=rows[0].id;
-    if(hint)hint.textContent=rows.length
-      ?`${rows.length} sonuç listelendi${total>rows.length?' (ilk 50)':''}. Listeden müşteriyi seçin.`
-      :(apiErr?`Arama başarısız: ${apiErr}`:'Eşleşen müşteri yok. Yeni müşteri ekleyebilirsiniz.');
-    if(!rows.length && apiErr)stToast(apiErr);
+    if(hint)hint.textContent=rows.length?`${rows.length} müşteri. Seçin.`:'Eşleşen müşteri yok.';
     salesCustomerChanged();
   }finally{if(btn)btn.disabled=false}
 }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=pay-split-v3" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v4" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -566,6 +566,7 @@ body.inv-full #pageTitle{font-size:18px}
 <button class="active" data-tab="dashboard" type="button">⌂ Dashboard</button>
 <button data-tab="foundation" type="button">◆ Foundation Yönetimi</button>
 <button data-tab="financeCenter" type="button">₺ Finans &amp; Cari</button>
+<button data-tab="financeCenter" data-finance-jump="uninvoiced" type="button">🧾 Kesilmeyen Faturalar</button>
 <button data-tab="customerPayments" type="button">💳 Müşteri Ödemeleri</button>
 <button data-tab="customersPage" type="button">👥 Müşteriler</button>
 <button data-tab="salesCenter" type="button">🛒 Satış Merkezi</button>
@@ -1690,5 +1691,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=pay-split-v3"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v4"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

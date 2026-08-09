@@ -28,7 +28,20 @@ function salesProductUnitPrice(p,method=''){
   return cash||card||list||salesNum(p.salePrice)||salesNum(p.bekoPrice);
 }
 function toast(t){q('#toast').textContent=t;q('#toast').classList.remove('hidden');setTimeout(()=>q('#toast').classList.add('hidden'),2800)}
-async function api(url,opt={}){const r=await fetch(url,{credentials:'same-origin',...opt});const d=await r.json().catch(()=>({}));if(!r.ok){if(r.status===401)throw new Error('Oturum süresi dolmuş. Lütfen tekrar giriş yapın.');throw new Error(d.error||'İşlem başarısız')}return d}
+async function api(url,opt={}){
+  const r=await fetch(url,{credentials:'same-origin',...opt});
+  const ct=String(r.headers.get('content-type')||'');
+  const text=await r.text();
+  let d={};
+  if(ct.includes('application/json')||/^\s*[{[]/.test(text)){
+    try{d=JSON.parse(text||'{}')}catch(_){d={}}
+  }else if(r.redirected||/^\s*</.test(text)){
+    // Eski sunucu bilinmeyen API'yi /personel HTML'ine yönlendiriyor
+    throw new Error('API bulunamadı (sunucu güncellemesi gerekli)');
+  }
+  if(!r.ok){if(r.status===401)throw new Error('Oturum süresi dolmuş. Lütfen tekrar giriş yapın.');throw new Error(d.error||'İşlem başarısız')}
+  return d;
+}
 async function check(){const m=await api('/web-api/me');if(m.authenticated){showApp();await load()}else q('#loginView').classList.remove('hidden')}
 q('#loginForm').onsubmit=async e=>{e.preventDefault();try{await api('/web-api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:q('#username').value.trim(),password:q('#password').value})});await loadCurrentAdminPermissions();showApp();await load()}catch(e){toast(e.message)}};
 function isMobileUi(){
@@ -61,21 +74,38 @@ function setProductsMenu(open){
   submenu.classList.toggle('open',Boolean(open));
   toggle.setAttribute('aria-expanded',open?'true':'false');
 }
-function goTab(id,{remember=true}={}){
-  if(id==='uninvoicedSales')id='invoiceCenter';
+function goTab(id,{remember=true,financeJump=''}={}){
+  if(id==='uninvoicedSales'){id='financeCenter';financeJump=financeJump||'uninvoiced'}
   const needed=TAB_PERMISSION_MAP[id];if(needed&&!can(needed)){toast('Bu ekran için yetkiniz yok.');return false}
   const target=q('#'+id);
   if(!target){toast('Bu ekran henüz bağlı değil: '+id);return false}
-  qa('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===id));
+  qa('[data-tab]').forEach(x=>{
+    const same=x.dataset.tab===id;
+    const jumpMatch=!financeJump || x.dataset.financeJump===financeJump || (!x.dataset.financeJump && !financeJump);
+    x.classList.toggle('active',same && (id!=='financeCenter' || jumpMatch || (!x.dataset.financeJump && financeJump!=='uninvoiced')));
+  });
+  // Finans alt menü: Kesilmeyen seçiliyse o butonu aktif tut
+  if(id==='financeCenter'&&financeJump==='uninvoiced'){
+    qa('[data-tab="financeCenter"]').forEach(x=>x.classList.toggle('active',x.dataset.financeJump==='uninvoiced'));
+  }else if(id==='financeCenter'){
+    qa('[data-tab="financeCenter"]').forEach(x=>x.classList.toggle('active',!x.dataset.financeJump));
+  }
   qa('.tab').forEach(x=>x.classList.toggle('active',x.id===id));
-  const btn=q(`[data-tab="${id}"]`);
+  const btn=financeJump?q(`[data-tab="${id}"][data-finance-jump="${financeJump}"]`):q(`[data-tab="${id}"]:not([data-finance-jump])`)||q(`[data-tab="${id}"]`);
   q('#pageTitle').textContent=btn?btn.textContent.replace(/^[^A-Za-zÇĞİÖŞÜ]+/,'').trim():id;
   if(remember)sessionStorage.setItem('atakAdminTab',id);
   q('#productsNavGroup')?.classList.toggle('active-group',productTabs.has(id));q('#financeNavGroup')?.classList.toggle('active-group',id==='financeDashboard');
   if(productTabs.has(id))setProductsMenu(true);
   if(id==='foundation')setTimeout(()=>loadFoundation().catch(e=>toast(e.message)),20);
   if(id==='stockCenter')setTimeout(()=>loadStockCenter().catch(e=>toast(e.message)),20);
-  if(id==='financeCenter')setTimeout(()=>loadFinanceCenter().catch(e=>toast(e.message)),20);
+  if(id==='financeCenter')setTimeout(async()=>{
+    try{await loadFinanceCenter()}catch(e){toast(e.message)}
+    if(financeJump==='uninvoiced'){
+      q('#financeUninvoicedPanel')?.scrollIntoView({behavior:'smooth',block:'start'});
+      q('#financeUninvoicedPanel')?.classList.add('pulse-highlight');
+      setTimeout(()=>q('#financeUninvoicedPanel')?.classList.remove('pulse-highlight'),1800);
+    }
+  },20);
   if(id==='customersPage')setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),20);
   if(id==='salesCenter')setTimeout(()=>loadSalesCenter(),20);
   if(id==='webOrders')setTimeout(()=>loadWebOrders(),20);
@@ -92,7 +122,7 @@ function goTab(id,{remember=true}={}){
 }
 document.addEventListener('click',e=>{
   const tab=e.target.closest('[data-tab]');
-  if(tab){e.preventDefault();e.stopPropagation();goTab(tab.dataset.tab);return}
+  if(tab){e.preventDefault();e.stopPropagation();goTab(tab.dataset.tab,{financeJump:tab.dataset.financeJump||''});return}
   const go=e.target.closest('[data-go]');
   if(go){e.preventDefault();e.stopPropagation();goTab(go.dataset.go);return}
 });
@@ -106,22 +136,35 @@ let dashboardRevenue=null;
 async function renderDashboardRevenue(){
   try{
     const d=localDate();
-    dashboardRevenue=await fetchRevenueSummary(d,d);
-    const c=dashboardRevenue.channels,total=Object.values(c).reduce((a,b)=>a+Number(b.amount||0),0);
+    dashboardRevenue=await fetchRevenueSummary(d,d).catch(()=>({channels:{beko:{amount:0,orderCount:0},istikbal:{amount:0,orderCount:0},atakhome:{amount:0,orderCount:0},hepsiburada:{amount:0,orderCount:0}}}));
+    const c=dashboardRevenue.channels||{};
+    const ch=(k)=>({amount:Number(c[k]?.amount||0),orderCount:Number(c[k]?.orderCount||0)});
+    const beko=ch('beko'),istikbal=ch('istikbal'),atakhome=ch('atakhome'),hb=ch('hepsiburada');
     let netToday=0,netCount=0,primToday=0;
     try{
       const board=await api('/web-api/admin/sales-prim-board?period=day&date='+encodeURIComponent(d));
       netToday=Number(board.summary?.net||0);
-      netCount=Number(board.summary?.count||0);
-      primToday=Number(board.summary?.commission||0);
-    }catch(_){}
+      netCount=Number(board.summary?.count||board.summary?.netCount||0);
+      primToday=Number(board.summary?.commission||board.summary?.primEarned||0);
+    }catch(_){
+      // Eski sunucu: POS satışlarını finance-center'dan say
+      try{
+        const fin=await api('/web-api/admin/finance-center?customers=0');
+        const sales=(fin.sales||fin.transactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled&&String(t.date||'').slice(0,10)===d);
+        netToday=sales.reduce((a,t)=>a+(Number(t.total)!=null&&t.total!==''?Number(t.total):Math.abs(Number(t.customerDelta||0))),0);
+        netCount=sales.length;
+        primToday=sales.reduce((a,t)=>a+Number(t.commissionAmount||0),0);
+      }catch(__){}
+    }
+    const channelTotal=beko.amount+istikbal.amount+atakhome.amount+hb.amount;
+    const total=Math.max(channelTotal,netToday);
     q('#stats').innerHTML=`
-      <div class="stat net-today"><small>Bugün NET Satış</small><strong>${money(netToday)}</strong><em>${netCount} satış · Prim ${money(primToday)}</em></div>
-      <div class="stat channel beko"><small>Beko Mağaza bugün</small><strong>${money(c.beko.amount)}</strong><em>${c.beko.orderCount} satış</em></div>
-      <div class="stat channel istikbal"><small>İstikbal bugün</small><strong>${money(c.istikbal.amount)}</strong><em>${c.istikbal.orderCount} satış</em></div>
-      <div class="stat channel atakhome"><small>AtakHome bugün</small><strong>${money(c.atakhome.amount)}</strong><em>${c.atakhome.orderCount} otomatik sipariş</em></div>
-      <div class="stat channel hb"><small>Hepsiburada bugün</small><strong>${money(c.hepsiburada.amount)}</strong><em>${c.hepsiburada.orderCount} sipariş</em></div>
-      <div class="stat total"><small>Toplam ciro</small><strong>${money(total)}</strong><em>KDV dahil</em></div>`;
+      <div class="stat net-today"><small>Bugün NET Satış (POS)</small><strong>${money(netToday)}</strong><em>${netCount} satış · Prim ${money(primToday)}</em></div>
+      <div class="stat channel beko"><small>Beko Mağaza bugün</small><strong>${money(beko.amount)}</strong><em>${beko.orderCount} satış</em></div>
+      <div class="stat channel istikbal"><small>İstikbal bugün</small><strong>${money(istikbal.amount)}</strong><em>${istikbal.orderCount} satış</em></div>
+      <div class="stat channel atakhome"><small>AtakHome bugün</small><strong>${money(atakhome.amount)}</strong><em>${atakhome.orderCount} otomatik sipariş</em></div>
+      <div class="stat channel hb"><small>Hepsiburada bugün</small><strong>${money(hb.amount)}</strong><em>${hb.orderCount} sipariş</em></div>
+      <div class="stat total"><small>Toplam ciro</small><strong>${money(total)}</strong><em>KDV dahil · POS dahil</em></div>`;
   }catch(e){console.error(e)}
 }
 function renderDashboard(){const ps=store.products,active=ps.filter(p=>p.active),campaigns=store.campaigns.filter(c=>c.active),missingImage=ps.filter(p=>!p.image),zeroStock=ps.filter(p=>!p.stock);renderDashboardRevenue();q('#healthCards').innerHTML=`<div class="health"><b>${missingImage.length}</b><span>Görseli eksik ürün</span></div><div class="health"><b>${zeroStock.length}</b><span>Stok 0 / sorunuz</span></div><div class="health"><b>${campaigns.length}</b><span>Aktif kampanya</span></div><div class="health"><b>${ps.filter(p=>Number(p.cashPrice||0)<Number(p.minimumSalePrice||0)&&Number(p.minimumSalePrice||0)>0).length}</b><span>Minimum fiyat altı</span></div>`;q('#auditList').innerHTML=(store.auditLogs||[]).slice(0,12).map(a=>`<div class="activity"><i></i><div><b>${a.action}</b><br><small>${a.entity} · ${new Date(a.date).toLocaleString('tr-TR')}</small></div></div>`).join('')||'<p>Henüz işlem kaydı yok.</p>'}
@@ -859,20 +902,23 @@ function filterCustomersLocal(list,term){
 }
 async function loadSalesCenter(){
   try{
-    const [cat,fin,stock,people,custMeta]=await Promise.all([
+    // Müşteri listesini finance-center'dan al (customers/search eski sunucuda yok → 302)
+    const [cat,fin,stock,people]=await Promise.all([
       api('/web-api/admin/sales-catalog'),
-      api('/web-api/admin/finance-center?customers=0'),
-      api('/web-api/admin/stock-center'),
-      api('/web-api/admin/salespeople').catch(()=>({rows:[],currentUser:null,canManage:false})),
-      api('/web-api/admin/customers/search').catch(()=>api('/web-api/admin/customer-search').catch(()=>({total:0,rows:[]})))
+      api('/web-api/admin/finance-center'),
+      api('/web-api/admin/stock-center').catch(()=>({warehouses:[],stocks:[]})),
+      api('/web-api/admin/salespeople').catch(()=>({rows:[],currentUser:null,canManage:false}))
     ]);
     salesCenterData.products=cat.products||[];
     salesCenterData.categories=cat.categories||[];
     salesCenterData.dealerSettings=cat.dealerSettings||[];
-    salesCenterData.customers=[]; // 10k+ için tüm listeyi select'e basma
-    salesCenterData._customerFallback=Array.isArray(cat.customers)?cat.customers:[];
-    salesCenterData.customerTotal=Number(fin.customerTotal||custMeta.total||cat.customerTotal||salesCenterData._customerFallback.length||0);
-    salesCenterData.accounts=fin.accounts||[];
+    const fromFin=Array.isArray(fin.customers)?fin.customers:[];
+    const fromCat=Array.isArray(cat.customers)?cat.customers:[];
+    // Küçük cari: doğrudan kullan; büyükse ara ile
+    salesCenterData._customerFallback=fromFin.length?fromFin:fromCat;
+    salesCenterData.customers=salesCenterData._customerFallback.slice(0,500);
+    salesCenterData.customerTotal=Number(fin.customerTotal||salesCenterData._customerFallback.length||0);
+    salesCenterData.accounts=fin.accounts||cat.accounts||[];
     salesCenterData.warehouses=stock.warehouses||[];
     salesCenterData.stocks=stock.stocks||[];
     salesCenterData.salespeople=people.rows||[];
@@ -892,16 +938,26 @@ async function loadSalesCenter(){
     ['#salesAccount','#payCashAccount','#payCardAccount','#payTransferAccount'].forEach(id=>{
       if(q(id))q(id).innerHTML=accountOpts;
     });
-    // Nakit için kasa, kart/havale için banka tercihi
     const cashAcc=salesCenterData.accounts.find(a=>a.type==='cash')||salesCenterData.accounts[0];
     const bankAcc=salesCenterData.accounts.find(a=>a.type==='bank')||salesCenterData.accounts[0];
     if(cashAcc&&q('#payCashAccount'))q('#payCashAccount').value=cashAcc.id;
     if(bankAcc&&q('#payCardAccount'))q('#payCardAccount').value=bankAcc.id;
     if(bankAcc&&q('#payTransferAccount'))q('#payTransferAccount').value=bankAcc.id;
     if(q('#salesWarehouse'))q('#salesWarehouse').innerHTML=salesCenterData.warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('');
-    if(q('#salesCustomerSelect'))q('#salesCustomerSelect').innerHTML='<option value="">Önce arayın, sonra seçin</option>';
-    if(q('#salesCustomerCount'))q('#salesCustomerCount').textContent=(salesCenterData.customerTotal||0)+' kayıt';
-    if(q('#salesCustomerSearchHint'))q('#salesCustomerSearchHint').textContent=`Toplam ${salesCenterData.customerTotal||0} müşteri. Ad / telefon / VKN ile arayıp seçin (tüm liste yüklenmez).`;
+    // 500 ve altı: select'i doldur — Ara olmadan da seçilebilsin
+    const list=salesCenterData.customers||[];
+    if(q('#salesCustomerSelect')){
+      if(list.length && list.length<=500){
+        q('#salesCustomerSelect').innerHTML='<option value="">Müşteri seçin</option>'+
+          list.map(c=>`<option value="${c.id}">${c.name}${c.phone?' · '+c.phone:''}</option>`).join('');
+      }else{
+        q('#salesCustomerSelect').innerHTML='<option value="">Önce arayın, sonra seçin</option>';
+      }
+    }
+    if(q('#salesCustomerCount'))q('#salesCustomerCount').textContent=(salesCenterData.customerTotal||list.length||0)+' kayıt';
+    if(q('#salesCustomerSearchHint'))q('#salesCustomerSearchHint').textContent=
+      list.length?`Toplam ${salesCenterData.customerTotal||list.length} müşteri yüklendi. İsim yazarak süzün veya listeden seçin.`
+      :'Müşteri bulunamadı. Önce Müşteriler’den ekleyin.';
     if(typeof refreshSalesProductSelects==='function')refreshSalesProductSelects();
     if(typeof loadSalesPromissoryDefaults==='function')loadSalesPromissoryDefaults();
     if(typeof salesSyncCartEmpty==='function')salesSyncCartEmpty();
@@ -1308,46 +1364,43 @@ async function salesSearchCustomers(){
   const btn=q('#salesCustomerSearchBtn');
   const hint=q('#salesCustomerSearchHint');
   const current=q('#salesCustomerSelect')?.value||'';
-  if(term.length<1){
-    if(hint)hint.textContent='Aramak için ad, telefon, VKN veya TCKN yazın.';
-    return;
-  }
   if(btn)btn.disabled=true;
-  if(hint)hint.textContent='Aranıyor…';
-  let rows=[],total=0,apiErr='';
-  try{
-    let d;
-    try{d=await api('/web-api/admin/customers/search?q='+encodeURIComponent(term)+'&limit=50')}
-    catch(_){d=await api('/web-api/admin/customer-search?q='+encodeURIComponent(term)+'&limit=50')}
-    rows=d.rows||[];
-    total=Number(d.total||rows.length||0);
-  }catch(e){apiErr=e.message||'Arama API hatası'}
-  // API boş/hatalıysa katalog veya finans listesinden yerel ara
-  if(!rows.length){
-    let local=filterCustomersLocal(salesCenterData._customerFallback,term);
-    if(!local.length){
+  if(hint)hint.textContent=term?'Aranıyor…':'Liste hazırlanıyor…';
+  let rows=[],total=0;
+  // 1) Yerel liste (finance-center) — eski sunucuda tek güvenilir yol
+  if(!salesCenterData._customerFallback?.length){
+    try{
+      const fin=await api('/web-api/admin/finance-center');
+      salesCenterData._customerFallback=fin.customers||[];
+      if(fin.customerTotal!=null)salesCenterData.customerTotal=Number(fin.customerTotal);
+    }catch(_){}
+  }
+  if(term){
+    rows=filterCustomersLocal(salesCenterData._customerFallback,term);
+    total=rows.length;
+    // 2) Varsa sunucu araması (yeni sürüm)
+    if(!rows.length){
       try{
-        const fin=await api('/web-api/admin/finance-center');
-        salesCenterData._customerFallback=fin.customers||[];
-        if(fin.customerTotal!=null)salesCenterData.customerTotal=Number(fin.customerTotal);
-        local=filterCustomersLocal(salesCenterData._customerFallback,term);
+        const d=await api('/web-api/admin/customers/search?q='+encodeURIComponent(term)+'&limit=50');
+        rows=d.rows||[];total=Number(d.total||rows.length||0);
       }catch(_){}
     }
-    if(local.length){rows=local;total=local.length}
+  }else{
+    rows=(salesCenterData._customerFallback||[]).slice(0,200);
+    total=salesCenterData.customerTotal||rows.length;
   }
   try{
     const map=new Map((salesCenterData.customers||[]).map(c=>[String(c.id),c]));
     rows.forEach(c=>map.set(String(c.id),c));
     salesCenterData.customers=[...map.values()];
-    q('#salesCustomerCount').textContent=total>rows.length?`${rows.length}/${total} sonuç`:`${rows.length} sonuç`;
+    q('#salesCustomerCount').textContent=`${rows.length} sonuç`;
     q('#salesCustomerSelect').innerHTML=(rows.length?'':'<option value="">Sonuç yok — farklı kelime deneyin</option>')+
       rows.map(c=>`<option value="${c.id}" ${String(c.id)===String(current)?'selected':''}>${c.name}${c.phone?' · '+c.phone:''}${c.taxNo?' · '+c.taxNo:''}</option>`).join('');
     if(current && rows.some(c=>String(c.id)===String(current)))q('#salesCustomerSelect').value=current;
     else if(rows.length===1)q('#salesCustomerSelect').value=rows[0].id;
     if(hint)hint.textContent=rows.length
-      ?`${rows.length} sonuç listelendi${total>rows.length?' (ilk 50)':''}. Listeden müşteriyi seçin.`
-      :(apiErr?`Arama başarısız: ${apiErr}`:'Eşleşen müşteri yok. Yeni müşteri ekleyebilirsiniz.');
-    if(!rows.length && apiErr)toast(apiErr);
+      ?`${rows.length} müşteri. Listeden seçin.`
+      :'Eşleşen müşteri yok. Yeni müşteri ekleyebilirsiniz.';
     salesCustomerChanged();
   }finally{if(btn)btn.disabled=false}
 }
@@ -1849,7 +1902,7 @@ async function confirmSalesDraft(){
         noteText+=` · fatura ${inv.result?.docType||''} (${inv.record?.status||'kuyruk'})`;
       }catch(invErr){noteText+=` · fatura uyarısı: ${invErr.message}`}
     }
-    closeSalesPreview();status.textContent=`Satış kaydedildi. Yeni cari bakiye: ${salesMoney(result.balance)}${noteText}`;status.className='form-status success';await check();await loadSalesCenter();salesReset();
+    closeSalesPreview();status.textContent=`Satış kaydedildi. Yeni cari bakiye: ${salesMoney(result.balance)}${noteText}`;status.className='form-status success';await check();await loadSalesCenter();try{await renderDashboardRevenue()}catch(_){ }salesReset();
   }catch(e){status.textContent=e.message;status.className='form-status error'}finally{btn.disabled=false;btn.textContent='✓ Kontrol Ettim, Satışı Yap'}
 }
 q('#salesSaveBtn')?.addEventListener('click',openSalesPreview);
