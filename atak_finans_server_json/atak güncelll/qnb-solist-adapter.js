@@ -104,11 +104,15 @@ ${lines}
 
 function readinessChecks(cfg={}){
   const ep=defaultEndpoints(cfg.environment||'test');
+  const ef=String(cfg.efaturaSeries||'ATK').toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)||'ATK';
+  const ea=String(cfg.earsivSeries||'ATA').toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)||'ATA';
   return [
     {name:'Sağlayıcı',ok:['qnb-efinans','qnb-esolutions','qnb-solist'].includes(String(cfg.provider||'')),detail:cfg.provider||'-'},
     {name:'Ortam',ok:['test','live'].includes(String(cfg.environment||'')),detail:cfg.environment||'-'},
     {name:'Firma VKN',ok:onlyDigits(cfg.companyVkn).length>=10,detail:cfg.companyVkn||'QNB’den / mali mühür VKN'},
     {name:'Firma ünvanı',ok:!!String(cfg.companyTitle||'').trim(),detail:cfg.companyTitle||'Eksik'},
+    {name:'e-Fatura seri',ok:ef.length===3,detail:`${ef} (örn. ${ef}${new Date().getFullYear()}000000001)`},
+    {name:'e-Arşiv seri',ok:ea.length===3,detail:`${ea} (örn. ${ea}${new Date().getFullYear()}000000001)`},
     {name:'Gönderici alias',ok:!!String(cfg.senderAlias||'').trim(),detail:cfg.senderAlias||'QNB Solist birim etiketi'},
     {name:'WSDL / servis URL',ok:!!String(cfg.webServiceUrl||'').trim(),detail:cfg.webServiceUrl||ep.note},
     {name:'Kullanıcı',ok:!!String(cfg.username||'').trim(),detail:cfg.username?'Tanımlı':'QNB kullanıcı adı'},

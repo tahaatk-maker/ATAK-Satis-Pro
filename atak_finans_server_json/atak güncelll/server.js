@@ -129,8 +129,13 @@ function ensureStore(store) {
   store.receivables = Array.isArray(store.receivables) ? store.receivables : [];
   store.promissoryNotes = Array.isArray(store.promissoryNotes) ? store.promissoryNotes : [];
   store.promissorySettings ||= {creditorName:store.settings?.siteName||'Atak Pazarlama',paymentPlace:'İstanbul',issuePlace:'İstanbul',prefix:'ATAK',defaultInstallments:1,firstDueDays:30,intervalMonths:1,copies:1,footer:''};
-  store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:'',companyTitle:'',senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:''};
+  store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:'',companyTitle:'',senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:'',efaturaSeries:'ATK',earsivSeries:'ATA',efaturaNext:1,earsivNext:1};
   if(store.invoiceIntegration && !store.invoiceIntegration.provider)store.invoiceIntegration.provider='qnb-solist';
+  // Seri: e-Fatura = ATK, e-Arşiv = ATA (GIB 3 harf + yıl + 9 hane)
+  if(!String(store.invoiceIntegration.efaturaSeries||'').trim())store.invoiceIntegration.efaturaSeries='ATK';
+  if(!String(store.invoiceIntegration.earsivSeries||'').trim())store.invoiceIntegration.earsivSeries='ATA';
+  if(!Number.isFinite(Number(store.invoiceIntegration.efaturaNext))||Number(store.invoiceIntegration.efaturaNext)<1)store.invoiceIntegration.efaturaNext=1;
+  if(!Number.isFinite(Number(store.invoiceIntegration.earsivNext))||Number(store.invoiceIntegration.earsivNext)<1)store.invoiceIntegration.earsivNext=1;
 
   store.dealerSettings ||= [
     {id:'atak-beko',name:'Atak Beko',marginDividePct:25,commissionPct:0.50,cashMaxDiscountPct:10,cardMaxDiscountPct:5,active:true},
@@ -1702,7 +1707,12 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   sale.invoicePartyName=invoiceParty.name;
   const invCfg=s.invoiceIntegration||{};
   if(saleNeedsInvoice(sale.invoiceStatus)||sale.invoiceStatus==='issued'){
-    const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',provider:invCfg.provider||'qnb-solist',providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:sale.invoiceNumber||'',invoiceDate:sale.invoiceDate||'',error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+    const docTypeHint=qnbSolist.detectDocumentType(invoiceParty,invCfg);
+    const alloc=allocateInvoiceNumber(invCfg,docTypeHint,sale.invoiceNumber||'');
+    s.invoiceIntegration=invCfg;
+    sale.invoiceNumber=alloc.number;
+    sale.invoiceType=docTypeHint;
+    const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',docType:docTypeHint,provider:invCfg.provider||'qnb-solist',providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:alloc.number,invoiceDate:sale.invoiceDate||'',error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
     s.invoiceQueue.push(invoiceRecord);
     sale.invoiceQueueId=invoiceRecord.id;
   }else{
@@ -2417,9 +2427,51 @@ app.post('/web-api/admin/dealer-settings',requireAdmin,(req,res)=>{
   writeStore(s);res.json({ok:true,rows:clean});
 });
 
+function normalizeInvoiceSeries(v,fallback){
+  const s=String(v||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
+  return s.length===3?s:fallback;
+}
+function nextInvoiceSeq(n){
+  const v=Math.round(Number(n)||1);
+  return Math.min(999999999,Math.max(1,v));
+}
+/** GIB format: AAAYYYY######### — örn. ATK2026000000252 / ATA2026000000001 */
+function formatGibInvoiceNumber(series,year,seq){
+  return `${normalizeInvoiceSeries(series,'ATK')}${String(year)}${String(nextInvoiceSeq(seq)).padStart(9,'0')}`;
+}
+function allocateInvoiceNumber(cfg,docType,existing=''){
+  if(String(existing||'').trim())return{number:String(existing).trim(),cfg,allocated:false};
+  const year=new Date().getFullYear();
+  const earsiv=String(docType||'').toLowerCase()==='earsiv';
+  const series=earsiv
+    ?normalizeInvoiceSeries(cfg.earsivSeries,'ATA')
+    :normalizeInvoiceSeries(cfg.efaturaSeries,'ATK');
+  const key=earsiv?'earsivNext':'efaturaNext';
+  const seq=nextInvoiceSeq(cfg[key]);
+  const number=formatGibInvoiceNumber(series,year,seq);
+  cfg[key]=seq+1;
+  if(earsiv)cfg.earsivSeries=series;else cfg.efaturaSeries=series;
+  return{number,cfg,allocated:true,docType:earsiv?'earsiv':'efatura',series,seq};
+}
+
 app.get('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
   const s=readStore(),cfg=s.invoiceIntegration||{};
-  res.json({settings:{...cfg,password:cfg.password?'********':''},queueCount:(s.invoiceQueue||[]).filter(x=>!['issued','cancelled'].includes(x.status)).length});
+  const year=new Date().getFullYear();
+  const efSeries=normalizeInvoiceSeries(cfg.efaturaSeries,'ATK');
+  const eaSeries=normalizeInvoiceSeries(cfg.earsivSeries,'ATA');
+  res.json({
+    settings:{
+      ...cfg,
+      password:cfg.password?'********':'',
+      efaturaSeries:efSeries,
+      earsivSeries:eaSeries,
+      efaturaNext:nextInvoiceSeq(cfg.efaturaNext),
+      earsivNext:nextInvoiceSeq(cfg.earsivNext),
+      efaturaPreview:formatGibInvoiceNumber(efSeries,year,cfg.efaturaNext),
+      earsivPreview:formatGibInvoiceNumber(eaSeries,year,cfg.earsivNext)
+    },
+    queueCount:(s.invoiceQueue||[]).filter(x=>!['issued','cancelled'].includes(x.status)).length
+  });
 });
 app.post('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},old=s.invoiceIntegration||{};
@@ -2437,9 +2489,13 @@ app.post('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
     username:String(x.username||'').trim(),
     password:String(x.password||'')==='********'?String(old.password||''):String(x.password||''),
     draftMode:x.draftMode!==false&&String(x.draftMode)!=='false',
-    autoDetectType:x.autoDetectType!==false&&String(x.autoDetectType)!=='false'
+    autoDetectType:x.autoDetectType!==false&&String(x.autoDetectType)!=='false',
+    efaturaSeries:normalizeInvoiceSeries(x.efaturaSeries!=null?x.efaturaSeries:old.efaturaSeries,'ATK'),
+    earsivSeries:normalizeInvoiceSeries(x.earsivSeries!=null?x.earsivSeries:old.earsivSeries,'ATA'),
+    efaturaNext:nextInvoiceSeq(x.efaturaNext!=null?x.efaturaNext:old.efaturaNext),
+    earsivNext:nextInvoiceSeq(x.earsivNext!=null?x.earsivNext:old.earsivNext)
   };
-  audit(s,'QNB Solist entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider});writeStore(s);res.json({ok:true});
+  audit(s,'QNB Solist entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider,efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries});writeStore(s);res.json({ok:true,settings:{efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries,efaturaNext:s.invoiceIntegration.efaturaNext,earsivNext:s.invoiceIntegration.earsivNext}});
 });
 app.post('/web-api/admin/invoice-integration/test',requireAdmin,(req,res)=>{
   const s=readStore(),c=s.invoiceIntegration||{};
@@ -2561,7 +2617,7 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_man
       customer:{name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district},
       items:(sale.items||[]).map(i=>({...i})),total:Number(sale.total||0),
       status:'pending',invoiceType:'auto',provider:cfg.provider||'qnb-solist',
-      providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:'',invoiceDate:todayISO(),
+      providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:sale.invoiceNumber||'',invoiceDate:todayISO(),
       error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
     };
     s.invoiceQueue.push(record);
@@ -2569,9 +2625,14 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_man
   }else{
     record.customer={name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district};
   }
-  const out=await qnbSolist.sendOrQueueInvoice({record,sale,customer:invoiceParty,cfg});
+  const docTypeHint=qnbSolist.detectDocumentType(invoiceParty,cfg);
+  const alloc=allocateInvoiceNumber(cfg,docTypeHint,record.invoiceNumber||sale.invoiceNumber||'');
+  s.invoiceIntegration=cfg;
+  record.invoiceNumber=alloc.number;
+  sale.invoiceNumber=alloc.number;
+  const out=await qnbSolist.sendOrQueueInvoice({record,sale:{...sale,invoiceNumber:alloc.number},customer:invoiceParty,cfg});
   record.status=out.status||'ready';
-  record.docType=out.docType;
+  record.docType=out.docType||docTypeHint;
   record.ublXml=out.ublXml;
   record.providerMessage=out.message||'';
   record.updatedAt=new Date().toISOString();
@@ -2579,12 +2640,12 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_man
   sale.invoicePartyType=invoiceParty.partyType;
   sale.invoicePartyName=invoiceParty.name;
   sale.invoiceStatus=out.status==='issued'?'issued':'queued';
-  sale.invoiceType=out.docType;
+  sale.invoiceType=out.docType||docTypeHint;
   sale.invoiceUuid=record.uuid;
   sale.updatedAt=new Date().toISOString();
-  audit(s,'Fatura kes / QNB kuyruğa alındı',invoiceParty.name,{saleId:sale.id,status:record.status,docType:out.docType,party:invoiceParty.partyType});
+  audit(s,'Fatura kes / QNB kuyruğa alındı',invoiceParty.name,{saleId:sale.id,status:record.status,docType:record.docType,invoiceNumber:record.invoiceNumber,party:invoiceParty.partyType});
   writeStore(s);
-  res.json({ok:true,record,result:out,sale:{id:sale.id,invoiceStatus:sale.invoiceStatus,invoiceType:sale.invoiceType,billingParty:sale.billingParty}});
+  res.json({ok:true,record,result:out,sale:{id:sale.id,invoiceStatus:sale.invoiceStatus,invoiceType:sale.invoiceType,invoiceNumber:sale.invoiceNumber,billingParty:sale.billingParty}});
 });
 
 function htmlEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}

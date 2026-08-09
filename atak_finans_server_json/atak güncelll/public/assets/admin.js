@@ -2076,10 +2076,69 @@ q('#promissorySettingsForm')?.addEventListener('submit',async e=>{e.preventDefau
 
 
 
-async function loadInvoiceIntegration(){
- try{const d=await api('/web-api/admin/invoice-integration'),s=d.settings||{};if(q('#invoiceProvider'))q('#invoiceProvider').value=s.provider||'qnb-solist';q('#invoiceEnvironment').value=s.environment||'test';q('#invoiceCompanyVkn').value=s.companyVkn||'';q('#invoiceCompanyTitle').value=s.companyTitle||'';q('#invoiceSenderAlias').value=s.senderAlias||s.gbAlias||'';if(q('#invoicePkAlias'))q('#invoicePkAlias').value=s.pkAlias||'';q('#invoiceServiceUrl').value=s.webServiceUrl||'';q('#invoiceUsername').value=s.username||'';q('#invoicePassword').value=s.password||'';q('#invoiceEnabled').checked=!!s.enabled;q('#invoiceDraftMode').checked=s.draftMode!==false;q('#invoiceAutoDetect').checked=s.autoDetectType!==false}catch(e){toast(e.message)}
+function gibSeriesPreview(series,next){
+  const ser=String(series||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)||'???';
+  const seq=Math.max(1,Math.min(999999999,Math.round(Number(next)||1)));
+  return `${ser}${new Date().getFullYear()}${String(seq).padStart(9,'0')}`;
 }
-q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{e.preventDefault();const st=q('#invoiceIntegrationStatus');try{await api('/web-api/admin/invoice-integration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:q('#invoiceProvider')?.value||'qnb-solist',environment:q('#invoiceEnvironment').value,companyVkn:q('#invoiceCompanyVkn').value,companyTitle:q('#invoiceCompanyTitle').value,senderAlias:q('#invoiceSenderAlias').value,gbAlias:q('#invoiceSenderAlias').value,pkAlias:q('#invoicePkAlias')?.value||'',webServiceUrl:q('#invoiceServiceUrl').value,username:q('#invoiceUsername').value,password:q('#invoicePassword').value,enabled:q('#invoiceEnabled').checked,draftMode:q('#invoiceDraftMode').checked,autoDetectType:q('#invoiceAutoDetect').checked})});st.textContent='QNB Solist altyapı ayarları kaydedildi.';st.className='form-status success';invoiceConnectionTestForCenter()}catch(err){st.textContent=err.message;st.className='form-status error'}});
+function refreshInvoiceSeriesPreview(){
+  if(q('#invoiceEfaturaPreview'))q('#invoiceEfaturaPreview').textContent='Önizleme: '+gibSeriesPreview(q('#invoiceEfaturaSeries')?.value||'ATK',q('#invoiceEfaturaNext')?.value||1);
+  if(q('#invoiceEarsivPreview'))q('#invoiceEarsivPreview').textContent='Önizleme: '+gibSeriesPreview(q('#invoiceEarsivSeries')?.value||'ATA',q('#invoiceEarsivNext')?.value||1);
+}
+async function loadInvoiceIntegration(){
+ try{
+  const d=await api('/web-api/admin/invoice-integration'),s=d.settings||{};
+  if(q('#invoiceProvider'))q('#invoiceProvider').value=s.provider||'qnb-solist';
+  q('#invoiceEnvironment').value=s.environment||'test';
+  q('#invoiceCompanyVkn').value=s.companyVkn||'';
+  q('#invoiceCompanyTitle').value=s.companyTitle||'';
+  if(q('#invoiceEfaturaSeries'))q('#invoiceEfaturaSeries').value=(s.efaturaSeries||'ATK').toUpperCase();
+  if(q('#invoiceEarsivSeries'))q('#invoiceEarsivSeries').value=(s.earsivSeries||'ATA').toUpperCase();
+  if(q('#invoiceEfaturaNext'))q('#invoiceEfaturaNext').value=s.efaturaNext||1;
+  if(q('#invoiceEarsivNext'))q('#invoiceEarsivNext').value=s.earsivNext||1;
+  q('#invoiceSenderAlias').value=s.senderAlias||s.gbAlias||'';
+  if(q('#invoicePkAlias'))q('#invoicePkAlias').value=s.pkAlias||'';
+  q('#invoiceServiceUrl').value=s.webServiceUrl||'';
+  q('#invoiceUsername').value=s.username||'';
+  q('#invoicePassword').value=s.password||'';
+  q('#invoiceEnabled').checked=!!s.enabled;
+  q('#invoiceDraftMode').checked=s.draftMode!==false;
+  q('#invoiceAutoDetect').checked=s.autoDetectType!==false;
+  refreshInvoiceSeriesPreview();
+ }catch(e){toast(e.message)}
+}
+['invoiceEfaturaSeries','invoiceEarsivSeries','invoiceEfaturaNext','invoiceEarsivNext'].forEach(id=>{
+  q('#'+id)?.addEventListener('input',refreshInvoiceSeriesPreview);
+});
+q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#invoiceIntegrationStatus');
+  try{
+    await api('/web-api/admin/invoice-integration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      provider:q('#invoiceProvider')?.value||'qnb-solist',
+      environment:q('#invoiceEnvironment').value,
+      companyVkn:q('#invoiceCompanyVkn').value,
+      companyTitle:q('#invoiceCompanyTitle').value,
+      efaturaSeries:q('#invoiceEfaturaSeries')?.value||'ATK',
+      earsivSeries:q('#invoiceEarsivSeries')?.value||'ATA',
+      efaturaNext:q('#invoiceEfaturaNext')?.value||1,
+      earsivNext:q('#invoiceEarsivNext')?.value||1,
+      senderAlias:q('#invoiceSenderAlias').value,
+      gbAlias:q('#invoiceSenderAlias').value,
+      pkAlias:q('#invoicePkAlias')?.value||'',
+      webServiceUrl:q('#invoiceServiceUrl').value,
+      username:q('#invoiceUsername').value,
+      password:q('#invoicePassword').value,
+      enabled:q('#invoiceEnabled').checked,
+      draftMode:q('#invoiceDraftMode').checked,
+      autoDetectType:q('#invoiceAutoDetect').checked
+    })});
+    st.textContent='QNB ayarları kaydedildi · e-Fatura ATK / e-Arşiv ATA.';
+    st.className='form-status success';
+    await loadInvoiceIntegration();
+    invoiceConnectionTestForCenter();
+  }catch(err){st.textContent=err.message;st.className='form-status error'}
+});
 q('#invoiceConnectionTestBtn')?.addEventListener('click',async()=>{const box=q('#invoiceConnectionTestResult');box.innerHTML='<p>Kontrol ediliyor…</p>';try{const r=await api('/web-api/admin/invoice-integration/test');box.innerHTML=(r.checks||[]).map(c=>`<div class="self-test-row ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${c.name}</b><small>${c.detail}</small></div>`).join('')+`<div class="self-test-row"><small>${r.note||''}</small></div>`}catch(e){box.innerHTML=`<div class="self-test-row bad"><b>Test çalışmadı</b><small>${e.message}</small></div>`}});
 
 let dynamicsPreviewData=null;

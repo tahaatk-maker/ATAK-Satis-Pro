@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v13" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v14" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1331,6 +1331,14 @@ Bulunamayan → Diğer.
             </div></div>
             <div class="two-col"><label>Sağlayıcı<select id="invoiceProvider"><option value="qnb-solist">QNB Solist</option><option value="qnb-esolutions">QNB eSolutions</option><option value="qnb-efinans">QNB eFinans</option></select></label><label>Ortam<select id="invoiceEnvironment"><option value="test">Test</option><option value="live">Canlı</option></select></label></div>
             <div class="two-col"><label>Firma VKN<input id="invoiceCompanyVkn" placeholder="10 haneli VKN"/></label><label>Firma Ünvanı<input id="invoiceCompanyTitle"/></label></div>
+            <div class="two-col">
+              <label>e-Fatura seri (3 harf)<input id="invoiceEfaturaSeries" maxlength="3" placeholder="ATK" value="ATK"/><small class="field-hint">Örn. ATK2026000000252</small></label>
+              <label>e-Arşiv seri (3 harf)<input id="invoiceEarsivSeries" maxlength="3" placeholder="ATA" value="ATA"/><small class="field-hint">Örn. ATA2026000000001</small></label>
+            </div>
+            <div class="two-col">
+              <label>e-Fatura sonraki no<input id="invoiceEfaturaNext" type="number" min="1" max="999999999" step="1" value="1"/><small class="field-hint" id="invoiceEfaturaPreview">Önizleme: ATK…</small></label>
+              <label>e-Arşiv sonraki no<input id="invoiceEarsivNext" type="number" min="1" max="999999999" step="1" value="1"/><small class="field-hint" id="invoiceEarsivPreview">Önizleme: ATA…</small></label>
+            </div>
             <label>Gönderici Birim Etiketi / GB Alias<input id="invoiceSenderAlias" placeholder="QNB Solist GB alias"/></label>
             <label>Posta Kutusu / PK Alias<input id="invoicePkAlias" placeholder="Opsiyonel PK alias"/></label>
             <label>QNB WSDL / Web Servis Adresi<input id="invoiceServiceUrl" placeholder="QNB’nin vereceği test/canlı WSDL"/></label>
@@ -1722,5 +1730,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v13"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v14"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
