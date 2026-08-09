@@ -617,10 +617,49 @@ app.post('/web-api/admin/finance-account',requireAdmin,(req,res)=>{
   audit(s,'Finans hesabı kaydedildi',row.name,{type});writeStore(s);res.json({ok:true,row:{...row,balance:accountBalance(s,row.id)}});
 });
 app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,res)=>{
-  const s=readStore(),x=req.body||{},name=String(x.name||'').trim();
+  const s=readStore(),x=req.body||{};
+  const name=String(x.name||'').trim();
+  const phone=String(x.phone||'').trim();
+  const city=String(x.city||'').trim();
+  const district=String(x.district||'').trim();
+  const address=String(x.address||'').trim();
+  const invoiceType=String(x.invoiceType||'individual')==='corporate'?'corporate':'individual';
+  const deliverySame=x.deliverySameAsBilling!==false&&x.deliverySameAsBilling!=='false';
+  const deliveryCity=String(x.deliveryCity||'').trim();
+  const deliveryDistrict=String(x.deliveryDistrict||'').trim();
+  const deliveryAddress=String(x.deliveryAddress||'').trim();
+  const companyName=String(x.companyName||'').trim();
+  const taxOffice=String(x.taxOffice||'').trim();
+  const taxNo=String(x.taxNo||x.corporateTaxNo||x.tckn||'').trim();
   if(!name)return res.status(400).json({error:'Müşteri adı zorunludur'});
+  if(!phone)return res.status(400).json({error:'Telefon zorunludur'});
+  if(!city||!district||!address)return res.status(400).json({error:'Fatura adresi (il, ilçe, açık adres) zorunludur'});
+  if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress)){
+    return res.status(400).json({error:'Teslimat adresi fatura adresinden farklıysa il, ilçe ve açık adres zorunludur'});
+  }
+  if(invoiceType==='corporate'){
+    if(!companyName)return res.status(400).json({error:'Kurumsal faturada firma ünvanı zorunludur'});
+    if(!taxOffice)return res.status(400).json({error:'Kurumsal faturada vergi dairesi zorunludur'});
+    if(!taxNo||taxNo.replace(/\D/g,'').length<10)return res.status(400).json({error:'Kurumsal faturada geçerli VKN zorunludur'});
+  }
   let row=s.customers.find(v=>v.id===x.id);
-  const data={name,phone:String(x.phone||''),email:String(x.email||''),taxNo:String(x.taxNo||''),address:String(x.address||''),note:String(x.note||''),active:x.active!==false,updatedAt:new Date().toISOString()};
+  const data={
+    name,phone,
+    email:String(x.email||'').trim(),
+    taxNo,
+    tckn:invoiceType==='individual'?String(x.tckn||taxNo||'').trim():'',
+    city,district,address,
+    deliverySameAsBilling:deliverySame,
+    deliveryCity:deliverySame?city:deliveryCity,
+    deliveryDistrict:deliverySame?district:deliveryDistrict,
+    deliveryAddress:deliverySame?address:deliveryAddress,
+    invoiceType,
+    companyName:invoiceType==='corporate'?companyName:'',
+    taxOffice:invoiceType==='corporate'?taxOffice:'',
+    note:String(x.note||'').trim(),
+    active:x.active!==false&&x.active!=='false',
+    updatedAt:new Date().toISOString()
+  };
   if(row)Object.assign(row,data);else{row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),...data};s.customers.push(row)}
   audit(s,'Müşteri kaydedildi',row.name);writeStore(s);res.json({ok:true,row:{...row,balance:customerBalance(s,row.id)}});
 });

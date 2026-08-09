@@ -71,7 +71,7 @@ function goTab(id,{remember=true}={}){
   if(id==='foundation')setTimeout(()=>loadFoundation().catch(e=>toast(e.message)),20);
   if(id==='stockCenter')setTimeout(()=>loadStockCenter().catch(e=>toast(e.message)),20);
   if(id==='financeCenter')setTimeout(()=>loadFinanceCenter().catch(e=>toast(e.message)),20);
-  if(id==='customersPage')setTimeout(()=>loadCustomersPage?.(),20);
+  if(id==='customersPage')setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),20);
   if(id==='salesCenter')setTimeout(()=>loadSalesCenter(),20);
   if(id==='webOrders')setTimeout(()=>loadWebOrders(),20);
   if(id==='settings')setTimeout(()=>loadPromissorySettings(),20);
@@ -479,6 +479,175 @@ q('#dealerSettingsForm')?.addEventListener('submit',async e=>{
   try{await api('/web-api/admin/dealer-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})});st.textContent='Bayi ayarları kaydedildi.';st.className='form-status success';await loadDealerSettings();await loadSalesCenter()}catch(err){st.textContent=err.message;st.className='form-status error'}
 });
 
+/* ===== Müşteriler sayfası ===== */
+let customersPageData={customers:[],selectedId:''};
+function customerInvoiceType(prefix){
+  const checked=document.querySelector(`input[name="${prefix}InvoiceType"]:checked`);
+  return checked?.value==='corporate'?'corporate':'individual';
+}
+function syncCustomerFormUI(prefix){
+  const same=q(`#${prefix}DeliverySame`)?.checked!==false;
+  q(`#${prefix}DeliveryWrap`)?.classList.toggle('hidden',same);
+  const corp=customerInvoiceType(prefix)==='corporate';
+  q(`#${prefix}CorporateWrap`)?.classList.toggle('hidden',!corp);
+  q(`#${prefix}IndividualTaxWrap`)?.classList.toggle('hidden',corp);
+}
+function collectCustomerPayload(prefix,{requireActive=false}={}){
+  const name=(q(`#${prefix}Name`)?.value||'').trim();
+  const phone=(q(`#${prefix}Phone`)?.value||'').trim();
+  const city=(q(`#${prefix}City`)?.value||'').trim();
+  const district=(q(`#${prefix}District`)?.value||'').trim();
+  const address=(q(`#${prefix}Address`)?.value||'').trim();
+  const deliverySame=q(`#${prefix}DeliverySame`)?.checked!==false;
+  const deliveryCity=(q(`#${prefix}DeliveryCity`)?.value||'').trim();
+  const deliveryDistrict=(q(`#${prefix}DeliveryDistrict`)?.value||'').trim();
+  const deliveryAddress=(q(`#${prefix}DeliveryAddress`)?.value||'').trim();
+  const invoiceType=customerInvoiceType(prefix);
+  const companyName=(q(`#${prefix}CompanyName`)?.value||'').trim();
+  const taxOffice=(q(`#${prefix}TaxOffice`)?.value||'').trim();
+  const taxNo=(q(`#${prefix}TaxNo`)?.value||'').trim();
+  const tckn=(q(`#${prefix}Tckn`)?.value||'').trim();
+  if(!name)throw new Error('Müşteri adı zorunludur');
+  if(!phone)throw new Error('Telefon zorunludur');
+  if(!city||!district||!address)throw new Error('Fatura adresi (il, ilçe, açık adres) zorunludur');
+  if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress))throw new Error('Teslimat adresi için il, ilçe ve açık adres girin');
+  if(invoiceType==='corporate'){
+    if(!companyName)throw new Error('Kurumsal faturada firma ünvanı zorunludur');
+    if(!taxOffice)throw new Error('Kurumsal faturada vergi dairesi zorunludur');
+    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal faturada geçerli VKN zorunludur');
+  }
+  const payload={
+    name,phone,
+    email:(q(`#${prefix}Email`)?.value||'').trim(),
+    city,district,address,
+    deliverySameAsBilling:deliverySame,
+    deliveryCity,deliveryDistrict,deliveryAddress,
+    invoiceType,companyName,taxOffice,
+    taxNo:invoiceType==='corporate'?taxNo:tckn,
+    tckn:invoiceType==='individual'?tckn:'',
+    note:(q(`#${prefix}Note`)?.value||'').trim(),
+    active:true
+  };
+  if(requireActive||q(`#${prefix}Active`))payload.active=String(q(`#${prefix}Active`)?.value||'true')!=='false';
+  const id=(q(`#${prefix}Id`)?.value||'').trim();
+  if(id)payload.id=id;
+  return payload;
+}
+function fillCustomerForm(prefix,c={}){
+  if(q(`#${prefix}Id`))q(`#${prefix}Id`).value=c.id||'';
+  if(q(`#${prefix}Name`))q(`#${prefix}Name`).value=c.name||'';
+  if(q(`#${prefix}Phone`))q(`#${prefix}Phone`).value=c.phone||'';
+  if(q(`#${prefix}Email`))q(`#${prefix}Email`).value=c.email||'';
+  if(q(`#${prefix}City`))q(`#${prefix}City`).value=c.city||'';
+  if(q(`#${prefix}District`))q(`#${prefix}District`).value=c.district||'';
+  if(q(`#${prefix}Address`))q(`#${prefix}Address`).value=c.address||'';
+  if(q(`#${prefix}DeliverySame`))q(`#${prefix}DeliverySame`).checked=c.deliverySameAsBilling!==false;
+  if(q(`#${prefix}DeliveryCity`))q(`#${prefix}DeliveryCity`).value=c.deliveryCity||'';
+  if(q(`#${prefix}DeliveryDistrict`))q(`#${prefix}DeliveryDistrict`).value=c.deliveryDistrict||'';
+  if(q(`#${prefix}DeliveryAddress`))q(`#${prefix}DeliveryAddress`).value=c.deliveryAddress||'';
+  const type=c.invoiceType==='corporate'?'corporate':'individual';
+  document.querySelectorAll(`input[name="${prefix}InvoiceType"]`).forEach(r=>{r.checked=r.value===type});
+  if(q(`#${prefix}CompanyName`))q(`#${prefix}CompanyName`).value=c.companyName||'';
+  if(q(`#${prefix}TaxOffice`))q(`#${prefix}TaxOffice`).value=c.taxOffice||'';
+  if(q(`#${prefix}TaxNo`))q(`#${prefix}TaxNo`).value=type==='corporate'?(c.taxNo||''):'';
+  if(q(`#${prefix}Tckn`))q(`#${prefix}Tckn`).value=type==='individual'?(c.tckn||c.taxNo||''):'';
+  if(q(`#${prefix}Note`))q(`#${prefix}Note`).value=c.note||'';
+  if(q(`#${prefix}Active`))q(`#${prefix}Active`).value=c.active===false?'false':'true';
+  syncCustomerFormUI(prefix);
+}
+function openCustomerModal(c=null){
+  q('#customerPageForm')?.reset();
+  q('#customerPageStatus').textContent='';
+  q('#customerPageStatus').className='form-status';
+  q('#customerFormTitle').textContent=c?'Müşteri Düzenle':'Yeni Müşteri Ekle';
+  fillCustomerForm('customerPage',c||{});
+  if(!c&&q('#customerPageDeliverySame'))q('#customerPageDeliverySame').checked=true;
+  syncCustomerFormUI('customerPage');
+  q('#customerModal')?.classList.remove('hidden');
+  q('#customerPageName')?.focus();
+}
+function renderCustomerPageList(){
+  const term=(q('#customerPageSearch')?.value||'').toLocaleLowerCase('tr-TR');
+  const rows=customersPageData.customers.filter(c=>{
+    const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.city||''} ${c.district||''}`.toLocaleLowerCase('tr-TR');
+    return !term||hay.includes(term);
+  });
+  if(q('#customerPageCount'))q('#customerPageCount').textContent=String(rows.length);
+  const box=q('#customerPageList');if(!box)return;
+  if(!rows.length){box.innerHTML='<div class="note" style="padding:16px">Müşteri bulunamadı. + Yeni Müşteri ile ekleyin.</div>';return}
+  box.innerHTML=rows.map(c=>{
+    const bal=Number(c.balance||0);
+    const balCls=bal>0?'debt':bal<0?'credit':'closed';
+    const sub=[c.phone,c.city&&c.district?`${c.district}/${c.city}`:(c.address||'')].filter(Boolean).join(' · ');
+    const active=String(c.id)===String(customersPageData.selectedId)?'active':'';
+    return `<button type="button" class="customer-card ${active}" data-customer-id="${c.id}"><div><b>${c.name||'-'}</b><small>${sub||'Adres yok'}${c.invoiceType==='corporate'?' · Kurumsal':''}</small></div><div class="customer-card-balance ${balCls}"><small>Cari</small><strong>${money2(bal)}</strong></div></button>`;
+  }).join('');
+  qa('#customerPageList [data-customer-id]').forEach(btn=>btn.addEventListener('click',()=>selectCustomerPage(btn.dataset.customerId)));
+}
+async function selectCustomerPage(id){
+  customersPageData.selectedId=id;
+  renderCustomerPageList();
+  const empty=q('#customerEmptyState'),content=q('#customerDetailContent');
+  try{
+    const d=await api('/web-api/admin/customer-detail/'+encodeURIComponent(id));
+    const c=d.customer||{};
+    empty?.classList.add('hidden');content?.classList.remove('hidden');
+    if(q('#customerDetailName'))q('#customerDetailName').textContent=c.name||'-';
+    if(q('#customerDetailPhone'))q('#customerDetailPhone').textContent=[c.phone,c.email].filter(Boolean).join(' · ')||'-';
+    if(q('#customerDetailStatus'))q('#customerDetailStatus').textContent=c.active===false?'Pasif':(c.invoiceType==='corporate'?'Kurumsal · Aktif':'Bireysel · Aktif');
+    if(q('#customerDetailBalance'))q('#customerDetailBalance').textContent=money2(c.balance);
+    const addr=[c.address,c.district,c.city].filter(Boolean).join(', ');
+    const deliv=c.deliverySameAsBilling!==false?'Teslimat = fatura adresi':[c.deliveryAddress,c.deliveryDistrict,c.deliveryCity].filter(Boolean).join(', ');
+    const tx=d.transactions||[];
+    if(q('#customerTransactionCount'))q('#customerTransactionCount').textContent=`${tx.length} hareket`;
+    const list=q('#customerTransactionList');
+    if(list){
+      list.innerHTML=`<div class="customer-info-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div class="note"><b>Fatura adresi</b><br>${addr||'-'}</div>
+        <div class="note"><b>Teslimat</b><br>${deliv||'-'}</div>
+        ${c.invoiceType==='corporate'?`<div class="note"><b>Firma</b><br>${c.companyName||'-'}<br>${c.taxOffice||''} · VKN ${c.taxNo||''}</div>`:''}
+      </div>`+(tx.length?tx.slice(0,80).map(t=>`<div class="customer-tx"><div><b>${t.date||''}</b> · ${t.kind||''}<small>${t.description||t.reference||''}</small></div><strong>${money2(t.amount)}</strong></div>`).join(''):'<div class="note">Henüz cari hareket yok.</div>');
+    }
+    customersPageData._selected=c;
+  }catch(e){toast(e.message);empty?.classList.remove('hidden');content?.classList.add('hidden')}
+}
+async function loadCustomersPage(){
+  const fin=await api('/web-api/admin/finance-center');
+  customersPageData.customers=fin.customers||[];
+  renderCustomerPageList();
+  if(customersPageData.selectedId&&customersPageData.customers.some(c=>String(c.id)===String(customersPageData.selectedId))){
+    await selectCustomerPage(customersPageData.selectedId);
+  }else{
+    customersPageData.selectedId='';
+    q('#customerEmptyState')?.classList.remove('hidden');
+    q('#customerDetailContent')?.classList.add('hidden');
+  }
+}
+q('#newCustomerBtn')?.addEventListener('click',()=>openCustomerModal(null));
+q('#customerModalClose')?.addEventListener('click',()=>q('#customerModal')?.classList.add('hidden'));
+q('#customerPageSearch')?.addEventListener('input',()=>{clearTimeout(window.__custSearchT);window.__custSearchT=setTimeout(renderCustomerPageList,160)});
+q('#customerPageDeliverySame')?.addEventListener('change',()=>syncCustomerFormUI('customerPage'));
+document.querySelectorAll('input[name="customerPageInvoiceType"]').forEach(r=>r.addEventListener('change',()=>syncCustomerFormUI('customerPage')));
+document.addEventListener('click',e=>{
+  const edit=e.target.closest('[data-customer-action="edit"]');
+  if(edit){e.preventDefault();if(customersPageData._selected)openCustomerModal(customersPageData._selected)}
+  const goCust=e.target.closest('#openCustomersPage');
+  if(goCust){e.preventDefault();goTab('customersPage')}
+});
+q('#customerPageSaveBtn')?.addEventListener('click',async()=>{
+  const st=q('#customerPageStatus');
+  try{
+    const payload=collectCustomerPayload('customerPage',{requireActive:true});
+    st.textContent='Kaydediliyor...';st.className='form-status';
+    const r=await api('/web-api/admin/customer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    st.textContent='Müşteri kaydedildi.';st.className='form-status success';
+    q('#customerModal')?.classList.add('hidden');
+    toast('Müşteri kaydedildi');
+    await loadCustomersPage();
+    if(r.row?.id)await selectCustomerPage(r.row.id);
+  }catch(err){st.textContent=err.message;st.className='form-status error'}
+});
+
 let salesCenterData={customers:[],accounts:[],products:[],categories:[],warehouses:[],stocks:[],dealerSettings:[],salespeople:[],currentUser:null,canManage:false};
 async function loadSalesCenter(){
   try{
@@ -800,7 +969,8 @@ function salesCustomerChanged(){
   const c=salesCenterData.customers.find(x=>x.id===q('#salesCustomerSelect').value),box=q('#salesCustomerInfo'),noteWrap=q('#salesCustomerNoteWrap');
   if(!c){box.classList.add('hidden');box.innerHTML='';noteWrap?.classList.add('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value='';return}
   box.classList.remove('hidden');
-  box.innerHTML=`<div><small>Müşteri</small><b>${c.name}</b></div><div><small>Telefon</small><b>${c.phone||'-'}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>`;
+  const addr=[c.district,c.city].filter(Boolean).join('/')||(c.address||'-');
+  box.innerHTML=`<div><small>Müşteri</small><b>${c.name}</b></div><div><small>Telefon</small><b>${c.phone||'-'}</b></div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>`;
   noteWrap?.classList.remove('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value=c.note||'';
 }
 
@@ -938,21 +1108,28 @@ q('#salesCustomerNoteSave')?.addEventListener('click',async()=>{
 });
 
 q('#salesNewCustomerBtn')?.addEventListener('click',()=>{
-  q('#salesQuickCustomerForm')?.reset();q('#salesQuickCustomerStatus').textContent='';
-  q('#salesQuickCustomerModal')?.classList.remove('hidden');q('#salesQuickCustomerName')?.focus();
+  q('#salesQuickCustomerForm')?.reset();
+  q('#salesQuickCustomerStatus').textContent='';
+  q('#salesQuickCustomerStatus').className='form-status';
+  fillCustomerForm('salesQuickCustomer',{});
+  if(q('#salesQuickCustomerDeliverySame'))q('#salesQuickCustomerDeliverySame').checked=true;
+  document.querySelectorAll('input[name="salesQuickCustomerInvoiceType"]').forEach(r=>{r.checked=r.value==='individual'});
+  syncCustomerFormUI('salesQuickCustomer');
+  q('#salesQuickCustomerModal')?.classList.remove('hidden');
+  q('#salesQuickCustomerName')?.focus();
 });
 q('#salesQuickCustomerClose')?.addEventListener('click',()=>q('#salesQuickCustomerModal')?.classList.add('hidden'));
+q('#salesQuickCustomerDeliverySame')?.addEventListener('change',()=>syncCustomerFormUI('salesQuickCustomer'));
+document.querySelectorAll('input[name="salesQuickCustomerInvoiceType"]').forEach(r=>r.addEventListener('change',()=>syncCustomerFormUI('salesQuickCustomer')));
 q('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
-  e.preventDefault();const st=q('#salesQuickCustomerStatus'),name=q('#salesQuickCustomerName').value.trim();
-  if(!name){st.textContent='Müşteri adı zorunludur.';st.className='form-status error';return}
+  e.preventDefault();const st=q('#salesQuickCustomerStatus');
   try{
-    const r=await api('/web-api/admin/customer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      name,phone:q('#salesQuickCustomerPhone').value,email:q('#salesQuickCustomerEmail').value,taxNo:q('#salesQuickCustomerTaxNo').value,
-      address:q('#salesQuickCustomerAddress').value,note:q('#salesQuickCustomerNote').value,active:true
-    })});
+    const payload=collectCustomerPayload('salesQuickCustomer');
+    st.textContent='Kaydediliyor...';st.className='form-status';
+    const r=await api('/web-api/admin/customer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const fin=await api('/web-api/admin/finance-center');
     salesCenterData.customers=(fin.customers||[]).filter(c=>c.active!==false);
-    q('#salesCustomerSearch').value=name;salesRenderCustomers();q('#salesCustomerSelect').value=r.row.id;salesCustomerChanged();
+    q('#salesCustomerSearch').value=payload.name;salesRenderCustomers();q('#salesCustomerSelect').value=r.row.id;salesCustomerChanged();
     q('#salesQuickCustomerModal').classList.add('hidden');toast('Müşteri kaydedildi ve satışa seçildi.');
   }catch(err){st.textContent=err.message;st.className='form-status error'}
 });

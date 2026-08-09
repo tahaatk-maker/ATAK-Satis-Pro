@@ -415,3 +415,14 @@ button.primary,.primary,button{font-size:12px}
 @media(max-width:1300px){.sales-product-results{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1200px){.sales-center-layout{grid-template-columns:minmax(0,1.35fr) minmax(260px,.55fr)}}
 @media(max-width:1050px){.sales-summary-panel{max-height:none;position:static}}
+
+/* ===== Müşteri formu (Hepsiburada tarzı) ===== */
+.customer-modal-wide{width:min(720px,100%)!important}
+.cust-form-sec{border:1px solid #d7e2ef;border-radius:12px;padding:12px;background:#f8fafc;display:grid;gap:8px}
+.cust-form-sec-title{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7a8aa3}
+.cust-check,.cust-radio{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#13233f;cursor:pointer}
+.cust-check input,.cust-radio input{width:16px;height:16px;margin:0}
+.cust-invoice-type{display:flex;gap:16px;flex-wrap:wrap;padding:4px 0}
+#customerPageCorporateWrap,#salesQuickCorporateWrap,#customerPageDeliveryWrap,#salesQuickDeliveryWrap{display:grid;gap:8px;margin-top:4px;padding:10px;border:1px solid #c9d7e6;border-radius:10px;background:#fff}
+#customerPageCorporateWrap.hidden,#salesQuickCorporateWrap.hidden,#customerPageDeliveryWrap.hidden,#salesQuickDeliveryWrap.hidden{display:none!important}
+.customer-card.active{border-color:#0b4d8a;background:#eef5ff;box-shadow:inset 3px 0 0 #0b4d8a}
