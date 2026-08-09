@@ -522,7 +522,9 @@ async function loadSalesCenter(){
     if(typeof salesRenderCustomers==='function')salesRenderCustomers();
     if(typeof refreshSalesProductSelects==='function')refreshSalesProductSelects();
     if(typeof loadSalesPromissoryDefaults==='function')loadSalesPromissoryDefaults();
+    if(typeof salesSyncCartEmpty==='function')salesSyncCartEmpty();
     if(typeof salesCalculate==='function')salesCalculate();
+    q('#salesPosBarcode')?.focus();
   }catch(e){if(typeof toast==='function')toast(e.message||'Satış merkezi verileri yüklenemedi')}
 }
 function salesMoney(v){return money2(Number(v||0))}
