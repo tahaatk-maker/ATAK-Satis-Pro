@@ -267,36 +267,64 @@ async function fetchImportedBekoProduct(url){
 }
 
 
+const STAFF_DEFAULT_SCREENS=[
+  'screen_finance','screen_uninvoiced','screen_customer_payments','screen_customers',
+  'screen_sales_center','screen_sales_tracking','screen_my_sales','screen_invoice_center'
+];
 const PERMISSION_CATALOG=[
   {id:'dashboard_view',name:'Dashboard görüntüle',group:'Genel'},
-  {id:'products_view',name:'Ürün görüntüle',group:'Ürün'},
-  {id:'products_manage',name:'Ürün yönet',group:'Ürün'},
-  {id:'stock_manage',name:'Stok yönet',group:'Stok'},
-  {id:'stock_view',name:'Stok görüntüle',group:'Stok'},
-  {id:'customers_manage',name:'Müşteri yönet',group:'Müşteri'},
-  {id:'orders_manage',name:'Satış yap (POS)',group:'Satış'},
-  {id:'orders_view',name:'Sipariş görüntüle',group:'Satış'},
-  {id:'sale_docs',name:'Sözleşme / Senet bas',group:'Satış'},
-  {id:'sale_offer',name:'Teklif WhatsApp / PDF',group:'Satış'},
-  {id:'sale_invoice_qnb',name:'Fatura kes (QNB)',group:'Satış'},
-  {id:'sale_deduct_stock',name:'Satışta stok düş',group:'Satış'},
-  {id:'finance_view',name:'Finans görüntüle',group:'Finans'},
-  {id:'finance_manage',name:'Finans yönet',group:'Finans'},
-  {id:'invoices_manage',name:'Fatura merkezi',group:'Finans'},
-  {id:'marketing_manage',name:'Pazarlama yönet',group:'Web'},
+  {id:'screen_finance',name:'Finans & Cari (ana)',group:'Finans & Cari'},
+  {id:'screen_uninvoiced',name:'Kesilmeyen Faturalar',group:'Finans & Cari'},
+  {id:'screen_customer_payments',name:'Müşteri Ödemeleri',group:'Finans & Cari'},
+  {id:'screen_customers',name:'Müşteriler',group:'Finans & Cari'},
+  {id:'screen_sales_center',name:'Satış Merkezi',group:'Finans & Cari'},
+  {id:'screen_sales_tracking',name:'Satış Takibi',group:'Finans & Cari'},
+  {id:'screen_my_sales',name:'Satışlarım & Primim',group:'Finans & Cari'},
+  {id:'screen_staff_sales_report',name:'Personel Satış Raporu',group:'Finans & Cari'},
+  {id:'screen_manager_approvals',name:'Yönetici Onayları',group:'Finans & Cari'},
+  {id:'screen_invoice_center',name:'e-Fatura Merkezi',group:'Finans & Cari'},
+  {id:'orders_manage',name:'Satış kaydı yap (POS API)',group:'Satış işlemleri'},
+  {id:'sale_docs',name:'Sözleşme / Senet bas',group:'Satış işlemleri'},
+  {id:'sale_offer',name:'Teklif WhatsApp / PDF',group:'Satış işlemleri'},
+  {id:'sale_invoice_qnb',name:'Fatura kes (QNB)',group:'Satış işlemleri'},
+  {id:'sale_deduct_stock',name:'Satışta stok düş',group:'Satış işlemleri'},
+  {id:'products_view',name:'Ürün görüntüle',group:'Ürün & Stok'},
+  {id:'products_manage',name:'Ürün yönet',group:'Ürün & Stok'},
+  {id:'stock_view',name:'Stok görüntüle',group:'Ürün & Stok'},
+  {id:'stock_manage',name:'Stok yönet',group:'Ürün & Stok'},
+  {id:'customers_manage',name:'Müşteri kartı düzenle',group:'Finans işlemleri'},
+  {id:'finance_view',name:'Finans verisi görüntüle',group:'Finans işlemleri'},
+  {id:'finance_manage',name:'Finans yönet (tahsilat/masraf)',group:'Finans işlemleri'},
+  {id:'invoices_manage',name:'Fatura kuyruğu yönet',group:'Finans işlemleri'},
+  {id:'orders_view',name:'Sipariş görüntüle',group:'Diğer'},
+  {id:'marketing_manage',name:'Pazarlama yönet',group:'Diğer'},
   {id:'sync_manage',name:'Senkron yönet',group:'Sistem'},
   {id:'users_manage',name:'Kullanıcı / yetki yönet',group:'Sistem'},
   {id:'settings_manage',name:'Ayarlar',group:'Sistem'},
-  {id:'reports_view',name:'Rapor görüntüle',group:'Rapor'}
+  {id:'reports_view',name:'Ciro kanalları / rapor',group:'Sistem'},
+  {id:'foundation_manage',name:'Foundation yönetimi',group:'Sistem'},
+  {id:'web_manage',name:'Web sitesi yönet',group:'Sistem'}
 ];
 const ROLE_PRESETS={
   owner:{name:'Sahip / Tam Yetki',permissions:['*']},
-  admin:{name:'Yönetici',permissions:['dashboard_view','products_manage','marketing_manage','finance_manage','sync_manage','users_manage','orders_manage','sale_docs','sale_offer','sale_invoice_qnb','sale_deduct_stock','customers_manage','invoices_manage']},
+  admin:{name:'Yönetici',permissions:[
+    'dashboard_view','products_manage','marketing_manage','finance_manage','sync_manage','users_manage',
+    'orders_manage','sale_docs','sale_offer','sale_invoice_qnb','sale_deduct_stock','customers_manage','invoices_manage',
+    ...STAFF_DEFAULT_SCREENS,'screen_staff_sales_report','screen_manager_approvals','stock_manage','foundation_manage','settings_manage','reports_view'
+  ]},
   super_admin:{name:'Süper Admin',permissions:['*']},
-  sales:{name:'Satış Personeli',permissions:['dashboard_view','products_view','orders_manage','customers_manage','finance_view','sale_docs','sale_offer']},
-  warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','orders_view']},
-  accounting:{name:'Muhasebe',permissions:['dashboard_view','finance_manage','orders_view','finance_view','invoices_manage','sale_invoice_qnb']},
-  service:{name:'Servis',permissions:['dashboard_view','orders_view','service_manage']},
+  sales:{name:'Satış Personeli',permissions:[
+    'dashboard_view','products_view','orders_manage','customers_manage','finance_view',
+    'sale_docs','sale_offer',
+    ...STAFF_DEFAULT_SCREENS
+    // Personel Satış Raporu + Yönetici Onayları varsayılan KAPALI — istenirse kullanıcı kartından açılır
+  ]},
+  warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','stock_view','orders_view','screen_sales_tracking']},
+  accounting:{name:'Muhasebe',permissions:[
+    'dashboard_view','finance_manage','finance_view','orders_view','invoices_manage','sale_invoice_qnb',
+    'screen_finance','screen_uninvoiced','screen_customer_payments','screen_customers','screen_invoice_center','screen_my_sales'
+  ]},
+  service:{name:'Servis',permissions:['dashboard_view','orders_view','screen_sales_tracking']},
   viewer:{name:'Sadece Görüntüleme',permissions:['dashboard_view','products_view','orders_view']}
 };
 function sanitizePermissions(list,role){
@@ -412,7 +440,17 @@ function actorIsManager(req){
   const role=String(a.role||'').toLowerCase();
   if(['owner','admin','super_admin'].includes(role))return true;
   const perms=Array.isArray(a.permissions)?a.permissions:[];
-  return perms.includes('*')||perms.includes('finance_manage')||perms.includes('users_manage');
+  // Yönetici Onayları yetkisi de yönetici sayılır
+  return perms.includes('*')
+    ||perms.includes('finance_manage')
+    ||perms.includes('users_manage')
+    ||perms.includes('screen_manager_approvals')
+    ||perms.includes('cancellations_approve');
+}
+function actorCanSeeAllStaffSales(req){
+  return actorIsManager(req)
+    ||actorHasPermission(req,'screen_staff_sales_report')
+    ||actorHasPermission(req,'sales_reports_view');
 }
 function txBelongsToActor(tx,actor){
   if(!tx||!actor)return false;
@@ -657,7 +695,7 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.9-staff-pos-parity',
+  version:'6.3.10-screen-perms',
   build:'fix-v6',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
@@ -765,10 +803,14 @@ app.post('/foundation-api/login',(req,res)=>{
   const presetPerms=ROLE_PRESETS[role]?.permissions||[];
   const rawPerms=Array.isArray(user.permissions)?user.permissions:[];
   let permissions=rawPerms.length?rawPerms.slice():presetPerms.slice();
-  // Eski personel: sale_* yoksa teklif/senet varsayılan açık; fatura/stok kapalı kalır
-  if(permissions.includes('orders_manage') && !permissions.some(p=>String(p).startsWith('sale_'))){
-    const extras=(ROLE_PRESETS.sales.permissions||[]).filter(p=>String(p).startsWith('sale_'));
-    permissions=[...new Set([...permissions, ...extras])];
+  // Eski personel: ekran/işlem yetkileri yoksa satış personeli varsayılanlarını ekle (rapor+onay hariç)
+  if(permissions.includes('orders_manage') || permissions.includes('screen_sales_center')){
+    if(!permissions.some(p=>String(p).startsWith('sale_'))){
+      permissions=[...new Set([...permissions,'sale_docs','sale_offer'])];
+    }
+    if(!permissions.some(p=>String(p).startsWith('screen_'))){
+      permissions=[...new Set([...permissions, ...STAFF_DEFAULT_SCREENS])];
+    }
   }
   req.session.staffUser={
     id:user.id,
@@ -1020,10 +1062,11 @@ app.patch('/web-api/admin/web-orders/:id/status',requireAdmin,(req,res)=>{
   writeStore(store);res.json({ok:true,status});
 });
 
-app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage','screen_finance','screen_my_sales'),(req,res)=>{
   const s=readStore();
   const actor=currentActor(req);
-  const canManage=actorIsManager(req);
+  const canApprove=actorIsManager(req);
+  const canManage=actorCanSeeAllStaffSales(req);
   // Personel portalı oturumu: kapsam uygula. /web-admin oturumu: klasik tam finans.
   const staffPortal=isStaffPortalReq(req);
   const salespersonId=String(req.query.salespersonId||'');
@@ -1113,6 +1156,7 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
     sales:saleRows,
     stores:s.stores,
     canManage:staffPortal?canManage:true,
+    canApprove:staffPortal?canApprove:true,
     ciro,
     people:(staffPortal && canManage)?salesPeople(s,req):[],
     filters:{salespersonId,dealerId:dealerFilter},
@@ -1476,12 +1520,15 @@ function normalizeSaleInvoiceStatus(raw){
   if(st==='pending'||st==='queued'||st==='queue_qnb')return 'pending';
   return 'not_required';
 }
-app.get('/web-api/admin/uninvoiced-sales',requireAdmin,(req,res)=>{
+app.get('/web-api/admin/uninvoiced-sales',requireAdminOrStaffAny('screen_uninvoiced','invoices_manage','finance_manage'),(req,res)=>{
   const s=readStore();
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
-  const rows=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale' && !t.cancelled && saleNeedsInvoice(t.invoiceStatus))
-    .map(t=>({
+  const actor=currentActor(req);
+  const canAll=actorIsManager(req)||!isStaffPortalReq(req);
+  let rows=(s.financeTransactions||[])
+    .filter(t=>t.kind==='sale' && !t.cancelled && saleNeedsInvoice(t.invoiceStatus));
+  if(!canAll)rows=rows.filter(t=>txBelongsToActor(t,actor));
+  rows=rows.map(t=>({
       id:t.id,
       reference:t.reference||'',
       date:t.date||'',
@@ -1965,12 +2012,14 @@ app.post('/web-api/admin/customer/:id/note',requireAdmin,(req,res)=>{
 });
 
 
-app.get('/web-api/admin/sales-tracking',requireAdmin,(req,res)=>{
+app.get('/web-api/admin/sales-tracking',requireAdminOrStaffAny('screen_sales_tracking','orders_manage','screen_sales_center'),(req,res)=>{
   const s=readStore();
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
-  const rows=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale'&&!t.cancelled)
-    .map(t=>{
+  const actor=currentActor(req);
+  const canAll=actorCanSeeAllStaffSales(req)||!isStaffPortalReq(req);
+  let rows=(s.financeTransactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled);
+  if(!canAll)rows=rows.filter(t=>txBelongsToActor(t,actor));
+  rows=rows.map(t=>{
       const c=customerMap.get(String(t.customerId))||{};
       return {
         id:t.id,reference:t.reference||'',date:t.date||'',dealerId:t.dealerId||'',dealerName:t.dealerName||'',
@@ -1984,10 +2033,13 @@ app.get('/web-api/admin/sales-tracking',requireAdmin,(req,res)=>{
     .sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
   res.json({ok:true,rows});
 });
-app.post('/web-api/admin/sale/:id/delivery-status',requireAdmin,(req,res)=>{
+app.post('/web-api/admin/sale/:id/delivery-status',requireAdminOrStaffAny('screen_sales_tracking','orders_manage','screen_sales_center'),(req,res)=>{
   const s=readStore(),sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
   if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
   if(sale.cancelled)return res.status(400).json({error:'İptal edilmiş satış güncellenemez'});
+  if(isStaffPortalReq(req) && !actorCanSeeAllStaffSales(req) && !txBelongsToActor(sale,currentActor(req))){
+    return res.status(403).json({error:'Bu satış için yetkiniz yok'});
+  }
   const allowed=['order_received','preparing','ready','shipped','delivered'];
   const status=String(req.body?.status||'');
   if(!allowed.includes(status))return res.status(400).json({error:'Geçersiz teslimat durumu'});
@@ -2186,10 +2238,11 @@ app.get('/web-api/admin/sales-performance',requireAdmin,(req,res)=>{
   }));
   res.json({ok:true,canManage:board.canManage,summary,rows,collections,people:board.people,ranking,period:board.period,label:board.label,from:board.from,to:board.to});
 });
-app.get('/web-api/admin/staff-sales-month',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+app.get('/web-api/admin/staff-sales-month',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage','screen_my_sales','screen_staff_sales_report'),(req,res)=>{
   const s=readStore();
   const actor=currentActor(req);
-  const canManage=actorIsManager(req);
+  const canApprove=actorIsManager(req);
+  const canManage=actorCanSeeAllStaffSales(req);
   const staffPortal=isStaffPortalReq(req);
   const {month,from,to}=monthBounds(req.query.month);
   const salespersonId=String(req.query.salespersonId||'');
@@ -2226,6 +2279,7 @@ app.get('/web-api/admin/staff-sales-month',requireAdminOrStaffAny('finance_manag
     ok:true,
     month,from,to,
     canManage,
+    canApprove,
     staffPortal,
     summary:built.summary,
     rows:built.rows,

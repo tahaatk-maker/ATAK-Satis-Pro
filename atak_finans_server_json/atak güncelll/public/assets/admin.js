@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v8 */
+/* ATAK_ADMIN_BUILD=fix-v9 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -360,19 +360,47 @@ async function loadPermissionDefinitions(){
     applyRoleDefaultPermissions();
   }catch(e){}
 }
-function can(permission,user=window.__currentAdminUser){const p=user?.permissions||[];return p.includes('*')||p.includes(permission)}
+const PERM_ALIASES={
+  screen_sales_center:['sales_manage','orders_manage'],
+  screen_my_sales:['own_sales_view'],
+  screen_staff_sales_report:['sales_reports_view'],
+  screen_manager_approvals:['cancellations_approve'],
+  screen_customers:['customers_manage'],
+  screen_customer_payments:['finance_view'],
+  screen_finance:['finance_view','finance_manage'],
+  screen_invoice_center:['invoices_manage'],
+  screen_uninvoiced:['invoices_manage'],
+  screen_sales_tracking:['sales_manage','orders_manage']
+};
+function can(permission,user=window.__currentAdminUser){
+  const p=user?.permissions||[];
+  if(p.includes('*')||p.includes(permission))return true;
+  return (PERM_ALIASES[permission]||[]).some(a=>p.includes(a));
+}
 const TAB_PERMISSION_MAP={
- dashboard:'dashboard_view',salesCenter:'sales_manage',salesTracking:'sales_manage',mySalesReport:'own_sales_view',
-  staffSalesReport:'sales_reports_view',managerApprovals:'cancellations_approve',customersPage:'customers_manage',
- customerPayments:'finance_view',
- financeCenter:'finance_view',financeDashboard:'finance_view',invoiceCenter:'invoices_manage',uninvoicedSales:'invoices_manage',
- products:'products_view',dynamicsExcelImport:'products_manage',stockCenter:'stock_view',prices:'products_manage',
- brands:'products_manage',categories:'products_manage',productImport:'web_manage',campaigns:'web_manage',
- banners:'web_manage',webOrders:'web_manage',foundation:'foundation_manage',revenue:'reports_view',
- sync:'sync_manage',users:'users_manage',settings:'settings_manage'
+  dashboard:'dashboard_view',
+  financeCenter:'screen_finance',
+  customerPayments:'screen_customer_payments',
+  customersPage:'screen_customers',
+  salesCenter:'screen_sales_center',
+  salesTracking:'screen_sales_tracking',
+  mySalesReport:'screen_my_sales',
+  staffSalesReport:'screen_staff_sales_report',
+  managerApprovals:'screen_manager_approvals',
+  invoiceCenter:'screen_invoice_center',
+  uninvoicedSales:'screen_uninvoiced',
+  financeDashboard:'screen_finance',
+  products:'products_view',dynamicsExcelImport:'products_manage',stockCenter:'stock_view',prices:'products_manage',
+  brands:'products_manage',categories:'products_manage',productImport:'web_manage',campaigns:'web_manage',
+  banners:'web_manage',webOrders:'web_manage',foundation:'foundation_manage',revenue:'reports_view',
+  sync:'sync_manage',users:'users_manage',settings:'settings_manage'
 };
 function applyPermissionVisibility(){
-  qa('[data-tab]').forEach(el=>{const needed=TAB_PERMISSION_MAP[el.dataset.tab];if(needed)el.classList.toggle('permission-hidden',!can(needed))});
+  qa('[data-tab]').forEach(el=>{
+    let needed=TAB_PERMISSION_MAP[el.dataset.tab];
+    if(el.dataset.financeJump==='uninvoiced')needed='screen_uninvoiced';
+    if(needed)el.classList.toggle('permission-hidden',!can(needed));
+  });
 }
 async function loadCurrentAdminPermissions(){
   try{const d=await api('/web-api/me');window.__currentAdminUser=d.user||null;applyPermissionVisibility()}catch(e){}

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v8" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v9" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1144,7 +1144,7 @@ body.inv-full #pageTitle{font-size:18px}
 <section class="tab" id="sync"><div class="panel notice"><h2>Veri kaynağı bekleniyor</h2><p>Beko/Rapid tarafına salt okunur erişim talebi gönderildi. Yanıt gelene kadar çalışan site ve ürün yönetimi etkilenmez.</p></div><div class="panel"><h2>CSV yedek aktarımı</h2><form id="importForm"><input accept=".csv,text/csv" id="csvFile" required="" type="file"/><button type="submit">CSV’yi içe aktar</button></form><a class="secondary" href="/web-api/admin/export-csv">Ürünleri CSV indir</a></div></section>
 <section class="tab" id="users">
 <div class="split">
-<form class="panel form-stack" id="userForm"><h2>Kullanıcı kartı</h2><p class="note">Her personele ayrı kullanıcı açın. Finans, cari, satış, stok, fatura ve rapor yetkilerini tek tek açıp kapatabilirsiniz.</p><input id="userId" type="hidden"/><label>Ad Soyad<input id="userName" required=""/></label><label>Kullanıcı adı<input id="userUsername" required=""/></label><label>Rol<select id="userRole"></select></label>
+<form class="panel form-stack" id="userForm"><h2>Kullanıcı kartı</h2><p class="note">Finans &amp; Cari menüsündeki her ekran ayrı yetkidir. Satış Personeli rolünde <b>Personel Satış Raporu</b> ve <b>Yönetici Onayları</b> kapalıdır — isterseniz aşağıdaki listeden açın.</p><input id="userId" type="hidden"/><label>Ad Soyad<input id="userName" required=""/></label><label>Kullanıcı adı<input id="userUsername" required=""/></label><label>Rol<select id="userRole"></select></label>
 <div class="permission-editor">
   <div class="permission-editor-head"><div><b>Ekran & İşlem Yetkileri</b><small>Rolü seçin, sonra izinleri tek tek açıp kapatın.</small></div><button id="applyRolePermissions" class="secondary-btn" type="button">Rol Varsayılanını Uygula</button></div>
   <div id="userPermissionList" class="permission-grid"></div>
@@ -1724,5 +1724,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v8"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v9"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

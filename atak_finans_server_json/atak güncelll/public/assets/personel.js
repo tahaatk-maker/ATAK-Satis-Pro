@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v8 */
+/* ATAK_PERSONEL_BUILD=fix-v9 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -35,13 +35,27 @@ function currentMonthValue(){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
 
+const PERM_ALIASES={
+  screen_sales_center:['sales_manage','orders_manage'],
+  screen_my_sales:['own_sales_view'],
+  screen_staff_sales_report:['sales_reports_view'],
+  screen_manager_approvals:['cancellations_approve'],
+  screen_customers:['customers_manage'],
+  screen_customer_payments:['finance_view'],
+  screen_finance:['finance_view','finance_manage'],
+  screen_invoice_center:['invoices_manage'],
+  screen_uninvoiced:['invoices_manage'],
+  screen_sales_tracking:['sales_manage','orders_manage']
+};
 function has(permission){
   const p=currentUser?.permissions||[];
-  return p.includes('*')||p.includes(permission);
+  if(p.includes('*')||p.includes(permission))return true;
+  return (PERM_ALIASES[permission]||[]).some(a=>p.includes(a));
 }
 function canFinance(){
-  return has('finance_manage')||has('finance_view')||has('orders_manage')||has('customers_manage');
+  return has('screen_finance')||has('finance_manage')||has('finance_view')||has('orders_manage')||has('customers_manage');
 }
+function canScreen(id){return has(id)}
 function canSaleDocs(){return has('sale_docs')||has('*')}
 function canSaleOffer(){return has('sale_offer')||has('*')}
 function canSaleInvoice(){return has('sale_invoice_qnb')||has('finance_manage')||has('invoices_manage')||has('*')}
@@ -89,20 +103,21 @@ async function loadSession(){
     $('#app').classList.remove('hidden');
     $('#welcome').textContent=`Hoş geldin, ${currentUser.name||currentUser.username}`;
     $('#roleName').textContent=currentUser.roleName||currentUser.role||'Personel';
-    if(has('orders_manage'))$('#salesCard').classList.remove('hidden');
-    if(canFinance()){
-      $('#financeCard').classList.remove('hidden');
-      $('#paymentsCard').classList.remove('hidden');
-    }
-    if(has('stock_manage'))$('#stockCard').classList.remove('hidden');
+    // Finans & Cari ekranları — her biri ayrı yetki
+    if(canScreen('screen_sales_center')||has('orders_manage'))$('#salesCard').classList.remove('hidden');
+    if(canScreen('screen_finance')||canFinance())$('#financeCard').classList.remove('hidden');
+    if(canScreen('screen_customer_payments')||canFinance())$('#paymentsCard').classList.remove('hidden');
+    if(has('stock_manage')||has('stock_view'))$('#stockCard').classList.remove('hidden');
     applyStaffSalePermissions();
-    const locked=[];
-    if(!canSaleInvoice())locked.push('fatura kes');
-    if(!canDeductStock())locked.push('stok düş');
+    const closed=[];
+    if(!canScreen('screen_staff_sales_report'))closed.push('Personel Satış Raporu');
+    if(!canScreen('screen_manager_approvals'))closed.push('Yönetici Onayları');
+    if(!canSaleInvoice())closed.push('Fatura Kes (QNB)');
+    if(!canDeductStock())closed.push('Stok düş');
     if($('#permissionText')){
-      $('#permissionText').textContent=locked.length
-        ?`Yetkilerinize göre modüller açık. Satışta kapalı: ${locked.join(', ')} (yönetici Kullanıcılar’dan açabilir).`
-        :'Yetkilerinize göre kullanabileceğiniz modüller aşağıdadır.';
+      $('#permissionText').textContent=closed.length
+        ?`Açık ekranlar yetkinize göre. Kapalı: ${closed.join(', ')} — yönetici Kullanıcılar’dan açabilir.`
+        :'Tüm Finans & Cari ekranları açık.';
     }
     showHome();
   }catch(_){showLogin()}
@@ -159,7 +174,7 @@ async function loadFinance(){
     financeData=await api('/web-api/admin/finance-center'+financeQuery());
     renderFinance();
     await loadMonthSales();
-    if(financeData?.canManage)await loadManagerApprovals();
+    if(financeData?.canApprove||canScreen('screen_manager_approvals'))await loadManagerApprovals();
     st.textContent='';
   }catch(e){st.textContent=e.message}
 }
@@ -278,7 +293,7 @@ async function submitCancelRequest(){
     st.textContent=d.message||'Talep yöneticiye iletildi.';
     closeCancelModal();
     await loadMonthSales();
-    if(financeData?.canManage)await loadManagerApprovals();
+    if(financeData?.canApprove||canScreen('screen_manager_approvals'))await loadManagerApprovals();
     $('#financeStatus').textContent=d.message||'Talep yönetici onayına düştü.';
   }catch(e){st.textContent=e.message}
 }
@@ -288,7 +303,7 @@ async function loadManagerApprovals(){
   if(!wrap)return;
   try{
     const d=await api('/web-api/admin/cancellation-requests');
-    if(!d.canManage){wrap.classList.add('hidden');return}
+    if(!d.canManage && !canScreen('screen_manager_approvals')){wrap.classList.add('hidden');return}
     wrap.classList.remove('hidden');
     const pending=(d.rows||[]).filter(r=>r.status==='pending'&&['sale','sale_return','collection'].includes(r.targetType));
     $('#approvalRows').innerHTML=pending.map(r=>{
@@ -326,7 +341,8 @@ async function loadManagerApprovals(){
 
 function renderFinance(){
   const d=financeData||{};
-  const canManage=Boolean(d.canManage);
+  const canManage=Boolean(d.canManage)||canScreen('screen_staff_sales_report');
+  const canApprove=Boolean(d.canApprove)||canScreen('screen_manager_approvals');
   const ciro=d.ciro||{brand:{},personnel:[]};
   const brand=ciro.brand||{};
   const summary=d.summary||{};
@@ -335,7 +351,7 @@ function renderFinance(){
 
   $('#adminCiroWrap')?.classList.toggle('hidden',!canManage);
   $('#personnelCiroWrap')?.classList.toggle('hidden',!canManage);
-  $('#managerApprovalsWrap')?.classList.toggle('hidden',!canManage);
+  $('#managerApprovalsWrap')?.classList.toggle('hidden',!canApprove);
 
   // Personel portalında üst özet her zaman satış/tahsilat kartları (yönetici olsa bile)
   $('#financeStats').innerHTML=`

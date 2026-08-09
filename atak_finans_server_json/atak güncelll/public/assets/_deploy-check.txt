@@ -1,5 +1,5 @@
-fix-v8
-expect-health=6.3.9-staff-pos-parity
-staff-pos-admin-parity
-sale-permission-gates
+fix-v9
+expect-health=6.3.10-screen-perms
+finans-cari-screen-permissions
+staff-default-except-report-approvals
 2026-08-09
