@@ -393,7 +393,7 @@ function setSalesStep(step){
   if($('#salesHint1'))$('#salesHint1').textContent=hasCustomer?'Müşteri seçildi — devam edebilirsiniz':'Müşteri seçmeden devam edilemez';
   if($('#salesNext2'))$('#salesNext2').disabled=!hasCart;
   if($('#salesHint2'))$('#salesHint2').textContent=hasCart?`${salesCart.length} kalem hazır`:'Sepete ürün ekleyin';
-  if(salesStep===3)salesRecalcPay();
+  if(salesStep===3){syncPayAccounts();salesRecalcPay()}
 }
 function salesReset(){
   salesCart=[];
