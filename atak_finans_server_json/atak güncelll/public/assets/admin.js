@@ -103,6 +103,7 @@ function goTab(id,{remember=true}={}){
   if(id==='salesTracking')setTimeout(loadSalesTracking,20);
   if(id==='dynamicsExcelImport')setTimeout(()=>loadDynamicsImport(),20);
   document.body.classList.toggle('inv-full',id==='invoiceCenter');
+  document.body.classList.toggle('pos-full',id==='salesCenter');
   if(id==='invoiceCenter'){
     setTimeout(()=>loadInvoiceCenter().catch(e=>toast(e.message)),20);
   }
@@ -1118,7 +1119,7 @@ function salesApplyWizardVisibility(){
     const show=n===salesWizardStep;
     el.classList.toggle('hidden',!show);
     el.classList.toggle('pos-step-visible',show);
-    el.style.setProperty('display',show?(n===3?'flex':'block'):'none','important');
+    el.style.setProperty('display',show?'flex':'none','important');
     el.setAttribute('aria-hidden',show?'false':'true');
   });
   q('#salesCenter')?.setAttribute('data-pos-step',String(salesWizardStep));
@@ -1248,6 +1249,52 @@ function salesCalculate(){
   salesUpdatePosSteps(c);
   salesPaymentChanged();
 }
+function salesRecentIds(){
+  try{return JSON.parse(localStorage.getItem('atak-sales-recent-customers')||'[]')}catch(_){return []}
+}
+function salesRememberCustomer(id){
+  if(!id)return;
+  const next=[String(id),...salesRecentIds().filter(x=>String(x)!==String(id))].slice(0,24);
+  try{localStorage.setItem('atak-sales-recent-customers',JSON.stringify(next))}catch(_){}
+}
+function salesPickCustomer(id){
+  if(!id||!q('#salesCustomerSelect'))return;
+  const exists=(salesCenterData.customers||[]).some(c=>String(c.id)===String(id));
+  if(!exists){toast('Müşteri bulunamadı');return}
+  q('#salesCustomerSelect').value=String(id);
+  salesRememberCustomer(id);
+  salesCustomerChanged();
+  salesRenderRecentCustomers();
+}
+function salesRenderRecentCustomers(){
+  const box=q('#salesRecentCustomers');if(!box)return;
+  const term=(q('#salesCustomerSearch')?.value||'').toLocaleLowerCase('tr-TR');
+  const current=q('#salesCustomerSelect')?.value||'';
+  const byId=new Map((salesCenterData.customers||[]).map(c=>[String(c.id),c]));
+  let rows=salesRecentIds().map(id=>byId.get(String(id))).filter(Boolean);
+  if(!rows.length){
+    rows=[...(salesCenterData.customers||[])]
+      .sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))
+      .slice(0,16);
+  }
+  if(term){
+    rows=(salesCenterData.customers||[])
+      .filter(c=>`${c.name} ${c.phone||''} ${c.taxNo||''}`.toLocaleLowerCase('tr-TR').includes(term))
+      .slice(0,24);
+  }
+  if(q('#salesRecentCount'))q('#salesRecentCount').textContent=term?`${rows.length} sonuç`:`${rows.length} kayıt`;
+  if(!rows.length){
+    box.innerHTML='<div class="sales-recent-empty">Müşteri yok.<br/>Üstten arayın veya <b>+ Yeni Müşteri</b> ile ekleyin.</div>';
+    return;
+  }
+  box.innerHTML=rows.map(c=>{
+    const bal=Number(c.balance||0);
+    const balTxt=salesMoney(bal);
+    const active=String(c.id)===String(current)?'active':'';
+    const sub=[c.phone||'',[c.district,c.city].filter(Boolean).join('/')].filter(Boolean).join(' · ')||'Telefon yok';
+    return `<button type="button" class="sales-recent-item ${active}" data-customer-id="${c.id}"><div><strong>${c.name||'Müşteri'}</strong><span>${sub}</span></div><em>${balTxt}</em></button>`;
+  }).join('');
+}
 function salesRenderCustomers(){
   const term=(q('#salesCustomerSearch')?.value||'').toLocaleLowerCase('tr-TR'),current=q('#salesCustomerSelect')?.value||'';
   const rows=salesCenterData.customers.filter(c=>`${c.name} ${c.phone||''} ${c.taxNo||''}`.toLocaleLowerCase('tr-TR').includes(term));
@@ -1255,6 +1302,7 @@ function salesRenderCustomers(){
   q('#salesCustomerSelect').innerHTML='<option value="">Müşteri seçin</option>'+rows.map(c=>`<option value="${c.id}" ${String(c.id)===String(current)?'selected':''}>${c.name}${c.phone?' · '+c.phone:''}</option>`).join('');
   if(current && rows.some(c=>String(c.id)===String(current)))q('#salesCustomerSelect').value=current;
   salesCustomerChanged();
+  salesRenderRecentCustomers();
 }
 function salesCustomerChanged(){
   const c=salesCenterData.customers.find(x=>x.id===q('#salesCustomerSelect').value),box=q('#salesCustomerInfo'),noteWrap=q('#salesCustomerNoteWrap');
@@ -1262,14 +1310,17 @@ function salesCustomerChanged(){
     box.classList.add('hidden');box.innerHTML='';noteWrap?.classList.add('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value='';
     if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent='—';
     salesUpdatePosSteps(salesCalcState());
+    salesRenderRecentCustomers();
     return;
   }
+  salesRememberCustomer(c.id);
   box.classList.remove('hidden');
   const addr=[c.district,c.city].filter(Boolean).join('/')||(c.address||'-');
   box.innerHTML=`<div><small>Müşteri</small><b>${c.name}</b></div><div><small>Telefon</small><b>${c.phone||'-'}</b></div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>`;
   noteWrap?.classList.remove('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value=c.note||'';
   if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent=c.name.length>22?c.name.slice(0,21)+'…':c.name;
   salesUpdatePosSteps(salesCalcState());
+  salesRenderRecentCustomers();
 }
 
 let salesPromissorySettings={defaultInstallments:1,firstDueDays:30};
@@ -1395,6 +1446,11 @@ qa('[data-pay-fill]').forEach(btn=>{
   q(id)?.addEventListener('change',salesRenderPromissorySchedule);
 });
 q('#salesDealer')?.addEventListener('change',salesCalculate);q('#salesDiscountPct')?.addEventListener('input',salesCalculate);q('#salesDiscountPct')?.addEventListener('change',salesCalculate);q('#salesCustomerSearch')?.addEventListener('input',salesRenderCustomers);q('#salesCustomerSelect')?.addEventListener('change',salesCustomerChanged);
+q('#salesRecentCustomers')?.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-customer-id]');
+  if(!btn)return;
+  salesPickCustomer(btn.dataset.customerId);
+});
 
 q('#salesCustomerNoteSave')?.addEventListener('click',async()=>{
   const customerId=q('#salesCustomerSelect')?.value||'';if(!customerId){toast('Önce müşteri seçin');return}

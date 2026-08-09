@@ -443,6 +443,10 @@ main>.tab.active{flex:1 1 auto}
   .app{grid-template-columns:1fr!important}
   aside{width:min(320px,88vw)!important}
 }
+/* Satış Kasası tam ekran doldurma */
+body.pos-full main>.tab:not(#salesCenter){display:none!important}
+body.pos-full #salesCenter.tab.active{display:flex!important;flex-direction:column}
+#salesCenter .pos-sticky-dock{left:308px}
 .v4-search-wrap input{min-height:32px!important;font-size:12px}
 .panel,.stat{padding:10px!important;border-radius:10px!important}
 .stat strong{font-size:18px}
