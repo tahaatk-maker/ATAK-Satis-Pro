@@ -2358,7 +2358,7 @@ function renderRankTable(targetSel,ranking=[],opts={}){
         `Satış adedi: ${b.dataset.waCount}`,
         `Prim: ${salesMoney(b.dataset.waPrim)}`,
         '',
-        'Kolay gelsin 💪'
+        'Kolay gelsin.'
       ].join('\n');
       openWhatsAppShare(text);
     };
