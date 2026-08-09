@@ -1289,13 +1289,158 @@ function openSalesPreview(){
   activeSalesDraft=d;q('#salesPreviewBody').innerHTML=salesPreviewHtml(d);q('#salesPreviewModal').classList.remove('hidden');q('#salesPreviewModal').setAttribute('aria-hidden','false');document.body.classList.add('modal-open');
 }
 function closeSalesPreview(){q('#salesPreviewModal').classList.add('hidden');q('#salesPreviewModal').setAttribute('aria-hidden','true');document.body.classList.remove('modal-open')}
+function salesEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function salesAmountWords(n){
+  n=Math.round(Number(n||0)*100)/100;
+  const ones=['','bir','iki','üç','dört','beş','altı','yedi','sekiz','dokuz'];
+  const tens=['','on','yirmi','otuz','kırk','elli','altmış','yetmiş','seksen','doksan'];
+  const chunk=x=>{x=Math.floor(x);if(!x)return '';const y=Math.floor(x/100),o=Math.floor((x%100)/10),b=x%10;return (y?(y===1?'yüz':ones[y]+' yüz'):'')+(tens[o]?((y||b)?' ':'')+tens[o]:'')+(b?(o||y?' ':'')+ones[b]:'')};
+  const whole=Math.floor(n),kurus=Math.round((n-whole)*100);
+  if(!whole&&!kurus)return 'sıfır Türk Lirası';
+  let out='',rest=whole,i=0;const scales=['','bin','milyon','milyar'];
+  if(!whole)out='sıfır';
+  else{
+    const parts=[];
+    while(rest>0&&i<scales.length){
+      const c=rest%1000;
+      if(c){let w=chunk(c);if(i===1&&c===1)w='bin';else if(i>0)w=(w?w+' ':'')+scales[i];parts.unshift(w)}
+      rest=Math.floor(rest/1000);i++;
+    }
+    out=parts.join(' ');
+  }
+  out=`${out} Türk Lirası`;
+  if(kurus)out+=` ${chunk(kurus)} Kuruş`;
+  return out.replace(/\s+/g,' ').trim();
+}
+function salesPrintCss(){
+  return `@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:13px/1.45 "Segoe UI",Arial,sans-serif}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;padding:12px;background:#0b2a55;color:#fff}
+.toolbar button{border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer;background:#fff;color:#0b2a55}
+.toolbar button.primary{background:#dda20c;color:#1a1300}
+.sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:14mm;box-shadow:0 10px 30px #0002;page-break-after:always}
+.sheet:last-child{page-break-after:auto}
+.doc-head{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid #0b2a55;padding-bottom:12px;margin-bottom:14px}
+.brand{font-size:22px;font-weight:900;color:#0b2a55}.brand small{display:block;font-size:11px;font-weight:600;color:#66768d;margin-top:3px}
+.doc-meta{text-align:right;font-size:12px;color:#4b5b73}.doc-meta b{display:block;font-size:16px;color:#0b2a55;margin-bottom:4px}
+h2{margin:0 0 12px;font-size:18px;color:#0b2a55}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.box{border:1px solid #d7e2ef;border-radius:8px;padding:10px 12px;background:#f8fafc}.box small{display:block;color:#66768d;font-size:11px;margin-bottom:3px}
+table{width:100%;border-collapse:collapse;margin:14px 0}th,td{border-bottom:1px solid #e3ebf4;padding:8px 6px;text-align:left}th{font-size:11px;text-transform:uppercase;color:#66768d;border-bottom:2px solid #0b2a55}.num{text-align:right;white-space:nowrap}
+.totals{width:320px;margin-left:auto}.totals div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e8eef5}.totals .net{font-size:16px;font-weight:900;color:#0b2a55;border-bottom:0;padding-top:10px}
+.note-line{margin-top:12px;padding:10px 12px;border:1px solid #f0d48a;background:#fff8e8;border-radius:8px;font-size:12px}
+.terms{margin-top:16px;font-size:11px;color:#4b5b73}.terms ol{margin:6px 0 0;padding-left:18px}
+.signs{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px}.sig{border-top:1px solid #9aa8bc;padding-top:8px;text-align:center;min-height:70px}.sig small{display:block;color:#66768d;margin-bottom:28px}
+.senet .top{display:flex;justify-content:space-between;border-bottom:2px solid #0b2a55;padding-bottom:10px}.senet .top b{font-size:26px;color:#0b2a55}
+.senet .amount{font-size:34px;font-weight:900;color:#0b2a55;margin:18px 0 8px}.senet .words{font-size:12px;color:#4b5b73;margin-bottom:14px}
+.footer{font-size:11px;color:#66768d;margin-top:14px}.hint{font-size:11px;color:#8a96a8;margin-top:4px}
+@media print{body{background:#fff}.toolbar{display:none!important}.sheet{margin:0;box-shadow:none;width:auto;min-height:auto;padding:0}}`;
+}
+function salesCustomerPrintTotals(d){
+  const pay=(d.payments||[]).map(p=>`<div><span>${salesEsc(p.method)}</span><b>${salesMoney(p.amount)}</b></div>`).join('');
+  const note=d.promissory?`<div><span>Senet</span><b>${salesMoney(d.promissory.amount)}</b></div>`:'';
+  return `<div class="totals">
+    <div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div>
+    <div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div>
+    <div class="net"><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>
+    ${pay}${note}
+    <div><span>Ödeme şekli</span><b>${salesEsc(d.method||'-')}</b></div>
+  </div>`;
+}
+function salesOfferSheetHtml(d){
+  const rows=(d.items||[]).map(i=>`<tr><td>${salesEsc(i.itemCode||'-')}</td><td>${salesEsc(i.materialCode||i.productName||i.productCode)}</td><td class="num">${i.quantity}</td><td class="num">${salesMoney(i.unitPrice)}</td><td class="num">${salesMoney(i.quantity*i.unitPrice)}</td></tr>`).join('');
+  const addr=[d.customer?.address,d.customer?.district,d.customer?.city].filter(Boolean).join(', ');
+  return `<section class="sheet">
+    <div class="doc-head"><div class="brand">ATAK PAZARLAMA<small>Satış Teklifi · Müşteri kopyası</small></div>
+      <div class="doc-meta"><b>TEKLİF</b><div>Tarih: ${salesEsc(d.date||'')}</div><div>Bayi: ${salesEsc(d.dealer?.name||'')}</div><div>Satıcı: ${salesEsc(d.salesperson?.name||'')}</div></div></div>
+    <h2>SATIŞ TEKLİFİ</h2>
+    <div class="grid2">
+      <div class="box"><small>Müşteri</small><b>${salesEsc(d.customer?.name||'-')}</b><div>${salesEsc(d.customer?.phone||'')}</div></div>
+      <div class="box"><small>Geçerlilik</small><b>3 iş günü</b><div>Fiyatlar stok / kampanya durumuna göre değişebilir</div></div>
+      <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${salesEsc(addr||'-')}</b></div>
+    </div>
+    <table><thead><tr><th>Kod</th><th>Ürün / Malzeme</th><th class="num">Adet</th><th class="num">Birim</th><th class="num">Tutar</th></tr></thead><tbody>${rows}</tbody></table>
+    ${salesCustomerPrintTotals(d)}
+    ${d.promissory?`<div class="note-line"><b>Senet planı:</b> ${salesMoney(d.promissory.amount)} · ${d.promissory.installments} taksit · İlk vade ${salesEsc(d.promissory.firstDueDate)}<br>${(d.promissory.schedule||[]).map(r=>`${r.no}) ${r.dueDate} → ${salesMoney(r.amount)}`).join(' · ')}</div>`:''}
+    ${d.description?`<div class="note-line"><b>Not:</b> ${salesEsc(d.description)}</div>`:''}
+    <div class="terms"><b>Notlar</b><ol><li>Bu belge tekliftir; sipariş onayı / satış kaydı sonrası sözleşme ve senet basılır.</li><li>Mali fatura yerine geçmez.</li></ol></div>
+    <div class="signs"><div class="sig"><small>Satış Temsilcisi</small>${salesEsc(d.salesperson?.name||'')}</div><div class="sig"><small>Müşteri</small>${salesEsc(d.customer?.name||'')}</div></div>
+  </section>`;
+}
+function salesContractSheetHtml(d){
+  const rows=(d.items||[]).map(i=>`<tr><td>${salesEsc(i.itemCode||i.productCode||'-')}</td><td>${salesEsc(i.materialCode||i.productName||i.productCode)}</td><td class="num">${i.quantity}</td><td class="num">${salesMoney(i.unitPrice)}</td><td class="num">${salesMoney(i.quantity*i.unitPrice)}</td></tr>`).join('');
+  const addr=[d.customer?.address,d.customer?.district,d.customer?.city].filter(Boolean).join(', ');
+  const creditor=salesPromissorySettings.creditorName||'Atak Pazarlama';
+  return `<section class="sheet">
+    <div class="doc-head"><div class="brand">ATAK PAZARLAMA<small>Satış Sözleşmesi / Teslim Tutanağı</small></div>
+      <div class="doc-meta"><b>SÖZLEŞME</b><div>Tarih: ${salesEsc(d.date||'')}</div><div>Bayi: ${salesEsc(d.dealer?.name||'')}</div><div>Satıcı: ${salesEsc(d.salesperson?.name||'')}</div></div></div>
+    <h2>SATIŞ SÖZLEŞMESİ</h2>
+    <div class="grid2">
+      <div class="box"><small>Müşteri / Alıcı</small><b>${salesEsc(d.customer?.name||'-')}</b><div>${salesEsc(d.customer?.phone||'')}</div></div>
+      <div class="box"><small>VKN / TCKN</small><b>${salesEsc(d.customer?.taxNo||d.customer?.tckn||'-')}</b></div>
+      <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${salesEsc(addr||'-')}</b></div>
+    </div>
+    <table><thead><tr><th>Kod</th><th>Ürün / Malzeme</th><th class="num">Adet</th><th class="num">Birim</th><th class="num">Tutar</th></tr></thead><tbody>${rows}</tbody></table>
+    ${salesCustomerPrintTotals(d)}
+    ${d.promissory?`<div class="note-line"><b>Senet:</b> ${salesMoney(d.promissory.amount)} tutarındaki senet/senetler bu sözleşmenin eki ve ayrılmaz parçasıdır.</div>`:''}
+    <div class="terms"><b>Şartlar</b><ol>
+      <li>Satılan ürün bedeli yukarıdaki ödeme planına göre tahsil edilir.</li>
+      <li>Müşteri ürünleri teslim sırasında kontrol edeceğini kabul eder.</li>
+      <li>Senetli satışlarda her senet ayrı ödeme taahhüdüdür.</li>
+      <li>Bu belge mali fatura yerine geçmez.</li>
+    </ol></div>
+    <div class="signs"><div class="sig"><small>Satıcı Kaşe / İmza</small>${salesEsc(creditor)}</div><div class="sig"><small>Müşteri İmza</small>${salesEsc(d.customer?.name||'')}</div></div>
+  </section>`;
+}
+function salesSenetSheetsHtml(d){
+  if(!d.promissory?.schedule?.length)return `<section class="sheet"><h2>Senet</h2><p>Bu satışta senet tutarı yok. Senet basmak için ödeme dağılımında <b>Senet</b> tutarı girin.</p></section>`;
+  const c=d.customer||{},cfg=salesPromissorySettings||{},creditor=cfg.creditorName||'Atak Pazarlama';
+  const issue=d.date||new Date().toISOString().slice(0,10);
+  return d.promissory.schedule.map((r,idx)=>`<section class="sheet senet">
+    <div class="top"><div><b>SENET</b><div class="hint">Taksit ${idx+1} / ${d.promissory.schedule.length} · Önizleme</div></div>
+      <div class="doc-meta"><span>Seri No</span><b>TASLAK-${String(idx+1).padStart(2,'0')}</b><div>Düzenleme: ${salesEsc(issue)}</div><div>Vade: <b>${salesEsc(r.dueDate)}</b></div></div></div>
+    <div class="amount">${salesMoney(r.amount)}</div>
+    <div class="words">Yalnız: ${salesEsc(salesAmountWords(r.amount))}</div>
+    <p>İşbu senet mukabilinde <b>${salesEsc(creditor)}</b> veya emrine, yukarıda yazılı bedeli vadesinde kayıtsız şartsız ödemeyi taahhüt ederim.</p>
+    <div class="grid2">
+      <div class="box"><small>Borçlu</small><b>${salesEsc(c.name||'')}</b></div>
+      <div class="box"><small>VKN / TCKN</small><b>${salesEsc(c.taxNo||c.tckn||'-')}</b></div>
+      <div class="box"><small>Telefon</small><b>${salesEsc(c.phone||'-')}</b></div>
+      <div class="box"><small>Ödeme Yeri</small><b>${salesEsc(cfg.paymentPlace||cfg.issuePlace||'-')}</b></div>
+      <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${salesEsc([c.address,c.district,c.city].filter(Boolean).join(', ')||'-')}</b></div>
+    </div>
+    <p class="footer">${salesEsc(cfg.footer||'İşbu senet 6102 sayılı TTK hükümlerine tabidir.')}</p>
+    <div class="signs"><div class="sig"><small>Keşideci / Borçlu İmza</small>${salesEsc(c.name||'')}</div><div class="sig"><small>Lehtar / Alacaklı</small>${salesEsc(creditor)}</div></div>
+  </section>`).join('');
+}
+function openSalesPrintWindow(title,bodyHtml){
+  const w=window.open('','_blank');
+  if(!w){toast('Tarayıcı yeni sekmeyi engelledi. Açılır pencerelere izin verin.');return null}
+  w.document.open();
+  w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${salesEsc(title)}</title><style>${salesPrintCss()}</style></head><body>
+    <div class="toolbar"><b>${salesEsc(title)}</b><button class="primary" onclick="window.print()">Yazdır / PDF Kaydet</button><button onclick="window.close()">Kapat</button><span style="opacity:.9;font-size:12px">Yazdır penceresinden “PDF olarak kaydet” seçebilirsiniz</span></div>
+    ${bodyHtml}
+  </body></html>`);
+  w.document.close();
+  try{w.focus()}catch(_){}
+  return w;
+}
 function salesOfferText(d){
   const pay=(d.payments||[]).map(p=>`${p.method}: ${salesMoney(p.amount)}`).join('\n');
   const note=d.promissory?`\nSenet: ${salesMoney(d.promissory.amount)} / ${d.promissory.installments} taksit / ilk vade ${d.promissory.firstDueDate}`:'';
   return `ATAK PAZARLAMA TEKLİF\nMüşteri: ${d.customer?.name||''}\n${d.items.map(i=>`${i.quantity} x ${i.itemCode||'-'} / ${i.materialCode||i.productName} - ${salesMoney(i.quantity*i.unitPrice)}`).join('\n')}\n\nBrüt: ${salesMoney(d.grossTotal)}\nİskonto (%${String(d.discountPct||0).replace('.',',')}): -${salesMoney(d.discountAmount||0)}\nNet Toplam: ${salesMoney(d.total)}\nÖdeme:\n${pay}${note}\n${d.description||''}`;
 }
-function sendSalesOffer(){const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);const phone=String(d.customer?.phone||'').replace(/\D/g,'');const raw=salesOfferText(d),text=encodeURIComponent(raw);if(phone){const trPhone=phone.startsWith('0')?'90'+phone.slice(1):phone;const win=window.open(`https://wa.me/${trPhone}?text=${text}`,'_blank');if(!win){navigator.clipboard?.writeText(raw);toast('Tarayıcı yeni pencereyi engelledi. Teklif panoya kopyalandı.')}}else{navigator.clipboard?.writeText(raw);toast('Müşterinin telefonu yok. Teklif metni panoya kopyalandı.')}}
-function printSalesPreview(){const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);const w=window.open('','_blank');if(!w){toast('Tarayıcı yazdırma penceresini engelledi. Açılır pencerelere izin verin.');return}w.document.write(`<html><head><title>Atak Pazarlama Teklif</title><meta charset="utf-8"><style>body{font:14px Arial;padding:30px;color:#14233b}h1{color:#07366c}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #ddd;text-align:left}.preview-cards{display:flex;gap:12px}.preview-cards>div{flex:1;border:1px solid #ddd;padding:10px}.preview-cards small,.preview-cards b,.preview-cards span{display:block}.preview-totals{margin:20px 0 0 auto;width:380px}.preview-totals>div{display:flex;justify-content:space-between;padding:7px;border-bottom:1px solid #ddd}.preview-note,.preview-description{margin-top:12px;padding:10px;border:1px solid #ddd}</style></head><body><h1>ATAK PAZARLAMA</h1><h2>Satış / Teklif Önizleme</h2>${salesPreviewHtml(d)}<script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close()}
+function sendSalesOffer(){const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);const phone=String(d.customer?.phone||'').replace(/\D/g,'');const raw=salesOfferText(d),text=encodeURIComponent(raw);if(phone){const trPhone=phone.startsWith('0')?'90'+phone.slice(1):(phone.startsWith('90')?phone:'90'+phone);const win=window.open(`https://wa.me/${trPhone}?text=${text}`,'_blank');if(!win){navigator.clipboard?.writeText(raw);toast('Tarayıcı yeni pencereyi engelledi. Teklif panoya kopyalandı.')}}else{navigator.clipboard?.writeText(raw);toast('Müşterinin telefonu yok. Teklif metni panoya kopyalandı.')}}
+function printSalesPreview(){
+  const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);
+  // Müşteri teklifi: prim / stok / iç notlar yok
+  openSalesPrintWindow('Atak Pazarlama · Satış Teklifi',salesOfferSheetHtml(d));
+}
+async function printSalesContractAndNotes(){
+  const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);
+  try{await loadSalesPromissoryDefaults()}catch(_){}
+  if(!d.promissory)toast('Senet yok — yalnız sözleşme açılıyor. Senet için ödeme satırına Senet tutarı girin.');
+  openSalesPrintWindow('Atak Pazarlama · Sözleşme & Senet',salesContractSheetHtml(d)+salesSenetSheetsHtml(d));
+}
 async function confirmSalesDraft(){
   const d=activeSalesDraft||collectSalesDraft();if(d.error){toast(d.error);return}const deductStock=Boolean(d.deductStock);if(deductStock&&!d.warehouseId){toast('Stoktan düşmek için satış deposu seçmelisiniz.');return}const status=d.status,btn=q('#salesPreviewConfirmBtn');btn.disabled=true;btn.textContent='Satış Yapılıyor...';status.textContent='';
   try{
@@ -1307,7 +1452,13 @@ async function confirmSalesDraft(){
     })});
     let noteText='';
     (result.collections||[]).forEach(c=>{if(c?.id)window.open('/web-api/admin/receipt/'+c.id,'_blank')});
-    if(result.promissory?.printUrl){noteText=` · ${result.promissory.notes?.length||0} senet oluşturuldu`;window.open(result.promissory.printUrl,'_blank')}
+    if(result.docsUrl){
+      noteText=result.promissory?.notes?.length?` · ${result.promissory.notes.length} senet + sözleşme`:' · sözleşme';
+      window.open(result.docsUrl,'_blank');
+    }else if(result.promissory?.printUrl){
+      noteText=` · ${result.promissory.notes?.length||0} senet oluşturuldu`;
+      window.open(result.promissory.printUrl,'_blank');
+    }
     closeSalesPreview();status.textContent=`Satış kaydedildi. Yeni cari bakiye: ${salesMoney(result.balance)}${noteText}`;status.className='form-status success';await check();await loadSalesCenter();salesReset();
   }catch(e){status.textContent=e.message;status.className='form-status error'}finally{btn.disabled=false;btn.textContent='✓ Kontrol Ettim, Satışı Yap'}
 }
@@ -1316,14 +1467,18 @@ q('#salesPreviewClose')?.addEventListener('click',closeSalesPreview);
 q('#salesPreviewConfirmBtn')?.addEventListener('click',confirmSalesDraft);
 q('#salesPreviewOfferBtn')?.addEventListener('click',sendSalesOffer);
 q('#salesPreviewPrintBtn')?.addEventListener('click',printSalesPreview);
+q('#salesPreviewDocsBtn')?.addEventListener('click',printSalesContractAndNotes);
 document.addEventListener('click',e=>{
   const offer=e.target.closest('#salesPreviewOfferBtn');
   if(offer && !offer.dataset.boundFallback){e.preventDefault();sendSalesOffer()}
   const print=e.target.closest('#salesPreviewPrintBtn');
   if(print && !print.dataset.boundFallback){e.preventDefault();printSalesPreview()}
+  const docs=e.target.closest('#salesPreviewDocsBtn');
+  if(docs && !docs.dataset.boundFallback){e.preventDefault();printSalesContractAndNotes()}
 });
 q('#salesPreviewOfferBtn')?.setAttribute('data-bound-fallback','1');
 q('#salesPreviewPrintBtn')?.setAttribute('data-bound-fallback','1');
+q('#salesPreviewDocsBtn')?.setAttribute('data-bound-fallback','1');
 q('#salesPreviewModal')?.addEventListener('click',e=>{if(e.target===q('#salesPreviewModal'))closeSalesPreview()});
 
 

@@ -986,7 +986,11 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
 
   audit(s,'Müşteriye satış yapıldı',customer.name,{total,grossTotal,discountPct,dealer:dealer.name,salesperson:salesperson.name,commissionAmount,paid,payments:sale.payments,promissoryAmount,ref,items:cleanItems.length});
   writeStore(s);
-  res.json({ok:true,sale,collections,collection:collections[0]||null,promissory:promissoryResult,balance:customerBalance(s,customer.id)});
+  res.json({
+    ok:true,sale,collections,collection:collections[0]||null,promissory:promissoryResult,
+    docsUrl:`/web-api/admin/sale/${sale.id}/print-docs`,
+    balance:customerBalance(s,customer.id)
+  });
 });
 
 app.post('/web-api/admin/customer-collection',requireAdmin,(req,res)=>{
@@ -1239,6 +1243,148 @@ app.post('/web-api/admin/invoice-integration/test',requireAdmin,(req,res)=>{
 app.get('/web-api/admin/invoice-queue',requireAdmin,(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
 app.post('/web-api/admin/invoice-queue/:id/retry',requireAdmin,(req,res)=>{const s=readStore(),r=(s.invoiceQueue||[]).find(x=>x.id===req.params.id);if(!r)return res.status(404).json({error:'Fatura kaydı bulunamadı'});r.status='ready';r.error='';r.updatedAt=new Date().toISOString();writeStore(s);res.json({ok:true,row:r})});
 
+function htmlEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function moneyTR(v){return Number(v||0).toLocaleString('tr-TR',{style:'currency',currency:'TRY'})}
+function printDocShell(title,body,opts={}){
+  const auto=opts.autoPrint!==false;
+  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEsc(title)}</title>
+<style>
+@page{size:A4;margin:12mm}
+*{box-sizing:border-box}
+body{margin:0;background:#d9e2ec;color:#13233f;font:13px/1.45 "Segoe UI",Arial,sans-serif}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;padding:12px;background:#0b2a55;color:#fff;box-shadow:0 6px 20px #0004}
+.toolbar b{margin-right:8px}
+.toolbar button,.toolbar a{appearance:none;border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer;text-decoration:none;color:#0b2a55;background:#fff}
+.toolbar button.primary{background:#dda20c;color:#1a1300}
+.sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:14mm 14mm 12mm;box-shadow:0 10px 30px #0002;page-break-after:always}
+.sheet:last-child{page-break-after:auto}
+.doc-head{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid #0b2a55;padding-bottom:12px;margin-bottom:14px}
+.brand{font-size:22px;font-weight:900;color:#0b2a55;letter-spacing:.02em}
+.brand small{display:block;font-size:11px;font-weight:600;color:#66768d;margin-top:3px}
+.doc-meta{text-align:right;font-size:12px;color:#4b5b73}
+.doc-meta b{display:block;font-size:16px;color:#0b2a55;margin-bottom:4px}
+h2.doc-title{margin:0 0 12px;font-size:18px;color:#0b2a55}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.box{border:1px solid #d7e2ef;border-radius:8px;padding:10px 12px;background:#f8fafc}
+.box small{display:block;color:#66768d;font-size:11px;margin-bottom:3px}
+.box b{font-size:13px}
+table.items{width:100%;border-collapse:collapse;margin:14px 0}
+table.items th,table.items td{border-bottom:1px solid #e3ebf4;padding:8px 6px;text-align:left;vertical-align:top}
+table.items th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#66768d;border-bottom:2px solid #0b2a55}
+table.items td.num,table.items th.num{text-align:right;white-space:nowrap}
+.totals{width:320px;margin-left:auto;margin-top:8px}
+.totals div{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #e8eef5}
+.totals .net{font-size:16px;font-weight:900;color:#0b2a55;border-bottom:0;padding-top:10px}
+.note-line{margin-top:12px;padding:10px 12px;border:1px solid #f0d48a;background:#fff8e8;border-radius:8px;font-size:12px}
+.terms{margin-top:16px;font-size:11px;color:#4b5b73}
+.terms ol{margin:6px 0 0;padding-left:18px}
+.signs{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px}
+.signs .sig{border-top:1px solid #9aa8bc;padding-top:8px;text-align:center;min-height:70px}
+.signs small{display:block;color:#66768d;margin-bottom:28px}
+.senet .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0b2a55;padding-bottom:10px}
+.senet .top b{font-size:26px;color:#0b2a55}
+.senet .amount{font-size:34px;font-weight:900;color:#0b2a55;margin:18px 0 8px}
+.senet .words{font-size:12px;color:#4b5b73;margin-bottom:14px}
+.senet .body{font-size:13px;margin:12px 0 16px}
+.senet .footer{font-size:11px;color:#66768d;margin-top:14px}
+.hint{font-size:11px;color:#8a96a8;margin-top:8px}
+@media print{
+  body{background:#fff}
+  .toolbar{display:none!important}
+  .sheet{margin:0;box-shadow:none;width:auto;min-height:auto;padding:0}
+}
+</style></head><body>
+<div class="toolbar"><b>${htmlEsc(title)}</b><button class="primary" onclick="window.print()">Yazdır / PDF Kaydet</button><button onclick="window.close()">Kapat</button><span style="opacity:.85;font-size:12px">Yazdır → “PDF olarak kaydet” seçebilirsiniz</span></div>
+${body}
+${auto?`<script>window.addEventListener('load',()=>setTimeout(()=>{try{window.focus()}catch(e){}},200));<\/script>`:''}
+</body></html>`;
+}
+function amountToTrWords(n){
+  n=Math.round(Number(n||0)*100)/100;
+  const ones=['','bir','iki','üç','dört','beş','altı','yedi','sekiz','dokuz'];
+  const tens=['','on','yirmi','otuz','kırk','elli','altmış','yetmiş','seksen','doksan'];
+  const scales=[['',''] ,['bin','bin'],['milyon','milyon'],['milyar','milyar']];
+  const chunk=x=>{
+    x=Math.floor(x);if(!x)return '';
+    const yuz=Math.floor(x/100),on=Math.floor((x%100)/10),bir=x%10;
+    return (yuz?(yuz===1?'yüz':ones[yuz]+' yüz'):'')+(tens[on]?((yuz||bir)?' ':'')+tens[on]:'')+(bir?(on||yuz?' ':'')+ones[bir]:'');
+  };
+  const whole=Math.floor(n),kurus=Math.round((n-whole)*100);
+  if(!whole&&!kurus)return 'sıfır Türk Lirası';
+  let out='',rest=whole,i=0;
+  if(!whole)out='sıfır';
+  else{
+    const parts=[];
+    while(rest>0&&i<scales.length){
+      const c=rest%1000;
+      if(c){
+        let w=chunk(c);
+        if(i===1&&c===1)w='bin';
+        else if(i>0)w=(w?(w+' '):'')+scales[i][1];
+        parts.unshift(w);
+      }
+      rest=Math.floor(rest/1000);i++;
+    }
+    out=parts.join(' ');
+  }
+  out=`${out} Türk Lirası`;
+  if(kurus)out+=` ${chunk(kurus)} Kuruş`;
+  return out.replace(/\s+/g,' ').trim();
+}
+function buildSenetCardsHtml(notes,customer,cfg){
+  return (notes||[]).map((n,idx)=>`<section class="sheet senet">
+    <div class="top"><div><b>SENET</b><div class="hint">Taksit ${idx+1} / ${notes.length}</div></div><div class="doc-meta"><span>Seri No</span><b>${htmlEsc(n.serial||'-')}</b><div>Düzenleme: ${htmlEsc(n.issueDate||'')}</div><div>Vade: <b>${htmlEsc(n.dueDate||'')}</b></div></div></div>
+    <div class="amount">${moneyTR(n.amount)}</div>
+    <div class="words">Yalnız: ${htmlEsc(amountToTrWords(n.amount))}</div>
+    <p class="body">İşbu senet mukabilinde <b>${htmlEsc(cfg.creditorName||'Atak Pazarlama')}</b> veya emrine, yukarıda yazılı bedeli vadesinde kayıtsız şartsız ödemeyi taahhüt ederim. Protesto keşide edilmesini ve ihtar çekilmesini peşinen kabul ederim.</p>
+    <div class="grid2">
+      <div class="box"><small>Borçlu</small><b>${htmlEsc(customer?.name||'')}</b></div>
+      <div class="box"><small>VKN / TCKN</small><b>${htmlEsc(customer?.taxNo||customer?.tckn||'-')}</b></div>
+      <div class="box"><small>Telefon</small><b>${htmlEsc(customer?.phone||'-')}</b></div>
+      <div class="box"><small>Ödeme / Düzenleme Yeri</small><b>${htmlEsc(cfg.paymentPlace||cfg.issuePlace||'-')}</b></div>
+      <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${htmlEsc([customer?.address,customer?.district,customer?.city].filter(Boolean).join(', ')||'-')}</b></div>
+    </div>
+    ${n.description?`<div class="note-line">${htmlEsc(n.description)}</div>`:''}
+    <p class="footer">${htmlEsc(cfg.footer||'İşbu senet 6102 sayılı TTK hükümlerine tabidir. Bedelsiz / karşılıksızdır iddiası ileri sürülemez.')}</p>
+    <div class="signs"><div class="sig"><small>Keşideci / Borçlu İmza</small>${htmlEsc(customer?.name||'')}</div><div class="sig"><small>Lehtar / Alacaklı</small>${htmlEsc(cfg.creditorName||'Atak Pazarlama')}</div></div>
+  </section>`).join('');
+}
+function buildSaleContractHtml(sale,customer,cfg,settings){
+  const items=Array.isArray(sale.items)?sale.items:[];
+  const rows=items.map(i=>`<tr><td>${htmlEsc(i.itemCode||i.productCode||'-')}</td><td>${htmlEsc(i.productName||i.materialCode||i.productCode||'')}</td><td class="num">${Number(i.quantity||1)}</td><td class="num">${moneyTR(i.unitPrice)}</td><td class="num">${moneyTR(i.total!=null?i.total:Number(i.quantity||1)*Number(i.unitPrice||0))}</td></tr>`).join('');
+  const pays=(sale.payments||[]).map(p=>`<div><span>${htmlEsc(p.method||'')}</span><b>${moneyTR(p.amount)}</b></div>`).join('');
+  const gross=Number(sale.grossTotal!=null?sale.grossTotal:sale.total||0);
+  const net=Number(sale.total||0);
+  const disc=Number(sale.discountAmount!=null?sale.discountAmount:Math.max(0,gross-net));
+  const site=settings?.siteName||cfg.creditorName||'ATAK PAZARLAMA';
+  return `<section class="sheet">
+    <div class="doc-head"><div class="brand">${htmlEsc(site)}<small>Satış Sözleşmesi / Teslim Tutanağı</small></div>
+      <div class="doc-meta"><b>${htmlEsc(sale.reference||'SATIŞ')}</b><div>Tarih: ${htmlEsc(sale.date||'')}</div><div>Bayi: ${htmlEsc(sale.dealerName||'')}</div><div>Satıcı: ${htmlEsc(sale.salespersonName||sale.createdBy||'')}</div></div></div>
+    <h2 class="doc-title">SATIŞ SÖZLEŞMESİ</h2>
+    <div class="grid2">
+      <div class="box"><small>Müşteri / Alıcı</small><b>${htmlEsc(customer?.name||'')}</b><div>${htmlEsc(customer?.phone||'')}</div></div>
+      <div class="box"><small>VKN / TCKN</small><b>${htmlEsc(customer?.taxNo||customer?.tckn||'-')}</b></div>
+      <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${htmlEsc([customer?.address,customer?.district,customer?.city].filter(Boolean).join(', ')||'-')}</b></div>
+    </div>
+    <table class="items"><thead><tr><th>Kod</th><th>Ürün / Malzeme</th><th class="num">Adet</th><th class="num">Birim</th><th class="num">Tutar</th></tr></thead><tbody>${rows||'<tr><td colspan="5">Ürün yok</td></tr>'}</tbody></table>
+    <div class="totals">
+      <div><span>Brüt Toplam</span><b>${moneyTR(gross)}</b></div>
+      <div><span>İskonto (%${htmlEsc(String(sale.discountPct||0).replace('.',','))})</span><b>-${moneyTR(disc)}</b></div>
+      <div class="net"><span>Net Satış</span><b>${moneyTR(net)}</b></div>
+      ${pays}
+      <div><span>Ödeme şekli</span><b>${htmlEsc(sale.paymentMethod||'-')}</b></div>
+    </div>
+    ${sale.promissoryAmount?`<div class="note-line"><b>Senet:</b> ${moneyTR(sale.promissoryAmount)} tutarında senet/senetler işbu sözleşmenin eki ve ayrılmaz parçasıdır.</div>`:''}
+    <div class="terms"><b>Şartlar</b><ol>
+      <li>İşbu sözleşme kapsamında satılan ürünlerin bedeli yukarıdaki ödeme planına göre tahsil edilir.</li>
+      <li>Müşteri, ürünleri teslim almadan önce kontrol ettiğini / teslim sırasında kontrol edeceğini kabul eder.</li>
+      <li>Senetli satışlarda her bir senet ayrı bir ödeme taahhüdüdür; vadesinde ödenmeyen senetler için yasal yollara başvurulabilir.</li>
+      <li>Bu belge mali fatura yerine geçmez; fatura ayrıca düzenlenir.</li>
+    </ol></div>
+    <div class="signs"><div class="sig"><small>Satıcı Kaşe / İmza</small>${htmlEsc(site)}</div><div class="sig"><small>Müşteri İmza</small>${htmlEsc(customer?.name||'')}</div></div>
+  </section>`;
+}
+
 app.get('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=readStore();res.json({settings:s.promissorySettings||{}})});
 app.post('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=readStore(),x=req.body||{};s.promissorySettings={creditorName:String(x.creditorName||s.settings?.siteName||'Atak Pazarlama'),paymentPlace:String(x.paymentPlace||'İstanbul'),issuePlace:String(x.issuePlace||'İstanbul'),prefix:String(x.prefix||'ATAK').replace(/[^A-Za-z0-9_-]/g,'').slice(0,12)||'ATAK',defaultInstallments:Math.min(36,Math.max(1,Math.round(Number(x.defaultInstallments)||1))),firstDueDays:Math.min(365,Math.max(0,Math.round(Number(x.firstDueDays)||30))),intervalMonths:Math.min(12,Math.max(1,Math.round(Number(x.intervalMonths)||1))),copies:Math.min(3,Math.max(1,Math.round(Number(x.copies)||1))),footer:String(x.footer||'')};audit(s,'Senet ayarları güncellendi','Ayarlar');writeStore(s);res.json({ok:true,settings:s.promissorySettings})});
 app.post('/web-api/admin/promissory-plan',requireAdminOrStaff('orders_manage'),(req,res)=>{
@@ -1251,9 +1397,21 @@ app.post('/web-api/admin/promissory-plan',requireAdminOrStaff('orders_manage'),(
  s.promissoryNotes.push(...notes);audit(s,'Senet planı oluşturuldu',customer.name,{planId,total,count,interval});writeStore(s);res.json({ok:true,planId,notes,printUrl:`/web-api/admin/promissory-plan/${planId}/print`})
 });
 app.get('/web-api/admin/promissory-plan/:planId/print',requireAdminOrStaff('orders_manage'),(req,res)=>{
- const s=readStore(),notes=(s.promissoryNotes||[]).filter(n=>n.planId===req.params.planId);if(!notes.length)return res.status(404).send('Senet planı bulunamadı');const customer=s.customers.find(c=>c.id===notes[0].customerId),cfg=s.promissorySettings||{},esc=v=>String(v||'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
- const cards=notes.map((n,i)=>`<section class="note"><div class="top"><b>SENET</b><span>Seri: ${esc(n.serial)}</span></div><div class="amount">${Number(n.amount).toLocaleString('tr-TR',{style:'currency',currency:'TRY'})}</div><p><b>Vade:</b> ${esc(n.dueDate)} &nbsp; <b>Düzenleme:</b> ${esc(n.issueDate)}</p><p>İşbu senet karşılığında <b>${esc(cfg.creditorName||'Atak Pazarlama')}</b> veya emrine, yukarıda yazılı bedeli vadesinde kayıtsız ve şartsız ödeyeceğim.</p><div class="grid"><div><small>Borçlu</small><b>${esc(customer?.name||'')}</b></div><div><small>VKN/TCKN</small><b>${esc(customer?.taxNo||'')}</b></div><div><small>Adres</small><b>${esc(customer?.address||'')}</b></div><div><small>Ödeme Yeri</small><b>${esc(cfg.paymentPlace||'')}</b></div></div><p class="footer">${esc(cfg.footer||'')}</p><div class="signature">Borçlu İmza<br><br>________________________</div></section>`).join('');
- res.type('html').send(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Senet Planı</title><style>body{font-family:Arial;margin:0;background:#eef2f6;color:#17233a}.wrap{max-width:900px;margin:20px auto}.note{background:#fff;border:1px solid #aeb9c8;border-radius:10px;padding:24px;margin:0 0 18px;page-break-inside:avoid}.top{display:flex;justify-content:space-between;border-bottom:2px solid #082e62;padding-bottom:10px}.top b{font-size:24px;color:#082e62}.amount{font-size:30px;font-weight:900;margin:18px 0;color:#082e62}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid div{border:1px solid #d8e0ea;padding:10px;border-radius:7px}.grid small,.grid b{display:block}.signature{text-align:right;margin-top:28px}.footer{font-size:12px;color:#64748b}.actions{text-align:center;margin:18px}.actions button{padding:12px 22px;background:#082e62;color:#fff;border:0;border-radius:8px;font-weight:800}@media print{body{background:white}.wrap{margin:0;max-width:none}.actions{display:none}.note{border-radius:0;box-shadow:none}}</style></head><body><div class="actions"><button onclick="window.print()">Senetleri Yazdır</button></div><div class="wrap">${cards}</div></body></html>`)
+  const s=readStore(),notes=(s.promissoryNotes||[]).filter(n=>n.planId===req.params.planId).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
+  if(!notes.length)return res.status(404).send('Senet planı bulunamadı');
+  const customer=s.customers.find(c=>c.id===notes[0].customerId),cfg=s.promissorySettings||{};
+  const body=buildSenetCardsHtml(notes,customer,cfg);
+  res.type('html').send(printDocShell(`Senet Planı · ${customer?.name||''}`,body));
+});
+app.get('/web-api/admin/sale/:id/print-docs',requireAdminOrStaff('orders_manage'),(req,res)=>{
+  const s=readStore(),sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
+  if(!sale)return res.status(404).send('Satış bulunamadı');
+  const customer=s.customers.find(c=>c.id===sale.customerId)||{};
+  const cfg=s.promissorySettings||{};
+  const settings=s.settings||{};
+  const notes=(s.promissoryNotes||[]).filter(n=>n.saleId===sale.id||n.planId===sale.promissoryPlanId).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
+  const body=buildSaleContractHtml(sale,customer,cfg,settings)+buildSenetCardsHtml(notes,customer,cfg);
+  res.type('html').send(printDocShell(`Sözleşme & Senet · ${sale.reference||''}`,body));
 });
 app.get('/web-api/admin/self-test',requireAdmin,(req,res)=>{
  try{
