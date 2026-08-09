@@ -302,12 +302,24 @@ function requirePermission(permission){
   };
 }
 function currentActor(req){
+  // Personel oturumu varsa onu kullan — admin paneli cookie/bayrağı personel kimliğini ezmesin
+  if(req.session?.staffUser) return req.session.staffUser;
   if(req.session?.systemOwner===true){
     return {id:'system-owner',name:'Sistem Yöneticisi',username:'admin',role:'owner',permissions:['*']};
   }
   if(req.session?.user) return req.session.user;
-  if(req.session?.staffUser) return req.session.staffUser;
   return null;
+}
+/** Satış tutarı: total yoksa customerDelta / amount */
+function saleAmount(tx={}){
+  if(tx.total!=null && tx.total!==''){
+    const n=Number(tx.total);
+    if(Number.isFinite(n))return n;
+  }
+  const cd=Number(tx.customerDelta);
+  if(Number.isFinite(cd) && cd!==0)return Math.abs(cd);
+  const a=Number(tx.amount);
+  return Number.isFinite(a)?Math.abs(a):0;
 }
 
 function actorHasPermission(req,permission){
@@ -388,7 +400,7 @@ function buildSalesCiro(salesRows){
   const brand={beko:0,istikbal:0,other:0,total:0,count:0};
   const byPerson=new Map();
   for(const t of salesRows||[]){
-    const amount=Number(t.total||t.grossTotal||0);
+    const amount=saleAmount(t);
     const key=dealerBrandKey(t.dealerId);
     brand[key]=(brand[key]||0)+amount;
     brand.total+=amount;
@@ -420,11 +432,29 @@ function monthBounds(month=''){
   const to=`${m}-${String(last).padStart(2,'0')}`;
   return{month:m,from,to};
 }
+/** Satış tarihi: date yoksa createdAt; TR formatını da ISO'ya çevir */
+function txDateKey(tx){
+  const raw=String(tx?.date||tx?.createdAt||'').trim();
+  if(!raw)return '';
+  const iso=raw.slice(0,10);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(iso))return iso;
+  const tr=raw.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+  if(tr)return `${tr[3]}-${tr[2].padStart(2,'0')}-${tr[1].padStart(2,'0')}`;
+  const d=new Date(raw);
+  if(!Number.isNaN(d.getTime())){
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  return '';
+}
+function isStaffPortalReq(req){
+  // Personel girişi varsa personel portalıdır (admin=true owner bypass'ı staffPortal'ı bozmasın)
+  return Boolean(req.session?.staffUser);
+}
 function buildMonthSalesPrim(salesRows=[],pendingMap=new Map()){
   const round=n=>Math.round(Number(n||0)*100)/100;
   let gross=0,grossCount=0,cancelled=0,cancelledCount=0,returned=0,returnedCount=0,net=0,netCount=0,prim=0,primLost=0;
   const rows=(salesRows||[]).map(t=>{
-    const amount=Number(t.total||0);
+    const amount=saleAmount(t);
     const commission=Number(t.commissionAmount||0);
     const isCancelled=Boolean(t.cancelled);
     const cancelKind=String(t.cancelKind||t.requestKind||'').toLowerCase()==='return'?'return':'cancel';
@@ -439,7 +469,7 @@ function buildMonthSalesPrim(salesRows=[],pendingMap=new Map()){
     return{
       id:t.id,
       reference:t.reference||'',
-      date:(t.date||'').slice(0,10),
+      date:txDateKey(t)||String(t.date||'').slice(0,10),
       customerId:t.customerId||'',
       customerName:t.customerName||'',
       dealerId:t.dealerId||'',
@@ -555,7 +585,7 @@ function financeTx(s,data){
     accountId:String(data.accountId||''),counterAccountId:String(data.counterAccountId||''),customerId:String(data.customerId||''),
     amount:Math.round(Number(data.amount||0)*100)/100,customerDelta:Math.round(Number(data.customerDelta||0)*100)/100,
     category:String(data.category||''),description:String(data.description||''),reference:String(data.reference||''),
-    createdBy:String(data.createdBy||'Admin'),createdAt:new Date().toISOString()};
+    createdBy:String(data.createdBy||'Admin'),createdById:String(data.createdById||''),createdAt:new Date().toISOString()};
   s.financeTransactions.unshift(row); return row;
 }
 
@@ -686,13 +716,20 @@ app.post('/foundation-api/login',(req,res)=>{
                (s.stores||[])[0];
 
   clearLoginFails(failKey);
+  // Personel girişi admin paneli oturum bayraklarını temizler (özet/prim kapsamı bozulmasın)
+  delete req.session.admin;
+  delete req.session.systemOwner;
+  delete req.session.user;
+  const role=String(user.role||'staff');
+  const presetPerms=ROLE_PRESETS[role]?.permissions||[];
+  const rawPerms=Array.isArray(user.permissions)?user.permissions:[];
   req.session.staffUser={
     id:user.id,
     name:user.name,
     username:user.username,
-    role:user.role||'staff',
-    roleName:(typeof ROLE_PRESETS!=='undefined' && ROLE_PRESETS[user.role]?.name)||user.role||'Personel',
-    permissions:Array.isArray(user.permissions)?user.permissions:(ROLE_PRESETS[user.role]?.permissions||[]),
+    role:role||'staff',
+    roleName:(typeof ROLE_PRESETS!=='undefined' && ROLE_PRESETS[role]?.name)||role||'Personel',
+    permissions:rawPerms.length?rawPerms:presetPerms,
     storeId:user.storeId||branch?.id||'',
     storeName:branch?.name||'Mağaza',
     active:user.active!==false
@@ -700,7 +737,13 @@ app.post('/foundation-api/login',(req,res)=>{
 
   res.json({ok:true,user:req.session.staffUser,ownerOnly:ownerOnlyEnabled()});
 });
-app.post('/foundation-api/logout',(req,res)=>{delete req.session.staffUser;res.json({ok:true})});
+app.post('/foundation-api/logout',(req,res)=>{
+  delete req.session.staffUser;
+  delete req.session.admin;
+  delete req.session.systemOwner;
+  delete req.session.user;
+  res.json({ok:true});
+});
 app.get('/foundation-api/me',(req,res)=>{
   if(staffSession(req) && ownerOnlyEnabled() && !isOwnerActor(req)){
     delete req.session.staffUser;
@@ -932,7 +975,7 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
   const actor=currentActor(req);
   const canManage=actorIsManager(req);
   // Personel portalı oturumu: kapsam uygula. /web-admin oturumu: klasik tam finans.
-  const staffPortal=Boolean(req.session?.staffUser) && req.session?.admin!==true;
+  const staffPortal=isStaffPortalReq(req);
   const salespersonId=String(req.query.salespersonId||'');
   const dealerFilter=String(req.query.dealerId||'');
   const accounts=s.financeAccounts.map(x=>({...x,balance:accountBalance(s,x.id)}));
@@ -982,19 +1025,31 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
     customerName:customerMap.get(String(x.customerId||''))?.name||x.customerName||''
   }));
   const ciro=buildSalesCiro(saleRows);
-  const ownNet=Math.round(saleRows.reduce((a,t)=>a+Number(t.total||0),0)*100)/100;
-  const ownCount=saleRows.length;
-  const ownCollect=Math.round(transactions.filter(t=>t.kind==='collection').reduce((a,t)=>a+Number(t.amount||0),0)*100)/100;
+  // Üst kartlar: personel portalında her zaman oturumdaki kişinin kendi satışı
+  const ownSaleRows=(staffPortal && actor)
+    ? (s.financeTransactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled&&txBelongsToActor(t,actor))
+    : saleRows;
+  const ownNet=Math.round(ownSaleRows.reduce((a,t)=>a+saleAmount(t),0)*100)/100;
+  const ownCount=ownSaleRows.length;
+  const ownCollect=Math.round(
+    (staffPortal && actor
+      ? (s.financeTransactions||[]).filter(t=>!t.cancelled&&t.kind==='collection'&&(txBelongsToActor(t,actor)||ownSaleRows.some(sale=>String(sale.customerId||'')===String(t.customerId||''))))
+      : transactions.filter(t=>t.kind==='collection')
+    ).reduce((a,t)=>a+Math.abs(Number(t.amount||0)),0)*100
+  )/100;
   const fullSummary=financeSnapshot(s);
-  const summary=(staffPortal && (!canManage || salespersonId || dealerFilter))
+  // Personel portalında her zaman satış/prim özet alanlarını doldur
+  const summary=staffPortal
     ? {
         cash:canManage?fullSummary.cash:0,
         bank:canManage?fullSummary.bank:0,
         receivable:omitCustomers?0:Math.round(customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0)*100)/100,
-        todayExpense:0,
+        todayExpense:canManage?(fullSummary.todayExpense||0):0,
         mySalesTotal:ownNet,
         mySalesCount:ownCount,
-        myCollections:ownCollect
+        myCollections:ownCollect,
+        totalCash:canManage?fullSummary.cash:0,
+        totalBank:canManage?fullSummary.bank:0
       }
     : fullSummary;
 
@@ -1011,7 +1066,8 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
     ciro,
     people:(staffPortal && canManage)?salesPeople(s,req):[],
     filters:{salespersonId,dealerId:dealerFilter},
-    scope:staffPortal?(canManage?(salespersonId||dealerFilter?'filtered':'all'):'own'):'admin'
+    scope:staffPortal?(canManage?(salespersonId||dealerFilter?'filtered':'all'):'own'):'admin',
+    staffPortal
   });
 });
 app.post('/web-api/admin/finance-account',requireAdmin,(req,res)=>{
@@ -1395,8 +1451,11 @@ app.post('/web-api/admin/sale/:id/mark-invoiced',requireAdmin,(req,res)=>{
 app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{};
   const actor=currentActor(req);
-  // Personel portalında satış her zaman kendi adına yazılır
-  if(!actorIsManager(req) && actor){
+  // Personel portalundan gelen satışta satıcı boşsa oturumdaki kişi yazılır
+  if(isStaffPortalReq(req) && actor){
+    if(!String(x.salespersonId||'').trim())x.salespersonId=actor.id;
+    if(!String(x.salespersonName||'').trim())x.salespersonName=actor.name;
+  }else if(!actorIsManager(req) && actor){
     x.salespersonId=actor.id;
     x.salespersonName=actor.name;
   }
@@ -1471,9 +1530,12 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     }
   }
   const ref=`SAT-${Date.now()}`;
+  const actorName=actor?.name||currentActor(req)?.name||'Admin';
+  const actorId=actor?.id||currentActor(req)?.id||'';
   const sale=financeTx(s,{
     date:x.date,kind:'sale',accountId:'',customerId:customer.id,amount:0,customerDelta:total,
-    category:'Ürün Satışı',description:String(x.description||'Müşteri satışı'),reference:ref,createdBy:currentActor(req)?.name||'Admin'
+    category:'Ürün Satışı',description:String(x.description||'Müşteri satışı'),reference:ref,
+    createdBy:actorName,createdById:actorId
   });
   sale.items=cleanItems;
   sale.grossTotal=grossTotal;
@@ -1521,8 +1583,11 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     if(!['Nakit','Kredi Kartı','Havale'].includes(p.method))continue;
     const collection=financeTx(s,{
       date:x.date,kind:'collection',accountId:p.accountId,customerId:customer.id,amount:p.amount,customerDelta:-p.amount,
-      category:p.method,description:`${ref} satış tahsilatı · ${p.method}`,reference:`TAH-${Date.now()}-${collections.length+1}`,createdBy:currentActor(req)?.name||'Admin'
+      category:p.method,description:`${ref} satış tahsilatı · ${p.method}`,reference:`TAH-${Date.now()}-${collections.length+1}`,
+      createdBy:actorName,createdById:actorId
     });
+    collection.salespersonId=salesperson.id;
+    collection.salespersonName=salesperson.name;
     collections.push(collection);
   }
   if(collections[0])sale.collectionId=collections[0].id;
@@ -1869,19 +1934,23 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
     from=to=d;label=d;period='day';
   }
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
-  let all=(s.financeTransactions||[]).filter(t=>t.kind==='sale' && String(t.date||'').slice(0,10)>=from && String(t.date||'').slice(0,10)<=to);
+  let all=(s.financeTransactions||[]).filter(t=>{
+    if(t.kind!=='sale')return false;
+    const key=txDateKey(t);
+    return key && key>=from && key<=to;
+  });
   if(!canManage){
     all=all.filter(t=>txBelongsToActor(t,u)||String(t.salespersonId||'')===String(u?.id||''));
   }else if(salespersonId){
-    all=all.filter(t=>String(t.salespersonId||'')===salespersonId);
+    all=all.filter(t=>String(t.salespersonId||'')===salespersonId||txBelongsToActor(t,{id:salespersonId,name:''}));
   }
   if(dealerId)all=all.filter(t=>String(t.dealerId||'')===dealerId);
 
   const byPerson=new Map();
   let gross=0,grossCount=0,net=0,netCount=0,cancelled=0,cancelledCount=0,discount=0,commission=0,primLost=0;
   for(const t of all){
-    const amount=Number(t.total||0);
-    const g=Number(t.grossTotal||t.total||0);
+    const amount=saleAmount(t);
+    const g=Number(t.grossTotal!=null && t.grossTotal!==''?t.grossTotal:amount)||0;
     const comm=Number(t.commissionAmount||0);
     const pid=String(t.salespersonId||t.salespersonName||t.createdBy||'unknown');
     const pname=String(t.salespersonName||t.createdBy||'Personel');
@@ -1976,7 +2045,11 @@ app.get('/web-api/admin/sales-performance',requireAdmin,(req,res)=>{
     const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
     const pendingByTarget=new Map();
     (s.cancellationRequests||[]).filter(r=>r.status==='pending').forEach(r=>pendingByTarget.set(`${r.targetType}:${r.targetId}`,r));
-    let all=(s.financeTransactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled&&String(t.date||'')>=from&&String(t.date||'')<=to);
+    let all=(s.financeTransactions||[]).filter(t=>{
+      if(t.kind!=='sale'||t.cancelled)return false;
+      const key=txDateKey(t);
+      return key && key>=from && key<=to;
+    });
     if(!canManage)all=all.filter(t=>txBelongsToActor(t,u));
     if(req.query.salespersonId)all=all.filter(t=>String(t.salespersonId||'')===String(req.query.salespersonId));
     if(req.query.dealerId)all=all.filter(t=>String(t.dealerId||'')===String(req.query.dealerId));
@@ -2022,11 +2095,15 @@ app.get('/web-api/admin/staff-sales-month',requireAdminOrStaffAny('finance_manag
   const s=readStore();
   const actor=currentActor(req);
   const canManage=actorIsManager(req);
-  const staffPortal=Boolean(req.session?.staffUser) && req.session?.admin!==true;
+  const staffPortal=isStaffPortalReq(req);
   const {month,from,to}=monthBounds(req.query.month);
   const salespersonId=String(req.query.salespersonId||'');
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
-  let sales=(s.financeTransactions||[]).filter(t=>t.kind==='sale' && String(t.date||'').slice(0,10)>=from && String(t.date||'').slice(0,10)<=to);
+  let sales=(s.financeTransactions||[]).filter(t=>{
+    if(t.kind!=='sale')return false;
+    const key=txDateKey(t);
+    return key && key>=from && key<=to;
+  });
   if(staffPortal && !canManage){
     sales=sales.filter(t=>txBelongsToActor(t,actor));
   }else if(staffPortal && canManage && salespersonId){
@@ -2037,9 +2114,9 @@ app.get('/web-api/admin/staff-sales-month',requireAdminOrStaffAny('finance_manag
   }else if(!staffPortal && !canManage){
     sales=sales.filter(t=>txBelongsToActor(t,actor));
   }else if(!staffPortal && salespersonId){
-    sales=sales.filter(t=>String(t.salespersonId||'')===salespersonId);
+    sales=sales.filter(t=>String(t.salespersonId||'')===salespersonId||txBelongsToActor(t,{id:salespersonId,name:''}));
   }
-  sales=sales.map(t=>({...t,customerName:customerMap.get(String(t.customerId||''))?.name||''}));
+  sales=sales.map(t=>({...t,date:txDateKey(t)||t.date,customerName:customerMap.get(String(t.customerId||''))?.name||''}));
   const pendingMap=new Map();
   (s.cancellationRequests||[]).filter(r=>r.status==='pending'&&['sale','sale_return'].includes(r.targetType)).forEach(r=>{
     pendingMap.set(String(r.targetId),r);
@@ -2054,6 +2131,7 @@ app.get('/web-api/admin/staff-sales-month',requireAdminOrStaffAny('finance_manag
     ok:true,
     month,from,to,
     canManage,
+    staffPortal,
     summary:built.summary,
     rows:built.rows,
     requests:myRequests,

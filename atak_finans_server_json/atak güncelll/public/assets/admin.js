@@ -1025,7 +1025,7 @@ function salesReset(){
   if(q('#salesPosBarcode'))q('#salesPosBarcode').value='';
   if(q('#salesDiscountPct'))q('#salesDiscountPct').value='0';
   if(q('#salesDiscountAmount'))q('#salesDiscountAmount').value='0';
-  ['#payCash','#payCard','#payTransfer','#payCredit','#payNote','#salesPaidAmount'].forEach(id=>{if(q(id))q(id).value='0'});
+  ['#payCash','#payCard','#payTransfer','#payCredit','#payNote','#salesPaidAmount'].forEach(id=>{if(q(id))q(id).value=''});
   if(q('#salesDescription'))q('#salesDescription').value='';
   if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value='pending';
   if(q('#salesInvoiceNumber'))q('#salesInvoiceNumber').value='';

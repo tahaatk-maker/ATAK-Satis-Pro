@@ -282,10 +282,19 @@ function renderFinance(){
   const ciro=d.ciro||{brand:{},personnel:[]};
   const brand=ciro.brand||{};
   const summary=d.summary||{};
+  const salesTotal=Number(summary.mySalesTotal!=null?summary.mySalesTotal:(brand.total||0));
+  const salesCount=Number(summary.mySalesCount!=null?summary.mySalesCount:(brand.count||0));
 
   $('#adminCiroWrap')?.classList.toggle('hidden',!canManage);
   $('#personnelCiroWrap')?.classList.toggle('hidden',!canManage);
   $('#managerApprovalsWrap')?.classList.toggle('hidden',!canManage);
+
+  // Personel portalında üst özet her zaman satış/tahsilat kartları (yönetici olsa bile)
+  $('#financeStats').innerHTML=`
+      <div class="stat"><small>Satışlarım (Net)</small><b>${money(salesTotal)}</b></div>
+      <div class="stat"><small>Satış Adedi</small><b>${salesCount}</b></div>
+      <div class="stat"><small>Tahsilatlarım</small><b>${money(summary.myCollections||0)}</b></div>
+      <div class="stat"><small>İlgili Cari</small><b>${(d.customers||[]).length}</b></div>`;
 
   if(canManage){
     $('#financeScopeHint').textContent='Yönetici görünümü: Beko / İstikbal / Total, personel ciro, aylık prim ve iptal/iade onayları';
@@ -305,18 +314,8 @@ function renderFinance(){
         <td><b>${money(p.total)}</b></td>
         <td>${p.count||0}</td>
       </tr>`).join('')||'<tr><td colspan="5">Personel cirosu yok.</td></tr>';
-    $('#financeStats').innerHTML=`
-      <div class="stat"><small>Toplam Kasa</small><b>${money(summary.cash||summary.totalCash||0)}</b></div>
-      <div class="stat"><small>Toplam Banka</small><b>${money(summary.bank||summary.totalBank||0)}</b></div>
-      <div class="stat"><small>Alacak</small><b>${money(summary.receivable||0)}</b></div>
-      <div class="stat"><small>Müşteri</small><b>${(d.customers||[]).length}</b></div>`;
   }else{
     $('#financeScopeHint').textContent='Satışlarınız ay bazında toplanır; iptal/iade düşülür. Prim net satışa göredir.';
-    $('#financeStats').innerHTML=`
-      <div class="stat"><small>Satışlarım (Net)</small><b>${money(summary.mySalesTotal||brand.total||0)}</b></div>
-      <div class="stat"><small>Satış Adedi</small><b>${Number(summary.mySalesCount||brand.count||0)}</b></div>
-      <div class="stat"><small>Tahsilatlarım</small><b>${money(summary.myCollections||0)}</b></div>
-      <div class="stat"><small>İlgili Cari</small><b>${(d.customers||[]).length}</b></div>`;
   }
   renderCustomers();
   renderTransactions();
@@ -346,7 +345,7 @@ function renderTransactions(){
       <td>${kindLabel(t.kind)}</td>
       <td><b>${t.customerName||'—'}</b><small>${t.salespersonName||t.createdBy||''}</small></td>
       <td>${dealerLabel(t.dealerId,t.dealerName)}</td>
-      <td><b>${money(t.total??t.amount)}</b></td>
+      <td><b>${money(t.kind==='sale'?(t.total??Math.abs(Number(t.customerDelta||t.amount||0))):(t.total??t.amount))}</b></td>
     </tr>`).join('')||'<tr><td colspan="5">Hareket bulunamadı.</td></tr>';
 }
 
