@@ -396,11 +396,22 @@
       <button id="salesQuickCustomerClose" class="ghost-btn" type="button">Kapat</button>
     </div>
     <form id="salesQuickCustomerForm" class="form-grid">
-      <label class="field">Ad Soyad / Firma *<input id="qcName" required></label>
+      <label class="field">Ad Soyad (Şahıs / Senet) *<input id="qcName" required placeholder="Senet borçlusu"></label>
       <label class="field">Telefon *<input id="qcPhone" required></label>
+      <label class="field">TCKN<input id="qcTckn" placeholder="11 hane" inputmode="numeric"></label>
       <label class="field">İl *<input id="qcCity" required></label>
       <label class="field">İlçe *<input id="qcDistrict" required></label>
       <label class="field wide">Açık adres *<textarea id="qcAddress" rows="2" required></textarea></label>
+      <label class="field wide"><small>Kurumsal fatura (opsiyonel — senet şahsa, fatura firmaya)</small></label>
+      <label class="field">Firma ünvanı<input id="qcCompanyName" placeholder="Şirket ünvanı"></label>
+      <label class="field">Vergi dairesi<input id="qcTaxOffice"></label>
+      <label class="field">VKN<input id="qcTaxNo" placeholder="10 hane" inputmode="numeric"></label>
+      <label class="field">Varsayılan fatura
+        <select id="qcInvoiceType">
+          <option value="individual">Bireysel</option>
+          <option value="corporate">Kurumsal</option>
+        </select>
+      </label>
       <button class="primary-btn wide" type="submit">Kaydet ve Seç</button>
       <div id="qcStatus" class="status"></div>
     </form>
@@ -436,6 +447,10 @@
 </main>
 </div>
 
+<<<<<<< HEAD
 <script src="/assets/personel.js?v=cust-pay-v1"></script>
+=======
+<script src="/assets/personel.js?v=customer-dual-billing-v1"></script>
+>>>>>>> 75d5604 (Müşteri kartında bireysel + kurumsal fatura bilgilerini birlikte tut)
 </body>
 </html>

@@ -586,12 +586,13 @@ function customerInvoiceType(prefix){
   const checked=document.querySelector(`input[name="${prefix}InvoiceType"]:checked`);
   return checked?.value==='corporate'?'corporate':'individual';
 }
+function customerHasCorporate(c={}){
+  return Boolean(String(c.companyName||'').trim()&&String(c.taxNo||'').replace(/\D/g,'').length>=10);
+}
 function syncCustomerFormUI(prefix){
   const same=q(`#${prefix}DeliverySame`)?.checked!==false;
   q(`#${prefix}DeliveryWrap`)?.classList.toggle('hidden',same);
-  const corp=customerInvoiceType(prefix)==='corporate';
-  q(`#${prefix}CorporateWrap`)?.classList.toggle('hidden',!corp);
-  q(`#${prefix}IndividualTaxWrap`)?.classList.toggle('hidden',corp);
+  // Bireysel + kurumsal alanlar birlikte görünür (XOR yok)
 }
 function collectCustomerPayload(prefix,{requireActive=false}={}){
   const name=(q(`#${prefix}Name`)?.value||'').trim();
@@ -608,15 +609,17 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
   const taxOffice=(q(`#${prefix}TaxOffice`)?.value||'').trim();
   const taxNo=(q(`#${prefix}TaxNo`)?.value||'').trim();
   const tckn=(q(`#${prefix}Tckn`)?.value||'').trim();
-  if(!name)throw new Error('Müşteri adı zorunludur');
+  if(!name)throw new Error('Şahıs / müşteri adı zorunludur');
   if(!phone)throw new Error('Telefon zorunludur');
-  if(!city||!district||!address)throw new Error('Fatura adresi (il, ilçe, açık adres) zorunludur');
+  if(!city||!district||!address)throw new Error('Adres (il, ilçe, açık adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress))throw new Error('Teslimat adresi için il, ilçe ve açık adres girin');
-  if(invoiceType==='corporate'){
-    if(!companyName)throw new Error('Kurumsal faturada firma ünvanı zorunludur');
-    if(!taxOffice)throw new Error('Kurumsal faturada vergi dairesi zorunludur');
-    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal faturada geçerli VKN zorunludur');
+  const wantsCorporate=invoiceType==='corporate'||companyName||taxOffice||taxNo;
+  if(wantsCorporate){
+    if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
+    if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
+    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
   }
+  if(tckn&&tckn.replace(/\D/g,'').length&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN 11 hane olmalıdır');
   const email=(q(`#${prefix}Email`)?.value||'').trim();
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Geçerli bir e-posta girin (e-Fatura / e-Arşiv için)');
   const payload={
@@ -626,8 +629,8 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
     deliverySameAsBilling:deliverySame,
     deliveryCity,deliveryDistrict,deliveryAddress,
     invoiceType,companyName,taxOffice,
-    taxNo:invoiceType==='corporate'?taxNo:tckn,
-    tckn:invoiceType==='individual'?tckn:'',
+    taxNo, // VKN
+    tckn,  // şahıs
     note:(q(`#${prefix}Note`)?.value||'').trim(),
     active:true
   };
@@ -652,8 +655,8 @@ function fillCustomerForm(prefix,c={}){
   document.querySelectorAll(`input[name="${prefix}InvoiceType"]`).forEach(r=>{r.checked=r.value===type});
   if(q(`#${prefix}CompanyName`))q(`#${prefix}CompanyName`).value=c.companyName||'';
   if(q(`#${prefix}TaxOffice`))q(`#${prefix}TaxOffice`).value=c.taxOffice||'';
-  if(q(`#${prefix}TaxNo`))q(`#${prefix}TaxNo`).value=type==='corporate'?(c.taxNo||''):'';
-  if(q(`#${prefix}Tckn`))q(`#${prefix}Tckn`).value=type==='individual'?(c.tckn||c.taxNo||''):'';
+  if(q(`#${prefix}TaxNo`))q(`#${prefix}TaxNo`).value=c.taxNo||'';
+  if(q(`#${prefix}Tckn`))q(`#${prefix}Tckn`).value=c.tckn||(!c.companyName&&String(c.taxNo||'').replace(/\D/g,'').length===11?c.taxNo:'')||'';
   if(q(`#${prefix}Note`))q(`#${prefix}Note`).value=c.note||'';
   if(q(`#${prefix}Active`))q(`#${prefix}Active`).value=c.active===false?'false':'true';
   syncCustomerFormUI(prefix);
@@ -683,7 +686,8 @@ function renderCustomerPageList(){
     const balCls=bal>0?'debt':bal<0?'credit':'closed';
     const sub=[c.phone,c.email,c.city&&c.district?`${c.district}/${c.city}`:(c.address||'')].filter(Boolean).join(' · ');
     const active=String(c.id)===String(customersPageData.selectedId)?'active':'';
-    return `<button type="button" class="customer-card ${active}" data-customer-id="${c.id}"><div><b>${c.name||'-'}</b><small>${sub||'Adres yok'}${c.invoiceType==='corporate'?' · Kurumsal':''}</small></div><div class="customer-card-balance ${balCls}"><small>Cari</small><strong>${money2(bal)}</strong></div></button>`;
+    const badge=customerHasCorporate(c)?(c.invoiceType==='corporate'?' · Şahıs+Firma':' · Firma kayıtlı'):' · Bireysel';
+    return `<button type="button" class="customer-card ${active}" data-customer-id="${c.id}"><div><b>${c.name||'-'}</b><small>${sub||'Adres yok'}${badge}${c.companyName?` · ${c.companyName}`:''}</small></div><div class="customer-card-balance ${balCls}"><small>Cari</small><strong>${money2(bal)}</strong></div></button>`;
   }).join('');
   qa('#customerPageList [data-customer-id]').forEach(btn=>btn.addEventListener('click',()=>selectCustomerPage(btn.dataset.customerId)));
 }
@@ -728,6 +732,32 @@ function renderCustomerTransaction(t){
   const showAmt=kind==='collection'?Math.abs(amt):amt;
   return `<div class="customer-tx${cancelled?' is-cancelled':''}"><div><b>${t.date||'-'} · ${label}</b><small>${[t.reference,t.description,t.accountName,t.category].filter(Boolean).join(' · ')||'-'}</small></div><strong class="${cls}">${money2(showAmt)}</strong></div>`;
 }
+function renderCustomerBillingCards(c={}){
+  const box=q('#customerBillingCards');if(!box)return;
+  const addr=[c.address,c.district,c.city].filter(Boolean).join(', ')||'-';
+  const deliv=c.deliverySameAsBilling!==false?'Teslimat = fatura adresi':([c.deliveryAddress,c.deliveryDistrict,c.deliveryCity].filter(Boolean).join(', ')||'-');
+  const hasCorp=customerHasCorporate(c);
+  const def=c.invoiceType==='corporate'?'Kurumsal':'Bireysel';
+  box.innerHTML=`
+    <article class="billing-card person">
+      <small>BİREYSEL · SENET / ŞAHIS</small>
+      <b>${c.name||'-'}</b>
+      <span>TCKN: ${c.tckn||'—'}</span>
+      <span>${c.phone||'—'}${c.email?' · '+c.email:''}</span>
+    </article>
+    <article class="billing-card company${hasCorp?'':' empty'}">
+      <small>KURUMSAL · FATURA FİRMASI</small>
+      <b>${hasCorp?(c.companyName||'-'):'Firma bilgisi yok'}</b>
+      <span>${hasCorp?`VKN: ${c.taxNo||'—'} · ${c.taxOffice||'—'}`:'Şahsa senet / firmaya fatura için ekleyin'}</span>
+      <span>Varsayılan fatura: ${def}</span>
+    </article>
+    <article class="billing-card address">
+      <small>ADRES</small>
+      <b>${addr}</b>
+      <span>${deliv}</span>
+      ${c.note?`<span>Not: ${c.note}</span>`:''}
+    </article>`;
+}
 async function selectCustomerPage(id){
   customersPageData.selectedId=id;
   renderCustomerPageList();
@@ -738,21 +768,23 @@ async function selectCustomerPage(id){
     empty?.classList.add('hidden');content?.classList.remove('hidden');
     if(q('#customerDetailName'))q('#customerDetailName').textContent=c.name||'-';
     if(q('#customerDetailPhone'))q('#customerDetailPhone').textContent=[c.phone,c.email].filter(Boolean).join(' · ')||'-';
-    if(q('#customerDetailStatus'))q('#customerDetailStatus').textContent=c.active===false?'Pasif':(c.invoiceType==='corporate'?'Kurumsal · Aktif':'Bireysel · Aktif');
+    if(q('#customerDetailStatus')){
+      const bits=[];
+      if(c.active===false)bits.push('Pasif');else bits.push('Aktif');
+      if(customerHasCorporate(c))bits.push('Şahıs+Firma');
+      else bits.push('Bireysel');
+      if(c.invoiceType==='corporate')bits.push('Fatura: Kurumsal');
+      q('#customerDetailStatus').textContent=bits.join(' · ');
+    }
     if(q('#customerDetailBalance'))q('#customerDetailBalance').textContent=money2(c.balance);
-    const addr=[c.address,c.district,c.city].filter(Boolean).join(', ');
-    const deliv=c.deliverySameAsBilling!==false?'Teslimat = fatura adresi':[c.deliveryAddress,c.deliveryDistrict,c.deliveryCity].filter(Boolean).join(', ');
+    renderCustomerBillingCards(c);
     const tx=d.transactions||[];
     const saleCount=tx.filter(t=>t.kind==='sale'&&!t.cancelled).length;
     if(q('#customerTransactionCount'))q('#customerTransactionCount').textContent=`${tx.length} hareket · ${saleCount} satış`;
     const list=q('#customerTransactionList');
     if(list){
       const pending=d.pendingEdit?`<div class="customer-pending-banner">Bekleyen düzenleme onayı var · ${d.pendingEdit.requestedByName||'Personel'} · ${String(d.pendingEdit.requestedAt||'').replace('T',' ').slice(0,16)}</div>`:'';
-      list.innerHTML=pending+`<div class="customer-info-grid">
-        <div class="note"><b>Fatura adresi</b><br>${addr||'-'}</div>
-        <div class="note"><b>Teslimat</b><br>${deliv||'-'}</div>
-        ${c.invoiceType==='corporate'?`<div class="note"><b>Firma</b><br>${c.companyName||'-'}<br>${c.taxOffice||''} · VKN ${c.taxNo||''}</div>`:''}
-      </div>`+(tx.length?tx.slice(0,80).map(renderCustomerTransaction).join(''):'<div class="note">Henüz cari hareket yok.</div>');
+      list.innerHTML=pending+(tx.length?tx.slice(0,80).map(renderCustomerTransaction).join(''):'<div class="note">Henüz cari hareket yok.</div>');
     }
     customersPageData._selected=c;
     customersPageData._canManage=Boolean(d.canManage);
@@ -1291,15 +1323,24 @@ async function salesSearchCustomers(){
 function salesRenderCustomers(){ /* geriye uyum: ara butonuyla aynı */ return salesSearchCustomers(); }
 function salesCustomerChanged(){
   const c=salesCenterData.customers.find(x=>String(x.id)===String(q('#salesCustomerSelect')?.value||'')),box=q('#salesCustomerInfo'),noteWrap=q('#salesCustomerNoteWrap');
+  const billWrap=q('#salesBillingPartyWrap'),billSel=q('#salesBillingParty');
   if(!c){
     box.classList.add('hidden');box.innerHTML='';noteWrap?.classList.add('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value='';
+    billWrap?.classList.add('hidden');
     if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent='—';
     salesUpdatePosSteps(salesCalcState());
     return;
   }
   box.classList.remove('hidden');
   const addr=[c.district,c.city].filter(Boolean).join('/')||(c.address||'-');
-  box.innerHTML=`<div><small>Müşteri</small><b>${c.name}</b></div><div><small>Telefon</small><b>${c.phone||'-'}</b></div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>`;
+  const hasCorp=customerHasCorporate(c);
+  const corpLine=hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'-'}</b><span style="display:block;font-size:11px;color:#667890">VKN ${c.taxNo||'-'} · ${c.taxOffice||''}</span></div>`:'';
+  box.innerHTML=`<div><small>Şahıs / Senet</small><b>${c.name}</b><span style="display:block;font-size:11px;color:#667890">TCKN ${c.tckn||'—'}</span></div><div><small>Telefon</small><b>${c.phone||'-'}</b></div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>${corpLine}`;
+  if(billWrap&&billSel){
+    billWrap.classList.toggle('hidden',!hasCorp);
+    const prefer=c.invoiceType==='corporate'&&hasCorp?'corporate':'individual';
+    billSel.value=prefer;
+  }
   noteWrap?.classList.remove('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value=c.note||'';
   if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent=c.name.length>22?c.name.slice(0,21)+'…':c.name;
   salesUpdatePosSteps(salesCalcState());
@@ -1521,8 +1562,12 @@ function collectSalesDraft(){
   const dealerId=q('#salesDealer')?.value||'',dealer=calc.dealer,discountPct=calc.discountPct,grossTotal=calc.gross,total=calc.net;
   const deductStock=q('#salesDeductStock')?.value==='yes';
   const salespersonId=q('#salesSalesperson')?.value||'',salesperson=salesCenterData.salespeople.find(p=>String(p.id)===String(salespersonId));
-  const draft={status,customerId,customer,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'pending',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
+  const billingParty=customerHasCorporate(customer||{})
+    ?(q('#salesBillingParty')?.value==='corporate'?'corporate':'individual')
+    :'individual';
+  const draft={status,customerId,customer,billingParty,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'pending',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
   if(!customerId)return{error:'Müşteri seçmelisiniz.',...draft};
+  if(billingParty==='corporate'&&!customerHasCorporate(customer))return{error:'Kurumsal fatura için müşteri kartına firma / VKN ekleyin.',...draft};
   if(!dealer)return{error:'Satış bayisini seçmelisiniz.',...draft};
   if(!salesperson)return{error:'Satış personelini seçmelisiniz.',...draft};
   if(!items.length)return{error:'En az bir ürün eklemelisiniz.',...draft};
@@ -1543,7 +1588,10 @@ function salesPreviewHtml(d){
   const invLabel=d.invoiceStatus==='issued'
     ?`Manuel kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`
     :(d.invoiceStatus==='queue_qnb'?'QNB Solist ile kesilecek (e-Fatura / e-Arşiv kuyruğu)':'Daha sonra kesilecek');
-  return `<div class="preview-cards"><div><small>Müşteri</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Tahsil: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>${payRows}<div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div>${note}<div class="preview-note"><b>Fatura:</b> ${invLabel}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${d.deductStock?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`:'Stoktan düşülmeyecek'}<small>Fatura kesme durumu stoğu etkilemez.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
+  const billLabel=d.billingParty==='corporate'
+    ?`Kurumsal · ${d.customer?.companyName||'-'} · VKN ${d.customer?.taxNo||'-'}`
+    :`Bireysel · ${d.customer?.name||'-'} · TCKN ${d.customer?.tckn||'—'}`;
+  return `<div class="preview-cards"><div><small>Şahıs / Senet</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}${d.customer?.tckn?' · TCKN '+d.customer.tckn:''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Tahsil: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>${payRows}<div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div>${note}<div class="preview-note"><b>Fatura tarafı:</b> ${billLabel}<br><b>Fatura durumu:</b> ${invLabel}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${d.deductStock?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`:'Stoktan düşülmeyecek'}<small>Fatura kesme durumu stoğu etkilemez.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
 }
 let activeSalesDraft=null;
 function openSalesPreview(){
@@ -1665,9 +1713,10 @@ function salesCombinedContractSenetA4Html(d){
       <div class="doc-meta"><b>SÖZLEŞME + SENET</b><div>Tarih: ${salesEsc(d.date||'')}</div><div>Bayi: ${salesEsc(d.dealer?.name||'')}</div><div>Satıcı: ${salesEsc(d.salesperson?.name||'')}</div></div></div>
     <h2>SATIŞ SÖZLEŞMESİ</h2>
     <div class="grid2">
-      <div class="box"><small>Müşteri</small><b>${salesEsc(d.customer?.name||'-')}</b><div>${salesEsc(d.customer?.phone||'')}</div></div>
-      <div class="box"><small>VKN / TCKN</small><b>${salesEsc(d.customer?.taxNo||d.customer?.tckn||'-')}</b></div>
+      <div class="box"><small>Müşteri / Alıcı (Şahıs)</small><b>${salesEsc(d.customer?.name||'-')}</b><div>${salesEsc(d.customer?.phone||'')}</div></div>
+      <div class="box"><small>TCKN</small><b>${salesEsc(d.customer?.tckn||'-')}</b></div>
       <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${salesEsc(addr)}</b></div>
+      ${customerHasCorporate(d.customer||{})?`<div class="box" style="grid-column:1/-1"><small>Fatura firması (senet şahsa)</small><b>${salesEsc(d.customer.companyName||'')}</b><div>VKN ${salesEsc(d.customer.taxNo||'')} · ${salesEsc(d.customer.taxOffice||'')}</div></div>`:''}
     </div>
     <table><thead><tr><th>Kod</th><th>Ürün</th><th class="num">Adet</th><th class="num">Birim</th><th class="num">Tutar</th></tr></thead><tbody>${rows}${items.length>12?`<tr><td colspan="5">… +${items.length-12} kalem</td></tr>`:''}</tbody></table>
     ${salesCustomerPrintTotals(d)}
@@ -1686,7 +1735,7 @@ function salesCombinedContractSenetA4Html(d){
           <div class="amount">${salesMoney(senetTotal)}</div>
           <div class="words">Yalnız: ${salesEsc(salesAmountWords(senetTotal))}</div>
           <p>İşbu senet mukabilinde <b>${salesEsc(creditor)}</b> veya emrine bedeli vadesinde kayıtsız şartsız ödemeyi taahhüt ederim.</p>
-          <div class="grid2"><div class="box"><small>Borçlu</small><b>${salesEsc(d.customer?.name||'')}</b></div><div class="box"><small>Ödeme yeri</small><b>${salesEsc(cfg.paymentPlace||cfg.issuePlace||'-')}</b></div></div>
+          <div class="grid2"><div class="box"><small>Borçlu (Şahıs)</small><b>${salesEsc(d.customer?.name||'')}</b><div>TCKN ${salesEsc(d.customer?.tckn||'-')}</div></div><div class="box"><small>Ödeme yeri</small><b>${salesEsc(cfg.paymentPlace||cfg.issuePlace||'-')}</b></div></div>
           ${schedRows?`<table class="sched"><thead><tr><th>#</th><th>Seri</th><th>Vade</th><th class="num">Tutar</th></tr></thead><tbody>${schedRows}</tbody></table>`:''}
           <p>${salesEsc(cfg.footer||'TTK hükümlerine tabidir.')}</p>
           <div class="signs"><div class="sig"><small>Keşideci</small>${salesEsc(d.customer?.name||'')}</div><div class="sig"><small>Lehtar</small>${salesEsc(creditor)}</div></div>
@@ -1744,7 +1793,7 @@ async function confirmSalesDraft(){
     const result=await api('/web-api/admin/customer-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       customerId:d.customerId,dealerId:d.dealerId,salespersonId:d.salespersonId,salespersonName:d.salesperson?.name||'',
       discountPct:d.discountPct,warehouseId:d.warehouseId,date:d.date,paymentMethod:d.method,
-      payments:d.payments,promissory:d.promissory,
+      payments:d.payments,promissory:d.promissory,billingParty:d.billingParty||'individual',
       description:d.description,items:d.items,invoiceStatus,invoiceNumber:d.invoiceNumber,invoiceDate:d.invoiceDate,deductStock
     })});
     let noteText='';
@@ -1759,7 +1808,7 @@ async function confirmSalesDraft(){
     const createdSaleId=result.sale?.id||result.saleId||result.id;
     if(d.invoiceStatus==='queue_qnb'&&createdSaleId){
       try{
-        const inv=await api('/web-api/admin/sale/'+encodeURIComponent(createdSaleId)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+        const inv=await api('/web-api/admin/sale/'+encodeURIComponent(createdSaleId)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({billingParty:d.billingParty||'individual'})});
         noteText+=` · fatura ${inv.result?.docType||''} (${inv.record?.status||'kuyruk'})`;
       }catch(invErr){noteText+=` · fatura uyarısı: ${invErr.message}`}
     }

@@ -1,5 +1,9 @@
 <!DOCTYPE html>
+<<<<<<< HEAD
 <html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=cust-pay-v1" rel="stylesheet"/>
+=======
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=customer-dual-billing-v1" rel="stylesheet"/>
+>>>>>>> 75d5604 (Müşteri kartında bireysel + kurumsal fatura bilgilerini birlikte tut)
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -624,25 +628,32 @@ body.inv-full #pageTitle{font-size:18px}
   <p class="sales-customer-hint" id="salesCustomerSearchHint">10.000+ müşteri kaydı için listeyi yüklemiyoruz. Ad / telefon / VKN ile arayıp seçin.</p>
 </div>
 <div class="sales-customer-info hidden" id="salesCustomerInfo"></div>
+<label class="sales-billing-party hidden" id="salesBillingPartyWrap">Fatura kime kesilsin?
+  <select id="salesBillingParty">
+    <option value="individual">Bireysel (şahıs / TCKN)</option>
+    <option value="corporate">Kurumsal (firma / VKN)</option>
+  </select>
+  <small class="field-hint">Senet her zaman şahıs adına kalır; fatura tarafını burada seçersiniz.</small>
+</label>
 <div class="customer-modal hidden" id="salesQuickCustomerModal">
   <div class="customer-modal-card customer-modal-wide">
     <div class="panel-head"><h2>Yeni Müşteri Ekle</h2><button class="secondary-btn" id="salesQuickCustomerClose" type="button">Kapat</button></div>
     <form id="salesQuickCustomerForm" class="form-stack" action="javascript:void(0)">
       <div class="cust-form-sec"><div class="cust-form-sec-title">İletişim</div>
-        <label>Ad Soyad / Firma *<input id="salesQuickCustomerName" required placeholder="Zorunlu"/></label>
+        <label>Ad Soyad (Şahıs / Senet) *<input id="salesQuickCustomerName" required placeholder="Senet borçlusu şahıs adı"/></label>
         <div class="two-col">
           <label>Telefon *<input id="salesQuickCustomerPhone" required placeholder="05xx xxx xx xx"/></label>
           <label>E-posta<input id="salesQuickCustomerEmail" type="email"/></label>
         </div>
       </div>
-      <div class="cust-form-sec"><div class="cust-form-sec-title">Fatura adresi</div>
+      <div class="cust-form-sec"><div class="cust-form-sec-title">Adres</div>
         <div class="two-col">
           <label>İl *<input id="salesQuickCustomerCity" required placeholder="Örn. İstanbul"/></label>
           <label>İlçe *<input id="salesQuickCustomerDistrict" required placeholder="Örn. Pendik"/></label>
         </div>
         <label>Açık adres *<textarea id="salesQuickCustomerAddress" required rows="2" placeholder="Mahalle, sokak, no, daire"></textarea></label>
         <label class="cust-check"><input id="salesQuickCustomerDeliverySame" type="checkbox" checked/> Teslimat adresim fatura adresim ile aynı</label>
-        <div id="salesQuickDeliveryWrap" class="hidden">
+        <div id="salesQuickCustomerDeliveryWrap" class="hidden">
           <div class="two-col">
             <label>Teslimat il *<input id="salesQuickCustomerDeliveryCity" placeholder="İl"/></label>
             <label>Teslimat ilçe *<input id="salesQuickCustomerDeliveryDistrict" placeholder="İlçe"/></label>
@@ -650,20 +661,21 @@ body.inv-full #pageTitle{font-size:18px}
           <label>Teslimat açık adres *<textarea id="salesQuickCustomerDeliveryAddress" rows="2" placeholder="Teslimat adresi"></textarea></label>
         </div>
       </div>
-      <div class="cust-form-sec"><div class="cust-form-sec-title">Fatura tipi</div>
+      <div class="cust-form-sec"><div class="cust-form-sec-title">Bireysel (Şahıs / Senet)</div>
+        <label>TCKN<input id="salesQuickCustomerTckn" placeholder="11 haneli TCKN" inputmode="numeric"/></label>
+      </div>
+      <div class="cust-form-sec"><div class="cust-form-sec-title">Kurumsal fatura (opsiyonel)</div>
+        <p class="field-hint" style="margin:0">Senet şahsa, fatura firmaya kesilecekse doldurun.</p>
+        <label>Firma ünvanı<input id="salesQuickCustomerCompanyName" placeholder="Şirket ünvanı"/></label>
+        <div class="two-col">
+          <label>Vergi dairesi<input id="salesQuickCustomerTaxOffice" placeholder="Vergi dairesi"/></label>
+          <label>VKN<input id="salesQuickCustomerTaxNo" placeholder="10 haneli VKN" inputmode="numeric"/></label>
+        </div>
+      </div>
+      <div class="cust-form-sec"><div class="cust-form-sec-title">Varsayılan fatura tarafı</div>
         <div class="cust-invoice-type">
           <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="individual" checked/> Bireysel</label>
-          <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="corporate"/> Kurumsal fatura</label>
-        </div>
-        <div id="salesQuickCorporateWrap" class="hidden">
-          <label>Firma ünvanı *<input id="salesQuickCustomerCompanyName" placeholder="Şirket ünvanı"/></label>
-          <div class="two-col">
-            <label>Vergi dairesi *<input id="salesQuickCustomerTaxOffice" placeholder="Vergi dairesi"/></label>
-            <label>VKN *<input id="salesQuickCustomerTaxNo" placeholder="10 haneli VKN"/></label>
-          </div>
-        </div>
-        <div id="salesQuickIndividualTaxWrap">
-          <label>TCKN (opsiyonel)<input id="salesQuickCustomerTckn" placeholder="11 haneli TCKN"/></label>
+          <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="corporate"/> Kurumsal</label>
         </div>
       </div>
       <label>Müşteri Notu<textarea id="salesQuickCustomerNote" rows="2"></textarea></label>
@@ -1525,6 +1537,7 @@ Bulunamayan → Diğer.
 </div>
 </div>
 <div class="customer-action-buttons"><button data-customer-action="edit" type="button">✏️ Bilgileri Düzenle</button></div>
+<div id="customerBillingCards" class="customer-billing-cards"></div>
 <div class="panel-head compact">
 <h3>Cari Hareketler</h3>
 <span id="customerTransactionCount"></span>
@@ -1542,14 +1555,14 @@ Bulunamayan → Diğer.
 <form action="javascript:void(0)" class="form-stack" id="customerPageForm" onsubmit="return false;">
 <input id="customerPageId" type="hidden"/>
 <div class="cust-form-sec"><div class="cust-form-sec-title">İletişim</div>
-<label>Ad Soyad / Firma *<input autocomplete="name" id="customerPageName" required placeholder="Zorunlu"/></label>
+<label>Ad Soyad (Şahıs / Senet) *<input autocomplete="name" id="customerPageName" required placeholder="Senet borçlusu şahıs adı"/></label>
 <div class="two-col">
 <label>Telefon *<input autocomplete="tel" id="customerPagePhone" required placeholder="05xx xxx xx xx"/></label>
 <label>E-posta (e-Fatura / e-Arşiv)<input autocomplete="email" id="customerPageEmail" type="email" placeholder="ornek@mail.com"/><small class="field-hint">Fatura gönderimi için önerilir</small></label>
 </div>
 <label>Durum<select id="customerPageActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></label>
 </div>
-<div class="cust-form-sec"><div class="cust-form-sec-title">Fatura adresi</div>
+<div class="cust-form-sec"><div class="cust-form-sec-title">Adres</div>
 <div class="two-col">
 <label>İl *<input id="customerPageCity" required placeholder="Örn. İstanbul"/></label>
 <label>İlçe *<input id="customerPageDistrict" required placeholder="Örn. Pendik"/></label>
@@ -1564,21 +1577,24 @@ Bulunamayan → Diğer.
 <label>Teslimat açık adres *<textarea id="customerPageDeliveryAddress" rows="2" placeholder="Teslimat adresi"></textarea></label>
 </div>
 </div>
-<div class="cust-form-sec"><div class="cust-form-sec-title">Fatura tipi</div>
-<div class="cust-invoice-type">
-<label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="individual" checked/> Bireysel</label>
-<label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="corporate"/> Kurumsal fatura</label>
+<div class="cust-form-sec"><div class="cust-form-sec-title">Bireysel (Şahıs / Senet)</div>
+<p class="field-hint" style="margin:0">Senet ve sözleşme bu bilgilere yazılır.</p>
+<label>TCKN<input id="customerPageTckn" placeholder="11 haneli TCKN" inputmode="numeric"/></label>
 </div>
-<div id="customerPageCorporateWrap" class="hidden">
-<label>Firma ünvanı *<input id="customerPageCompanyName" placeholder="Şirket ünvanı"/></label>
+<div class="cust-form-sec"><div class="cust-form-sec-title">Kurumsal fatura (opsiyonel)</div>
+<p class="field-hint" style="margin:0">Şahsa senet yapıp faturayı şirkete kesmek için burayı doldurun. İki bilgi birden saklanır.</p>
+<label>Firma ünvanı<input id="customerPageCompanyName" placeholder="Şirket ünvanı"/></label>
 <div class="two-col">
-<label>Vergi dairesi *<input id="customerPageTaxOffice" placeholder="Vergi dairesi"/></label>
-<label>VKN *<input id="customerPageTaxNo" placeholder="10 haneli VKN"/></label>
+<label>Vergi dairesi<input id="customerPageTaxOffice" placeholder="Vergi dairesi"/></label>
+<label>VKN<input id="customerPageTaxNo" placeholder="10 haneli VKN" inputmode="numeric"/></label>
 </div>
 </div>
-<div id="customerPageIndividualTaxWrap">
-<label>TCKN (opsiyonel)<input id="customerPageTckn" placeholder="11 haneli TCKN"/></label>
+<div class="cust-form-sec"><div class="cust-form-sec-title">Varsayılan fatura tarafı</div>
+<div class="cust-invoice-type">
+<label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="individual" checked/> Bireysel (şahıs / TCKN)</label>
+<label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="corporate"/> Kurumsal (firma / VKN)</label>
 </div>
+<p class="field-hint" style="margin:0">Satış sırasında da değiştirebilirsiniz.</p>
 </div>
 <label>Not<textarea id="customerPageNote" rows="2"></textarea></label>
 <button class="primary" id="customerPageSaveBtn" type="button">Müşteriyi Kaydet</button>
@@ -1678,5 +1694,9 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
+<<<<<<< HEAD
 <div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=cust-pay-v1"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+=======
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=customer-dual-billing-v1"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+>>>>>>> 75d5604 (Müşteri kartında bireysel + kurumsal fatura bilgilerini birlikte tut)
 </body></html>

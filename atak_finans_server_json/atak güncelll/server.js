@@ -1033,6 +1033,32 @@ function customerSnapshot(c={}){
     active:c.active!==false
   };
 }
+function customerHasCorporateBilling(c={}){
+  const vkn=String(c.taxNo||c.corporateTaxNo||'').replace(/\D/g,'');
+  return Boolean(String(c.companyName||'').trim()&&vkn.length>=10);
+}
+/** Fatura tarafı: kurumsal varsa şirket, yoksa şahıs. Senet her zaman şahıs (name+tckn). */
+function resolveCustomerInvoiceParty(customer={},prefer=''){
+  const want=prefer==='corporate'||prefer==='individual'
+    ?prefer
+    :(customer.invoiceType==='corporate'?'corporate':'individual');
+  const useCorp=want==='corporate'&&customerHasCorporateBilling(customer);
+  return {
+    partyType:useCorp?'corporate':'individual',
+    invoiceType:useCorp?'corporate':'individual',
+    name:useCorp?(customer.companyName||customer.name||''):(customer.name||''),
+    taxNumber:useCorp?String(customer.taxNo||'').trim():String(customer.tckn||'').trim(),
+    taxNo:useCorp?String(customer.taxNo||'').trim():String(customer.tckn||'').trim(),
+    tckn:useCorp?'':String(customer.tckn||'').trim(),
+    taxOffice:useCorp?String(customer.taxOffice||'').trim():'',
+    companyName:useCorp?String(customer.companyName||'').trim():'',
+    phone:customer.phone||'',
+    email:customer.email||'',
+    address:customer.address||'',
+    city:customer.city||'',
+    district:customer.district||''
+  };
+}
 function parseCustomerPayload(x={}){
   const name=String(x.name||'').trim();
   const phone=String(x.phone||'').trim();
@@ -1046,31 +1072,40 @@ function parseCustomerPayload(x={}){
   const deliveryAddress=String(x.deliveryAddress||'').trim();
   const companyName=String(x.companyName||'').trim();
   const taxOffice=String(x.taxOffice||'').trim();
-  const taxNo=String(x.taxNo||x.corporateTaxNo||x.tckn||'').trim();
-  if(!name)throw new Error('Müşteri adı zorunludur');
+  // taxNo = kurumsal VKN; tckn = şahıs (ikisi birden saklanır)
+  const taxNo=String(x.taxNo||x.corporateTaxNo||'').trim();
+  const tckn=String(x.tckn||x.individualTaxNo||'').trim();
+  if(!name)throw new Error('Şahıs / müşteri adı zorunludur');
   if(!phone)throw new Error('Telefon zorunludur');
   if(!city||!district||!address)throw new Error('Fatura adresi (il, ilçe, açık adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress)){
     throw new Error('Teslimat adresi fatura adresinden farklıysa il, ilçe ve açık adres zorunludur');
   }
-  if(invoiceType==='corporate'){
-    if(!companyName)throw new Error('Kurumsal faturada firma ünvanı zorunludur');
-    if(!taxOffice)throw new Error('Kurumsal faturada vergi dairesi zorunludur');
-    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal faturada geçerli VKN zorunludur');
+  const wantsCorporate=invoiceType==='corporate'||companyName||taxOffice||taxNo;
+  if(wantsCorporate){
+    if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
+    if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
+    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
+  }
+  if(tckn&&tckn.replace(/\D/g,'').length&&tckn.replace(/\D/g,'').length!==11){
+    throw new Error('TCKN 11 hane olmalıdır');
+  }
+  if(invoiceType==='corporate'&&!customerHasCorporateBilling({companyName,taxNo})){
+    throw new Error('Varsayılan fatura kurumsal seçildi; firma bilgilerini doldurun');
   }
   return {
     name,phone,
     email:String(x.email||'').trim(),
-    taxNo,
-    tckn:invoiceType==='individual'?String(x.tckn||taxNo||'').trim():'',
+    taxNo:companyName||taxOffice||taxNo?taxNo:'',
+    tckn,
     city,district,address,
     deliverySameAsBilling:deliverySame,
     deliveryCity:deliverySame?city:deliveryCity,
     deliveryDistrict:deliverySame?district:deliveryDistrict,
     deliveryAddress:deliverySame?address:deliveryAddress,
     invoiceType,
-    companyName:invoiceType==='corporate'?companyName:'',
-    taxOffice:invoiceType==='corporate'?taxOffice:'',
+    companyName,
+    taxOffice,
     note:String(x.note||'').trim(),
     active:x.active!==false&&x.active!=='false',
     updatedAt:new Date().toISOString()
@@ -1108,7 +1143,9 @@ app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_mana
     .map(c=>({
       id:c.id,name:c.name||'',phone:c.phone||'',email:c.email||'',
       taxNo:c.taxNo||'',tckn:c.tckn||'',city:c.city||'',district:c.district||'',
-      address:c.address||'',companyName:c.companyName||'',note:c.note||'',
+      address:c.address||'',companyName:c.companyName||'',taxOffice:c.taxOffice||'',
+      invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
+      hasCorporate:customerHasCorporateBilling(c),note:c.note||'',
       balance:customerBalance(s,c.id)
     }));
   res.json({ok:true,total,rows,needQuery:false,limit});
@@ -1461,8 +1498,16 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   sale.invoiceNumber=sale.invoiceStatus==='issued'?String(x.invoiceNumber||'').trim():'';
   sale.invoiceDate=sale.invoiceStatus==='issued'?String(x.invoiceDate||x.date||''):'';
   sale.invoiceIssuedAt=sale.invoiceStatus==='issued'?new Date().toISOString():'';
+  const billingPartyPrefer=String(x.billingParty||customer.invoiceType||'individual')==='corporate'?'corporate':'individual';
+  if(billingPartyPrefer==='corporate'&&!customerHasCorporateBilling(customer)){
+    return res.status(400).json({error:'Kurumsal fatura seçildi ancak müşteride firma / VKN bilgisi yok. Müşteri kartına kurumsal bilgileri ekleyin.'});
+  }
+  sale.billingParty=billingPartyPrefer;
+  const invoiceParty=resolveCustomerInvoiceParty(customer,billingPartyPrefer);
+  sale.invoicePartyType=invoiceParty.partyType;
+  sale.invoicePartyName=invoiceParty.name;
   const invCfg=s.invoiceIntegration||{};
-  const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:customer.name||'',phone:customer.phone||'',email:customer.email||'',taxNumber:customer.taxNumber||customer.taxNo||customer.vkn||customer.tckn||'',taxOffice:customer.taxOffice||'',address:customer.address||''},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',provider:invCfg.provider||'qnb-solist',providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:sale.invoiceNumber||'',invoiceDate:sale.invoiceDate||'',error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',provider:invCfg.provider||'qnb-solist',providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:sale.invoiceNumber||'',invoiceDate:sale.invoiceDate||'',error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
   s.invoiceQueue.push(invoiceRecord);
   sale.invoiceQueueId=invoiceRecord.id;
 
@@ -2276,15 +2321,20 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_man
   if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
   const customer=(s.customers||[]).find(c=>String(c.id)===String(sale.customerId));
   if(!customer)return res.status(400).json({error:'Satış müşterisi bulunamadı'});
-  if(!customer.email&&!customer.taxNo&&!customer.tckn){
+  const prefer=String(req.body?.billingParty||sale.billingParty||customer.invoiceType||'individual');
+  const invoiceParty=resolveCustomerInvoiceParty(customer,prefer);
+  if(!customer.email&&!invoiceParty.taxNumber){
     return res.status(400).json({error:'Fatura için müşteride e-posta veya VKN/TCKN olmalı'});
+  }
+  if(prefer==='corporate'&&!customerHasCorporateBilling(customer)){
+    return res.status(400).json({error:'Kurumsal fatura için müşteri kartına firma ünvanı ve VKN ekleyin'});
   }
   const cfg=s.invoiceIntegration||{};
   let record=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id));
   if(!record){
     record={
       id:crypto.randomUUID(),saleId:sale.id,reference:sale.reference||'',customerId:customer.id,
-      customer:{name:customer.name||'',phone:customer.phone||'',email:customer.email||'',taxNumber:customer.taxNo||customer.tckn||'',taxOffice:customer.taxOffice||'',address:customer.address||''},
+      customer:{name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district},
       items:(sale.items||[]).map(i=>({...i})),total:Number(sale.total||0),
       status:'pending',invoiceType:'auto',provider:cfg.provider||'qnb-solist',
       providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:'',invoiceDate:todayISO(),
@@ -2292,20 +2342,25 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_man
     };
     s.invoiceQueue.push(record);
     sale.invoiceQueueId=record.id;
+  }else{
+    record.customer={name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district};
   }
-  const out=await qnbSolist.sendOrQueueInvoice({record,sale,customer,cfg});
+  const out=await qnbSolist.sendOrQueueInvoice({record,sale,customer:invoiceParty,cfg});
   record.status=out.status||'ready';
   record.docType=out.docType;
   record.ublXml=out.ublXml;
   record.providerMessage=out.message||'';
   record.updatedAt=new Date().toISOString();
+  sale.billingParty=invoiceParty.partyType;
+  sale.invoicePartyType=invoiceParty.partyType;
+  sale.invoicePartyName=invoiceParty.name;
   sale.invoiceStatus=out.status==='issued'?'issued':'queued';
   sale.invoiceType=out.docType;
   sale.invoiceUuid=record.uuid;
   sale.updatedAt=new Date().toISOString();
-  audit(s,'Fatura kes / QNB kuyruğa alındı',customer.name,{saleId:sale.id,status:record.status,docType:out.docType});
+  audit(s,'Fatura kes / QNB kuyruğa alındı',invoiceParty.name,{saleId:sale.id,status:record.status,docType:out.docType,party:invoiceParty.partyType});
   writeStore(s);
-  res.json({ok:true,record,result:out,sale:{id:sale.id,invoiceStatus:sale.invoiceStatus,invoiceType:sale.invoiceType}});
+  res.json({ok:true,record,result:out,sale:{id:sale.id,invoiceStatus:sale.invoiceStatus,invoiceType:sale.invoiceType,billingParty:sale.billingParty}});
 });
 
 function htmlEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -2421,6 +2476,12 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
     ? noteList.map((n,idx)=>`<tr><td>${idx+1}</td><td>${htmlEsc(n.serial||'-')}</td><td>${htmlEsc(n.dueDate||'')}</td><td class="num">${moneyTR(n.amount)}</td></tr>`).join('')
     : '';
   const addr=[customer?.address,customer?.district,customer?.city].filter(Boolean).join(', ')||'-';
+  // Senet / sözleşme borçlusu her zaman şahıs; fatura firması ayrıca not edilir
+  const personName=customer?.name||'';
+  const personTax=customer?.tckn||'';
+  const corpNote=customerHasCorporateBilling(customer)
+    ?`<div class="box" style="grid-column:1/-1"><small>Fatura firması (senet şahsa)</small><b>${htmlEsc(customer.companyName||'')}</b><div>VKN ${htmlEsc(customer.taxNo||'')} · ${htmlEsc(customer.taxOffice||'')}</div></div>`
+    :'';
   return `<section class="sheet a4-one">
 <style>
 .a4-one{padding:8mm!important;font-size:11px;line-height:1.35}
@@ -2458,9 +2519,10 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
       <div class="doc-meta"><b>${htmlEsc(sale.reference||'SATIŞ')}</b><div>Tarih: ${htmlEsc(sale.date||'')}</div><div>Bayi: ${htmlEsc(sale.dealerName||'')}</div><div>Satıcı: ${htmlEsc(sale.salespersonName||sale.createdBy||'')}</div></div></div>
     <h2 class="doc-title">SATIŞ SÖZLEŞMESİ</h2>
     <div class="grid2">
-      <div class="box"><small>Müşteri / Alıcı</small><b>${htmlEsc(customer?.name||'')}</b><div>${htmlEsc(customer?.phone||'')}</div></div>
-      <div class="box"><small>VKN / TCKN</small><b>${htmlEsc(customer?.taxNo||customer?.tckn||'-')}</b></div>
+      <div class="box"><small>Müşteri / Alıcı (Şahıs)</small><b>${htmlEsc(personName)}</b><div>${htmlEsc(customer?.phone||'')}</div></div>
+      <div class="box"><small>TCKN</small><b>${htmlEsc(personTax||'-')}</b></div>
       <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${htmlEsc(addr)}</b></div>
+      ${corpNote}
     </div>
     <table class="items"><thead><tr><th>Kod</th><th>Ürün</th><th class="num">Adet</th><th class="num">Birim</th><th class="num">Tutar</th></tr></thead><tbody>${rows||'<tr><td colspan="5">Ürün yok</td></tr>'}${items.length>12?`<tr><td colspan="5">… +${items.length-12} kalem</td></tr>`:''}</tbody></table>
     <div class="totals">
@@ -2477,7 +2539,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
     </ol></div>
     <div class="split">
       <div>
-        <div class="signs" style="margin-top:8px"><div class="sig"><small>Satıcı Kaşe / İmza</small>${htmlEsc(site)}</div><div class="sig"><small>Müşteri İmza</small>${htmlEsc(customer?.name||'')}</div></div>
+        <div class="signs" style="margin-top:8px"><div class="sig"><small>Satıcı Kaşe / İmza</small>${htmlEsc(site)}</div><div class="sig"><small>Müşteri İmza</small>${htmlEsc(personName)}</div></div>
       </div>
       <div class="senet-box">
         <h3>SENET</h3>
@@ -2486,12 +2548,12 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
           <div class="words">Yalnız: ${htmlEsc(amountToTrWords(senetTotal))}</div>
           <p>İşbu senet mukabilinde <b>${htmlEsc(cfg.creditorName||site)}</b> veya emrine bedeli vadesinde kayıtsız şartsız ödemeyi taahhüt ederim.</p>
           <div class="grid2" style="margin:4px 0">
-            <div class="box"><small>Borçlu</small><b>${htmlEsc(customer?.name||'')}</b></div>
+            <div class="box"><small>Borçlu (Şahıs)</small><b>${htmlEsc(personName)}</b><div>TCKN ${htmlEsc(personTax||'-')}</div></div>
             <div class="box"><small>Ödeme yeri</small><b>${htmlEsc(cfg.paymentPlace||cfg.issuePlace||'-')}</b></div>
           </div>
           ${scheduleRows?`<table class="sched"><thead><tr><th>#</th><th>Seri</th><th>Vade</th><th class="num">Tutar</th></tr></thead><tbody>${scheduleRows}</tbody></table>`:''}
           <p style="margin-top:6px">${htmlEsc(cfg.footer||'TTK hükümlerine tabidir.')}</p>
-          <div class="signs" style="margin-top:8px;gap:12px"><div class="sig"><small>Keşideci</small>${htmlEsc(customer?.name||'')}</div><div class="sig"><small>Lehtar</small>${htmlEsc(cfg.creditorName||site)}</div></div>
+          <div class="signs" style="margin-top:8px;gap:12px"><div class="sig"><small>Keşideci</small>${htmlEsc(personName)}</div><div class="sig"><small>Lehtar</small>${htmlEsc(cfg.creditorName||site)}</div></div>
         `:`<p>Bu satışta senet tutarı yok.</p>`}
       </div>
     </div>

@@ -500,6 +500,20 @@ button.primary,.primary,button{font-size:12px}
 .cust-check,.cust-radio{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#13233f;cursor:pointer}
 .cust-check input,.cust-radio input{width:16px;height:16px;margin:0}
 .cust-invoice-type{display:flex;gap:16px;flex-wrap:wrap;padding:4px 0}
-#customerPageCorporateWrap,#salesQuickCorporateWrap,#customerPageDeliveryWrap,#salesQuickDeliveryWrap{display:grid;gap:8px;margin-top:4px;padding:10px;border:1px solid #c9d7e6;border-radius:10px;background:#fff}
-#customerPageCorporateWrap.hidden,#salesQuickCorporateWrap.hidden,#customerPageDeliveryWrap.hidden,#salesQuickDeliveryWrap.hidden{display:none!important}
+.field-hint{display:block;font-size:11px;color:#7a8aa3;font-weight:650;margin-top:4px}
+#customerPageDeliveryWrap,#salesQuickCustomerDeliveryWrap{display:grid;gap:8px;margin-top:4px;padding:10px;border:1px solid #c9d7e6;border-radius:10px;background:#fff}
+#customerPageDeliveryWrap.hidden,#salesQuickCustomerDeliveryWrap.hidden{display:none!important}
 .customer-card.active{border-color:#0b4d8a;background:#eef5ff;box-shadow:inset 3px 0 0 #0b4d8a}
+.customer-billing-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 18px}
+.billing-card{border:1px solid #d7e2ef;border-radius:12px;padding:12px 14px;background:linear-gradient(180deg,#fff,#f7faff);display:grid;gap:4px}
+.billing-card small{font-size:10px;font-weight:900;letter-spacing:.05em;color:#7a8aa3}
+.billing-card b{font-size:14px;color:#0b2a4a}
+.billing-card span{font-size:12px;color:#5d6c82}
+.billing-card.person{border-color:#b7d0ef;background:linear-gradient(180deg,#fff,#eef6ff)}
+.billing-card.company{border-color:#f0d2a8;background:linear-gradient(180deg,#fff,#fff7ed)}
+.billing-card.company.empty{opacity:.78;border-style:dashed}
+.billing-card.address{border-color:#c9e4d4;background:linear-gradient(180deg,#fff,#f3fbf6)}
+.sales-billing-party{display:grid;gap:6px;margin:10px 0 0;font-size:12px;font-weight:800;color:#0b4d8a}
+.sales-billing-party select{min-height:42px;border:1px solid #b7d0ef;border-radius:10px;padding:8px 10px;font:inherit;background:#fff}
+.sales-billing-party.hidden{display:none!important}
+@media(max-width:900px){.customer-billing-cards{grid-template-columns:1fr}}

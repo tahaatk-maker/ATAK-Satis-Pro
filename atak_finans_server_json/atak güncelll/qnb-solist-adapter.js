@@ -78,8 +78,8 @@ function buildUblInvoiceDraft({sale,customer,cfg,docType}){
   </cac:AccountingSupplierParty>
   <cac:AccountingCustomerParty>
     <cac:Party>
-      <cac:PartyName><cbc:Name>${escXml(customer.name||'')}</cbc:Name></cac:PartyName>
-      <cac:PartyTaxScheme><cac:TaxScheme/><cbc:CompanyID>${escXml(customer.taxNo||customer.tckn||customer.taxNumber||'')}</cbc:CompanyID></cac:PartyTaxScheme>
+      <cac:PartyName><cbc:Name>${escXml(customer.companyName||customer.name||'')}</cbc:Name></cac:PartyName>
+      <cac:PartyTaxScheme><cac:TaxScheme/><cbc:CompanyID>${escXml(customer.taxNumber||customer.taxNo||customer.tckn||'')}</cbc:CompanyID></cac:PartyTaxScheme>
       <cac:Contact>
         <cbc:Telephone>${escXml(customer.phone||'')}</cbc:Telephone>
         <cbc:ElectronicMail>${escXml(customer.email||'')}</cbc:ElectronicMail>

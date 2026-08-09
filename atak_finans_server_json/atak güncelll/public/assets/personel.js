@@ -500,10 +500,12 @@ function salesCustomerChanged(){
   const box=$('#salesCustomerInfo');
   if(!c){box?.classList.add('hidden');box&&(box.innerHTML='');setSalesStep(salesStep);return}
   box.classList.remove('hidden');
+  const hasCorp=Boolean(String(c.companyName||'').trim()&&String(c.taxNo||'').replace(/\D/g,'').length>=10);
   box.innerHTML=`
-    <div><small>Müşteri</small><b>${c.name||'—'}</b></div>
+    <div><small>Şahıs / Senet</small><b>${c.name||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">TCKN ${c.tckn||'—'}</span></div>
     <div><small>Telefon</small><b>${c.phone||'—'}</b></div>
-    <div><small>Cari</small><b>${money(c.balance)}</b></div>`;
+    <div><small>Cari</small><b>${money(c.balance)}</b></div>
+    ${hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">VKN ${c.taxNo||'—'} · ${c.taxOffice||''}</span></div>`:''}`;
   setSalesStep(salesStep);
 }
 function renderProducts(){
@@ -715,12 +717,21 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
   const st=$('#qcStatus');
   st.textContent='Kaydediliyor...';
   try{
+    const companyName=($('#qcCompanyName')?.value||'').trim();
+    const taxOffice=($('#qcTaxOffice')?.value||'').trim();
+    const taxNo=($('#qcTaxNo')?.value||'').trim();
+    const tckn=($('#qcTckn')?.value||'').trim();
+    let invoiceType=$('#qcInvoiceType')?.value==='corporate'?'corporate':'individual';
+    if(invoiceType==='corporate'&&!(companyName&&taxNo.replace(/\D/g,'').length>=10)){
+      st.textContent='Kurumsal fatura için firma ünvanı ve VKN zorunlu';return;
+    }
+    if(!companyName&&!taxNo)invoiceType='individual';
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         name:$('#qcName').value,phone:$('#qcPhone').value,
         city:$('#qcCity').value,district:$('#qcDistrict').value,address:$('#qcAddress').value,
-        deliverySameAsBilling:true,invoiceType:'individual'
+        deliverySameAsBilling:true,invoiceType,tckn,companyName,taxOffice,taxNo
       })
     });
     const row=r.row||{};
