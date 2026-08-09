@@ -198,7 +198,7 @@ aside{
   display:block!important;margin-top:2px;color:#0a4d94;font-size:10px;font-weight:900;
   letter-spacing:.14em;text-align:center
 }
-aside nav{height:calc(100vh - 220px);overflow:auto;padding:4px 0 16px;display:flex;flex-direction:column;gap:3px}
+aside nav{height:calc(100vh - 268px);overflow:auto;padding:4px 0 16px;display:flex;flex-direction:column;gap:3px}
 .menu-label{font-size:9px;letter-spacing:1.5px;color:#8fb2df;padding:13px 13px 5px;font-weight:900}
 aside nav button,aside nav a,aside summary{
   width:100%;min-height:42px;border:0;border-radius:9px;background:transparent;
