@@ -91,11 +91,25 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .cart-row button{border:0;border-radius:7px;background:#ffe8e8;color:#a42929;font-weight:800;height:34px;cursor:pointer}
 .cart-total{display:flex;justify-content:space-between;padding:10px 4px;font-weight:800}
 .pay-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.pay-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.pay-tiles label{display:grid;gap:5px;font-size:12px;font-weight:800;padding:10px;border:1px solid #d5e0ee;border-radius:10px;background:#f7f9fc}
-.pay-tiles input{padding:10px;border:1px solid #d6e0ec;border-radius:8px;font:inherit}
+.pay-grid.compact{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pay-summary-card{display:grid;gap:14px;padding:16px;border:1px solid #d5e0ee;border-radius:14px;background:#f8fafc}
+.pay-method-preview{padding:12px 14px;border-radius:10px;background:#eef5ff;border:1px solid #c9dbf2;font-weight:800;color:#0b2a4a}
+.pay-open-btn{min-width:220px;min-height:48px;font-size:15px}
+.pay-screen{width:min(640px,100%)!important}
+.pay-net-hero{display:flex;justify-content:space-between;align-items:end;padding:14px 16px;border-radius:14px;background:linear-gradient(135deg,#071a33,#125ea3);color:#fff;margin-bottom:14px}
+.pay-net-hero span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9ec0ef;font-weight:800}
+.pay-net-hero strong{font-size:30px}
+.pay-method-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.pay-method-btn{border:1.5px solid #d5e0ee;border-radius:14px;background:#fff;padding:16px;text-align:left;cursor:pointer;font:inherit}
+.pay-method-btn b{display:block;font-size:16px;color:#0b2a4a}
+.pay-method-btn small{display:block;margin-top:4px;color:#66758a}
+.pay-method-btn.active{border-color:#1565c0;background:#eef5ff;box-shadow:inset 3px 0 0 #1565c0}
+.pay-method-btn[data-method="Senet"].active{border-color:#be123c;background:#fff1f2;box-shadow:inset 3px 0 0 #be123c}
+.pay-screen-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.senet-btn{border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#e11d48,#9f1239);color:#fff}
 .totals-box{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
-.totals-box>div{padding:12px;border-radius:10px;background:#f7f9fc;border:1px solid #e0e7ef}
+.totals-box.simple{grid-template-columns:repeat(3,minmax(0,1fr))}
+.totals-box>div{padding:12px;border-radius:10px;background:#fff;border:1px solid #e0e7ef}
 .totals-box span{display:block;font-size:11px;color:#66758a;font-weight:800}
 .totals-box b{display:block;margin-top:4px;font-size:16px}
 .totals-box .net{background:linear-gradient(135deg,#071a33,#125ea3);color:#fff;border:0}
@@ -108,12 +122,12 @@ td small{display:block;color:#7a879a;margin-top:2px}
 @media(max-width:980px){
   .modules,.stat-grid,.ciro-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .split-panels,.sales-grid{grid-template-columns:1fr}
-  .pay-grid,.pay-tiles,.totals-box,.info-box{grid-template-columns:1fr 1fr}
+  .pay-grid,.totals-box,.info-box,.pay-method-grid{grid-template-columns:1fr 1fr}
 }
 @media(max-width:640px){
   header{padding:8px 12px}
   header img{width:110px}
-  .modules,.stat-grid,.ciro-grid,.pay-grid,.pay-tiles,.totals-box,.info-box,.form-grid{grid-template-columns:1fr}
+  .modules,.stat-grid,.ciro-grid,.pay-grid,.totals-box,.info-box,.form-grid,.pay-method-grid{grid-template-columns:1fr}
   .toolbar{flex-direction:column;align-items:stretch}
   .cart-row{grid-template-columns:minmax(0,1fr) 60px 34px}
   .cart-row input[data-price]{grid-column:1/-1}

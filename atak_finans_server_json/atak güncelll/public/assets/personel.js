@@ -15,6 +15,8 @@ let salesCustomers=[];
 let salesAccounts=[];
 let salesCart=[];
 let salesStep=1;
+let selectedPayMethod='';
+let lastSaleDocsUrl='';
 
 function has(permission){
   const p=currentUser?.permissions||[];
@@ -321,40 +323,89 @@ function addToCart(code){
   else salesCart.push({code:p.code,name:p.searchName||p.name||p.code,qty:1,unitPrice:productPrice(p),itemCode:p.itemCode||'',materialCode:p.searchName||p.code||''});
   renderCart();
 }
+function syncPayAccounts(){
+  const cashOpts=salesAccounts.filter(a=>a.type==='cash'&&a.active!==false);
+  const bankOpts=salesAccounts.filter(a=>a.type==='bank'&&a.active!==false);
+  const all=salesAccounts.filter(a=>a.active!==false);
+  const list=selectedPayMethod==='Nakit'?(cashOpts.length?cashOpts:all):(bankOpts.length?bankOpts:all);
+  const sel=$('#payAccountSelect');
+  if(sel)sel.innerHTML=list.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Hesap yok</option>';
+  if($('#payCashAccount'))$('#payCashAccount').innerHTML=$('#payAccountSelect')?.innerHTML||'';
+  if($('#payBankAccount'))$('#payBankAccount').innerHTML=$('#payAccountSelect')?.innerHTML||'';
+}
+function applyPayMethod(method){
+  selectedPayMethod=method||'';
+  const net=cartNet();
+  ['#payCash','#payCard','#payTransfer','#payNote'].forEach(id=>{if($(id))$(id).value='0'});
+  document.querySelectorAll('.pay-method-btn').forEach(b=>b.classList.toggle('active',b.dataset.method===selectedPayMethod));
+  const isSenet=selectedPayMethod==='Senet';
+  $('#promissoryWrap')?.classList.toggle('hidden',!isSenet);
+  $('#payAccountWrap')?.classList.toggle('hidden',isSenet);
+  $('#salesSavePrintSenetBtn')?.classList.toggle('hidden',!isSenet);
+  if($('#payAmount'))$('#payAmount').value=String(net);
+  if(selectedPayMethod==='Nakit')$('#payCash').value=String(net);
+  if(selectedPayMethod==='Kredi Kartı')$('#payCard').value=String(net);
+  if(selectedPayMethod==='Havale')$('#payTransfer').value=String(net);
+  if(selectedPayMethod==='Senet')$('#payNote').value=String(net);
+  syncPayAccounts();
+  const acc=$('#payAccountSelect')?.value||'';
+  if(selectedPayMethod==='Nakit'&&$('#payCashAccount'))$('#payCashAccount').value=acc;
+  if((selectedPayMethod==='Kredi Kartı'||selectedPayMethod==='Havale')&&$('#payBankAccount'))$('#payBankAccount').value=acc;
+  salesRecalcPay();
+}
 function salesRecalcPay(){
   const net=cartNet();
+  const amount=num($('#payAmount')?.value)||net;
+  if(selectedPayMethod==='Nakit')$('#payCash').value=String(amount);
+  if(selectedPayMethod==='Kredi Kartı')$('#payCard').value=String(amount);
+  if(selectedPayMethod==='Havale')$('#payTransfer').value=String(amount);
+  if(selectedPayMethod==='Senet')$('#payNote').value=String(amount);
   const cash=num($('#payCash')?.value),card=num($('#payCard')?.value),tr=num($('#payTransfer')?.value),note=num($('#payNote')?.value);
-  const allocated=Math.round((cash+card+tr+note)*100)/100;
-  const remain=Math.round((net-allocated)*100)/100;
   const gross=cartGross();
   if($('#payGross'))$('#payGross').textContent=money(gross);
   if($('#payDiscount'))$('#payDiscount').textContent=money(gross-net);
   if($('#payNet'))$('#payNet').textContent=money(net);
-  if($('#payAllocated'))$('#payAllocated').textContent=money(allocated);
-  if($('#payRemain'))$('#payRemain').textContent=money(remain);
-  $('#promissoryWrap')?.classList.toggle('hidden',note<=0);
+  if($('#payScreenNet'))$('#payScreenNet').textContent=money(net);
+  const preview=$('#payMethodPreview');
+  if(preview){
+    preview.textContent=selectedPayMethod
+      ?`Seçili ödeme: ${selectedPayMethod} · ${money(amount)}`
+      :'Ödeme seçilmedi — Ödeme Ekranı’ndan seçin';
+  }
+  $('#promissoryWrap')?.classList.toggle('hidden',!(selectedPayMethod==='Senet'||note>0));
 }
-function fillPay(method){
-  const net=cartNet();
-  ['#payCash','#payCard','#payTransfer','#payNote'].forEach(id=>{if($(id))$(id).value='0'});
-  if(method==='cash'&&$('#payCash'))$('#payCash').value=String(net);
-  if(method==='card'&&$('#payCard'))$('#payCard').value=String(net);
+function openPayScreen(){
   salesRecalcPay();
+  if(!selectedPayMethod)applyPayMethod('Nakit');
+  else applyPayMethod(selectedPayMethod);
+  $('#payScreenStatus').textContent='';
+  $('#payScreenModal')?.classList.remove('hidden');
 }
-async function saveSale(){
-  const st=$('#salesStatus');
+function closePayScreen(){$('#payScreenModal')?.classList.add('hidden')}
+function printSaleDocs(url){
+  if(!url)return;
+  const w=window.open(url,'_blank','noopener,noreferrer');
+  if(!w)$('#payScreenStatus').textContent='Açılır pencere engellendi — tarayıcı izni verin';
+}
+async function saveSale(printSenet=false){
+  const st=$('#payScreenStatus')||$('#salesStatus');
   const customerId=$('#salesCustomerSelect')?.value||'';
   if(!customerId){st.textContent='Müşteri seçin';return}
   if(!salesCart.length){st.textContent='Sepete ürün ekleyin';return}
+  if(!selectedPayMethod){st.textContent='Ödeme şekli seçin';openPayScreen();return}
   const net=cartNet();
+  const amount=num($('#payAmount')?.value);
+  if(amount<=0){st.textContent='Ödeme tutarı girin';return}
+  if(Math.abs(amount-net)>0.009){st.textContent=`Tutar net ile aynı olmalı: ${money(net)}`;return}
+  applyPayMethod(selectedPayMethod);
   const cash=num($('#payCash')?.value),card=num($('#payCard')?.value),tr=num($('#payTransfer')?.value),note=num($('#payNote')?.value);
-  const allocated=Math.round((cash+card+tr+note)*100)/100;
-  if(Math.abs(allocated-net)>0.009){st.textContent=`Ödeme net tutara eşit olmalı. Net ${money(net)}, dağıtılan ${money(allocated)}`;return}
   if(note>0 && !$('#promissoryFirstDue')?.value){st.textContent='Senet için ilk vade girin';return}
+  const acc=$('#payAccountSelect')?.value||'';
+  if(selectedPayMethod!=='Senet' && !acc){st.textContent='Hesap seçin';return}
   const payments=[];
-  if(cash>0)payments.push({method:'Nakit',amount:cash,accountId:$('#payCashAccount')?.value||''});
-  if(card>0)payments.push({method:'Kredi Kartı',amount:card,accountId:$('#payBankAccount')?.value||''});
-  if(tr>0)payments.push({method:'Havale',amount:tr,accountId:$('#payBankAccount')?.value||''});
+  if(cash>0)payments.push({method:'Nakit',amount:cash,accountId:acc||$('#payCashAccount')?.value||''});
+  if(card>0)payments.push({method:'Kredi Kartı',amount:card,accountId:acc||$('#payBankAccount')?.value||''});
+  if(tr>0)payments.push({method:'Havale',amount:tr,accountId:acc||$('#payBankAccount')?.value||''});
   const body={
     customerId,
     dealerId:$('#salesDealer')?.value||'',
@@ -370,7 +421,16 @@ async function saveSale(){
   st.textContent='Satış kaydediliyor...';
   try{
     const r=await api('/web-api/admin/customer-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    st.textContent=`Satış kaydedildi: ${r.sale?.reference||r.reference||'OK'}`;
+    const ref=r.sale?.reference||r.reference||'OK';
+    lastSaleDocsUrl=r.docsUrl||r.promissory?.printUrl||(r.sale?.id?`/web-api/admin/sale/${r.sale.id}/print-docs`:'');
+    if(printSenet && lastSaleDocsUrl){
+      printSaleDocs(lastSaleDocsUrl);
+      st.textContent=`Satış kaydedildi (${ref}) — senet/sözleşme açıldı`;
+    }else{
+      st.textContent=`Satış kaydedildi: ${ref}`;
+    }
+    closePayScreen();
+    $('#salesStatus').textContent=st.textContent;
     salesReset();
   }catch(e){st.textContent=e.message}
 }
@@ -406,12 +466,22 @@ $('#cartRows')?.addEventListener('click',e=>{
   salesCart.splice(Number(row.dataset.idx),1);
   renderCart();
 });
-['#salesDiscountPct','#payCash','#payCard','#payTransfer','#payNote'].forEach(id=>{
-  $(id)?.addEventListener('input',salesRecalcPay);
+$('#salesDiscountPct')?.addEventListener('input',()=>{salesRecalcPay();if(selectedPayMethod)applyPayMethod(selectedPayMethod)});
+$('#payAmount')?.addEventListener('input',salesRecalcPay);
+$('#openPayScreenBtn')?.addEventListener('click',openPayScreen);
+$('#payScreenClose')?.addEventListener('click',closePayScreen);
+$('#payScreenModal')?.addEventListener('click',e=>{if(e.target===$('#payScreenModal'))closePayScreen()});
+$('#payMethodGrid')?.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-method]');
+  if(btn)applyPayMethod(btn.dataset.method);
 });
-$('#salesFillCash')?.addEventListener('click',()=>fillPay('cash'));
-$('#salesFillCard')?.addEventListener('click',()=>fillPay('card'));
-$('#salesSaveBtn')?.addEventListener('click',saveSale);
+$('#payAccountSelect')?.addEventListener('change',()=>{
+  const acc=$('#payAccountSelect')?.value||'';
+  if($('#payCashAccount'))$('#payCashAccount').value=acc;
+  if($('#payBankAccount'))$('#payBankAccount').value=acc;
+});
+$('#salesSaveBtn')?.addEventListener('click',()=>saveSale(false));
+$('#salesSavePrintSenetBtn')?.addEventListener('click',()=>saveSale(true));
 
 $('#salesNewCustomerBtn')?.addEventListener('click',()=>{
   $('#salesQuickCustomerForm')?.reset();
