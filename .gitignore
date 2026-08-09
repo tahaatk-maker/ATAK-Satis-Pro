@@ -4,3 +4,7 @@ node_modules/
 .DS_Store
 uploads/
 *.tmp
+.env
+**/.env
+!.env.example
+!**/.env.example
