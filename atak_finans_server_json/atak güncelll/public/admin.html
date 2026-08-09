@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v9" rel="stylesheet"/>
+<html lang="tr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Satış Operasyon</title><link href="/web-admin-assets/admin.css?v=fix-v10" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -675,21 +675,21 @@ body.inv-full #pageTitle{font-size:18px}
           <label>Teslimat açık adres *<textarea id="salesQuickCustomerDeliveryAddress" rows="2" placeholder="Teslimat adresi"></textarea></label>
         </div>
       </div>
-      <div class="cust-form-sec"><div class="cust-form-sec-title">Bireysel (Şahıs / Senet)</div>
-        <label>TCKN<input id="salesQuickCustomerTckn" placeholder="11 haneli TCKN" inputmode="numeric"/></label>
-      </div>
-      <div class="cust-form-sec"><div class="cust-form-sec-title">Kurumsal fatura (opsiyonel)</div>
-        <p class="field-hint" style="margin:0">Senet şahsa, fatura firmaya kesilecekse doldurun.</p>
-        <label>Firma ünvanı<input id="salesQuickCustomerCompanyName" placeholder="Şirket ünvanı"/></label>
-        <div class="two-col">
-          <label>Vergi dairesi<input id="salesQuickCustomerTaxOffice" placeholder="Vergi dairesi"/></label>
-          <label>VKN<input id="salesQuickCustomerTaxNo" placeholder="10 haneli VKN" inputmode="numeric"/></label>
-        </div>
-      </div>
-      <div class="cust-form-sec"><div class="cust-form-sec-title">Varsayılan fatura tarafı</div>
+      <div class="cust-form-sec"><div class="cust-form-sec-title">Fatura tipi *</div>
         <div class="cust-invoice-type">
-          <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="individual" checked/> Bireysel</label>
-          <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="corporate"/> Kurumsal</label>
+          <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="individual" checked/> Bireysel (TCKN)</label>
+          <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="corporate"/> Kurumsal (VKN)</label>
+        </div>
+        <p class="field-hint" style="margin:0">Senet her zaman şahıs adına kalır. Fatura tipi zorunludur.</p>
+      </div>
+      <div class="cust-form-sec" id="salesQuickCustomerIndividualSec"><div class="cust-form-sec-title">Bireysel fatura</div>
+        <label>TCKN *<input id="salesQuickCustomerTckn" placeholder="11 haneli TCKN" inputmode="numeric" required/></label>
+      </div>
+      <div class="cust-form-sec hidden" id="salesQuickCustomerCorporateSec"><div class="cust-form-sec-title">Kurumsal fatura</div>
+        <label>Firma ünvanı *<input id="salesQuickCustomerCompanyName" placeholder="Şirket ünvanı"/></label>
+        <div class="two-col">
+          <label>Vergi dairesi *<input id="salesQuickCustomerTaxOffice" placeholder="Vergi dairesi"/></label>
+          <label>VKN *<input id="salesQuickCustomerTaxNo" placeholder="10 haneli VKN" inputmode="numeric"/></label>
         </div>
       </div>
       <label>Müşteri Notu<textarea id="salesQuickCustomerNote" rows="2"></textarea></label>
@@ -1607,24 +1607,22 @@ Bulunamayan → Diğer.
 <label>Teslimat açık adres *<textarea id="customerPageDeliveryAddress" rows="2" placeholder="Teslimat adresi"></textarea></label>
 </div>
 </div>
-<div class="cust-form-sec"><div class="cust-form-sec-title">Bireysel (Şahıs / Senet)</div>
-<p class="field-hint" style="margin:0">Senet ve sözleşme bu bilgilere yazılır.</p>
-<label>TCKN<input id="customerPageTckn" placeholder="11 haneli TCKN" inputmode="numeric"/></label>
-</div>
-<div class="cust-form-sec"><div class="cust-form-sec-title">Kurumsal fatura (opsiyonel)</div>
-<p class="field-hint" style="margin:0">Şahsa senet yapıp faturayı şirkete kesmek için burayı doldurun. İki bilgi birden saklanır.</p>
-<label>Firma ünvanı<input id="customerPageCompanyName" placeholder="Şirket ünvanı"/></label>
-<div class="two-col">
-<label>Vergi dairesi<input id="customerPageTaxOffice" placeholder="Vergi dairesi"/></label>
-<label>VKN<input id="customerPageTaxNo" placeholder="10 haneli VKN" inputmode="numeric"/></label>
-</div>
-</div>
-<div class="cust-form-sec"><div class="cust-form-sec-title">Varsayılan fatura tarafı</div>
+<div class="cust-form-sec"><div class="cust-form-sec-title">Fatura tipi *</div>
 <div class="cust-invoice-type">
-<label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="individual" checked/> Bireysel (şahıs / TCKN)</label>
-<label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="corporate"/> Kurumsal (firma / VKN)</label>
+<label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="individual" checked/> Bireysel (TCKN)</label>
+<label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="corporate"/> Kurumsal (VKN)</label>
 </div>
-<p class="field-hint" style="margin:0">Satış sırasında da değiştirebilirsiniz.</p>
+<p class="field-hint" style="margin:0">Senet şahıs adına kalır. Fatura tipi zorunludur — opsiyonel değil.</p>
+</div>
+<div class="cust-form-sec" id="customerPageIndividualSec"><div class="cust-form-sec-title">Bireysel fatura</div>
+<label>TCKN *<input id="customerPageTckn" placeholder="11 haneli TCKN" inputmode="numeric" required/></label>
+</div>
+<div class="cust-form-sec hidden" id="customerPageCorporateSec"><div class="cust-form-sec-title">Kurumsal fatura</div>
+<label>Firma ünvanı *<input id="customerPageCompanyName" placeholder="Şirket ünvanı"/></label>
+<div class="two-col">
+<label>Vergi dairesi *<input id="customerPageTaxOffice" placeholder="Vergi dairesi"/></label>
+<label>VKN *<input id="customerPageTaxNo" placeholder="10 haneli VKN" inputmode="numeric"/></label>
+</div>
 </div>
 <label>Not<textarea id="customerPageNote" rows="2"></textarea></label>
 <button class="primary" id="customerPageSaveBtn" type="button">Müşteriyi Kaydet</button>
@@ -1724,5 +1722,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v9"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v10"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

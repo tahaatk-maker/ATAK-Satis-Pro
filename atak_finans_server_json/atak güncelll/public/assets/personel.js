@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v9 */
+/* ATAK_PERSONEL_BUILD=fix-v10 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1142,21 +1142,25 @@ $('#salesDockPreviewBtn')?.addEventListener('click',()=>{
   openSalesPreview();
 });
 
-function syncQcInvoiceHint(){
-  const company=($('#qcCompanyName')?.value||'').trim();
-  const tax=($('#qcTaxNo')?.value||'').replace(/\D/g,'');
-  const corp=Boolean(company&&tax.length>=10);
+function syncQcInvoiceUI(){
+  const corp=document.querySelector('input[name="qcInvoiceTypeRadio"]:checked')?.value==='corporate';
   if($('#qcInvoiceType'))$('#qcInvoiceType').value=corp?'corporate':'individual';
-  const hint=$('#qcInvoiceAutoHint');
-  if(hint)hint.textContent=corp
-    ?`Kurumsal fatura otomatik: ${company} · VKN ${tax}`
-    :'Şimdilik bireysel. Firma+VKN dolunca kurumsal seçilir.';
+  $('#qcIndividualSec')?.classList.toggle('hidden',corp);
+  $('#qcCompanyWrap')?.classList.toggle('hidden',!corp);
+  $('#qcTaxOfficeWrap')?.classList.toggle('hidden',!corp);
+  $('#qcTaxNoWrap')?.classList.toggle('hidden',!corp);
+  if($('#qcTckn'))$('#qcTckn').required=!corp;
+  if($('#qcCompanyName'))$('#qcCompanyName').required=corp;
+  if($('#qcTaxOffice'))$('#qcTaxOffice').required=corp;
+  if($('#qcTaxNo'))$('#qcTaxNo').required=corp;
 }
-['#qcCompanyName','#qcTaxNo'].forEach(id=>$(id)?.addEventListener('input',syncQcInvoiceHint));
+document.querySelectorAll('input[name="qcInvoiceTypeRadio"]').forEach(r=>r.addEventListener('change',syncQcInvoiceUI));
 $('#salesNewCustomerBtn')?.addEventListener('click',()=>{
   $('#salesQuickCustomerForm')?.reset();
+  const ind=document.querySelector('input[name="qcInvoiceTypeRadio"][value="individual"]');
+  if(ind)ind.checked=true;
   $('#qcStatus').textContent='';
-  syncQcInvoiceHint();
+  syncQcInvoiceUI();
   $('#salesQuickCustomerModal')?.classList.remove('hidden');
 });
 $('#salesQuickCustomerClose')?.addEventListener('click',()=>$('#salesQuickCustomerModal')?.classList.add('hidden'));
@@ -1165,18 +1169,28 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
   const st=$('#qcStatus');
   st.textContent='Kaydediliyor...';
   try{
+    const invoiceType=document.querySelector('input[name="qcInvoiceTypeRadio"]:checked')?.value==='corporate'?'corporate':'individual';
     const companyName=($('#qcCompanyName')?.value||'').trim();
     const taxOffice=($('#qcTaxOffice')?.value||'').trim();
     const taxNo=($('#qcTaxNo')?.value||'').trim();
     const tckn=($('#qcTckn')?.value||'').trim();
-    // Firma+VKN varsa otomatik kurumsal — manuel seçim yok
-    const invoiceType=(companyName&&taxNo.replace(/\D/g,'').length>=10)?'corporate':'individual';
+    if(invoiceType==='corporate'){
+      if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
+      if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
+      if(taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için 10 haneli VKN zorunludur');
+    }else if(tckn.replace(/\D/g,'').length!==11){
+      throw new Error('Bireysel fatura için 11 haneli TCKN zorunludur');
+    }
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         name:$('#qcName').value,phone:$('#qcPhone').value,
         city:$('#qcCity').value,district:$('#qcDistrict').value,address:$('#qcAddress').value,
-        deliverySameAsBilling:true,invoiceType,tckn,companyName,taxOffice,taxNo
+        deliverySameAsBilling:true,invoiceType,
+        tckn:invoiceType==='individual'?tckn:'',
+        companyName:invoiceType==='corporate'?companyName:'',
+        taxOffice:invoiceType==='corporate'?taxOffice:'',
+        taxNo:invoiceType==='corporate'?taxNo:''
       })
     });
     const row=r.row||{};

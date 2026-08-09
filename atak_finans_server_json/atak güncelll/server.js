@@ -695,7 +695,7 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.10-screen-perms',
+  version:'6.3.11-invoice-required',
   build:'fix-v6',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
@@ -1231,31 +1231,28 @@ function parseCustomerPayload(x={}){
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress)){
     throw new Error('Teslimat adresi fatura adresinden farklıysa il, ilçe ve açık adres zorunludur');
   }
-  const wantsCorporate=invoiceType==='corporate'||companyName||taxOffice||taxNo;
-  if(wantsCorporate){
+  if(invoiceType==='corporate'){
     if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
     if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
     if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
-  }
-  if(tckn&&tckn.replace(/\D/g,'').length&&tckn.replace(/\D/g,'').length!==11){
-    throw new Error('TCKN 11 hane olmalıdır');
-  }
-  if(invoiceType==='corporate'&&!customerHasCorporateBilling({companyName,taxNo})){
-    throw new Error('Varsayılan fatura kurumsal seçildi; firma bilgilerini doldurun');
+  }else{
+    if(!tckn||tckn.replace(/\D/g,'').length!==11){
+      throw new Error('Bireysel fatura için 11 haneli TCKN zorunludur');
+    }
   }
   return {
     name,phone,
     email:String(x.email||'').trim(),
-    taxNo:companyName||taxOffice||taxNo?taxNo:'',
-    tckn,
+    taxNo:invoiceType==='corporate'?taxNo:'',
+    tckn:invoiceType==='individual'?tckn:(tckn||''),
     city,district,address,
     deliverySameAsBilling:deliverySame,
     deliveryCity:deliverySame?city:deliveryCity,
     deliveryDistrict:deliverySame?district:deliveryDistrict,
     deliveryAddress:deliverySame?address:deliveryAddress,
     invoiceType,
-    companyName,
-    taxOffice,
+    companyName:invoiceType==='corporate'?companyName:'',
+    taxOffice:invoiceType==='corporate'?taxOffice:'',
     note:String(x.note||'').trim(),
     active:x.active!==false&&x.active!=='false',
     updatedAt:new Date().toISOString()

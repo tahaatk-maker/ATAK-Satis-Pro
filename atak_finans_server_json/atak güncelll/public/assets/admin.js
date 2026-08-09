@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v9 */
+/* ATAK_ADMIN_BUILD=fix-v10 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -675,7 +675,17 @@ function customerHasCorporate(c={}){
 function syncCustomerFormUI(prefix){
   const same=q(`#${prefix}DeliverySame`)?.checked!==false;
   q(`#${prefix}DeliveryWrap`)?.classList.toggle('hidden',same);
-  // Bireysel + kurumsal alanlar birlikte görünür (XOR yok)
+  const corp=customerInvoiceType(prefix)==='corporate';
+  q(`#${prefix}IndividualSec`)?.classList.toggle('hidden',corp);
+  q(`#${prefix}CorporateSec`)?.classList.toggle('hidden',!corp);
+  const tckn=q(`#${prefix}Tckn`);
+  const company=q(`#${prefix}CompanyName`);
+  const office=q(`#${prefix}TaxOffice`);
+  const vkn=q(`#${prefix}TaxNo`);
+  if(tckn)tckn.required=!corp;
+  if(company)company.required=corp;
+  if(office)office.required=corp;
+  if(vkn)vkn.required=corp;
 }
 function collectCustomerPayload(prefix,{requireActive=false}={}){
   const name=(q(`#${prefix}Name`)?.value||'').trim();
@@ -696,13 +706,13 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
   if(!phone)throw new Error('Telefon zorunludur');
   if(!city||!district||!address)throw new Error('Adres (il, ilçe, açık adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress))throw new Error('Teslimat adresi için il, ilçe ve açık adres girin');
-  const wantsCorporate=invoiceType==='corporate'||companyName||taxOffice||taxNo;
-  if(wantsCorporate){
+  if(invoiceType==='corporate'){
     if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
     if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
     if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
+  }else{
+    if(!tckn||tckn.replace(/\D/g,'').length!==11)throw new Error('Bireysel fatura için 11 haneli TCKN zorunludur');
   }
-  if(tckn&&tckn.replace(/\D/g,'').length&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN 11 hane olmalıdır');
   const email=(q(`#${prefix}Email`)?.value||'').trim();
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Geçerli bir e-posta girin (e-Fatura / e-Arşiv için)');
   const payload={
@@ -711,9 +721,11 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
     city,district,address,
     deliverySameAsBilling:deliverySame,
     deliveryCity,deliveryDistrict,deliveryAddress,
-    invoiceType,companyName,taxOffice,
-    taxNo, // VKN
-    tckn,  // şahıs
+    invoiceType,
+    companyName:invoiceType==='corporate'?companyName:'',
+    taxOffice:invoiceType==='corporate'?taxOffice:'',
+    taxNo:invoiceType==='corporate'?taxNo:'',
+    tckn:invoiceType==='individual'?tckn:(tckn||''),
     note:(q(`#${prefix}Note`)?.value||'').trim(),
     active:true
   };

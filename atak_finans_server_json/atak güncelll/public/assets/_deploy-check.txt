@@ -1,5 +1,4 @@
-fix-v9
-expect-health=6.3.10-screen-perms
-finans-cari-screen-permissions
-staff-default-except-report-approvals
+fix-v10
+expect-health=6.3.11-invoice-required
+invoice-type-required-bireysel-kurumsal
 2026-08-09
