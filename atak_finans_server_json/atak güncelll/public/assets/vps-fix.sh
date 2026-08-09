@@ -158,7 +158,7 @@ done
 echo "PUBLIC https://panel.atakhome.com.tr/web-admin-assets/_deploy-check.txt"
 echo "PUBLIC https://atakhome.com.tr/assets/_deploy-check.txt"
 echo "CHECK_HEALTH https://panel.atakhome.com.tr/health  (must contain $EXPECT_HEALTH)"
-echo "CHECK_HTML https://panel.atakhome.com.tr/web-admin  (must contain fix-v5 and Kesilmeyen)"
+echo "CHECK_HTML https://panel.atakhome.com.tr/web-admin  (must contain fix-v15; must NOT contain finance-jump uninvoiced)"
 
 if [ -n "$FAIL_MSG" ]; then
   echo "DEPLOY_FAILED"
