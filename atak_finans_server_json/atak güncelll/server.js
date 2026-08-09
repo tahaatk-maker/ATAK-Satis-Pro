@@ -267,16 +267,52 @@ async function fetchImportedBekoProduct(url){
 }
 
 
+const PERMISSION_CATALOG=[
+  {id:'dashboard_view',name:'Dashboard görüntüle',group:'Genel'},
+  {id:'products_view',name:'Ürün görüntüle',group:'Ürün'},
+  {id:'products_manage',name:'Ürün yönet',group:'Ürün'},
+  {id:'stock_manage',name:'Stok yönet',group:'Stok'},
+  {id:'stock_view',name:'Stok görüntüle',group:'Stok'},
+  {id:'customers_manage',name:'Müşteri yönet',group:'Müşteri'},
+  {id:'orders_manage',name:'Satış yap (POS)',group:'Satış'},
+  {id:'orders_view',name:'Sipariş görüntüle',group:'Satış'},
+  {id:'sale_docs',name:'Sözleşme / Senet bas',group:'Satış'},
+  {id:'sale_offer',name:'Teklif WhatsApp / PDF',group:'Satış'},
+  {id:'sale_invoice_qnb',name:'Fatura kes (QNB)',group:'Satış'},
+  {id:'sale_deduct_stock',name:'Satışta stok düş',group:'Satış'},
+  {id:'finance_view',name:'Finans görüntüle',group:'Finans'},
+  {id:'finance_manage',name:'Finans yönet',group:'Finans'},
+  {id:'invoices_manage',name:'Fatura merkezi',group:'Finans'},
+  {id:'marketing_manage',name:'Pazarlama yönet',group:'Web'},
+  {id:'sync_manage',name:'Senkron yönet',group:'Sistem'},
+  {id:'users_manage',name:'Kullanıcı / yetki yönet',group:'Sistem'},
+  {id:'settings_manage',name:'Ayarlar',group:'Sistem'},
+  {id:'reports_view',name:'Rapor görüntüle',group:'Rapor'}
+];
 const ROLE_PRESETS={
   owner:{name:'Sahip / Tam Yetki',permissions:['*']},
-  admin:{name:'Yönetici',permissions:['dashboard_view','products_manage','marketing_manage','finance_manage','sync_manage','users_manage']},
+  admin:{name:'Yönetici',permissions:['dashboard_view','products_manage','marketing_manage','finance_manage','sync_manage','users_manage','orders_manage','sale_docs','sale_offer','sale_invoice_qnb','sale_deduct_stock','customers_manage','invoices_manage']},
   super_admin:{name:'Süper Admin',permissions:['*']},
-  sales:{name:'Satış Personeli',permissions:['dashboard_view','products_view','orders_manage','customers_manage','finance_view']},
+  sales:{name:'Satış Personeli',permissions:['dashboard_view','products_view','orders_manage','customers_manage','finance_view','sale_docs','sale_offer']},
   warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','orders_view']},
-  accounting:{name:'Muhasebe',permissions:['dashboard_view','finance_manage','orders_view','finance_view']},
+  accounting:{name:'Muhasebe',permissions:['dashboard_view','finance_manage','orders_view','finance_view','invoices_manage','sale_invoice_qnb']},
   service:{name:'Servis',permissions:['dashboard_view','orders_view','service_manage']},
   viewer:{name:'Sadece Görüntüleme',permissions:['dashboard_view','products_view','orders_view']}
 };
+function sanitizePermissions(list,role){
+  const preset=ROLE_PRESETS[role]?.permissions||ROLE_PRESETS.viewer.permissions;
+  if(!Array.isArray(list)||!list.length)return preset.slice();
+  if(list.includes('*'))return ['*'];
+  const allowed=new Set(PERMISSION_CATALOG.map(p=>p.id));
+  const cleaned=[...new Set(list.map(String).filter(p=>allowed.has(p)))];
+  return cleaned.length?cleaned:preset.slice();
+}
+function staffCanInvoice(req){
+  return actorHasPermission(req,'sale_invoice_qnb')||actorHasPermission(req,'finance_manage')||actorHasPermission(req,'invoices_manage');
+}
+function staffCanDeductStock(req){
+  return actorHasPermission(req,'sale_deduct_stock')||actorHasPermission(req,'stock_manage');
+}
 function hashPassword(password,salt=crypto.randomBytes(16).toString('hex')){
   return`${salt}:${crypto.scryptSync(String(password),salt,64).toString('hex')}`;
 }
@@ -621,7 +657,7 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.8-pay-plan',
+  version:'6.3.9-staff-pos-parity',
   build:'fix-v6',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
@@ -661,16 +697,20 @@ app.get('/web-api/admin/store',requireAdmin,(req,res)=>{const s=readStore();res.
 
 
 
-app.get('/web-api/admin/roles',requireAdmin,(req,res)=>res.json({roles:Object.entries(ROLE_PRESETS).map(([id,x])=>({id,name:x.name,permissions:x.permissions}))}));
+app.get('/web-api/admin/roles',requireAdmin,(req,res)=>res.json({
+  roles:Object.entries(ROLE_PRESETS).map(([id,x])=>({id,name:x.name,permissions:x.permissions})),
+  permissions:PERMISSION_CATALOG
+}));
 app.post('/web-api/admin/user',requirePermission('users_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{},username=String(x.username||'').trim().toLocaleLowerCase('tr-TR'),name=String(x.name||'').trim(),role=ROLE_PRESETS[x.role]?String(x.role):'viewer';
   if(!username||!name)return res.status(400).json({error:'Ad ve kullanıcı adı zorunludur'});
   if(!/^[a-z0-9._-]{3,40}$/.test(username))return res.status(400).json({error:'Kullanıcı adı uygun değil'});
   if((s.users||[]).some(u=>u.id!==x.id&&String(u.username).toLocaleLowerCase('tr-TR')===username))return res.status(409).json({error:'Bu kullanıcı adı zaten kullanılıyor'});
   let user=(s.users||[]).find(u=>String(u.id)===String(x.id));const now=new Date().toISOString();
-  if(user){user.name=name;user.username=username;user.role=role;user.active=x.active!==false;user.permissions=ROLE_PRESETS[role].permissions;if(String(x.password||'').trim())user.passwordHash=hashPassword(x.password);user.updatedAt=now}
-  else{if(!String(x.password||'').trim())return res.status(400).json({error:'Yeni kullanıcı için şifre zorunludur'});user={id:crypto.randomUUID(),name,username,role,permissions:ROLE_PRESETS[role].permissions,active:x.active!==false,passwordHash:hashPassword(x.password),createdAt:now,updatedAt:now};s.users.push(user)}
-  audit(s,x.id?'Kullanıcı güncellendi':'Kullanıcı eklendi',username,{role});writeStore(s);res.json({ok:true,user:publicUser(user)});
+  const permissions=sanitizePermissions(x.permissions,role);
+  if(user){user.name=name;user.username=username;user.role=role;user.active=x.active!==false;user.permissions=permissions;if(String(x.password||'').trim())user.passwordHash=hashPassword(x.password);user.updatedAt=now}
+  else{if(!String(x.password||'').trim())return res.status(400).json({error:'Yeni kullanıcı için şifre zorunludur'});user={id:crypto.randomUUID(),name,username,role,permissions,active:x.active!==false,passwordHash:hashPassword(x.password),createdAt:now,updatedAt:now};s.users.push(user)}
+  audit(s,x.id?'Kullanıcı güncellendi':'Kullanıcı eklendi',username,{role,permissions});writeStore(s);res.json({ok:true,user:publicUser(user)});
 });
 app.delete('/web-api/admin/user/:id',requirePermission('users_manage'),(req,res)=>{
   const s=readStore(),user=(s.users||[]).find(x=>x.id===req.params.id);if(!user)return res.status(404).json({error:'Kullanıcı bulunamadı'});
@@ -724,13 +764,19 @@ app.post('/foundation-api/login',(req,res)=>{
   const role=String(user.role||'staff');
   const presetPerms=ROLE_PRESETS[role]?.permissions||[];
   const rawPerms=Array.isArray(user.permissions)?user.permissions:[];
+  let permissions=rawPerms.length?rawPerms.slice():presetPerms.slice();
+  // Eski personel: sale_* yoksa teklif/senet varsayılan açık; fatura/stok kapalı kalır
+  if(permissions.includes('orders_manage') && !permissions.some(p=>String(p).startsWith('sale_'))){
+    const extras=(ROLE_PRESETS.sales.permissions||[]).filter(p=>String(p).startsWith('sale_'));
+    permissions=[...new Set([...permissions, ...extras])];
+  }
   req.session.staffUser={
     id:user.id,
     name:user.name,
     username:user.username,
     role:role||'staff',
     roleName:(typeof ROLE_PRESETS!=='undefined' && ROLE_PRESETS[role]?.name)||role||'Personel',
-    permissions:rawPerms.length?rawPerms:presetPerms,
+    permissions,
     storeId:user.storeId||branch?.id||'',
     storeName:branch?.name||'Mağaza',
     active:user.active!==false
@@ -1551,8 +1597,15 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   const paid=Math.round(normalizedPayments.filter(p=>['Nakit','Kredi Kartı','Havale'].includes(p.method)).reduce((a,p)=>a+p.amount,0)*100)/100;
   const paymentMethod=normalizedPayments.map(p=>p.method).concat(promissoryAmount>0?['Senet']:[]).join(' + ')||String(x.paymentMethod||'Karma');
 
-  const deductStock=x.deductStock===true||String(x.deductStock)==='true';
+  let deductStock=x.deductStock===true||String(x.deductStock)==='true';
   const warehouseId=String(x.warehouseId||'');
+  if(isStaffPortalReq(req) && deductStock && !staffCanDeductStock(req)){
+    return res.status(403).json({error:'Stok düşme yetkiniz yok — yöneticiden “Satışta stok düş” yetkisini açın'});
+  }
+  const invWant=String(x.invoiceStatus||'').toLowerCase().trim();
+  if(isStaffPortalReq(req) && (invWant==='queue_qnb'||invWant==='issued') && !staffCanInvoice(req)){
+    return res.status(403).json({error:'Fatura kesme yetkiniz yok — yöneticiden “Fatura kes (QNB)” yetkisini açın'});
+  }
   if(deductStock){
     if(!warehouseId)return res.status(400).json({error:'Stoktan düşmek için satış deposu seçilmelidir'});
     if(!s.warehouses.some(w=>w.id===warehouseId&&w.active!==false))return res.status(400).json({error:'Geçerli satış deposu seçilmelidir'});
@@ -2436,6 +2489,9 @@ app.post('/web-api/admin/invoice-queue/:id/retry',requireAdmin,async(req,res)=>{
   }
 });
 app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_manage'),async(req,res)=>{
+  if(isStaffPortalReq(req) && !staffCanInvoice(req)){
+    return res.status(403).json({error:'Fatura kesme yetkiniz yok — yöneticiden sale_invoice_qnb açın'});
+  }
   const s=readStore();
   const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale'&&!t.cancelled);
   if(!sale)return res.status(404).json({error:'Satış bulunamadı'});

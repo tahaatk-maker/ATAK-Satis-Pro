@@ -1,5 +1,5 @@
-fix-v7
-expect-health=6.3.8-pay-plan
-pay-plan-button-admin-personel
-sales-pay-plan-panel-gated
+fix-v8
+expect-health=6.3.9-staff-pos-parity
+staff-pos-admin-parity
+sale-permission-gates
 2026-08-09

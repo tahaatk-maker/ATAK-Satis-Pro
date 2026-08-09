@@ -247,3 +247,64 @@ td small{display:block;color:#7a879a;margin-top:2px}
   .cart-row input[data-price]{grid-column:1/-1}
   main{padding:14px}
 }
+
+/* Admin 03 parity — checkout foot / finish / dock / preview */
+#salesPanel{padding-bottom:88px}
+.sc-sec{margin-bottom:12px;padding:12px;border:1px solid #ecd9c4;border-radius:14px;background:#fffaf5}
+.sc-sec-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9a3412}
+.sc-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pos-block-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 14px}
+.pos-block-head .left{display:flex;gap:12px;align-items:center}
+.pos-block-head em{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:#0b2a4a;color:#fff;font-style:normal;font-weight:900}
+.pos-block-head h3{margin:0;font-size:18px}
+.pos-block-head p{margin:2px 0 0;font-size:12px;color:#66758a;font-weight:650}
+.pos-big-btn{border:0;border-radius:12px;padding:12px 16px;background:#1565c0;color:#fff;font-weight:800;cursor:pointer}
+.sc-checkout-foot{border-top:1px solid #ecd9c4;background:linear-gradient(180deg,#fffaf5,#fff3e6);padding:14px 4px 8px;margin-top:8px;border-radius:0 0 14px 14px}
+.pos-net-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin:0 0 12px;padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,#071a33,#125ea3);color:#fff;box-shadow:0 12px 24px rgba(7,26,51,.2)}
+.pos-net-hero span{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9ec0ef}
+.pos-net-hero strong{display:block;margin-top:2px;font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
+.sales-calc-box{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 10px}
+.sales-calc-box .sales-total-line{display:grid;gap:2px;padding:10px 12px;border:1px solid #ecd9c4;border-radius:12px;background:#fff;font-size:12px;color:#7a5230;font-weight:650}
+.sales-calc-box .sales-total-line b{color:#13233b;font-variant-numeric:tabular-nums;font-size:15px}
+.sales-calc-box .sales-total-line.discount b{color:#b45309}
+.sc-foot-mini{display:flex;justify-content:space-between;gap:8px;margin:0 0 10px;font-size:12px;color:#7a5230;font-weight:650}
+.sc-foot-mini b{color:#13233b}
+.pos-finish-split{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 8px}
+.pos-finish-split.pos-finish-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pos-finish-card{display:grid;gap:8px;align-content:start;padding:16px;border-radius:16px;border:1.5px solid #d5e0ee;background:#fff}
+.pos-finish-card.docs{border-color:#fdba74;background:linear-gradient(180deg,#fff,#fff7ed)}
+.pos-finish-card.offer{border-color:#86efac;background:linear-gradient(180deg,#fff,#f0fdf4)}
+.pos-finish-card.invoice{border-color:#93c5fd;background:linear-gradient(180deg,#fff,#eff6ff)}
+.pos-finish-card h4{margin:0;font-size:15px;font-weight:800;color:#0b2a4a}
+.pos-finish-card p{margin:0;font-size:12px;font-weight:650;color:#667890;line-height:1.4}
+.pos-action-btn{width:100%;min-height:48px;border:0;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;color:#fff;box-shadow:0 8px 18px rgba(0,0,0,.12)}
+.pos-action-btn.preview{background:linear-gradient(180deg,#22c55e,#15803d)}
+.pos-action-btn.docs{background:linear-gradient(180deg,#f97316,#c2410c)}
+.pos-action-btn.invoice{background:linear-gradient(180deg,#3b82f6,#1d4ed8)}
+.pos-action-btn.secondary{background:#fff;color:#15803d;border:1.5px solid #15803d;box-shadow:none}
+.pos-sticky-dock{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:rgba(7,26,51,.95);backdrop-filter:blur(10px);color:#fff;box-shadow:0 -12px 28px rgba(0,0,0,.2)}
+.pos-sticky-dock .dock-meta{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.pos-sticky-dock small{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#9ec0ef;font-weight:800}
+.pos-sticky-dock b{font-size:18px;font-variant-numeric:tabular-nums}
+.pos-sticky-dock button{min-height:48px;padding:0 20px;border:0;border-radius:12px;background:linear-gradient(180deg,#22c55e,#15803d);color:#fff;font-weight:800;font-size:14px;cursor:pointer}
+.sales-preview-modal{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:16px;background:rgba(2,18,42,.72)}
+.sales-preview-card{width:min(920px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:18px;padding:18px}
+.sales-preview-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+.sales-preview-head small{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;color:#9a7b2f}
+.sales-preview-head h2{margin:4px 0 0}
+.sales-preview-head button{border:0;background:#edf3fb;width:40px;height:40px;border-radius:10px;font-size:22px;cursor:pointer}
+.sales-preview-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid #e5edf7}
+.preview-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.preview-cards>div{padding:10px;border:1px solid #e5edf7;border-radius:12px;background:#f8fafc}
+.preview-cards small{display:block;font-size:11px;color:#66758a;font-weight:800}
+.preview-cards b{display:block;margin-top:4px}
+.preview-totals{display:grid;gap:6px;margin-top:12px}
+.preview-totals>div,.sales-total-line{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #eef2f7}
+.preview-note{margin-top:10px;padding:10px;border-radius:10px;background:#fff8e8;border:1px solid #f0d48a;font-size:12px}
+.sales-promissory-schedule{margin-top:8px;font-size:12px;background:#fff;border:1px solid #f0c28a;border-radius:10px;padding:8px}
+[data-need-perm].perm-locked{opacity:.45;pointer-events:none;filter:grayscale(.2)}
+@media(max-width:900px){
+  .pos-finish-split.pos-finish-3,.sales-calc-box,.preview-cards,.sc-grid-2{grid-template-columns:1fr}
+  .pos-sticky-dock{flex-direction:column;align-items:stretch}
+  .pos-net-hero strong{font-size:28px}
+}

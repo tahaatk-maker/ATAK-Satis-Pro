@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Satış Operasyon Personel</title>
 <link rel="icon" href="/assets/favicon.png">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v7">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v8">
 </head>
 <body>
 
@@ -333,26 +333,38 @@
 </div>
 
 <div id="salesStep3" class="pos-step-panel hidden">
-  <div class="pay-summary-card">
-    <div class="pay-grid compact">
+  <div class="pos-block-head pos-block-3">
+    <div class="left"><em>03</em><div><h3>ÖDEME PLANI</h3><p>Dağıtımı yapın · sonra senet/sözleşme veya önizle/teklif</p></div></div>
+    <button class="pos-big-btn" id="salesJumpPreviewBtn" type="button">Önizle</button>
+  </div>
+
+  <div class="sc-sec">
+    <div class="sc-sec-title"><span>Satış bilgisi</span></div>
+    <div class="sc-grid-2">
       <label class="field">Bayi<select id="salesDealer"></select></label>
-      <label class="field">İskonto %<input id="salesDiscountPct" type="number" min="0" max="100" step="0.01" value="0"></label>
-      <label class="field">Satış Tarihi<input id="salesDate" type="date"></label>
+      <label class="field">İskonto %<input id="salesDiscountPct" type="number" min="0" max="100" step="0.01" value="0" inputmode="decimal"></label>
     </div>
-    <div class="totals-box simple">
-      <div><span>Brüt</span><b id="payGross">₺0,00</b></div>
-      <div><span>İskonto</span><b id="payDiscount">₺0,00</b></div>
-      <div class="net"><span>Net Ödenecek</span><b id="payNet">₺0,00</b></div>
+    <div class="sc-grid-2" style="margin-top:8px">
+      <label class="field">İskonto ₺<input id="salesDiscountAmount" type="number" min="0" step="0.01" value="0" readonly></label>
+      <label class="field">Tarih<input id="salesDate" type="date"></label>
     </div>
-    <div class="sc-meta-line"><span id="salesCommissionPreview">Prim: ₺0,00</span></div>
-    <div id="payMethodPreview" class="pay-method-preview">Ödeme seçilmedi</div>
+    <div class="sc-grid-2 staff-perm-stock" style="margin-top:8px" data-need-perm="sale_deduct_stock">
+      <label class="field">Stok
+        <select id="salesDeductStock">
+          <option value="no" selected>Değişmesin</option>
+          <option value="yes">Stoktan düş</option>
+        </select>
+      </label>
+      <label class="field" id="salesWarehouseWrap">Depo<select id="salesWarehouse"></select></label>
+    </div>
+    <div class="sc-meta-line"><span id="salesCommissionPreview">Prim: ₺0,00</span> · <span id="payMethodPreview">Ödeme seçilmedi</span></div>
+    <span id="payGross" class="hidden">₺0,00</span>
+    <span id="payDiscount" class="hidden">₺0,00</span>
+    <span id="payNet" class="hidden">₺0,00</span>
   </div>
 
   <div class="sc-sec sales-pay-plan-gate">
-    <div class="sales-payments-title">
-      <b>Ödeme planı</b>
-      <small>Admin ile aynı — planı açıp yöntem seçin</small>
-    </div>
+    <div class="sc-sec-title"><span>Ödeme planı</span></div>
     <div class="sales-pay-plan-summary" id="salesPayPlanSummary">
       <div><small>Dağıtılan</small><b id="payAllocatedSummary">₺0,00</b></div>
       <div><small>Kalan</small><b id="payRemainingSummary">₺0,00</b></div>
@@ -427,25 +439,91 @@
       <label class="field">Senet taksit<input id="promissoryInstallments" type="number" min="1" max="36" value="1"></label>
       <label class="field">Aralık (ay)<input id="promissoryInterval" type="number" min="1" max="12" value="1"></label>
       <label class="field">İlk vade<input id="promissoryFirstDue" type="date"></label>
+      <div id="salesPromissorySchedule" class="sales-promissory-schedule" style="grid-column:1/-1"></div>
     </div>
   </div>
 
-  <label class="field" style="margin-top:12px">Fatura
-    <select id="salesInvoiceStatus">
-      <option value="not_required" selected>Fatura gerekmiyor</option>
-      <option value="pending">Daha sonra kes (Kesilmeyen’e düşer)</option>
-    </select>
-  </label>
-
-  <div class="pos-nav">
-    <button id="salesBack3" class="ghost-btn" type="button">← Ürün</button>
-    <button id="salesSaveInlineBtn" class="primary-btn pay-open-btn" type="button">SATIŞI BİTİR</button>
-    <button id="salesSavePrintInlineBtn" class="senet-btn hidden" type="button">BİTİR + SENET BAS</button>
+  <div class="sc-sec" style="margin-top:12px">
+    <div class="sc-sec-title"><span>Fatura &amp; not</span></div>
+    <label class="field">Fatura durumu
+      <select id="salesInvoiceStatus">
+        <option value="not_required" selected>Fatura gerekmiyor</option>
+        <option value="pending">Daha sonra kes (Kesilmeyen’e düşer)</option>
+        <option value="queue_qnb" data-need-perm="sale_invoice_qnb">QNB Solist ile kes (e-Fatura / e-Arşiv)</option>
+        <option value="issued" data-need-perm="sale_invoice_qnb">Manuel faturalandı</option>
+      </select>
+    </label>
+    <div id="salesInvoiceIssuedFields" class="hidden" style="margin-top:8px">
+      <div class="sc-grid-2">
+        <label class="field">Fatura no<input id="salesInvoiceNumber" placeholder="Fatura no"/></label>
+        <label class="field">Fatura tarihi<input id="salesInvoiceDate" type="date"/></label>
+      </div>
+    </div>
+    <label class="field" style="margin-top:8px">Açıklama<textarea id="salesDescription" placeholder="Mağaza satışı" rows="2"></textarea></label>
   </div>
-  <div id="payInlineStatus" class="status"></div>
+
+  <div class="sc-checkout-foot">
+    <div class="pos-net-hero">
+      <div><span>Net tahsilat</span><strong id="salesGrandTotal">₺0,00</strong></div>
+      <div style="text-align:right;font-size:11px;color:#9ec0ef">Prim<br><b id="salesCommissionAmountPreview" style="color:#fff;font-size:13px">₺0,00</b></div>
+    </div>
+    <div class="sales-calc-box">
+      <div class="sales-total-line"><span>Brüt</span><b id="salesGrossPreview">₺0,00</b></div>
+      <div class="sales-total-line discount"><span>İskonto <i id="salesDiscountPctLabel">(%0)</i></span><b id="salesDiscountPreview">-₺0,00</b></div>
+      <div class="sales-total-line commission"><span>Prim oranı <i id="salesCommissionPctLabel">(%0)</i></span><b>—</b></div>
+    </div>
+    <div class="sc-foot-mini">
+      <span>Tahsil <b id="salesPaidPreview">₺0,00</b></span>
+      <span>Cari / senet <b id="salesDuePreview">₺0,00</b></span>
+    </div>
+    <div class="pos-finish-split pos-finish-3">
+      <div class="pos-finish-card docs" data-need-perm="sale_docs">
+        <h4>Senet + Sözleşme</h4>
+        <p>Tek A4 sayfada sözleşme ve senet planı.</p>
+        <button class="pos-action-btn docs" id="salesWizardDocsBtn" type="button">TEK A4 BAS</button>
+      </div>
+      <div class="pos-finish-card offer">
+        <h4>Önizle / Teklif</h4>
+        <p>Satışı kontrol edin veya WhatsApp teklifi gönderin.</p>
+        <button class="pos-action-btn preview" id="salesSaveInlineBtn" type="button">ÖNİZLE VE SATIŞI YAP</button>
+        <button class="pos-action-btn secondary" id="salesWizardOfferBtn" type="button" data-need-perm="sale_offer">TEKLİF KAYDET / GÖNDER</button>
+      </div>
+      <div class="pos-finish-card invoice" data-need-perm="sale_invoice_qnb">
+        <h4>Fatura Kes</h4>
+        <p>QNB Solist e-Fatura / e-Arşiv kuyruğuna al.</p>
+        <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button">FATURA KES (QNB)</button>
+      </div>
+    </div>
+    <div class="pos-nav">
+      <button id="salesBack3" class="ghost-btn" type="button">← Ürün / Sepet</button>
+      <button id="salesFooterResetBtn" class="ghost-btn" type="button">Fişi Temizle</button>
+    </div>
+    <div id="payInlineStatus" class="status"></div>
+  </div>
 </div>
 
-<!-- Ödeme dağılımı adım 3 içinde (admin ile aynı seçenekler); modal kaldırıldı -->
+<div class="pos-sticky-dock hidden" id="salesStickyDock">
+  <div class="dock-meta">
+    <div><small>Adım</small><b id="salesDockStep">1 / 3</b></div>
+    <div><small>Net</small><b id="salesDockNet">₺0,00</b></div>
+    <div><small>Kalan ödeme</small><b id="salesDockRemain">₺0,00</b></div>
+    <div><small>Müşteri</small><b id="salesDockCustomer">—</b></div>
+  </div>
+  <button type="button" id="salesDockPreviewBtn">DEVAM ET →</button>
+</div>
+
+<div id="salesPreviewModal" class="sales-preview-modal hidden" aria-hidden="true">
+  <div class="sales-preview-card">
+    <div class="sales-preview-head"><div><small>SATIŞ ÖNİZLEME</small><h2>Satışı Kontrol Et</h2></div><button id="salesPreviewClose" type="button">×</button></div>
+    <div id="salesPreviewBody"></div>
+    <div class="sales-preview-actions">
+      <button id="salesPreviewOfferBtn" class="ghost-btn" type="button" data-need-perm="sale_offer">Teklif WhatsApp</button>
+      <button id="salesPreviewPrintBtn" class="ghost-btn" type="button" data-need-perm="sale_offer">Teklif PDF</button>
+      <button id="salesPreviewDocsBtn" class="ghost-btn" type="button" data-need-perm="sale_docs">Sözleşme + Senet</button>
+      <button id="salesPreviewConfirmBtn" class="primary-btn" type="button">✓ Kontrol Ettim, Satışı Yap</button>
+    </div>
+  </div>
+</div>
 
 <div id="salesQuickCustomerModal" class="modal hidden">
   <div class="modal-card">
@@ -501,6 +579,6 @@
 </main>
 </div>
 
-<script src="/assets/personel.js?v=fix-v7"></script>
+<script src="/assets/personel.js?v=fix-v8"></script>
 </body>
 </html>
