@@ -1612,7 +1612,7 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     const product=(s.products||[]).find(p=>String(p.code)===productCode);
     const itemCode=String(i.itemCode||product?.itemCode||'').trim();
     const materialCode=String(i.materialCode||product?.searchName||product?.code||i.productName||productCode).trim();
-    return{productCode,itemCode,materialCode,productName:materialCode,quantity:qty,unitPrice,total:qty*unitPrice};
+    return{productCode,itemCode,materialCode,productName:materialCode,brand:String(i.brand||product?.brand||'').trim(),quantity:qty,unitPrice,total:qty*unitPrice};
   });
   total=Math.round(total*100)/100;
   const grossTotal=total;
