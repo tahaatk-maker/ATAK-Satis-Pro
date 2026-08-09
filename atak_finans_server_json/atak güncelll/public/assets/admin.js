@@ -106,7 +106,7 @@ function goTab(id,{remember=true}={}){
 }
 document.addEventListener('click',e=>{
   const tab=e.target.closest('[data-tab]');
-  if(tab){e.preventDefault();e.stopPropagation();goTab(tab.dataset.tab,{financeJump:tab.dataset.financeJump||''});return}
+  if(tab){e.preventDefault();e.stopPropagation();goTab(tab.dataset.tab);return}
   const go=e.target.closest('[data-go]');
   if(go){e.preventDefault();e.stopPropagation();goTab(go.dataset.go);return}
 });
