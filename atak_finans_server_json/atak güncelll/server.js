@@ -700,8 +700,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.14-basit-fatura',
-  build:'fix-v13',
+  version:'6.3.16-no-finance-uninvoiced',
+  build:'fix-v15',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));

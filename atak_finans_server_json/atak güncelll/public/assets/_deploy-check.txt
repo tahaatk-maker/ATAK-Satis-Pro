@@ -1,5 +1,4 @@
 fix-v15
 expect-health=6.3.16-no-finance-uninvoiced
-tckn-not-required
-corporate-still-required-when-selected
-2026-08-09
+no-finance-uninvoiced-menu
+atk-ata-series
