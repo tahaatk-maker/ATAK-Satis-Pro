@@ -283,7 +283,7 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 
 /* V6.0 Satış Merkezi */
 .sales-center-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}.sales-center-head h2{margin:4px 0}.sales-center-head p{margin:5px 0;color:var(--muted)}
-.sales-center-layout,.sales-center-layout.sales-center-flow{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:15px;align-items:stretch;max-width:920px;width:100%}
+.sales-center-layout,.sales-center-layout.sales-center-flow{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:15px;align-items:stretch;max-width:1180px;width:100%}
 .sales-main-column{display:flex!important;flex-direction:column!important;gap:15px;width:100%}
 .sales-summary-panel,#salesPaymentStep{position:static!important;display:flex!important;flex-direction:column;gap:11px;width:100%;max-height:none!important}
 .sales-summary-panel label{display:grid;gap:5px;font-size:12px;font-weight:800}.sales-summary-panel input,.sales-summary-panel select,.sales-summary-panel textarea{width:100%}
