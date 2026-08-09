@@ -435,19 +435,10 @@ async function loadSales(){
       api('/web-api/admin/customers/search?limit=1').catch(()=>({total:0,rows:[]}))
     ]);
     salesData=cat;
-<<<<<<< HEAD
-    // Satış kataloğundaki tüm cariler + finans kapsamındaki cariler
-    const byId=new Map();
-    [...(cat.customers||[]),...(fin.customers||[])].forEach(c=>{
-      if(c && c.active!==false) byId.set(String(c.id),c);
-    });
-    salesCustomers=[...byId.values()];
-    salesAccounts=(cat.accounts&&cat.accounts.length?cat.accounts:fin.accounts)||[];
-=======
+    // 10k+ müşteri select'e basılmaz — Ara ile API'den gelir
     salesCustomers=[];
     salesCustomerTotal=Number(custMeta.total||fin.customerTotal||0);
-    salesAccounts=fin.accounts||[];
->>>>>>> 0e1d757 (Satış müşteri seçimine sunucu taraflı Ara butonu ekle)
+    salesAccounts=(cat.accounts&&cat.accounts.length?cat.accounts:fin.accounts)||[];
     if($('#salesDealer')){
       $('#salesDealer').innerHTML=(cat.dealerSettings||[]).filter(d=>d.active!==false)
         .map(d=>`<option value="${d.id}">${d.name}</option>`).join('')||'<option value="">Bayi yok</option>';
