@@ -710,8 +710,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.17-dashboard-beko-istikbal',
-  build:'fix-v16',
+  version:'6.3.18-admin-personel-ui',
+  build:'fix-v17',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));

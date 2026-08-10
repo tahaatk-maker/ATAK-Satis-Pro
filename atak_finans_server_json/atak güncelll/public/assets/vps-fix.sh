@@ -1,9 +1,10 @@
 #!/bin/bash
-# ATAK VPS kesin deploy (fix-v16) — health 6.3.17-dashboard-beko-istikbal olmadan DONE yazmaz
+# ATAK VPS kesin deploy (fix-v17) — health 6.3.18-admin-personel-ui olmadan DONE yazmaz
 set -euo pipefail
-BRANCH=cursor/satis-merkezi-iskonto-prim-bd99
-EXPECT_HEALTH=6.3.17-dashboard-beko-istikbal
-EXPECT_BUILD=fix-v16
+BRANCH=cursor/admin-personel-yenileme-c5c2
+# Deploy URL: raw.githubusercontent.com/.../cursor/admin-personel-yenileme-c5c2/.../vps-fix.sh
+EXPECT_HEALTH=6.3.18-admin-personel-ui
+EXPECT_BUILD=fix-v17
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 exec > >(tee "$OUT") 2>&1

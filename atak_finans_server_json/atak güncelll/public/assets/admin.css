@@ -522,3 +522,73 @@ button.primary,.primary,button{font-size:12px}
 aside nav button.nav-sub-item{padding-left:28px;font-size:13px;opacity:.95;color:#dbe7ff}
 aside nav button.nav-sub-item.active{background:rgba(253,186,116,.18);color:#fff}
 .stat.net-today{border-top:4px solid #0b2a4a}
+
+/* ===== V6 shell refresh (fix-v17) ===== */
+:root{
+  --font-ui:"Plus Jakarta Sans","Segoe UI",sans-serif;
+  --gold:#c4a15a;
+}
+body,button,input,select,textarea{font-family:var(--font-ui)}
+.login-view{
+  background:
+    radial-gradient(720px 340px at 82% 12%,rgba(196,161,90,.2),transparent 46%),
+    linear-gradient(145deg,#041024 0%,#0a2c65 55%,#125ea3 100%);
+}
+.login-card{
+  width:min(440px,92vw);padding:36px 32px 30px;border-radius:24px;
+  animation:adminCardIn .45s ease both;
+}
+@keyframes adminCardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.login-brand-link{display:block;margin:0 auto 6px}
+.login-card img{width:min(280px,100%);height:150px;object-fit:contain;display:block;margin:0 auto}
+.login-kicker{
+  margin:4px 0 2px;font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--gold)
+}
+.login-card h1{margin:0 0 4px;font-size:26px;letter-spacing:-.03em;color:#071a33}
+.login-card p{margin:0 0 8px;color:#667890;font-weight:600}
+.login-card button{
+  background:linear-gradient(180deg,#1565c0,#0b4d94)!important;
+  border-radius:12px!important;min-height:48px;transition:transform .12s,filter .12s
+}
+.login-card button:hover{transform:translateY(-1px);filter:brightness(1.05)}
+aside{
+  background:linear-gradient(180deg,#071a33 0%,#041024 100%);
+  box-shadow:inset -1px 0 0 rgba(255,255,255,.06)
+}
+aside nav button,aside nav a{
+  transition:background .14s,color .14s,transform .12s
+}
+aside nav button:hover,aside nav a:hover{transform:translateX(2px)}
+aside nav button.active{
+  background:linear-gradient(90deg,rgba(21,101,192,.35),rgba(21,101,192,.12));
+  box-shadow:inset 3px 0 0 #5b9dff
+}
+.v4-metric-grid .stat,.stats .stat{
+  border-radius:18px;transition:transform .14s,box-shadow .14s
+}
+.v4-metric-grid .stat:hover,.stats .stat:hover{
+  transform:translateY(-2px);box-shadow:0 14px 28px rgba(7,26,51,.08)
+}
+.stat.channel.beko{border-top-color:#1565c0}
+.stat.channel.istikbal{border-top-color:#c4a15a}
+.v4-finance-card,.v4-activity-card,.v4-quick-card{
+  border-radius:18px;overflow:hidden
+}
+.v4-kicker{color:var(--gold)!important;letter-spacing:.12em}
+.v4-quick-form button,.quick-actions button{
+  transition:transform .12s,border-color .12s,background .12s
+}
+.v4-quick-form button:hover,.quick-actions button:hover{
+  transform:translateY(-1px);border-color:#9db8d8;background:#eef5ff
+}
+#pageTitle{letter-spacing:-.02em}
+.v4-quick-actions button{
+  display:grid;grid-template-columns:42px 1fr;grid-template-rows:auto auto;column-gap:12px;row-gap:2px;align-items:center;
+  text-align:left;padding:14px 16px;border-radius:14px
+}
+.v4-quick-actions .qa-ico{
+  grid-row:1/span 2;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;
+  background:linear-gradient(180deg,#eef5ff,#dcecff);color:#1565c0;font-size:13px;font-weight:900
+}
+.v4-quick-actions b{grid-column:2;font-size:15px;color:#071a33}
+.v4-quick-actions small{grid-column:2;color:#667890;font-weight:650}
