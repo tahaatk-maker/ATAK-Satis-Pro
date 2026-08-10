@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v17 */
+/* ATAK_ADMIN_BUILD=fix-v18 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -181,7 +181,146 @@ async function renderDashboardRevenue(){
       <div class="stat total"><small>Toplam ciro</small><strong>${money(total)}</strong><em>KDV dahil · POS dahil</em></div>`;
   }catch(e){console.error(e)}
 }
-function renderDashboard(){const ps=store.products,active=ps.filter(p=>p.active),campaigns=store.campaigns.filter(c=>c.active),missingImage=ps.filter(p=>!p.image),zeroStock=ps.filter(p=>!p.stock);renderDashboardRevenue();q('#healthCards').innerHTML=`<div class="health"><b>${missingImage.length}</b><span>Görseli eksik ürün</span></div><div class="health"><b>${zeroStock.length}</b><span>Stok 0 / sorunuz</span></div><div class="health"><b>${campaigns.length}</b><span>Aktif kampanya</span></div><div class="health"><b>${ps.filter(p=>Number(p.cashPrice||0)<Number(p.minimumSalePrice||0)&&Number(p.minimumSalePrice||0)>0).length}</b><span>Minimum fiyat altı</span></div>`;q('#auditList').innerHTML=(store.auditLogs||[]).slice(0,12).map(a=>`<div class="activity"><i></i><div><b>${a.action}</b><br><small>${a.entity} · ${new Date(a.date).toLocaleString('tr-TR')}</small></div></div>`).join('')||'<p>Henüz işlem kaydı yok.</p>'}
+/* ===== Kokpit: SVG grafikler (harici kütüphane yok) ===== */
+const CK_COLORS={beko:'#1565c0',istikbal:'#c4a15a',other:'#94a3b8'};
+function ckShortMoney(n){
+  const v=Number(n||0);
+  if(Math.abs(v)>=1000000)return (v/1000000).toFixed(1).replace('.',',')+'M';
+  if(Math.abs(v)>=1000)return Math.round(v/1000)+'B';
+  return String(Math.round(v));
+}
+function ckEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function ckRenderTrend(series){
+  const box=q('#ckTrendChart');
+  if(!box)return;
+  const rows=Array.isArray(series)?series:[];
+  if(!rows.length){box.innerHTML='<div class="ck-empty">Veri yok</div>';return}
+  const W=720,H=230,padL=44,padR=10,padT=14,padB=26;
+  const innerW=W-padL-padR,innerH=H-padT-padB;
+  const max=Math.max(1,...rows.map(r=>Number(r.total||0)));
+  const slot=innerW/rows.length;
+  const barW=Math.max(6,Math.min(30,slot*0.56));
+  const yFor=v=>padT+innerH-(Number(v||0)/max)*innerH;
+
+  let grid='';
+  for(let i=0;i<=4;i++){
+    const y=padT+(innerH/4)*i;
+    const val=max-(max/4)*i;
+    grid+=`<line class="grid-line" x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}"/>`;
+    grid+=`<text class="axis-label" x="${padL-8}" y="${y+3}" text-anchor="end">${ckShortMoney(val)}</text>`;
+  }
+  let bars='';
+  rows.forEach((r,i)=>{
+    const cx=padL+slot*i+slot/2;
+    const x=cx-barW/2;
+    const beko=Number(r.beko||0),ist=Number(r.istikbal||0),other=Number(r.other||0);
+    const stackTotal=beko+ist+other;
+    let cursorY=padT+innerH;
+    const seg=(val,color)=>{
+      if(val<=0)return '';
+      const h=(val/max)*innerH;
+      cursorY-=h;
+      return `<rect class="ck-bar" x="${x}" y="${cursorY}" width="${barW}" height="${Math.max(1,h)}" rx="3" fill="${color}"><title>${ckEsc(r.date)} · ${ckShortMoney(val)}</title></rect>`;
+    };
+    bars+=seg(beko,CK_COLORS.beko)+seg(ist,CK_COLORS.istikbal)+seg(other,CK_COLORS.other);
+    if(stackTotal<=0){
+      bars+=`<rect x="${x}" y="${padT+innerH-2}" width="${barW}" height="2" rx="1" fill="#e2e8f0"/>`;
+    }
+    if(rows.length<=16||i%Math.ceil(rows.length/10)===0){
+      bars+=`<text class="axis-label" x="${cx}" y="${H-8}" text-anchor="middle">${ckEsc(String(r.date||'').slice(8,10))}.${ckEsc(String(r.date||'').slice(5,7))}</text>`;
+    }
+  });
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Günlük satış grafiği">${grid}${bars}</svg>`;
+}
+function ckRenderDonut(month){
+  const box=q('#ckBrandDonut');
+  if(!box)return;
+  const parts=[
+    {key:'beko',label:'Beko',value:Number(month?.beko||0),color:CK_COLORS.beko},
+    {key:'istikbal',label:'İstikbal',value:Number(month?.istikbal||0),color:CK_COLORS.istikbal},
+    {key:'other',label:'Diğer',value:Number(month?.other||0),color:CK_COLORS.other}
+  ].filter(p=>p.value>0);
+  const total=parts.reduce((a,p)=>a+p.value,0);
+  const R=70,SW=22,C=90,circ=2*Math.PI*R;
+  let ring='',offset=0;
+  if(total>0){
+    parts.forEach(p=>{
+      const len=(p.value/total)*circ;
+      ring+=`<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="${p.color}" stroke-width="${SW}"
+        stroke-dasharray="${len} ${circ-len}" stroke-dashoffset="${-offset}"
+        transform="rotate(-90 ${C} ${C})" stroke-linecap="butt"><title>${p.label}: ${money(p.value)}</title></circle>`;
+      offset+=len;
+    });
+  }else{
+    ring=`<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="#e8eef6" stroke-width="${SW}"/>`;
+  }
+  const legend=parts.length
+    ? parts.map(p=>`<div><i style="background:${p.color}"></i><span>${p.label}</span><b>${money(p.value)}</b></div>`).join('')
+    : '<div><i style="background:#e2e8f0"></i><span>Bu ay satış yok</span><b>₺0</b></div>';
+  box.innerHTML=`
+    <svg viewBox="0 0 180 180" role="img" aria-label="Marka dağılımı">
+      ${ring}
+      <text x="${C}" y="${C-4}" text-anchor="middle" font-size="13" font-weight="800" fill="#667890">AY TOPLAM</text>
+      <text x="${C}" y="${C+18}" text-anchor="middle" font-size="17" font-weight="900" fill="#0c1a33">${ckShortMoney(total)}</text>
+    </svg>
+    <div class="ck-donut-legend">${legend}</div>`;
+}
+function ckRenderMoney(fin){
+  const box=q('#ckMoneyGrid');
+  if(!box)return;
+  box.innerHTML=`
+    <article class="cash"><small>Toplam Kasa</small><b>${money(fin?.cash)}</b></article>
+    <article class="bank"><small>Toplam Banka</small><b>${money(fin?.bank)}</b></article>
+    <article class="debt"><small>Müşteri Alacağı</small><b>${money(fin?.receivable)}</b></article>
+    <article><small>Bugünkü Masraf</small><b>${money(fin?.todayExpense)}</b></article>`;
+}
+function ckRenderAlerts(alerts){
+  const box=q('#ckAlerts');
+  if(!box)return;
+  const items=[
+    {n:Number(alerts?.pendingInvoices||0),tone:'warn',icon:'F',title:'Kesilmeyen fatura',sub:'e-Fatura Merkezi’nde bekliyor',tab:'invoiceCenter'},
+    {n:Number(alerts?.overdueNotes||0),tone:'bad',icon:'S',title:'Vadesi geçen senet',sub:'Müşteri Ödemeleri ekranı',tab:'customerPayments'},
+    {n:Number(alerts?.lowStock||0),tone:'warn',icon:'D',title:'Stoğu biten ürün',sub:'Stok & Depo kontrolü',tab:'stockCenter'}
+  ];
+  box.innerHTML=items.map(it=>`
+    <button type="button" class="ck-alert ${it.n>0?it.tone:'ok'}" data-go="${it.tab}">
+      <i>${it.icon}</i>
+      <div><b>${it.title}</b><small>${it.n>0?it.sub:'Bekleyen yok'}</small></div>
+      <em>${it.n}</em>
+    </button>`).join('');
+}
+function ckRenderRecent(rows){
+  const body=q('#ckRecentRows');
+  if(!body)return;
+  const list=Array.isArray(rows)?rows:[];
+  if(!list.length){
+    body.innerHTML='<tr><td colspan="5"><div class="ck-empty">Henüz satış yok</div></td></tr>';
+    return;
+  }
+  const label={beko:'Beko',istikbal:'İstikbal',other:'Diğer'};
+  body.innerHTML=list.map(r=>`<tr>
+    <td>${ckEsc(r.date||'-')}</td>
+    <td><b>${ckEsc(r.customerName||'-')}</b></td>
+    <td><span class="ck-brand-pill ${ckEsc(r.brand||'other')}">${label[r.brand]||'Diğer'}</span></td>
+    <td>${ckEsc(r.salespersonName||'-')}</td>
+    <td class="num">${money(r.total)}</td>
+  </tr>`).join('');
+}
+async function renderCockpit(){
+  if(!q('#ckTrendChart'))return;
+  try{
+    const d=await api('/web-api/admin/dashboard-cockpit?days=14');
+    ckRenderTrend(d.series);
+    ckRenderDonut(d.month);
+    ckRenderMoney(d.finance);
+    ckRenderAlerts(d.alerts);
+    ckRenderRecent(d.recent);
+  }catch(e){
+    const box=q('#ckTrendChart');
+    if(box)box.innerHTML=`<div class="ck-empty">Grafik yüklenemedi: ${ckEsc(e.message)}</div>`;
+  }
+}
+function renderDashboard(){const ps=store.products,active=ps.filter(p=>p.active),campaigns=store.campaigns.filter(c=>c.active),missingImage=ps.filter(p=>!p.image),zeroStock=ps.filter(p=>!p.stock);renderDashboardRevenue();renderCockpit();q('#healthCards').innerHTML=`<div class="health"><b>${missingImage.length}</b><span>Görseli eksik ürün</span></div><div class="health"><b>${zeroStock.length}</b><span>Stok 0 / sorunuz</span></div><div class="health"><b>${campaigns.length}</b><span>Aktif kampanya</span></div><div class="health"><b>${ps.filter(p=>Number(p.cashPrice||0)<Number(p.minimumSalePrice||0)&&Number(p.minimumSalePrice||0)>0).length}</b><span>Minimum fiyat altı</span></div>`;q('#auditList').innerHTML=(store.auditLogs||[]).slice(0,12).map(a=>`<div class="activity"><i></i><div><b>${a.action}</b><br><small>${a.entity} · ${new Date(a.date).toLocaleString('tr-TR')}</small></div></div>`).join('')||'<p>Henüz işlem kaydı yok.</p>'}
 function renderCategoryOptions(){const opts=store.categories.sort((a,b)=>a.sort-b.sort).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');q('#filterCategory').innerHTML='<option value="all">Tüm kategoriler</option>'+opts;q('#bulkCategory').innerHTML='<option value="all">Tüm ürünler</option>'+opts;q('#pCategory').innerHTML=opts}
 function renderBrandOptions(){const opts=(store.brands||[]).filter(b=>b.active).sort((a,b)=>a.sort-b.sort).map(b=>`<option value="${b.name}">${b.name}</option>`).join('');q('#pBrand').innerHTML=opts}
 function filteredProducts(){const term=(q('#adminSearch').value||q('#globalSearch').value||'').toLocaleLowerCase('tr-TR'),cat=q('#filterCategory').value,status=q('#filterStatus').value;return store.products.filter(p=>`${p.code} ${p.name} ${p.brand}`.toLocaleLowerCase('tr-TR').includes(term)&&(cat==='all'||p.category===cat)&&(status==='all'||(status==='active'&&p.active)||(status==='passive'&&!p.active)||(status==='featured'&&p.featured)))}

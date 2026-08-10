@@ -710,8 +710,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.18-admin-personel-ui',
-  build:'fix-v17',
+  version:'6.3.19-kokpit',
+  build:'fix-v18',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -2185,6 +2185,79 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
     people:salesPeople(s,req)
   };
 }
+/** Dashboard kokpiti: tek istekte KPI + günlük seri + marka kırılımı + son satışlar */
+app.get('/web-api/admin/dashboard-cockpit',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const days=Math.min(90,Math.max(7,Math.round(Number(req.query.days)||14)));
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  const today=todayISO();
+
+  const dayKeys=[];
+  for(let i=days-1;i>=0;i--){
+    const d=new Date(`${today}T12:00:00`);
+    d.setDate(d.getDate()-i);
+    dayKeys.push(d.toISOString().slice(0,10));
+  }
+  const firstDay=dayKeys[0];
+  const monthKey=today.slice(0,7);
+
+  const blank=()=>({total:0,beko:0,istikbal:0,other:0,count:0});
+  const series=new Map(dayKeys.map(k=>[k,{date:k,...blank()}]));
+  const todayAgg={...blank(),commission:0};
+  const monthAgg={...blank(),commission:0};
+
+  const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
+  const recent=[];
+
+  for(const t of (s.financeTransactions||[])){
+    if(t.kind!=='sale'||t.cancelled)continue;
+    const key=txDateKey(t);
+    if(!key)continue;
+    const amount=saleAmount(t);
+    const brand=dealerBrandKey(t);
+    const comm=Number(t.commissionAmount||0);
+
+    if(key>=firstDay&&key<=today){
+      const row=series.get(key);
+      if(row){row.total+=amount;row[brand]+=amount;row.count+=1}
+    }
+    if(key.slice(0,7)===monthKey){
+      monthAgg.total+=amount;monthAgg[brand]+=amount;monthAgg.count+=1;monthAgg.commission+=comm;
+    }
+    if(key===today){
+      todayAgg.total+=amount;todayAgg[brand]+=amount;todayAgg.count+=1;todayAgg.commission+=comm;
+    }
+    recent.push({
+      id:t.id,date:key,reference:t.reference||'',
+      customerName:customerMap.get(String(t.customerId||''))?.name||'',
+      salespersonName:t.salespersonName||t.createdBy||'',
+      dealerName:t.dealerName||'',brand,
+      total:round(amount),
+      invoiceStatus:t.invoiceStatus||'not_required'
+    });
+  }
+  recent.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+
+  const fin=financeSnapshot(s);
+  const pendingInvoices=(s.financeTransactions||[])
+    .filter(t=>t.kind==='sale'&&!t.cancelled&&saleNeedsInvoice(t.invoiceStatus)).length;
+  const overdueNotes=(s.promissoryNotes||[])
+    .filter(n=>n.status==='open'&&String(n.dueDate||'')<today).length;
+  const lowStock=(s.productStocks||[])
+    .filter(x=>Number(x.quantity||0)-Number(x.reserved||0)<=0).length;
+
+  const clean=o=>({total:round(o.total),beko:round(o.beko),istikbal:round(o.istikbal),other:round(o.other),count:o.count});
+
+  res.json({
+    ok:true,
+    today:{...clean(todayAgg),commission:round(todayAgg.commission)},
+    month:{...clean(monthAgg),commission:round(monthAgg.commission),label:monthKey},
+    series:dayKeys.map(k=>clean(series.get(k))).map((v,i)=>({date:dayKeys[i],...v})),
+    finance:{cash:round(fin.cash),bank:round(fin.bank),receivable:round(fin.receivable),todayExpense:round(fin.todayExpense)},
+    alerts:{pendingInvoices,overdueNotes,lowStock},
+    recent:recent.slice(0,8)
+  });
+});
 app.get('/web-api/admin/sales-prim-board',requireAdmin,(req,res)=>{
   const s=readStore();
   const board=buildSalesPrimBoard(s,req,{

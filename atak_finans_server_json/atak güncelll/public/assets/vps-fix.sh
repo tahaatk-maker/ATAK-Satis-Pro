@@ -1,9 +1,9 @@
 #!/bin/bash
-# ATAK VPS kesin deploy (fix-v17) — health 6.3.18-admin-personel-ui olmadan DONE yazmaz
+# ATAK VPS kesin deploy (fix-v18) — health 6.3.19-kokpit olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/satis-merkezi-iskonto-prim-bd99}"
-EXPECT_HEALTH=6.3.18-admin-personel-ui
-EXPECT_BUILD=fix-v17
+EXPECT_HEALTH=6.3.19-kokpit
+EXPECT_BUILD=fix-v18
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 exec > >(tee "$OUT") 2>&1
@@ -69,6 +69,9 @@ check "e-fatura kesilmeyen sekmesi" grep -q 'data-inv-module="pending"' "$SRC/pu
 check "admin cache $EXPECT_BUILD" grep -q "admin.js?v=$EXPECT_BUILD" "$SRC/public/admin.html"
 check "personel cache $EXPECT_BUILD" grep -q "personel.js?v=$EXPECT_BUILD" "$SRC/public/personel.html"
 check "yeni personel arayuzu" grep -q 'personel-shell.css' "$SRC/public/personel.html"
+check "kokpit css" test -f "$SRC/public/assets/admin-cockpit.css"
+check "kokpit api" grep -q 'dashboard-cockpit' "$SRC/server.js"
+check "kiosk personel kartlari" grep -q 'modules kiosk' "$SRC/public/personel.html"
 if grep -q 'data-finance-jump="uninvoiced"' "$SRC/public/admin.html"; then
   echo "   HATALI: Finans menusunde Kesilmeyen hala var"; exit 1
 fi

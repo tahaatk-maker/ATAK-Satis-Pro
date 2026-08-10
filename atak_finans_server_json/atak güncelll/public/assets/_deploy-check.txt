@@ -1,3 +1,4 @@
-fix-v17
-expect-health=6.3.18-admin-personel-ui
-admin-personel-ui-refresh
+fix-v18
+expect-health=6.3.19-kokpit
+kokpit-dashboard
+kiosk-personel
