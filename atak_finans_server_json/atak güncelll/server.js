@@ -830,8 +830,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.36-istikbal-malzeme',
-  build:'fix-v35',
+  version:'6.3.37-istikbal-mobilya',
+  build:'fix-v36',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3994,18 +3994,26 @@ function purchaseBrandFromSupplier(supplierName='',productName=''){
   if(/SAMSUNG/.test(blob))return 'Samsung';
   if(/XIAOMI|REDMI|POCO/.test(blob))return 'Xiaomi';
   if(/APPLE|IPHONE/.test(blob))return 'Apple';
-  if(/ISTIKBAL|DO[GĞ]TA[SŞ]/.test(blob))return 'İstikbal';
+  if(/ISTIKBAL|İSTİKBAL|DO[GĞ]TA[SŞ]/.test(blob))return 'İstikbal';
   if(/GRUNDIG/.test(blob))return 'Grundig';
   if(/AR[CÇ]EL[Iİ]K|BEKO/.test(blob))return 'Beko';
   return 'Beko';
+}
+function isIstikbalSupplier(supplierName=''){
+  return /ISTIKBAL|İSTİKBAL|DO[GĞ]TA[SŞ]/i.test(String(supplierName||''));
 }
 function ensureProductFromPurchase(s,{productCode,productName,itemCode,searchName,unitCost,vatRate,supplierName,importBatchId}){
   const code=String(productCode||searchName||itemCode||productName||'').trim();
   if(!code)return null;
   const name=String(productName||searchName||productCode||code).trim()||code;
-  ensureDynamicsCoreCategories(s);
-  const category=dynamicsSuggestedCategoryId(s,searchName||code);
-  const brand=purchaseBrandFromSupplier(supplierName,`${name} ${searchName||''}`);
+  const ids=ensureDynamicsCoreCategories(s);
+  const furniture=isIstikbalSupplier(supplierName);
+  // İstikbal → her zaman Mobilya + İstikbal marka (%10 KDV)
+  const category=furniture
+    ? ids.mobilya
+    : dynamicsSuggestedCategoryId(s,`${name} ${searchName||''} ${code}`);
+  const brand=furniture?'İstikbal':purchaseBrandFromSupplier(supplierName,`${name} ${searchName||''}`);
+  const resolvedVat=furniture?10:(normalizeNumber(vatRate||20)||20);
   const product=sanitizeProduct({
     code,
     name,
@@ -4014,13 +4022,13 @@ function ensureProductFromPurchase(s,{productCode,productName,itemCode,searchNam
     brand,
     category,
     purchasePrice:normalizeNumber(unitCost||0),
-    vatRate:normalizeNumber(vatRate||20)||20,
+    vatRate:resolvedVat,
     listPrice:0,
     cashPrice:0,
     cardPrice:0,
     stock:0,
     active:true,
-    tags:['alis-faturasi','auto-created']
+    tags:furniture?['alis-faturasi','auto-created','istikbal','mobilya']:['alis-faturasi','auto-created']
   });
   product.purchasePriceSource='purchase-invoice';
   product.purchasePriceUpdatedAt=new Date().toISOString();
@@ -4047,6 +4055,8 @@ function applyPurchaseInvoiceToStore(s,{
   const importBatchId=crypto.randomUUID();
   const cleanItems=[];
   let matched=0,unmatched=0,created=0,priceUpdated=0,stockUpdated=0,total=0;
+  const furniture=isIstikbalSupplier(supplierName);
+  const mobilyaId=furniture?ensureDynamicsCoreCategories(s).mobilya:'';
 
   for(const raw of (Array.isArray(items)?items:[])){
     const productCode=String(raw.productCode||raw.searchName||'').trim();
@@ -4055,10 +4065,11 @@ function applyPurchaseInvoiceToStore(s,{
     const searchName=String(raw.searchName||productCode||'').trim();
     const qty=Math.max(0,normalizeNumber(raw.quantity||0));
     let unitCost=normalizeNumber(raw.unitCost||0);
-    const vatRate=normalizeNumber(raw.vatRate!=null?raw.vatRate:20)||20;
+    let vatRate=normalizeNumber(raw.vatRate!=null?raw.vatRate:20)||20;
+    if(furniture)vatRate=10;
     if(!(qty>0)||(!productCode&&!productName&&!itemCode)){unmatched++;continue}
-    // Maliyet zorunlu: maliyet güncelleme açıkken veya stok değilken
-    if(updatePurchasePrice&&!(unitCost>0)){unmatched++;continue}
+    // Arçelik maliyet modunda fiyat zorunlu; İstikbal katalogda 0 fiyatlı ürün de açılsın
+    if(updatePurchasePrice&&!(unitCost>0)&&!furniture){unmatched++;continue}
     if(!pricesIncludeVat&&unitCost>0)unitCost=round(unitCost*(1+vatRate/100));
 
     let product=findProductForPurchase(s,productCode,productName,itemCode);
@@ -4090,6 +4101,15 @@ function applyPurchaseInvoiceToStore(s,{
     };
     if(!product){unmatched++;cleanItems.push(line);continue}
     if(!createdNow)matched++;
+    // İstikbal eşleşenlerde de Mobilya + marka düzelt
+    if(furniture){
+      product.brand='İstikbal';
+      product.category=mobilyaId;
+      product.vatRate=10;
+      product.updatedAt=new Date().toISOString();
+      const tags=new Set([...(product.tags||[]).map(String),'istikbal','mobilya','alis-faturasi']);
+      product.tags=[...tags];
+    }
     // Sadece maliyet (veya both) modunda alış fiyatı yazılır; stok modunda mevcut maliyete dokunulmaz.
     if(updatePurchasePrice&&unitCost>0){
       product.purchasePrice=unitCost;
@@ -4099,7 +4119,7 @@ function applyPurchaseInvoiceToStore(s,{
       product.importBatchId=importBatchId;
       if(itemCode&&!product.itemCode)product.itemCode=itemCode;
       priceUpdated++;
-    }else if(createdNow||addStock){
+    }else if(createdNow||addStock||furniture){
       product.importBatchId=importBatchId;
       if(itemCode&&!product.itemCode)product.itemCode=itemCode;
     }
@@ -4284,11 +4304,14 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
     const warehouseId=String(req.body?.warehouseId||'');
     const supplierFallback=String(req.body?.supplierName||'Arçelik A.Ş.').trim()||'Arçelik A.Ş.';
     if(addStock&&!warehouseId)return res.status(400).json({error:'Stok aktarımı için depo seçilmelidir'});
+    const furniture=isIstikbalSupplier(supplierFallback);
 
     const items=rows
       .filter(r=>{
         const hasCode=r.productCode||r.productName||r.itemCode;
         if(!hasCode||!(r.quantity>0))return false;
+        // İstikbal: 0 fiyatlı satırlar da ürün kartı açılsın (Mobilya)
+        if(furniture&&(mode==='cost'||mode==='both'))return true;
         if(mode==='cost'||mode==='both')return r.unitCost>0;
         return true; // stock: miktar yeterli
       })
@@ -4299,13 +4322,15 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
         searchName:r.searchName,
         quantity:r.quantity>0?r.quantity:1,
         unitCost:r.unitCost>0?r.unitCost:0,
-        vatRate:r.vatRate
+        vatRate:furniture?10:r.vatRate
       }));
     if(!items.length)return res.status(400).json({error:'Aktarılacak satır yok. Madde kodu / Miktar / Maliyet tutarı kontrol edin.'});
 
     const invoiceNo=String(req.body?.invoiceNo||rows.find(r=>r.invoiceNo)?.invoiceNo||'').trim();
     const date=String(req.body?.date||rows.find(r=>r.date)?.date||todayISO()).slice(0,10);
-    const supplierName=String(rows.find(r=>r.supplierName)?.supplierName||supplierFallback).trim();
+    const supplierName=furniture
+      ? supplierFallback
+      : String(rows.find(r=>r.supplierName)?.supplierName||supplierFallback).trim();
 
     const invoice=applyPurchaseInvoiceToStore(s,{
       supplierName,invoiceNo,date,warehouseId,
