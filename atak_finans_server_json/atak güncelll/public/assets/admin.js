@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v32 */
+/* ATAK_ADMIN_BUILD=fix-v33 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2533,16 +2533,18 @@ qa('[data-purchase-mode]').forEach(b=>b.addEventListener('click',()=>purchaseSet
 function renderPurchasePreview(d){
   purchasePreviewData=d;
   const willCreate=Number(d.willCreate||d.unmatched||0);
+  const withCost=Number(d.withCost||0);
+  const stockRows=Number(d.matched||0)+willCreate;
   q('#purchaseExcelSummary').innerHTML=
     `<article><b>${d.total||0}</b><span>Toplam Satır</span></article>
-     <article class="good"><b>${d.matched||0}</b><span>Eşleşen (maliyet)</span></article>
+     <article class="good"><b>${d.matched||0}</b><span>Eşleşen ürün</span></article>
      <article class="warn"><b>${willCreate}</b><span>Yeni eklenecek</span></article>
      <article class="bad"><b>${d.invalid||0}</b><span>Hatalı</span></article>`;
   const rows=d.preview||[];
-  const label={matched:'Eşleşti — maliyet güncellenecek',will_create:'Yeni eklenecek',unmatched:'Yeni eklenecek',invalid:'Hatalı'};
+  const label={matched:'Eşleşti',will_create:'Yeni eklenecek',unmatched:'Yeni eklenecek',invalid:'Hatalı'};
   q('#purchasePreviewTable').innerHTML=rows.map(r=>{
     const st=r.status==='unmatched'?'will_create':r.status;
-    const why=st==='invalid'&&r.reason?`<small class="warn-text">${purchaseEsc(r.reason)}</small>`:'';
+    const why=r.reason?`<small class="warn-text">${purchaseEsc(r.reason)}</small>`:'';
     return `<tr class="dynamics-preview-row ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">
     <td><span class="dynamics-status ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">${label[st]||st}</span>${why}</td>
     <td><b>${purchaseEsc(r.productCode||r.itemCode||r.matchCode||'-')}</b><small>${purchaseEsc(r.productName||r.searchName||'')}${r.matchCode&&r.productCode&&r.matchCode!==r.productCode?` · sistem: ${purchaseEsc(r.matchCode)}`:''}</small></td>
@@ -2553,9 +2555,8 @@ function renderPurchasePreview(d){
   </tr>`;
   }).join('');
   q('#purchasePreviewEmpty').style.display=rows.length?'none':'block';
-  const can=!!(Number(d.matched||0)+willCreate);
-  q('#purchaseCostBtn')&&(q('#purchaseCostBtn').disabled=!can);
-  q('#purchaseStockBtn')&&(q('#purchaseStockBtn').disabled=!can);
+  q('#purchaseCostBtn')&&(q('#purchaseCostBtn').disabled=!withCost);
+  q('#purchaseStockBtn')&&(q('#purchaseStockBtn').disabled=!stockRows);
 }
 q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
   const status=q('#purchaseExcelStatus');
@@ -2567,7 +2568,8 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
     const d=await api('/web-api/admin/purchase-invoice-preview',{method:'POST',body:fd});
     renderPurchasePreview(d);
     const will=Number(d.willCreate||d.unmatched||0);
-    status.textContent=`${d.total} satır · ${d.matched} eşleşen · ${will} yeni · Şimdi “Sadece Maliyet” veya “Sadece Stok” seç`;
+    const withCost=Number(d.withCost||0);
+    status.textContent=`${d.total} satır · ${withCost} maliyetli · ${will} yeni · “Sadece Maliyet” veya “Sadece Stok” seç`;
     status.className='form-status success';
   }catch(e){
     status.textContent=e.message;status.className='form-status error';
@@ -2579,10 +2581,12 @@ async function runPurchaseImport(mode){
   if(!file){toast('Önce Excel seçin');return}
   const will=Number(purchasePreviewData?.willCreate||purchasePreviewData?.unmatched||0);
   const matched=Number(purchasePreviewData?.matched||0);
-  if(!(matched+will)){toast('Aktarılacak satır yok — önce Önizle');return}
+  const withCost=Number(purchasePreviewData?.withCost||0);
+  if(mode==='cost'&&!withCost){toast('Maliyet okunamadı — Excel’de “Maliyet tutarı” kolonunu kontrol edin');return}
+  if(mode==='stock'&&!(matched+will)){toast('Aktarılacak satır yok — önce Önizle');return}
   if(mode==='stock'&&!q('#purchaseExcelWarehouse')?.value){toast('Stok için depo seçin');return}
   const label=mode==='stock'?'Sadece stok':mode==='cost'?'Sadece maliyet':'Aktarım';
-  if(!confirm(`${label} aktarılsın mı?\n${matched} eşleşen · ${will} yeni\nSonra Geri Al ile silebilirsin.`))return;
+  if(!confirm(`${label} aktarılsın mı?\n${matched} eşleşen · ${will} yeni${mode==='cost'?` · ${withCost} maliyetli`:''}\nSonra Geri Al ile silebilirsin.`))return;
   try{
     status.textContent='Aktarılıyor…';status.className='form-status';
     const fd=new FormData();

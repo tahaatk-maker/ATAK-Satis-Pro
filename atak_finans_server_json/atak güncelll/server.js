@@ -830,8 +830,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.33-alis-maliyet-okuma',
-  build:'fix-v32',
+  version:'6.3.34-alis-maliyet-xlsx',
+  build:'fix-v33',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3829,6 +3829,50 @@ function parsePurchaseVat(raw){
   if(m)return Number(m[1])||20;
   return normalizeNumber(raw)||20;
 }
+function purchaseSheetRows(ws){
+  // Başlık satırını bul + hem ham sayı hem formatlı metni al (Excel TR/US)
+  const aoaRaw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+  const aoaFmt=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+  if(!aoaRaw.length)return [];
+  let headerIdx=0;
+  for(let i=0;i<Math.min(aoaRaw.length,15);i++){
+    const line=(aoaRaw[i]||[]).map(c=>String(c??'')).join(' | ');
+    if(/Madde\s*kodu|Maliyet\s*tutar|Arama\s*ad|Ürün\s*numar|Cost\s*amount/i.test(line)){headerIdx=i;break}
+  }
+  const headers=(aoaRaw[headerIdx]||[]).map(h=>String(h??'').trim());
+  let costIdx=headers.findIndex(h=>{
+    const k=purchaseHeaderKey(h);
+    return k.includes('maliyettutar')||k.includes('costamount')||k==='maliyet'||k==='birimmaliyet'||k==='birimfiyat';
+  });
+  // Dynamics hareket export: M kolonu (index 12) = Maliyet tutarı
+  if(costIdx<0&&headers.length>=13)costIdx=12;
+  const rows=[];
+  for(let r=headerIdx+1;r<aoaRaw.length;r++){
+    const cols=aoaRaw[r]||[];
+    const colsFmt=(aoaFmt[r]||[]);
+    if(!cols.some(c=>c!==null&&c!==undefined&&String(c).trim()!==''))continue;
+    const row={};
+    headers.forEach((h,i)=>{
+      if(!h)return;
+      const raw=cols[i], fmt=colsFmt[i];
+      // Sayı kolonlarında ham değeri tercih et; 0/boşsa formatlı metni dene
+      if(typeof raw==='number'&&Number.isFinite(raw))row[h]=raw;
+      else if(raw!==null&&raw!==undefined&&String(raw).trim()!=='')row[h]=raw;
+      else row[h]=fmt??'';
+    });
+    // Maliyet yedek: başlık eşleşmese bile index 12 / bulunan costIdx
+    if(costIdx>=0){
+      const raw=cols[costIdx], fmt=colsFmt[costIdx];
+      const nRaw=normalizeNumber(raw);
+      const nFmt=normalizeNumber(fmt);
+      const best=nRaw>0?raw:(nFmt>0?fmt:raw);
+      if(!row['Maliyet tutarı']&&best!==''&&best!=null)row['Maliyet tutarı']=best;
+      row.__costRaw=best;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
 function parsePurchaseWorkbook(buffer,fileName=''){
   let rows=[];
   const asText=purchaseBufferText(buffer);
@@ -3839,11 +3883,15 @@ function parsePurchaseWorkbook(buffer,fileName=''){
   if(looksCsv){
     rows=parsePurchaseCsvBuffer(buffer);
   }else{
-    const wb=XLSX.read(buffer,{type:'buffer',cellDates:true,codepage:1254});
-    const ws=wb.Sheets[wb.SheetNames[0]];
+    const wb=XLSX.read(buffer,{type:'buffer',cellDates:true,codepage:1254,cellText:true});
+    const sheetName=wb.SheetNames.find(n=>{
+      const ws=wb.Sheets[n];
+      const sample=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}).slice(0,5).map(r=>(r||[]).join(' ')).join(' ');
+      return /Madde|Maliyet|Arama|Fatura|Ürün/i.test(sample);
+    })||wb.SheetNames[0];
+    const ws=wb.Sheets[sheetName];
     if(!ws)throw new Error('Excel içinde çalışma sayfası bulunamadı');
-    // raw:true → gerçek sayı (8853.51). raw:false bazen "8,853.51" verir → eski parser 0 yapıyordu.
-    rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
+    rows=purchaseSheetRows(ws);
   }
   if(!rows.length)throw new Error('Excel/CSV boş görünüyor');
 
@@ -3869,9 +3917,11 @@ function parsePurchaseWorkbook(buffer,fileName=''){
     // Benzersiz kod: Madde kodu (aynı Arama adlı renk/varyantlar çakışmasın)
     const productCode=String(itemCode||searchName||purchasePick(r,codeAliases)||productName||'').trim();
     let quantity=normalizeNumber(purchasePick(r,qtyAliases)||purchasePickContains(r,['miktar','qty'])||0);
-    let costRaw=purchasePick(r,unitAliases);
+    let costRaw=r.__costRaw;
+    if(costRaw===''||costRaw==null)costRaw=purchasePick(r,unitAliases);
     if(costRaw===''||costRaw==null){
       for(const [k,v] of Object.entries(r||{})){
+        if(k.startsWith('__'))continue;
         if(v===null||v===undefined||String(v).trim()==='')continue;
         const hk=purchaseHeaderKey(k);
         if(hk.includes('maliyettutar')||hk.includes('costamount')||hk==='maliyet'||hk==='birimmaliyet'){costRaw=v;break}
@@ -4173,24 +4223,29 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,dynamicsUpload.s
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const s=readStore();
     const rows=parsePurchaseWorkbook(req.file.buffer,req.file.originalname||'');
-    let matched=0,willCreate=0,invalid=0;
+    let matched=0,willCreate=0,invalid=0,stockOk=0,withCost=0;
     const preview=rows.map(r=>{
       const hasCode=Boolean(r.productCode||r.itemCode||r.productName||r.searchName);
       if(!(r.quantity>0))r.quantity=r.unitCost>0?1:0;
-      if(!(r.unitCost>0)||!hasCode){
+      if(!hasCode||!(r.quantity>0)){
         invalid++;
-        const why=!(r.unitCost>0)?'maliyet yok':(!hasCode?'ürün kodu yok':'eksik');
+        const why=!hasCode?'ürün kodu yok':'miktar yok';
         return{...r,status:'invalid',reason:why,matchCode:'',currentPurchasePrice:0};
       }
       const p=findProductForPurchase(s,r.productCode||r.searchName,r.productName,r.itemCode);
-      if(p){matched++;return{...r,status:'matched',matchCode:p.code,productName:r.productName||p.name,currentPurchasePrice:normalizeNumber(p.purchasePrice||0)}}
+      const hasCost=r.unitCost>0;
+      if(hasCost)withCost++; else stockOk++;
+      if(p){
+        matched++;
+        return{...r,status:'matched',reason:hasCost?'':'maliyet yok (stok aktarılabilir)',matchCode:p.code,productName:r.productName||p.name,currentPurchasePrice:normalizeNumber(p.purchasePrice||0)};
+      }
       willCreate++;
-      return{...r,status:'will_create',matchCode:'',currentPurchasePrice:0};
+      return{...r,status:'will_create',reason:hasCost?'':'maliyet yok (stok aktarılabilir)',matchCode:'',currentPurchasePrice:0};
     });
     const invoiceNos=[...new Set(preview.map(x=>x.invoiceNo).filter(Boolean))];
     res.json({
       ok:true,
-      total:preview.length,matched,willCreate,unmatched:willCreate,invalid,
+      total:preview.length,matched,willCreate,unmatched:willCreate,invalid,stockOk,withCost,
       invoiceNos,
       preview:preview.slice(0,400),
       truncated:preview.length>400,
