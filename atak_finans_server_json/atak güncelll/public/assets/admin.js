@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v27 */
+/* ATAK_ADMIN_BUILD=fix-v28 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2487,7 +2487,7 @@ function renderPurchaseInvoiceList(d){
   const box=q('#purchaseInvoiceList');if(!box)return;
   const rows=d.invoices||[];
   box.innerHTML=rows.length
-    ?`<table><thead><tr><th>Tarih</th><th>Tedarikçi</th><th>Fatura No</th><th>Kalem</th><th>Toplam</th><th>Yeni ürün</th><th>Maliyet</th><th>Kaynak</th></tr></thead><tbody>${rows.map(r=>`<tr>
+    ?`<table><thead><tr><th>Tarih</th><th>Tedarikçi</th><th>Fatura No</th><th>Kalem</th><th>Toplam</th><th>Yeni ürün</th><th>Maliyet</th><th>Durum</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr class="${r.reverted?'price-warning':''}">
       <td>${purchaseEsc(r.date||'')}</td>
       <td>${purchaseEsc(r.supplierName||'')}</td>
       <td><b>${purchaseEsc(r.invoiceNo||'-')}</b></td>
@@ -2495,9 +2495,20 @@ function renderPurchaseInvoiceList(d){
       <td><b>${money(r.total)}</b></td>
       <td>${Number(r.created||0)}</td>
       <td>${Number(r.priceUpdated||0)}</td>
-      <td>${r.source==='excel'?'Excel':'Manuel'}</td>
+      <td>${r.reverted?'Geri alındı':(r.source==='excel'?'Excel':'Manuel')}</td>
+      <td>${r.reverted?'':`<button type="button" class="mini-btn danger" data-purchase-revert="${purchaseEsc(r.id)}">Geri Al / Sil</button>`}</td>
     </tr>`).join('')}</tbody></table>`
-    :'<p class="note">Henüz alış faturası yok. Excel yükleyin veya manuel girin.</p>';
+    :'<p class="note">Henüz alış faturası yok. Excel/CSV yükleyin veya manuel girin.</p>';
+  box.querySelectorAll('[data-purchase-revert]').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      if(!confirm('Bu aktarım geri alınsın mı?\n• Yeni eklenen ürünler silinir (satışı yoksa)\n• Güncellenen maliyetler eski haline döner'))return;
+      try{
+        const r=await api('/web-api/admin/purchase-invoice/'+btn.dataset.purchaseRevert+'/revert',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+        toast(`Geri alındı · ${r.productsRemoved||0} ürün silindi · ${r.pricesRestored||0} maliyet eskiye döndü`);
+        await loadPurchaseInvoices();
+      }catch(e){toast(e.message)}
+    });
+  });
 }
 async function loadPurchaseInvoices(){
   try{
@@ -2566,21 +2577,22 @@ q('#purchaseImportBtn')?.addEventListener('click',async()=>{
   const will=Number(purchasePreviewData?.willCreate||purchasePreviewData?.unmatched||0);
   const matched=Number(purchasePreviewData?.matched||0);
   if(!(matched+will)){toast('Aktarılacak satır yok');return}
-  if(!confirm(`${matched} ürünün maliyeti yenilenecek\n${will} yeni ürün eklenecek\nDevam?`))return;
+  const mode=q('#purchaseExcelMode')?.value||'both';
+  const modeLabel=mode==='products'?'sadece ürün':mode==='cost'?'sadece maliyet':'ürün + maliyet';
+  if(!confirm(`Aktarım: ${modeLabel}\n${matched} eşleşen · ${will} yeni\nSonra listeden Geri Al ile silebilirsin.\nDevam?`))return;
   try{
     status.textContent='Aktarılıyor…';status.className='form-status';
     const fd=new FormData();
     fd.append('file',file);
+    fd.append('mode',mode);
     fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'Arçelik A.Ş.');
     fd.append('warehouseId',q('#purchaseExcelWarehouse')?.value||'');
     fd.append('pricesIncludeVat',q('#purchaseExcelIncVat')?.checked?'1':'0');
-    fd.append('updatePurchasePrice',q('#purchaseExcelUpdatePrice')?.checked?'1':'0');
     fd.append('addStock',q('#purchaseExcelAddStock')?.checked?'1':'0');
-    fd.append('createMissingProducts','1');
     const d=await api('/web-api/admin/purchase-invoice-import',{method:'POST',body:fd});
-    status.textContent=`Tamam · ${d.invoice.created||0} yeni ürün · ${d.invoice.priceUpdated} maliyet · toplam ${money(d.invoice.total)}${d.invoice.stockUpdated?` · ${d.invoice.stockUpdated} stok`:''}`;
+    status.textContent=`Tamam · ${d.invoice.created||0} yeni ürün · ${d.invoice.priceUpdated} maliyet · toplam ${money(d.invoice.total)} · isterse Geri Al`;
     status.className='form-status success';
-    toast('Alış faturaları aktarıldı');
+    toast('Aktarım bitti — listeden silebilirsin');
     purchasePreviewData=null;
     q('#purchaseImportBtn').disabled=true;
     await loadPurchaseInvoices();

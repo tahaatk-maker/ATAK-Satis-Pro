@@ -3725,95 +3725,151 @@ function purchasePick(row,aliases){
   }
   return '';
 }
-function findProductForPurchase(s,code,name=''){
-  const k=normKey(code);
-  const nk=normKey(name);
+function findProductForPurchase(s,code,name='',itemCode=''){
+  const keys=[code,itemCode,name].map(normKey).filter(Boolean);
   const list=s.products||[];
-  if(k){
+  for(const k of keys){
     const exact=list.find(p=>
       normKey(p.code)===k||normKey(p.searchName)===k||normKey(p.itemCode)===k||
       normKey(p.barcode)===k||normKey(p.dynamicsProductId)===k
     );
     if(exact)return exact;
   }
+  const nk=normKey(name);
   if(nk){
-    const byName=list.find(p=>normKey(p.name)===nk||normKey(p.searchName)===nk||normKey(p.code)===nk);
+    const byName=list.find(p=>normKey(p.name)===nk);
     if(byName)return byName;
   }
   return null;
 }
+function parsePurchaseCsvBuffer(buffer){
+  const text=String(buffer.toString('utf8')||'').replace(/^\uFEFF/,'');
+  const first=text.split(/\r?\n/).find(l=>String(l||'').trim())||'';
+  const delim=first.includes(';')&&!first.includes(',')?';':(first.includes('\t')?'\t':',');
+  const lines=text.split(/\r?\n/).filter(l=>String(l||'').trim());
+  if(lines.length<2)return [];
+  const headers=lines[0].split(delim).map(h=>String(h||'').trim());
+  return lines.slice(1).map(line=>{
+    const cols=line.split(delim);
+    const row={};
+    headers.forEach((h,i)=>{row[h]=cols[i]!=null?String(cols[i]).trim():''});
+    return row;
+  });
+}
+function parsePurchaseDate(dateVal){
+  if(dateVal instanceof Date)return dateVal.toISOString().slice(0,10);
+  const s=String(dateVal||'').trim();
+  if(/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(s)){
+    const [d,m,y]=s.split('.');
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+  return s.slice(0,10);
+}
+function parsePurchaseVat(raw){
+  const s=String(raw||'').trim();
+  const m=s.match(/(\d{1,2})/);
+  if(m)return Number(m[1])||20;
+  return normalizeNumber(raw)||20;
+}
 function parsePurchaseWorkbook(buffer){
-  const wb=XLSX.read(buffer,{type:'buffer',cellDates:true});
-  const ws=wb.Sheets[wb.SheetNames[0]];
-  if(!ws)throw new Error('Excel içinde çalışma sayfası bulunamadı');
-  const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
-  if(!rows.length)throw new Error('Excel boş görünüyor');
-  const codeAliases=['Ürün Kodu','Urun Kodu','Madde Kodu','Malzeme Kodu','Stok Kodu','Kod','Arama Adı','Arama Adi','Barkod','Item Code','Material'];
-  const nameAliases=['Ürün Adı','Urun Adi','Malzeme Adı','Malzeme Tanımı','Açıklama','Aciklama','Ürün','Product Name','Tanım'];
+  let rows=[];
+  const asText=buffer.toString('utf8');
+  const looksCsv=/Maliyet tutar|Madde kodu|Arama ad|Ürün numar|Fatura/i.test(asText.slice(0,800))&&(/;|,|\t/).test(asText.slice(0,200));
+  if(looksCsv){
+    rows=parsePurchaseCsvBuffer(buffer);
+  }else{
+    const wb=XLSX.read(buffer,{type:'buffer',cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    if(!ws)throw new Error('Excel içinde çalışma sayfası bulunamadı');
+    rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+  }
+  if(!rows.length)throw new Error('Excel/CSV boş görünüyor');
+
+  const codeAliases=['Ürün Kodu','Urun Kodu','Madde Kodu','Madde kodu','Ürün numarası','Urun numarasi','Malzeme Kodu','Stok Kodu','Kod','Barkod','Item Code','Material'];
+  const searchAliases=['Arama Adı','Arama Adi','Arama adı','Search name'];
+  const nameAliases=['Ürün Adı','Urun Adi','Ürün adı','Malzeme Adı','Malzeme Tanımı','Açıklama','Aciklama','Ürün','Product Name','Tanım'];
   const qtyAliases=['Miktar','Adet','Quantity','Qty','Miktarı'];
-  const unitAliases=['Birim Fiyat','Birim Fiyatı','Alış Fiyatı','Alis Fiyati','Net Birim Fiyat','Birim Tutar','Fiyat','Unit Price'];
+  const unitAliases=['Birim Fiyat','Birim Fiyatı','Alış Fiyatı','Alis Fiyati','Net Birim Fiyat','Birim Tutar','Fiyat','Unit Price','Maliyet tutarı','Maliyet tutari','Maliyet','Cost amount'];
   const totalAliases=['Satır Tutarı','Satir Tutari','Tutar','Toplam','Line Total','Net Tutar','Malzeme Tutarı'];
-  const invAliases=['Fatura No','Fatura Numarası','Fatura Numarasi','Belge No','Invoice No'];
-  const dateAliases=['Fatura Tarihi','Tarih','Belge Tarihi','Invoice Date','Date'];
-  const vatAliases=['KDV','KDV %','KDV Oranı','KDV Orani','Vat','VAT %'];
-  const supplierAliases=['Tedarikçi','Tedarikci','Cari','Firma','Supplier'];
+  const invAliases=['Fatura No','Fatura Numarası','Fatura Numarasi','Belge No','Invoice No','Arçelik Fatura Numarası','Arcelik Fatura Numarasi'];
+  const dateAliases=['Fatura Tarihi','Tarih','Belge Tarihi','Invoice Date','Date','Fiili tarih','Fiili Tarih'];
+  const vatAliases=['KDV','KDV %','KDV Oranı','KDV Orani','Vat','VAT %','Madde satış vergisi grubu','Madde satis vergisi grubu'];
+  const supplierAliases=['Tedarikçi','Tedarikci','Cari','Firma','Supplier','Taraf'];
 
   const parsed=rows.map((r,index)=>{
-    const productCode=String(purchasePick(r,codeAliases)||'').trim();
-    const productName=String(purchasePick(r,nameAliases)||'').trim();
+    const itemCode=String(purchasePick(r,['Madde Kodu','Madde kodu','Ürün numarası','Urun numarasi','Malzeme Kodu'])||'').trim();
+    const searchName=String(purchasePick(r,searchAliases)||'').trim();
+    const productName=String(purchasePick(r,nameAliases)||searchName||'').trim();
+    // Benzersiz kod: Madde kodu (aynı Arama adlı renk/varyantlar çakışmasın)
+    const productCode=String(itemCode||searchName||purchasePick(r,codeAliases)||productName||'').trim();
     const quantity=normalizeNumber(purchasePick(r,qtyAliases)||0);
     let unitCost=normalizeNumber(purchasePick(r,unitAliases)||0);
     const lineTotalRaw=normalizeNumber(purchasePick(r,totalAliases)||0);
+    // Dynamics "Maliyet tutarı" genelde satır/birim maliyet — miktar 1 ise birim = tutar
     if(!(unitCost>0)&&lineTotalRaw>0&&quantity>0)unitCost=Math.round((lineTotalRaw/quantity)*100)/100;
-    const lineTotal=lineTotalRaw>0?lineTotalRaw:Math.round(unitCost*Math.max(quantity,0)*100)/100;
-    let dateVal=purchasePick(r,dateAliases);
-    if(dateVal instanceof Date)dateVal=dateVal.toISOString().slice(0,10);
-    else{
-      const s=String(dateVal||'').trim();
-      if(/^\d{2}\.\d{2}\.\d{4}$/.test(s)){
-        const [d,m,y]=s.split('.');dateVal=`${y}-${m}-${d}`;
-      }else dateVal=String(s).slice(0,10);
-    }
+    const lineTotal=lineTotalRaw>0?lineTotalRaw:Math.round(unitCost*Math.max(quantity||1,0)*100)/100;
+    const dateVal=parsePurchaseDate(purchasePick(r,dateAliases));
+    const vatRaw=purchasePick(r,vatAliases);
     return{
       rowNo:index+2,
       invoiceNo:String(purchasePick(r,invAliases)||'').trim(),
       date:dateVal,
       supplierName:String(purchasePick(r,supplierAliases)||'').trim(),
-      productCode,productName,
+      productCode,itemCode,searchName,productName,
       quantity:quantity>0?quantity:0,
       unitCost,
       lineTotal,
-      vatRate:normalizeNumber(purchasePick(r,vatAliases)||20)||20
+      vatRate:parsePurchaseVat(vatRaw||20)||20
     };
-  }).filter(r=>r.productCode||r.productName||r.unitCost>0);
+  }).filter(r=>r.productCode||r.itemCode||r.productName||r.unitCost>0);
 
-  if(!parsed.length)throw new Error('Excelde ürün satırı bulunamadı. Sütun adları: Ürün Kodu, Miktar, Birim Fiyat');
-  const sampleHeaders=Object.keys(rows[0]||{});
-  const hasCode=sampleHeaders.some(h=>codeAliases.map(purchaseHeaderKey).includes(purchaseHeaderKey(h)));
-  if(!hasCode){
-    // soft warn only — maybe they used a close alias we already matched via rows
+  if(!parsed.length)throw new Error('Satır bulunamadı. Madde kodu / Arama adı + Maliyet tutarı gerekli');
+
+  // Aynı madde birden fazla satırda gelebilir → birleştir (miktar toplam, maliyet son tarih)
+  const merged=new Map();
+  for(const r of parsed){
+    const key=normKey(r.itemCode||r.productCode||r.productName);
+    if(!key)continue;
+    if(!merged.has(key)){
+      merged.set(key,{...r,quantity:r.quantity>0?r.quantity:1});
+      continue;
+    }
+    const cur=merged.get(key);
+    cur.quantity=(cur.quantity||0)+(r.quantity>0?r.quantity:1);
+    const newer=!cur.date||(r.date&&String(r.date)>=String(cur.date));
+    if(newer&&r.unitCost>0){
+      cur.unitCost=r.unitCost;cur.date=r.date||cur.date;
+      cur.invoiceNo=r.invoiceNo||cur.invoiceNo;
+    }
+    if(!cur.productName&&r.productName)cur.productName=r.productName;
+    if(!cur.searchName&&r.searchName)cur.searchName=r.searchName;
+    cur.lineTotal=Math.round((cur.unitCost||0)*(cur.quantity||0)*100)/100;
   }
-  return parsed;
+  return [...merged.values()];
 }
 function purchaseBrandFromSupplier(supplierName='',productName=''){
-  const blob=`${supplierName} ${productName}`.toLocaleLowerCase('tr-TR');
-  if(/istikbal|doğtaş|dogtas/.test(blob))return 'İstikbal';
-  if(/grundig/.test(blob))return 'Grundig';
-  if(/arçelik|arcelik|beko/.test(blob))return 'Beko';
+  const blob=`${supplierName} ${productName}`.toLocaleUpperCase('tr-TR');
+  if(/SAMSUNG/.test(blob))return 'Samsung';
+  if(/XIAOMI|REDMI|POCO/.test(blob))return 'Xiaomi';
+  if(/APPLE|IPHONE/.test(blob))return 'Apple';
+  if(/ISTIKBAL|DO[GĞ]TA[SŞ]/.test(blob))return 'İstikbal';
+  if(/GRUNDIG/.test(blob))return 'Grundig';
+  if(/AR[CÇ]EL[Iİ]K|BEKO/.test(blob))return 'Beko';
   return 'Beko';
 }
-function ensureProductFromPurchase(s,{productCode,productName,unitCost,vatRate,supplierName}){
-  const code=String(productCode||productName||'').trim();
+function ensureProductFromPurchase(s,{productCode,productName,itemCode,searchName,unitCost,vatRate,supplierName,importBatchId}){
+  const code=String(productCode||searchName||itemCode||productName||'').trim();
   if(!code)return null;
-  const name=String(productName||productCode||code).trim()||code;
+  const name=String(productName||searchName||productCode||code).trim()||code;
   ensureDynamicsCoreCategories(s);
-  const category=dynamicsSuggestedCategoryId(s,code);
+  const category=dynamicsSuggestedCategoryId(s,searchName||code);
   const brand=purchaseBrandFromSupplier(supplierName,name);
   const product=sanitizeProduct({
     code,
     name,
-    searchName:code,
-    itemCode:code,
+    searchName:String(searchName||code).trim(),
+    itemCode:String(itemCode||code).trim(),
     brand,
     category,
     purchasePrice:normalizeNumber(unitCost||0),
@@ -3827,6 +3883,7 @@ function ensureProductFromPurchase(s,{productCode,productName,unitCost,vatRate,s
   });
   product.purchasePriceSource='purchase-invoice';
   product.purchasePriceUpdatedAt=new Date().toISOString();
+  if(importBatchId)product.importBatchId=importBatchId;
   s.products.unshift(product);
   return product;
 }
@@ -3846,29 +3903,37 @@ function applyPurchaseInvoiceToStore(s,{
 }={}){
   const round=n=>Math.round(Number(n||0)*100)/100;
   const wh=String(warehouseId||s.warehouses?.find(w=>w.active!==false)?.id||'');
+  const importBatchId=crypto.randomUUID();
   const cleanItems=[];
   let matched=0,unmatched=0,created=0,priceUpdated=0,stockUpdated=0,total=0;
 
   for(const raw of (Array.isArray(items)?items:[])){
-    const productCode=String(raw.productCode||'').trim();
+    const productCode=String(raw.productCode||raw.searchName||'').trim();
     const productName=String(raw.productName||'').trim();
+    const itemCode=String(raw.itemCode||'').trim();
+    const searchName=String(raw.searchName||productCode||'').trim();
     const qty=Math.max(0,normalizeNumber(raw.quantity||0));
     let unitCost=normalizeNumber(raw.unitCost||0);
     const vatRate=normalizeNumber(raw.vatRate!=null?raw.vatRate:20)||20;
-    if(!(qty>0)||!(unitCost>0)||(!productCode&&!productName)){unmatched++;continue}
-    // Excel net (KDV hariç) geldiyse KDV dahil alış fiyatına çevir
+    if(!(qty>0)||!(unitCost>0)||(!productCode&&!productName&&!itemCode)){unmatched++;continue}
     if(!pricesIncludeVat)unitCost=round(unitCost*(1+vatRate/100));
 
-    let product=findProductForPurchase(s,productCode,productName);
+    let product=findProductForPurchase(s,productCode,productName,itemCode);
     let createdNow=false;
     if(!product&&createMissingProducts){
-      product=ensureProductFromPurchase(s,{productCode,productName,unitCost,vatRate,supplierName});
+      product=ensureProductFromPurchase(s,{
+        productCode:productCode||searchName||itemCode,
+        productName,itemCode,searchName,unitCost,vatRate,supplierName,importBatchId
+      });
       if(product){created++;createdNow=true}
     }
+    const prevCost=createdNow?0:normalizeNumber(product?.purchasePrice||0);
     const lineTotal=round(qty*unitCost);
     total+=lineTotal;
     const line={
+      productId:product?.id||'',
       productCode:product?.code||productCode,
+      itemCode:itemCode||product?.itemCode||'',
       productName:product?.name||productName||productCode,
       quantity:qty,
       unitCost,
@@ -3876,16 +3941,17 @@ function applyPurchaseInvoiceToStore(s,{
       vatRate,
       matched:Boolean(product)&&!createdNow,
       created:createdNow,
-      previousPurchasePrice:createdNow?0:normalizeNumber(product?.purchasePrice||0)
+      previousPurchasePrice:prevCost
     };
     if(!product){unmatched++;cleanItems.push(line);continue}
     if(!createdNow)matched++;
-    // Maliyet: Excel'deki yenisi her zaman yazılır
     if(updatePurchasePrice||createdNow){
       product.purchasePrice=unitCost;
       product.purchasePriceSource='purchase-invoice';
       product.purchasePriceUpdatedAt=new Date().toISOString();
       product.updatedAt=new Date().toISOString();
+      product.importBatchId=importBatchId;
+      if(itemCode&&!product.itemCode)product.itemCode=itemCode;
       priceUpdated++;
     }
     if(addStock&&wh){
@@ -3902,10 +3968,10 @@ function applyPurchaseInvoiceToStore(s,{
     }
     cleanItems.push(line);
   }
-  if(!cleanItems.length)throw new Error('Kaydedilecek geçerli satır yok (ürün kodu + miktar + birim fiyat gerekli)');
+  if(!cleanItems.length)throw new Error('Kaydedilecek geçerli satır yok (ürün kodu + miktar + maliyet gerekli)');
 
   const invoice={
-    id:crypto.randomUUID(),
+    id:importBatchId,
     date:String(date||todayISO()).slice(0,10),
     supplierName:String(supplierName||'Arçelik A.Ş.').trim()||'Arçelik A.Ş.',
     invoiceNo:String(invoiceNo||'').trim(),
@@ -3919,12 +3985,51 @@ function applyPurchaseInvoiceToStore(s,{
     items:cleanItems,
     total:round(total),
     matched,unmatched,created,priceUpdated,stockUpdated,
+    reverted:false,
     createdBy:actor,
     createdAt:new Date().toISOString()
   };
   s.purchaseInvoices.unshift(invoice);
   if(s.purchaseInvoices.length>500)s.purchaseInvoices=s.purchaseInvoices.slice(0,500);
   return invoice;
+}
+function revertPurchaseInvoiceInStore(s,invoiceId){
+  const inv=(s.purchaseInvoices||[]).find(x=>String(x.id)===String(invoiceId));
+  if(!inv)throw new Error('Alış aktarımı bulunamadı');
+  if(inv.reverted)throw new Error('Bu aktarım zaten geri alınmış');
+  let productsRemoved=0,pricesRestored=0,skippedSales=0;
+  for(const line of (inv.items||[])){
+    const product=(s.products||[]).find(p=>
+      (line.productId&&String(p.id)===String(line.productId))||
+      normKey(p.code)===normKey(line.productCode)||
+      (line.itemCode&&normKey(p.itemCode)===normKey(line.itemCode))
+    );
+    if(!product)continue;
+    if(line.created){
+      const hasSale=(s.financeTransactions||[]).some(t=>
+        t.kind==='sale'&&!t.cancelled&&Array.isArray(t.items)&&
+        t.items.some(i=>normKey(i.productCode)===normKey(product.code))
+      );
+      if(hasSale){
+        product.active=false;
+        skippedSales++;
+      }else{
+        s.products=s.products.filter(p=>p.id!==product.id);
+        productsRemoved++;
+      }
+      continue;
+    }
+    if(line.previousPurchasePrice!=null){
+      product.purchasePrice=normalizeNumber(line.previousPurchasePrice);
+      product.purchasePriceSource='purchase-invoice-revert';
+      product.purchasePriceUpdatedAt=new Date().toISOString();
+      pricesRestored++;
+    }
+  }
+  inv.reverted=true;
+  inv.revertedAt=new Date().toISOString();
+  inv.revertResult={productsRemoved,pricesRestored,skippedSales};
+  return {invoice:inv,productsRemoved,pricesRestored,skippedSales};
 }
 
 app.get('/web-api/admin/purchase-invoices',requireAdmin,(req,res)=>{
@@ -3933,7 +4038,8 @@ app.get('/web-api/admin/purchase-invoices',requireAdmin,(req,res)=>{
     id:inv.id,date:inv.date,supplierName:inv.supplierName,invoiceNo:inv.invoiceNo,
     total:inv.total,matched:inv.matched,unmatched:inv.unmatched,created:inv.created||0,
     priceUpdated:inv.priceUpdated,stockUpdated:inv.stockUpdated,
-    source:inv.source,itemCount:(inv.items||[]).length,createdAt:inv.createdAt,createdBy:inv.createdBy
+    source:inv.source,itemCount:(inv.items||[]).length,createdAt:inv.createdAt,createdBy:inv.createdBy,
+    reverted:Boolean(inv.reverted)
   }));
   res.json({
     ok:true,
@@ -3986,7 +4092,7 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,dynamicsUpload.s
         invalid++;
         return{...r,status:'invalid',matchCode:'',currentPurchasePrice:0};
       }
-      const p=findProductForPurchase(s,r.productCode,r.productName);
+      const p=findProductForPurchase(s,r.productCode,r.productName,r.itemCode);
       if(p){matched++;return{...r,status:'matched',matchCode:p.code,productName:r.productName||p.name,currentPurchasePrice:normalizeNumber(p.purchasePrice||0)}}
       willCreate++;
       return{...r,status:'will_create',matchCode:'',currentPurchasePrice:0};
@@ -3998,7 +4104,7 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,dynamicsUpload.s
       invoiceNos,
       preview:preview.slice(0,400),
       truncated:preview.length>400,
-      note:'Sistemde olmayan ürünler aktarımda otomatik eklenir; maliyeti Excel’deki birim fiyattan yazılır. Sonraki Excel’de maliyet yine yenisiyle güncellenir.'
+      note:'Dynamics CSV (Maliyet tutarı / Madde kodu) desteklenir. Aktarımı sonra listeden geri alıp silebilirsiniz.'
     });
   }catch(e){
     res.status(400).json({error:e.message||'Excel okunamadı'});
@@ -4011,23 +4117,26 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
     const s=readStore();
     const rows=parsePurchaseWorkbook(req.file.buffer);
     const actor=currentSessionUser(req)?.name||'Yönetici';
-    const updatePurchasePrice=String(req.body?.updatePurchasePrice??'1')!=='0';
+    const mode=String(req.body?.mode||'both'); // both | products | cost
+    const createMissingProducts=mode==='both'||mode==='products';
+    const updatePurchasePrice=mode==='both'||mode==='cost';
     const addStock=String(req.body?.addStock||'0')==='1';
     const pricesIncludeVat=String(req.body?.pricesIncludeVat??'1')!=='0';
     const warehouseId=String(req.body?.warehouseId||'');
     const supplierFallback=String(req.body?.supplierName||'Arçelik A.Ş.').trim()||'Arçelik A.Ş.';
-    const createMissingProducts=String(req.body?.createMissingProducts??'1')!=='0';
 
     const items=rows
-      .filter(r=>r.quantity>0&&r.unitCost>0&&(r.productCode||r.productName))
+      .filter(r=>r.quantity>0&&r.unitCost>0&&(r.productCode||r.productName||r.itemCode))
       .map(r=>({
         productCode:r.productCode,
         productName:r.productName,
+        itemCode:r.itemCode,
+        searchName:r.searchName,
         quantity:r.quantity,
         unitCost:r.unitCost,
         vatRate:r.vatRate
       }));
-    if(!items.length)return res.status(400).json({error:'Aktarılacak satır yok. Excelde Ürün Kodu, Miktar ve Birim Fiyat gerekli.'});
+    if(!items.length)return res.status(400).json({error:'Aktarılacak satır yok. Madde kodu / Arama adı + Maliyet tutarı gerekli.'});
 
     const invoiceNo=String(req.body?.invoiceNo||rows.find(r=>r.invoiceNo)?.invoiceNo||'').trim();
     const date=String(req.body?.date||rows.find(r=>r.date)?.date||todayISO()).slice(0,10);
@@ -4035,22 +4144,35 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
 
     const invoice=applyPurchaseInvoiceToStore(s,{
       supplierName,invoiceNo,date,warehouseId,
-      note:String(req.body?.note||'Excel alış faturası'),
+      note:String(req.body?.note||`Excel alış (${mode})`),
       source:'excel',
       updatePurchasePrice,addStock,pricesIncludeVat,createMissingProducts,
       items,actor
     });
     audit(s,'Alış faturası Excel aktarımı',invoice.invoiceNo||invoice.id,{
-      matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total
+      mode,matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,total:invoice.total
     });
     writeStore(s);
     res.json({ok:true,invoice:{
       id:invoice.id,date:invoice.date,invoiceNo:invoice.invoiceNo,supplierName:invoice.supplierName,
       total:invoice.total,matched:invoice.matched,unmatched:invoice.unmatched,created:invoice.created,
-      priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,itemCount:invoice.items.length
+      priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,itemCount:invoice.items.length,
+      mode,reverted:false
     }});
   }catch(e){
     res.status(400).json({error:e.message||'Excel aktarılamadı'});
+  }
+});
+
+app.post('/web-api/admin/purchase-invoice/:id/revert',requireAdmin,(req,res)=>{
+  try{
+    const s=readStore();
+    const result=revertPurchaseInvoiceInStore(s,req.params.id);
+    audit(s,'Alış aktarımı geri alındı',result.invoice.invoiceNo||result.invoice.id,result.invoice.revertResult||{});
+    writeStore(s);
+    res.json({ok:true,...result});
+  }catch(e){
+    res.status(400).json({error:e.message||'Geri alınamadı'});
   }
 });
 
