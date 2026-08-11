@@ -112,6 +112,23 @@
 .ck-brand-pill.other{background:#f1f5f9;color:#64748b}
 .ck-empty{padding:26px;text-align:center;color:var(--ck-muted);font-weight:650}
 
+/* ---- Alış Faturaları ---- */
+.purchase-mode-tabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
+.purchase-mode{
+  min-height:42px;padding:0 16px;border-radius:11px;border:1px solid #dce4ef;
+  background:#fff;font:inherit;font-weight:750;color:#667890;cursor:pointer
+}
+.purchase-mode.active{background:#071a33;color:#fff;border-color:#071a33}
+#purchaseInvoices .check-row{
+  display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;color:#334155;margin:6px 0
+}
+#purchaseInvoices .check-row input{width:18px;height:18px}
+#purchaseInvoices .hidden{display:none!important}
+#purchaseManualLines input{
+  width:100%;min-height:40px;border:1px solid #dce4ef;border-radius:10px;padding:0 10px
+}
+#purchaseManualLines .mini-btn.danger{color:#b91c1c}
+
 /* ---- Kâr & Maliyet ---- */
 #profitCenter .warn-banner{
   margin:0 0 12px;padding:12px 14px;border-radius:12px;

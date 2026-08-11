@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v23" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v23" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v24" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v24" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -598,6 +598,7 @@ body.inv-full #pageTitle{font-size:18px}
 <small class="menu-label">ÜRÜN &amp; STOK</small>
 <button data-tab="products" type="button">▦ Tüm Ürünler</button>
 <button data-tab="dynamicsExcelImport" type="button">⇩ Dynamics Excel Aktar</button>
+<button data-tab="purchaseInvoices" type="button">📥 Alış Faturaları</button>
 <button data-tab="stockCenter" type="button">▦ Stok &amp; Depo</button>
 <button data-tab="prices" type="button">₺ Toplu Fiyat</button>
 <button data-tab="brands" type="button">◇ Markalar</button>
@@ -1350,6 +1351,103 @@ Bulunamayan → Diğer.
   </div>
   <div class="panel table-wrap dynamics-preview-wrap"><table><thead><tr><th>DURUM</th><th>ARAMA ADI / SATIŞ ÜRÜN KODU</th><th>KATEGORİ</th></tr></thead><tbody id="dynamicsPreviewTable"></tbody></table><div id="dynamicsPreviewEmpty" class="empty">Excel seçip “Excel'i Önizle” butonuna basın.</div></div>
 </section>
+<section class="tab" id="purchaseInvoices">
+<div class="foundation-head panel">
+  <div>
+    <small class="eyebrow">ÜRÜN & STOK · MALİYET</small>
+    <h2>Alış Faturaları</h2>
+    <p class="note">Arçelik (veya diğer tedarikçi) faturalarını buradan girin. Satırdaki <b>birim fiyat ürün kartının alış fiyatına</b> yazılır; sonraki satışlarda kâr buna göre hesaplanır.</p>
+  </div>
+  <a class="backup-btn" id="purchaseTemplateBtn" href="/web-api/admin/purchase-invoice-template">⬇ Excel Şablonu İndir</a>
+</div>
+
+<div class="purchase-mode-tabs">
+  <button type="button" class="purchase-mode active" data-purchase-mode="excel">Excel ile toplu yükle</button>
+  <button type="button" class="purchase-mode" data-purchase-mode="manual">Manuel tek fatura</button>
+</div>
+
+<div id="purchaseExcelPanel">
+  <div class="dynamics-import-grid">
+    <div class="panel dynamics-import-form">
+      <label>Arçelik / Tedarikçi Excel<input id="purchaseExcelFile" type="file" accept=".xlsx,.xls,.csv"/></label>
+      <label>Tedarikçi (Excelde yoksa)
+        <select id="purchaseExcelSupplier">
+          <option value="Arçelik A.Ş.">Arçelik A.Ş.</option>
+          <option value="İstikbal / Doğtaş">İstikbal / Doğtaş</option>
+          <option value="Diğer Tedarikçi">Diğer Tedarikçi</option>
+        </select>
+      </label>
+      <label>Depo (stok eklenecekse)<select id="purchaseExcelWarehouse"></select></label>
+      <label class="check-row"><input id="purchaseExcelIncVat" type="checkbox" checked/> Fiyatlarda KDV dahil</label>
+      <label class="check-row"><input id="purchaseExcelUpdatePrice" type="checkbox" checked/> Ürün alış fiyatını güncelle</label>
+      <label class="check-row"><input id="purchaseExcelAddStock" type="checkbox"/> Stoğa miktar ekle</label>
+      <div class="dynamics-info-box"><b>Excel sütunları</b><span>Ürün Kodu (veya Madde Kodu / Arama Adı), Miktar, Birim Fiyat. İsteğe bağlı: Fatura No, Fatura Tarihi, Ürün Adı, KDV %, Tedarikçi. Kendi listenizin başlıkları bunlara yakınsa sistem okur.</span></div>
+      <div class="dynamics-import-actions">
+        <button id="purchasePreviewBtn" class="secondary-btn" type="button">Excel'i Önizle</button>
+        <button id="purchaseImportBtn" class="primary" type="button" disabled>Alışları Aktar</button>
+      </div>
+      <div id="purchaseExcelStatus" class="form-status"></div>
+    </div>
+    <div class="panel">
+      <h3>Önizleme Özeti</h3>
+      <div id="purchaseExcelSummary" class="dynamics-summary">
+        <article><b>0</b><span>Toplam Satır</span></article>
+        <article class="good"><b>0</b><span>Eşleşen Ürün</span></article>
+        <article class="warn"><b>0</b><span>Eşleşmeyen</span></article>
+        <article class="bad"><b>0</b><span>Hatalı</span></article>
+      </div>
+      <p class="note" style="margin-top:12px">Eşleşmeyen satırlar (sistemde ürün yok) aktarımda atlanır. Önce Dynamics ile ürünleri ekleyin.</p>
+    </div>
+  </div>
+  <div class="panel table-wrap dynamics-preview-wrap">
+    <table>
+      <thead><tr><th>DURUM</th><th>ÜRÜN</th><th>MİKTAR</th><th>BİRİM FİYAT</th><th>MEVCUT ALIŞ</th><th>FATURA</th></tr></thead>
+      <tbody id="purchasePreviewTable"></tbody>
+    </table>
+    <div id="purchasePreviewEmpty" class="empty">Excel seçip “Excel'i Önizle”ye basın.</div>
+  </div>
+</div>
+
+<div id="purchaseManualPanel" class="hidden">
+  <form class="panel form-stack" id="purchaseManualForm">
+    <div class="form-grid two">
+      <label>Tedarikçi
+        <select id="purchaseManualSupplier">
+          <option value="Arçelik A.Ş.">Arçelik A.Ş.</option>
+          <option value="İstikbal / Doğtaş">İstikbal / Doğtaş</option>
+          <option value="Diğer Tedarikçi">Diğer Tedarikçi</option>
+        </select>
+      </label>
+      <label>Fatura No<input id="purchaseManualInvoiceNo" placeholder="Örn. ARC2026..."/></label>
+      <label>Fatura Tarihi<input id="purchaseManualDate" type="date"/></label>
+      <label>Depo<select id="purchaseManualWarehouse"></select></label>
+    </div>
+    <label class="check-row"><input id="purchaseManualIncVat" type="checkbox" checked/> Fiyatlar KDV dahil</label>
+    <label class="check-row"><input id="purchaseManualUpdatePrice" type="checkbox" checked/> Ürün alış fiyatını güncelle</label>
+    <label class="check-row"><input id="purchaseManualAddStock" type="checkbox"/> Stoğa miktar ekle</label>
+    <div class="panel-head" style="margin-top:8px"><div><h3>Fatura Kalemleri</h3><p class="note">Ürün kodu sistemdeki satış kodu / madde kodu ile aynı olmalı.</p></div>
+      <button type="button" class="mini-btn" id="purchaseAddLineBtn">+ Satır</button>
+    </div>
+    <div class="turnover-table">
+      <table>
+        <thead><tr><th>Ürün Kodu</th><th>Ürün Adı (opsiyonel)</th><th>Miktar</th><th>Birim Fiyat</th><th></th></tr></thead>
+        <tbody id="purchaseManualLines"></tbody>
+      </table>
+    </div>
+    <div class="dynamics-import-actions">
+      <button class="primary" type="submit">Faturayı Kaydet</button>
+    </div>
+    <div id="purchaseManualStatus" class="form-status"></div>
+  </form>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <div class="panel-head"><div><small class="v4-kicker">GEÇMİŞ</small><h2>Yüklenen Alış Faturaları</h2></div>
+    <button type="button" class="mini-btn" id="purchaseRefreshListBtn">Yenile</button>
+  </div>
+  <div class="turnover-table" id="purchaseInvoiceList"></div>
+</div>
+</section>
 <section class="tab" id="invoiceCenter">
   <div class="inv-shell">
     <aside class="inv-side">
@@ -1748,7 +1846,7 @@ Bulunamayan → Diğer.
 </section>
 <section class="tab" id="profitCenter">
 <div class="foundation-head panel">
-  <div><small class="eyebrow">KÂR & MALİYET</small><h2>Kârlılık Raporu</h2><p class="note">Kâr <b>KDV hariç</b> hesaplanır. Maliyet, ürün kartındaki <b>alış fiyatından satış anında</b> sabitlenir.</p></div>
+  <div><small class="eyebrow">KÂR & MALİYET</small><h2>Kârlılık Raporu</h2><p class="note">Kâr <b>KDV hariç</b> hesaplanır. Maliyet, ürün kartındaki <b>alış fiyatından satış anında</b> sabitlenir. Alış fiyatını <b>Alış Faturaları</b> (Excel/manuel) ile doldurun.</p></div>
   <button class="backup-btn" id="profitExportBtn" type="button">⬇ Excel / CSV İndir</button>
 </div>
 
@@ -1894,5 +1992,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v23"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v24"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

@@ -146,6 +146,15 @@ function ensureStore(store) {
   store.invoiceQueue = Array.isArray(store.invoiceQueue) ? store.invoiceQueue : [];
   store.invoiceInbox = Array.isArray(store.invoiceInbox) ? store.invoiceInbox : [];
   store.invoiceAppResponses = Array.isArray(store.invoiceAppResponses) ? store.invoiceAppResponses : [];
+  store.purchaseInvoices = Array.isArray(store.purchaseInvoices) ? store.purchaseInvoices : [];
+  store.suppliers = Array.isArray(store.suppliers) ? store.suppliers : [];
+  if(!store.suppliers.length){
+    store.suppliers.push(
+      {id:'arcelik',name:'Arçelik A.Ş.',active:true},
+      {id:'istikbal-tedarik',name:'İstikbal / Doğtaş',active:true},
+      {id:'diger-tedarik',name:'Diğer Tedarikçi',active:true}
+    );
+  }
   if(!store.financeAccounts.length){
     store.financeAccounts.push(
       {id:'merkez-kasa',name:'Merkez Kasa',type:'cash',storeId:store.stores[0]?.id||'',active:true,openingBalance:0,createdAt:new Date().toISOString()},
@@ -782,8 +791,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.24-kar-maliyet',
-  build:'fix-v23',
+  version:'6.3.25-alis-fatura',
+  build:'fix-v24',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3590,6 +3599,344 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,dynamicsUpload.sing
   }catch(e){
     res.status(400).json({error:e.message||'Excel aktarılamadı'})
   }
+});
+
+/* ===== Alış Faturaları (Arçelik vb. tedarikçi) — manuel + Excel ===== */
+function purchaseHeaderKey(h){
+  return String(h||'').toLocaleLowerCase('tr-TR')
+    .replace(/ı/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g')
+    .replace(/ü/g,'u').replace(/ö/g,'o').replace(/ç/g,'c')
+    .replace(/[^a-z0-9]+/g,'');
+}
+function purchasePick(row,aliases){
+  const map=new Map();
+  for(const [k,v] of Object.entries(row||{})) map.set(purchaseHeaderKey(k),v);
+  for(const a of aliases){
+    const key=purchaseHeaderKey(a);
+    if(map.has(key)){
+      const v=map.get(key);
+      if(v!==null&&v!==undefined&&String(v).trim()!=='')return v;
+    }
+  }
+  return '';
+}
+function findProductForPurchase(s,code,name=''){
+  const k=normKey(code);
+  const nk=normKey(name);
+  const list=s.products||[];
+  if(k){
+    const exact=list.find(p=>
+      normKey(p.code)===k||normKey(p.searchName)===k||normKey(p.itemCode)===k||
+      normKey(p.barcode)===k||normKey(p.dynamicsProductId)===k
+    );
+    if(exact)return exact;
+  }
+  if(nk){
+    const byName=list.find(p=>normKey(p.name)===nk||normKey(p.searchName)===nk||normKey(p.code)===nk);
+    if(byName)return byName;
+  }
+  return null;
+}
+function parsePurchaseWorkbook(buffer){
+  const wb=XLSX.read(buffer,{type:'buffer',cellDates:true});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  if(!ws)throw new Error('Excel içinde çalışma sayfası bulunamadı');
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+  if(!rows.length)throw new Error('Excel boş görünüyor');
+  const codeAliases=['Ürün Kodu','Urun Kodu','Madde Kodu','Malzeme Kodu','Stok Kodu','Kod','Arama Adı','Arama Adi','Barkod','Item Code','Material'];
+  const nameAliases=['Ürün Adı','Urun Adi','Malzeme Adı','Malzeme Tanımı','Açıklama','Aciklama','Ürün','Product Name','Tanım'];
+  const qtyAliases=['Miktar','Adet','Quantity','Qty','Miktarı'];
+  const unitAliases=['Birim Fiyat','Birim Fiyatı','Alış Fiyatı','Alis Fiyati','Net Birim Fiyat','Birim Tutar','Fiyat','Unit Price'];
+  const totalAliases=['Satır Tutarı','Satir Tutari','Tutar','Toplam','Line Total','Net Tutar','Malzeme Tutarı'];
+  const invAliases=['Fatura No','Fatura Numarası','Fatura Numarasi','Belge No','Invoice No'];
+  const dateAliases=['Fatura Tarihi','Tarih','Belge Tarihi','Invoice Date','Date'];
+  const vatAliases=['KDV','KDV %','KDV Oranı','KDV Orani','Vat','VAT %'];
+  const supplierAliases=['Tedarikçi','Tedarikci','Cari','Firma','Supplier'];
+
+  const parsed=rows.map((r,index)=>{
+    const productCode=String(purchasePick(r,codeAliases)||'').trim();
+    const productName=String(purchasePick(r,nameAliases)||'').trim();
+    const quantity=normalizeNumber(purchasePick(r,qtyAliases)||0);
+    let unitCost=normalizeNumber(purchasePick(r,unitAliases)||0);
+    const lineTotalRaw=normalizeNumber(purchasePick(r,totalAliases)||0);
+    if(!(unitCost>0)&&lineTotalRaw>0&&quantity>0)unitCost=Math.round((lineTotalRaw/quantity)*100)/100;
+    const lineTotal=lineTotalRaw>0?lineTotalRaw:Math.round(unitCost*Math.max(quantity,0)*100)/100;
+    let dateVal=purchasePick(r,dateAliases);
+    if(dateVal instanceof Date)dateVal=dateVal.toISOString().slice(0,10);
+    else{
+      const s=String(dateVal||'').trim();
+      if(/^\d{2}\.\d{2}\.\d{4}$/.test(s)){
+        const [d,m,y]=s.split('.');dateVal=`${y}-${m}-${d}`;
+      }else dateVal=String(s).slice(0,10);
+    }
+    return{
+      rowNo:index+2,
+      invoiceNo:String(purchasePick(r,invAliases)||'').trim(),
+      date:dateVal,
+      supplierName:String(purchasePick(r,supplierAliases)||'').trim(),
+      productCode,productName,
+      quantity:quantity>0?quantity:0,
+      unitCost,
+      lineTotal,
+      vatRate:normalizeNumber(purchasePick(r,vatAliases)||20)||20
+    };
+  }).filter(r=>r.productCode||r.productName||r.unitCost>0);
+
+  if(!parsed.length)throw new Error('Excelde ürün satırı bulunamadı. Sütun adları: Ürün Kodu, Miktar, Birim Fiyat');
+  const sampleHeaders=Object.keys(rows[0]||{});
+  const hasCode=sampleHeaders.some(h=>codeAliases.map(purchaseHeaderKey).includes(purchaseHeaderKey(h)));
+  if(!hasCode){
+    // soft warn only — maybe they used a close alias we already matched via rows
+  }
+  return parsed;
+}
+function applyPurchaseInvoiceToStore(s,{
+  supplierName='Arçelik A.Ş.',
+  invoiceNo='',
+  date='',
+  warehouseId='',
+  note='',
+  source='manual',
+  updatePurchasePrice=true,
+  addStock=false,
+  pricesIncludeVat=true,
+  items=[],
+  actor='Yönetici'
+}={}){
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  const wh=String(warehouseId||s.warehouses?.find(w=>w.active!==false)?.id||'');
+  const cleanItems=[];
+  let matched=0,unmatched=0,priceUpdated=0,stockUpdated=0,total=0;
+
+  for(const raw of (Array.isArray(items)?items:[])){
+    const productCode=String(raw.productCode||'').trim();
+    const productName=String(raw.productName||'').trim();
+    const qty=Math.max(0,normalizeNumber(raw.quantity||0));
+    let unitCost=normalizeNumber(raw.unitCost||0);
+    const vatRate=normalizeNumber(raw.vatRate!=null?raw.vatRate:20)||20;
+    if(!(qty>0)||!(unitCost>0)||(!productCode&&!productName)){unmatched++;continue}
+    // Excel net (KDV hariç) geldiyse KDV dahil alış fiyatına çevir
+    if(!pricesIncludeVat)unitCost=round(unitCost*(1+vatRate/100));
+    const product=findProductForPurchase(s,productCode,productName);
+    const lineTotal=round(qty*unitCost);
+    total+=lineTotal;
+    const line={
+      productCode:product?.code||productCode,
+      productName:product?.name||productName||productCode,
+      quantity:qty,
+      unitCost,
+      lineTotal,
+      vatRate,
+      matched:Boolean(product),
+      previousPurchasePrice:product?normalizeNumber(product.purchasePrice||0):0
+    };
+    if(!product){unmatched++;cleanItems.push(line);continue}
+    matched++;
+    if(updatePurchasePrice){
+      product.purchasePrice=unitCost;
+      product.updatedAt=new Date().toISOString();
+      priceUpdated++;
+    }
+    if(addStock&&wh){
+      addStockMovement(s,{
+        productCode:product.code,
+        warehouseId:wh,
+        type:'purchase',
+        quantity:qty,
+        reference:invoiceNo||'Alış faturası',
+        note:`${supplierName} alış`,
+        user:actor
+      });
+      stockUpdated++;
+    }
+    cleanItems.push(line);
+  }
+  if(!cleanItems.length)throw new Error('Kaydedilecek geçerli satır yok (ürün kodu + miktar + birim fiyat gerekli)');
+
+  const invoice={
+    id:crypto.randomUUID(),
+    date:String(date||todayISO()).slice(0,10),
+    supplierName:String(supplierName||'Arçelik A.Ş.').trim()||'Arçelik A.Ş.',
+    invoiceNo:String(invoiceNo||'').trim(),
+    warehouseId:wh,
+    note:String(note||'').trim(),
+    source:String(source||'manual'),
+    updatePurchasePrice:Boolean(updatePurchasePrice),
+    addStock:Boolean(addStock),
+    pricesIncludeVat:Boolean(pricesIncludeVat),
+    items:cleanItems,
+    total:round(total),
+    matched,unmatched,priceUpdated,stockUpdated,
+    createdBy:actor,
+    createdAt:new Date().toISOString()
+  };
+  s.purchaseInvoices.unshift(invoice);
+  if(s.purchaseInvoices.length>500)s.purchaseInvoices=s.purchaseInvoices.slice(0,500);
+  return invoice;
+}
+
+app.get('/web-api/admin/purchase-invoices',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const list=(s.purchaseInvoices||[]).slice(0,100).map(inv=>({
+    id:inv.id,date:inv.date,supplierName:inv.supplierName,invoiceNo:inv.invoiceNo,
+    total:inv.total,matched:inv.matched,unmatched:inv.unmatched,
+    priceUpdated:inv.priceUpdated,stockUpdated:inv.stockUpdated,
+    source:inv.source,itemCount:(inv.items||[]).length,createdAt:inv.createdAt,createdBy:inv.createdBy
+  }));
+  res.json({
+    ok:true,
+    invoices:list,
+    suppliers:(s.suppliers||[]).filter(x=>x.active!==false),
+    warehouses:(s.warehouses||[]).filter(w=>w.active!==false).map(w=>({id:w.id,name:w.name}))
+  });
+});
+
+app.get('/web-api/admin/purchase-invoice-template',requireAdmin,(req,res)=>{
+  const rows=[
+    {
+      'Fatura No':'ARC2026001',
+      'Fatura Tarihi':todayISO(),
+      'Tedarikçi':'Arçelik A.Ş.',
+      'Ürün Kodu':'C9100',
+      'Ürün Adı':'Örnek Çamaşır Makinesi',
+      'Miktar':1,
+      'Birim Fiyat':18500,
+      'KDV %':20
+    },
+    {
+      'Fatura No':'ARC2026001',
+      'Fatura Tarihi':todayISO(),
+      'Tedarikçi':'Arçelik A.Ş.',
+      'Ürün Kodu':'BM3143',
+      'Ürün Adı':'Örnek Bulaşık Makinesi',
+      'Miktar':2,
+      'Birim Fiyat':9200,
+      'KDV %':20
+    }
+  ];
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Alis Faturalari');
+  const buf=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition','attachment; filename="atak-alis-fatura-sablonu.xlsx"');
+  res.send(Buffer.from(buf));
+});
+
+app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,dynamicsUpload.single('file'),(req,res)=>{
+  try{
+    if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
+    const s=readStore();
+    const rows=parsePurchaseWorkbook(req.file.buffer);
+    let matched=0,unmatched=0,invalid=0;
+    const preview=rows.map(r=>{
+      if(!(r.quantity>0)||!(r.unitCost>0)||(!r.productCode&&!r.productName)){
+        invalid++;
+        return{...r,status:'invalid',matchCode:'',currentPurchasePrice:0};
+      }
+      const p=findProductForPurchase(s,r.productCode,r.productName);
+      if(p){matched++;return{...r,status:'matched',matchCode:p.code,productName:r.productName||p.name,currentPurchasePrice:normalizeNumber(p.purchasePrice||0)}}
+      unmatched++;
+      return{...r,status:'unmatched',matchCode:'',currentPurchasePrice:0};
+    });
+    const invoiceNos=[...new Set(preview.map(x=>x.invoiceNo).filter(Boolean))];
+    res.json({
+      ok:true,
+      total:preview.length,matched,unmatched,invalid,
+      invoiceNos,
+      preview:preview.slice(0,400),
+      truncated:preview.length>400,
+      note:'Birim Fiyat varsayılan olarak KDV dahil kabul edilir. Net fiyat yüklüyorsanız aktarımda “KDV hariç” seçin.'
+    });
+  }catch(e){
+    res.status(400).json({error:e.message||'Excel okunamadı'});
+  }
+});
+
+app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.single('file'),(req,res)=>{
+  try{
+    if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
+    const s=readStore();
+    const rows=parsePurchaseWorkbook(req.file.buffer);
+    const actor=currentSessionUser(req)?.name||'Yönetici';
+    const updatePurchasePrice=String(req.body?.updatePurchasePrice??'1')!=='0';
+    const addStock=String(req.body?.addStock||'0')==='1';
+    const pricesIncludeVat=String(req.body?.pricesIncludeVat??'1')!=='0';
+    const warehouseId=String(req.body?.warehouseId||'');
+    const supplierFallback=String(req.body?.supplierName||'Arçelik A.Ş.').trim()||'Arçelik A.Ş.';
+    const onlyMatched=String(req.body?.onlyMatched??'1')!=='0';
+
+    const items=rows
+      .filter(r=>r.quantity>0&&r.unitCost>0&&(r.productCode||r.productName))
+      .filter(r=>!onlyMatched||findProductForPurchase(s,r.productCode,r.productName))
+      .map(r=>({
+        productCode:r.productCode,
+        productName:r.productName,
+        quantity:r.quantity,
+        unitCost:r.unitCost,
+        vatRate:r.vatRate
+      }));
+    if(!items.length)return res.status(400).json({error:'Aktarılacak eşleşen satır yok. Önce ürünleri Dynamics ile ekleyin veya Exceldeki ürün kodlarını kontrol edin.'});
+
+    const invoiceNo=String(req.body?.invoiceNo||rows.find(r=>r.invoiceNo)?.invoiceNo||'').trim();
+    const date=String(req.body?.date||rows.find(r=>r.date)?.date||todayISO()).slice(0,10);
+    const supplierName=String(rows.find(r=>r.supplierName)?.supplierName||supplierFallback).trim();
+
+    const invoice=applyPurchaseInvoiceToStore(s,{
+      supplierName,invoiceNo,date,warehouseId,
+      note:String(req.body?.note||'Excel alış faturası'),
+      source:'excel',
+      updatePurchasePrice,addStock,pricesIncludeVat,
+      items,actor
+    });
+    audit(s,'Alış faturası Excel aktarımı',invoice.invoiceNo||invoice.id,{
+      matched:invoice.matched,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total
+    });
+    writeStore(s);
+    res.json({ok:true,invoice:{
+      id:invoice.id,date:invoice.date,invoiceNo:invoice.invoiceNo,supplierName:invoice.supplierName,
+      total:invoice.total,matched:invoice.matched,unmatched:invoice.unmatched,
+      priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,itemCount:invoice.items.length
+    }});
+  }catch(e){
+    res.status(400).json({error:e.message||'Excel aktarılamadı'});
+  }
+});
+
+app.post('/web-api/admin/purchase-invoice',requireAdmin,(req,res)=>{
+  try{
+    const s=readStore();
+    const x=req.body||{};
+    const actor=currentSessionUser(req)?.name||'Yönetici';
+    const items=Array.isArray(x.items)?x.items:[];
+    if(!items.length)return res.status(400).json({error:'En az bir kalem girin'});
+    const invoice=applyPurchaseInvoiceToStore(s,{
+      supplierName:x.supplierName||'Arçelik A.Ş.',
+      invoiceNo:x.invoiceNo||'',
+      date:x.date||todayISO(),
+      warehouseId:x.warehouseId||'',
+      note:x.note||'',
+      source:'manual',
+      updatePurchasePrice:x.updatePurchasePrice!==false,
+      addStock:Boolean(x.addStock),
+      pricesIncludeVat:x.pricesIncludeVat!==false,
+      items,actor
+    });
+    audit(s,'Alış faturası manuel kayıt',invoice.invoiceNo||invoice.id,{
+      matched:invoice.matched,priceUpdated:invoice.priceUpdated,total:invoice.total
+    });
+    writeStore(s);
+    res.json({ok:true,invoice});
+  }catch(e){
+    res.status(400).json({error:e.message||'Alış faturası kaydedilemedi'});
+  }
+});
+
+app.get('/web-api/admin/purchase-invoice/:id',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const inv=(s.purchaseInvoices||[]).find(x=>String(x.id)===String(req.params.id));
+  if(!inv)return res.status(404).json({error:'Alış faturası bulunamadı'});
+  res.json({ok:true,invoice:inv});
 });
 
 app.post('/web-api/admin/product',requireAdmin,(req,res)=>{ const s=readStore(),x=req.body||{}; if(!x.code||!x.name)return res.status(400).json({error:'Ürün kodu ve adı zorunlu'}); const i=s.products.findIndex(p=>String(p.id)===String(x.id)||String(p.code).toLowerCase()===String(x.code).toLowerCase()); const p=sanitizeProduct(x,i>=0?s.products[i]:{}); if(i>=0)s.products[i]=p;else s.products.unshift(p); audit(s,i>=0?'Ürün güncellendi':'Ürün eklendi',p.code,{name:p.name}); writeStore(s); res.json({ok:true,product:p}); });
