@@ -200,9 +200,35 @@ function readStore(){ return ensureStore(JSON.parse(fs.readFileSync(STORE_PATH,'
 function writeStore(store){ const t=`${STORE_PATH}.tmp`; fs.writeFileSync(t,JSON.stringify(ensureStore(store),null,2),'utf8'); fs.renameSync(t,STORE_PATH); }
 function normalizeNumber(value){
   if(value===null||value===undefined||value==='') return 0;
-  const raw=String(value).trim().replace(/\s/g,'').replace(/₺/g,'');
-  if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(raw)) return Number(raw.replace(/\./g,'').replace(',','.'))||0;
-  return Number(raw.replace(',','.'))||0;
+  if(typeof value==='number') return Number.isFinite(value)?value:0;
+  let raw=String(value).trim()
+    .replace(/[\u200b\u200c\u200d\ufeff]/g,'')
+    .replace(/\s/g,'')
+    .replace(/[₺]/g,'')
+    .replace(/(TRY|TL|USD|EUR|\$)/gi,'');
+  if(!raw) return 0;
+  // Muhasebe negatif: (1.234,56)
+  let neg=false;
+  if(/^\(.*\)$/.test(raw)){neg=true;raw=raw.slice(1,-1)}
+  // TR: 8.853,51  |  US/Excel raw:false: 8,853.51  |  sade: 8853,51 / 8853.51
+  if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(raw)){
+    const n=Number(raw.replace(/\./g,'').replace(',','.'));
+    return (Number.isFinite(n)?n:0)*(neg?-1:1);
+  }
+  if(/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(raw)){
+    const n=Number(raw.replace(/,/g,''));
+    return (Number.isFinite(n)?n:0)*(neg?-1:1);
+  }
+  if(raw.includes(',')&&raw.includes('.')){
+    // Son ayırıcı ondalık kabul et
+    const lastComma=raw.lastIndexOf(','), lastDot=raw.lastIndexOf('.');
+    const n=lastComma>lastDot
+      ?Number(raw.replace(/\./g,'').replace(',','.'))
+      :Number(raw.replace(/,/g,''));
+    return (Number.isFinite(n)?n:0)*(neg?-1:1);
+  }
+  const n=Number(raw.replace(',','.'));
+  return (Number.isFinite(n)?n:0)*(neg?-1:1);
 }
 function slug(input){ return String(input||'').toLocaleLowerCase('tr-TR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
 function calculateSalePrice(p){ const base=Number(p.bekoPrice||0),v=Number(p.priceValue||0); if(p.priceMode==='percent_down')return Math.max(0,Math.round(base*(1-v/100))); if(p.priceMode==='percent_up')return Math.max(0,Math.round(base*(1+v/100))); if(p.priceMode==='fixed_down')return Math.max(0,Math.round(base-v)); if(p.priceMode==='fixed_up')return Math.max(0,Math.round(base+v)); if(p.priceMode==='manual')return Math.max(0,Math.round(v||p.salePrice||base)); return Math.max(0,Math.round(base)); }
@@ -804,8 +830,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.32-alis-stok-veya-maliyet',
-  build:'fix-v31',
+  version:'6.3.33-alis-maliyet-okuma',
+  build:'fix-v32',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3807,23 +3833,27 @@ function parsePurchaseWorkbook(buffer,fileName=''){
   let rows=[];
   const asText=purchaseBufferText(buffer);
   const name=String(fileName||'').toLocaleLowerCase('tr-TR');
-  const looksCsv=name.endsWith('.csv')||(/Maliyet tutar|Madde kodu|Arama ad|Ürün numar|Fatura/i.test(asText.slice(0,1200))&&(/;|,|\t/).test(asText.slice(0,300)));
+  const isZip=Buffer.isBuffer(buffer)&&buffer.length>3&&buffer[0]===0x50&&buffer[1]===0x4b; // PK = xlsx
+  // .xlsx asla CSV sanılmasın
+  const looksCsv=!isZip&&(name.endsWith('.csv')||((name.endsWith('.txt')||!/\.xlsx?$/.test(name))&&/Maliyet tutar|Madde kodu|Arama ad|Ürün numar|Fatura/i.test(asText.slice(0,1200))&&(/;|,|\t/).test(asText.slice(0,300))));
   if(looksCsv){
     rows=parsePurchaseCsvBuffer(buffer);
   }else{
     const wb=XLSX.read(buffer,{type:'buffer',cellDates:true,codepage:1254});
     const ws=wb.Sheets[wb.SheetNames[0]];
     if(!ws)throw new Error('Excel içinde çalışma sayfası bulunamadı');
-    rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+    // raw:true → gerçek sayı (8853.51). raw:false bazen "8,853.51" verir → eski parser 0 yapıyordu.
+    rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
   }
   if(!rows.length)throw new Error('Excel/CSV boş görünüyor');
 
   const codeAliases=['Ürün Kodu','Urun Kodu','Madde Kodu','Madde kodu','Ürün numarası','Urun numarasi','Malzeme Kodu','Stok Kodu','Kod','Barkod','Item Code','Material'];
   const searchAliases=['Arama Adı','Arama Adi','Arama adı','Search name'];
   const nameAliases=['Ürün Adı','Urun Adi','Ürün adı','Malzeme Adı','Malzeme Tanımı','Açıklama','Aciklama','Ürün','Product Name','Tanım'];
-  const qtyAliases=['Miktar','Adet','Quantity','Qty','Miktarı'];
-  const unitAliases=['Birim Fiyat','Birim Fiyatı','Alış Fiyatı','Alis Fiyati','Net Birim Fiyat','Birim Tutar','Fiyat','Unit Price','Maliyet tutarı','Maliyet tutari','Maliyet','Cost amount','Maliyet tutar'];
-  const totalAliases=['Satır Tutarı','Satir Tutari','Tutar','Toplam','Line Total','Net Tutar','Malzeme Tutarı'];
+  const qtyAliases=['Miktar','Quantity','Qty','Miktarı'];
+  // Maliyet tutarı ÖNCE — genel "Fiyat/Tutar" yanlış kolona yapışmasın
+  const unitAliases=['Maliyet tutarı','Maliyet tutari','Maliyet Tutarı','Cost amount','Maliyet tutar','Birim maliyet','Birim Maliyet','Birim Fiyat','Birim Fiyatı','Alış Fiyatı','Alis Fiyati','Net Birim Fiyat','Birim Tutar','Unit Price','Maliyet','Fiyat'];
+  const totalAliases=['Satır Tutarı','Satir Tutari','Line Total','Net Tutar','Malzeme Tutarı','Toplam Tutar'];
   const invAliases=['Fatura No','Fatura Numarası','Fatura Numarasi','Belge No','Invoice No','Arçelik Fatura Numarası','Arcelik Fatura Numarasi'];
   const dateAliases=['Fatura Tarihi','Tarih','Belge Tarihi','Invoice Date','Date','Fiili tarih','Fiili Tarih'];
   const vatAliases=['KDV','KDV %','KDV Oranı','KDV Orani','Vat','VAT %','Madde satış vergisi grubu','Madde satis vergisi grubu'];
@@ -3838,11 +3868,19 @@ function parsePurchaseWorkbook(buffer,fileName=''){
     const productName=String(purchasePick(r,nameAliases)||purchasePickContains(r,['urunad','malzemead','tanim'])||searchName||'').trim();
     // Benzersiz kod: Madde kodu (aynı Arama adlı renk/varyantlar çakışmasın)
     const productCode=String(itemCode||searchName||purchasePick(r,codeAliases)||productName||'').trim();
-    let quantity=normalizeNumber(purchasePick(r,qtyAliases)||purchasePickContains(r,['miktar','adet','qty'])||0);
-    let unitCost=normalizeNumber(
-      purchasePick(r,unitAliases)||
-      purchasePickContains(r,['maliyet','birimfiyat','alisfiyat','unitprice','cost'])||0
-    );
+    let quantity=normalizeNumber(purchasePick(r,qtyAliases)||purchasePickContains(r,['miktar','qty'])||0);
+    let costRaw=purchasePick(r,unitAliases);
+    if(costRaw===''||costRaw==null){
+      for(const [k,v] of Object.entries(r||{})){
+        if(v===null||v===undefined||String(v).trim()==='')continue;
+        const hk=purchaseHeaderKey(k);
+        if(hk.includes('maliyettutar')||hk.includes('costamount')||hk==='maliyet'||hk==='birimmaliyet'){costRaw=v;break}
+      }
+    }
+    if(costRaw===''||costRaw==null){
+      costRaw=purchasePickContains(r,['birimfiyat','alisfiyat','unitprice'])||'';
+    }
+    let unitCost=normalizeNumber(costRaw||0);
     const lineTotalRaw=normalizeNumber(purchasePick(r,totalAliases)||0);
     // Dynamics "Maliyet tutarı" = birim maliyet; miktar yoksa 1 kabul et
     if(!(quantity>0)&&(unitCost>0||productCode))quantity=1;
