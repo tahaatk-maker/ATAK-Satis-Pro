@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v29 */
+/* ATAK_ADMIN_BUILD=fix-v30 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2539,12 +2539,13 @@ function renderPurchasePreview(d){
      <article class="warn"><b>${willCreate}</b><span>Yeni eklenecek</span></article>
      <article class="bad"><b>${d.invalid||0}</b><span>Hatalı</span></article>`;
   const rows=d.preview||[];
-  const label={matched:'Eşleşti',will_create:'Yeni eklenecek',unmatched:'Yeni eklenecek',invalid:'Hatalı'};
+  const label={matched:'Eşleşti — maliyet güncellenecek',will_create:'Yeni eklenecek',unmatched:'Yeni eklenecek',invalid:'Hatalı'};
   q('#purchasePreviewTable').innerHTML=rows.map(r=>{
     const st=r.status==='unmatched'?'will_create':r.status;
+    const why=st==='invalid'&&r.reason?`<small class="warn-text">${purchaseEsc(r.reason)}</small>`:'';
     return `<tr class="dynamics-preview-row ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">
-    <td><span class="dynamics-status ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">${label[st]||st}</span></td>
-    <td><b>${purchaseEsc(r.productCode||r.matchCode||'-')}</b><small>${purchaseEsc(r.productName||'')}${r.matchCode&&r.productCode&&r.matchCode!==r.productCode?` · sistem: ${purchaseEsc(r.matchCode)}`:''}</small></td>
+    <td><span class="dynamics-status ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">${label[st]||st}</span>${why}</td>
+    <td><b>${purchaseEsc(r.productCode||r.itemCode||r.matchCode||'-')}</b><small>${purchaseEsc(r.productName||r.searchName||'')}${r.matchCode&&r.productCode&&r.matchCode!==r.productCode?` · sistem: ${purchaseEsc(r.matchCode)}`:''}</small></td>
     <td>${Number(r.quantity||0)}</td>
     <td><b>${money(r.unitCost)}</b></td>
     <td>${st==='matched'?money(r.currentPurchasePrice):'—'}</td>
@@ -2577,22 +2578,20 @@ q('#purchaseImportBtn')?.addEventListener('click',async()=>{
   const will=Number(purchasePreviewData?.willCreate||purchasePreviewData?.unmatched||0);
   const matched=Number(purchasePreviewData?.matched||0);
   if(!(matched+will)){toast('Aktarılacak satır yok');return}
-  const mode=q('#purchaseExcelMode')?.value||'both';
-  const modeLabel=mode==='products'?'sadece ürün':mode==='cost'?'sadece maliyet':'ürün + maliyet';
-  if(!confirm(`Aktarım: ${modeLabel}\n${matched} eşleşen · ${will} yeni\nSonra listeden Geri Al ile silebilirsin.\nDevam?`))return;
+  if(!confirm(`Ürün + maliyet aktarılsın mı?\n${matched} eşleşen · ${will} yeni\nSonra Geri Al ile silebilirsin.`))return;
   try{
     status.textContent='Aktarılıyor…';status.className='form-status';
     const fd=new FormData();
     fd.append('file',file);
-    fd.append('mode',mode);
+    fd.append('mode','both');
     fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'Arçelik A.Ş.');
     fd.append('warehouseId',q('#purchaseExcelWarehouse')?.value||'');
     fd.append('pricesIncludeVat',q('#purchaseExcelIncVat')?.checked?'1':'0');
     fd.append('addStock',q('#purchaseExcelAddStock')?.checked?'1':'0');
     const d=await api('/web-api/admin/purchase-invoice-import',{method:'POST',body:fd});
-    status.textContent=`Tamam · ${d.invoice.created||0} yeni ürün · ${d.invoice.priceUpdated} maliyet · toplam ${money(d.invoice.total)} · isterse Geri Al`;
+    status.textContent=`Tamam · ${d.invoice.created||0} yeni ürün · ${d.invoice.priceUpdated} maliyet · toplam ${money(d.invoice.total)}`;
     status.className='form-status success';
-    toast('Aktarım bitti — listeden silebilirsin');
+    toast('Ürün + maliyet aktarıldı');
     purchasePreviewData=null;
     q('#purchaseImportBtn').disabled=true;
     await loadPurchaseInvoices();

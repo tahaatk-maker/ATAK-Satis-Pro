@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v29" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v29" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v30" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v30" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1381,19 +1381,12 @@ Bulunamayan → Diğer.
         </select>
       </label>
       <label>Depo (stok eklenecekse)<select id="purchaseExcelWarehouse"></select></label>
-      <label>Aktarım tipi
-        <select id="purchaseExcelMode">
-          <option value="both" selected>1+2 Ürün ve maliyet birlikte</option>
-          <option value="products">1 Sadece ürün ekle</option>
-          <option value="cost">2 Sadece maliyet güncelle</option>
-        </select>
-      </label>
       <label class="check-row"><input id="purchaseExcelIncVat" type="checkbox" checked/> Fiyatlarda KDV dahil</label>
       <label class="check-row"><input id="purchaseExcelAddStock" type="checkbox"/> Stoğa miktar ekle</label>
-      <div class="dynamics-info-box"><b>Dynamics CSV de olur</b><span>Madde kodu, Arama adı, Ürün adı, Fiili tarih, <b>Maliyet tutarı</b>, Arçelik Fatura No. Aynı ürün birden fazla satırdaysa birleştirilir. Aktarımı aşağıdan <b>Geri Al</b> ile silebilirsiniz.</span></div>
+      <div class="dynamics-info-box"><b>Tek buton</b><span>Olmayan ürünü ekler + maliyeti yazar. Dynamics CSV: Madde kodu, Arama adı, <b>Maliyet tutarı</b>, Fatura No. Beğenmezsen aşağıdan <b>Geri Al</b>.</span></div>
       <div class="dynamics-import-actions">
         <button id="purchasePreviewBtn" class="secondary-btn" type="button">Excel'i Önizle</button>
-        <button id="purchaseImportBtn" class="primary" type="button" disabled>Alışları Aktar</button>
+        <button id="purchaseImportBtn" class="primary" type="button" disabled>Ürün + Maliyet Aktar</button>
       </div>
       <div id="purchaseExcelStatus" class="form-status"></div>
     </div>
@@ -2001,5 +1994,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v29"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v30"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
