@@ -3954,20 +3954,24 @@ function applyPurchaseInvoiceToStore(s,{
     const qty=Math.max(0,normalizeNumber(raw.quantity||0));
     let unitCost=normalizeNumber(raw.unitCost||0);
     const vatRate=normalizeNumber(raw.vatRate!=null?raw.vatRate:20)||20;
-    if(!(qty>0)||!(unitCost>0)||(!productCode&&!productName&&!itemCode)){unmatched++;continue}
-    if(!pricesIncludeVat)unitCost=round(unitCost*(1+vatRate/100));
+    if(!(qty>0)||(!productCode&&!productName&&!itemCode)){unmatched++;continue}
+    // Maliyet zorunlu: maliyet güncelleme açıkken veya stok değilken
+    if(updatePurchasePrice&&!(unitCost>0)){unmatched++;continue}
+    if(!pricesIncludeVat&&unitCost>0)unitCost=round(unitCost*(1+vatRate/100));
 
     let product=findProductForPurchase(s,productCode,productName,itemCode);
     let createdNow=false;
     if(!product&&createMissingProducts){
       product=ensureProductFromPurchase(s,{
         productCode:productCode||searchName||itemCode,
-        productName,itemCode,searchName,unitCost,vatRate,supplierName,importBatchId
+        productName,itemCode,searchName,
+        unitCost:unitCost>0?unitCost:0,
+        vatRate,supplierName,importBatchId
       });
       if(product){created++;createdNow=true}
     }
     const prevCost=createdNow?0:normalizeNumber(product?.purchasePrice||0);
-    const lineTotal=round(qty*unitCost);
+    const lineTotal=round(qty*Math.max(unitCost,0));
     total+=lineTotal;
     const line={
       productId:product?.id||'',
@@ -3984,7 +3988,8 @@ function applyPurchaseInvoiceToStore(s,{
     };
     if(!product){unmatched++;cleanItems.push(line);continue}
     if(!createdNow)matched++;
-    if(updatePurchasePrice||createdNow){
+    // Sadece maliyet (veya both) modunda alış fiyatı yazılır; stok modunda mevcut maliyete dokunulmaz.
+    if(updatePurchasePrice&&unitCost>0){
       product.purchasePrice=unitCost;
       product.purchasePriceSource='purchase-invoice';
       product.purchasePriceUpdatedAt=new Date().toISOString();
@@ -3992,6 +3997,9 @@ function applyPurchaseInvoiceToStore(s,{
       product.importBatchId=importBatchId;
       if(itemCode&&!product.itemCode)product.itemCode=itemCode;
       priceUpdated++;
+    }else if(createdNow||addStock){
+      product.importBatchId=importBatchId;
+      if(itemCode&&!product.itemCode)product.itemCode=itemCode;
     }
     if(addStock&&wh){
       addStockMovement(s,{
@@ -4007,7 +4015,9 @@ function applyPurchaseInvoiceToStore(s,{
     }
     cleanItems.push(line);
   }
-  if(!cleanItems.length)throw new Error('Kaydedilecek geçerli satır yok (ürün kodu + miktar + maliyet gerekli)');
+  if(!cleanItems.length)throw new Error(updatePurchasePrice
+    ?'Kaydedilecek geçerli satır yok (ürün kodu + miktar + maliyet gerekli)'
+    :'Kaydedilecek geçerli satır yok (ürün kodu + miktar gerekli)');
 
   const invoice={
     id:importBatchId,
@@ -4171,9 +4181,9 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
     const items=rows
       .filter(r=>{
         const hasCode=r.productCode||r.productName||r.itemCode;
-        if(!hasCode)return false;
-        if(mode==='stock')return (r.quantity>0)&&(r.unitCost>0||true);
-        return r.quantity>0&&r.unitCost>0;
+        if(!hasCode||!(r.quantity>0))return false;
+        if(mode==='cost'||mode==='both')return r.unitCost>0;
+        return true; // stock: miktar yeterli
       })
       .map(r=>({
         productCode:r.productCode,
@@ -4181,7 +4191,7 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
         itemCode:r.itemCode,
         searchName:r.searchName,
         quantity:r.quantity>0?r.quantity:1,
-        unitCost:r.unitCost>0?r.unitCost:0.01, // stok-only yeni üründe kart açılsın diye sembolik; mevcutta maliyet yazılmaz
+        unitCost:r.unitCost>0?r.unitCost:0,
         vatRate:r.vatRate
       }));
     if(!items.length)return res.status(400).json({error:'Aktarılacak satır yok. Madde kodu / Miktar / Maliyet tutarı kontrol edin.'});
@@ -4197,16 +4207,6 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
       updatePurchasePrice,addStock,pricesIncludeVat,createMissingProducts,
       items,actor
     });
-    // Stok modunda yeni ürüne yazılan sembolik 0.01'i temizle — maliyet bilinmiyorsa 0 kalsın
-    if(mode==='stock'){
-      for(const line of invoice.items||[]){
-        if(line.created&&Number(line.unitCost)===0.01){
-          const p=(s.products||[]).find(x=>x.id===line.productId||normKey(x.code)===normKey(line.productCode));
-          if(p){p.purchasePrice=0;line.unitCost=0}
-        }
-      }
-      invoice.priceUpdated=0;
-    }
     audit(s,'Alış faturası Excel aktarımı',invoice.invoiceNo||invoice.id,{
       mode,matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total
     });
