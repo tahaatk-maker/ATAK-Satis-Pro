@@ -119,10 +119,10 @@
   background:#fff;font:inherit;font-weight:750;color:#667890;cursor:pointer
 }
 .purchase-mode.active{background:#071a33;color:#fff;border-color:#071a33}
-#purchaseInvoices .check-row{
+#purchaseInvoices .check-row,#dynamicsExcelImport .check-row{
   display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;color:#334155;margin:6px 0
 }
-#purchaseInvoices .check-row input{width:18px;height:18px}
+#purchaseInvoices .check-row input,#dynamicsExcelImport .check-row input{width:18px;height:18px}
 #purchaseInvoices .hidden{display:none!important}
 #purchaseManualLines input{
   width:100%;min-height:40px;border:1px solid #dce4ef;border-radius:10px;padding:0 10px

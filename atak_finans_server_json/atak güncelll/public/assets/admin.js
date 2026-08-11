@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v24 */
+/* ATAK_ADMIN_BUILD=fix-v25 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2653,6 +2653,10 @@ function dynamicsForm(includeCategories=false){
   if(!file)throw new Error('Önce Dynamics Excel dosyasını seçin.');
   const fd=new FormData();
   fd.append('file',file);
+  fd.append('updateStock',q('#dynamicsUpdateStock')?.checked?'1':'0');
+  fd.append('updatePurchasePrice',q('#dynamicsUpdateCost')?.checked?'1':'0');
+  fd.append('createNew',q('#dynamicsCreateNew')?.checked?'1':'0');
+  fd.append('warehouseId',q('#dynamicsWarehouse')?.value||'');
   if(includeCategories){
     const map={};
     qa('[data-dynamics-category]').forEach(sel=>{
@@ -2711,11 +2715,25 @@ function renderDynamicsPreview(d){
   const bulk=q('#dynamicsBulkCategory');
   if(bulk) bulk.innerHTML=dynamicsCategoryOptions('');
 
+  const wh=q('#dynamicsWarehouse');
+  if(wh&&(d.warehouses||[]).length){
+    const cur=wh.value;
+    wh.innerHTML=(d.warehouses||[]).map(w=>`<option value="${w.id}">${w.name}</option>`).join('');
+    if(cur)wh.value=cur;
+  }
+
   q('#dynamicsImportSummary').innerHTML=
     `<article><b>${d.total||0}</b><span>Toplam Satır</span></article>
      <article class="good"><b>${d.newCount||0}</b><span>Yeni Ürün</span></article>
      <article class="warn"><b>${d.existingCount||0}</b><span>Zaten Var</span></article>
      <article class="bad"><b>${d.invalidCount||0}</b><span>Hatalı</span></article>`;
+
+  const hint=q('#dynamicsCostStockHint');
+  if(hint){
+    const costOk=d.costHeaderFound?`Maliyet sütunu bulundu (${d.withCost||0} satırda fiyat var).`:'Maliyet sütunu yok — alış için Alış Faturaları ekranını kullanın.';
+    const stockOk=d.stockHeaderFound?`Stok sütunu bulundu (${d.withStock||0} satırda miktar var).`:'Stok sütunu okunamadı.';
+    hint.textContent=`${stockOk} ${costOk}`;
+  }
 
   const rows=d.preview||[];
   q('#dynamicsPreviewTable').innerHTML=rows.map(r=>{
@@ -2724,19 +2742,25 @@ function renderDynamicsPreview(d){
            ${dynamicsCategoryOptions(r.suggestedCategoryId||'')}
          </select>`
       : (r.status==='existing'
-          ? '<span class="muted">Mevcut ürün</span>'
+          ? '<span class="muted">Güncellenebilir</span>'
           : '<span class="muted">Aktarılmaz</span>');
+    const costCell=Number(r.purchasePrice||0)>0
+      ? `<b>${money(r.purchasePrice)}</b>${r.status==='existing'?`<small>şimdi: ${money(r.currentPurchasePrice)}</small>`:''}`
+      : '<span class="muted">—</span>';
     return `<tr class="dynamics-preview-row ${r.status}">
       <td><span class="dynamics-status ${r.status}">${r.status==='new'?'Yeni':r.status==='existing'?'Zaten Var':'Hatalı'}</span></td>
       <td><b>${r.searchName||'-'}</b>${r.existingCode?`<small>Mevcut: ${r.existingCode}</small>`:''}</td>
+      <td>${Number(r.stockQty||0)}</td>
+      <td>${costCell}</td>
       <td>${categoryCell}</td>
     </tr>`;
   }).join('');
 
   q('#dynamicsPreviewEmpty').style.display=rows.length?'none':'block';
-  q('#dynamicsImportBtn').disabled=!d.newCount;
+  const canRun=Boolean(d.newCount)||Boolean(d.existingCount);
+  q('#dynamicsImportBtn').disabled=!canRun;
 
-  if(!dynamicsCategories.length){
+  if(!dynamicsCategories.length && d.newCount){
     q('#dynamicsImportStatus').textContent='Aktif kategori bulunamadı. Önce Kategoriler ekranından kategori oluşturun.';
     q('#dynamicsImportStatus').className='form-status error';
   }
@@ -2768,28 +2792,39 @@ q('#dynamicsImportBtn')?.addEventListener('click',async()=>{
   const status=q('#dynamicsImportStatus'),btn=q('#dynamicsImportBtn');
   if(!dynamicsPreviewData){status.textContent='Önce Excel’i önizleyin.';status.className='form-status error';return}
   const newRows=(dynamicsPreviewData.preview||[]).filter(r=>r.status==='new');
-  const selectors=qa('[data-dynamics-category]');
-  const missing=selectors.filter(sel=>!sel.value);
-  if(missing.length){
-    status.textContent=`${missing.length} yeni ürünün kategorisi seçilmemiş. Hepsine kategori seçin.`;
-    status.className='form-status error';
-    missing[0]?.scrollIntoView({behavior:'smooth',block:'center'});
-    missing[0]?.focus();
-    return;
+  const createNew=!!q('#dynamicsCreateNew')?.checked;
+  const updateStock=!!q('#dynamicsUpdateStock')?.checked;
+  const updateCost=!!q('#dynamicsUpdateCost')?.checked;
+  if(createNew&&newRows.length){
+    const selectors=qa('[data-dynamics-category]');
+    const missing=selectors.filter(sel=>!sel.value);
+    if(missing.length){
+      status.textContent=`${missing.length} yeni ürünün kategorisi seçilmemiş. Hepsine kategori seçin.`;
+      status.className='form-status error';
+      missing[0]?.scrollIntoView({behavior:'smooth',block:'center'});
+      missing[0]?.focus();
+      return;
+    }
   }
-  if(!confirm(`${newRows.length} yeni Arama adı ürün kodu eklensin mi?`))return;
+  if(updateStock&&!q('#dynamicsWarehouse')?.value){toast('Stok için depo seçin');return}
+  if(!createNew&&!updateStock&&!updateCost){toast('En az bir seçenek işaretleyin');return}
+  const bits=[];
+  if(createNew&&newRows.length)bits.push(`${newRows.length} yeni ürün`);
+  if(updateStock)bits.push('stok güncelle');
+  if(updateCost)bits.push('alış/maliyet güncelle');
+  if(!confirm(`${bits.join(' + ')} uygulansın mı?`))return;
   try{
     btn.disabled=true;btn.textContent='Aktarılıyor...';
     const r=await api('/web-api/admin/dynamics-excel-import',{method:'POST',body:dynamicsForm(true)});
-    status.textContent=`Tamamlandı: ${r.added} yeni ürün eklendi, ${r.skipped} mevcut ürün atlandı. Stok değişmedi.`;
+    status.textContent=`Tamam: ${r.added||0} yeni · ${r.priceUpdated||0} alış · ${r.stockUpdated||0} stok · ${r.existingUpdated||0} mevcut güncellendi`;
     status.className='form-status success';
-    toast('Ürün kodları aktarıldı');
+    toast('Dynamics Excel aktarıldı');
     dynamicsPreviewData=null;
     await check();
   }catch(e){
     status.textContent=e.message;status.className='form-status error';
   }finally{
-    btn.disabled=false;btn.textContent='Yeni Ürünleri Aktar';
+    btn.disabled=false;btn.textContent='Aktar (ürün / stok / maliyet)';
   }
 });
 

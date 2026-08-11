@@ -702,15 +702,28 @@ function foundationSummary(s,date=todayISO()){
 
 
 function stockKey(productCode,warehouseId){return`${String(productCode).trim().toLocaleUpperCase('tr-TR')}::${warehouseId}`}
+function findStockRow(s,productCode,warehouseId){
+  const code=String(productCode||'').trim().toLocaleUpperCase('tr-TR');
+  const wh=String(warehouseId||'');
+  const key=stockKey(code,wh);
+  let row=(s.productStocks||[]).find(x=>x.key===key);
+  if(row)return row;
+  // Eski kayıtlar "KOD|depo" veya küçük harf key kullanmış olabilir
+  row=(s.productStocks||[]).find(x=>
+    String(x.productCode||'').trim().toLocaleUpperCase('tr-TR')===code &&
+    String(x.warehouseId||'')===wh
+  )||null;
+  if(row)row.key=key;
+  return row;
+}
 function currentStock(s,productCode,warehouseId){
-  const key=stockKey(productCode,warehouseId);
-  return s.productStocks.find(x=>x.key===key)||null;
+  return findStockRow(s,productCode,warehouseId);
 }
 function setStock(s,productCode,warehouseId,quantity){
   const code=String(productCode||'').trim().toLocaleUpperCase('tr-TR');
   const key=stockKey(code,warehouseId),now=new Date().toISOString();
-  let row=s.productStocks.find(x=>x.key===key);
-  if(row){row.quantity=Math.max(0,Math.round(Number(quantity)||0));row.updatedAt=now}
+  let row=findStockRow(s,code,warehouseId);
+  if(row){row.key=key;row.productCode=code;row.quantity=Math.max(0,Math.round(Number(quantity)||0));row.updatedAt=now}
   else{row={id:crypto.randomUUID(),key,productCode:code,warehouseId,quantity:Math.max(0,Math.round(Number(quantity)||0)),reserved:0,createdAt:now,updatedAt:now};s.productStocks.push(row)}
   return row;
 }
@@ -791,8 +804,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.25-alis-fatura',
-  build:'fix-v24',
+  version:'6.3.26-dynamics-stok-maliyet',
+  build:'fix-v25',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3413,24 +3426,73 @@ function dynamicsReadableCode(searchName,itemCode){
   if(!s)return String(itemCode||'').trim();
   return s;
 }
+function dynamicsRowPick(row,aliases){
+  const map=new Map();
+  for(const [k,v] of Object.entries(row||{})) map.set(purchaseHeaderKey(k),v);
+  for(const a of aliases){
+    const key=purchaseHeaderKey(a);
+    if(map.has(key)){
+      const v=map.get(key);
+      if(v!==null&&v!==undefined&&String(v).trim()!=='')return v;
+    }
+  }
+  return '';
+}
 function parseDynamicsWorkbook(buffer){
   const wb=XLSX.read(buffer,{type:'buffer',cellDates:false});
   const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)throw new Error('Excel içinde çalışma sayfası bulunamadı');
   const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
-  const required=['Madde kodu','Arama adı'];
   const headers=rows.length?Object.keys(rows[0]):[];
-  const missing=required.filter(h=>!headers.includes(h));if(missing.length)throw new Error('Eksik Excel sütunu: '+missing.join(', '));
-  return rows.map((r,index)=>({
-    rowNo:index+2,
-    itemCode:String(r['Madde kodu']||'').trim(),
-    dynamicsName:String(r['Ürün adı']||'').trim(),
-    searchName:String(r['Arama adı']||'').trim(),
-    physicalStock:normalizeNumber(r['Fiziksel stok']||0),
-    reservedStock:normalizeNumber(r['Fiziksel rezerve miktar']||0),
-    availableStock:normalizeNumber(r['Kullanılabilir fiziksel miktar']||0),
-    unit:String(r['Stok birimi']||'Adet').trim(),
-    dynamicsProductId:String(r['Ürün kimliği']||r['Madde kodu']||'').trim()
-  })).filter(r=>r.itemCode||r.searchName);
+  const headerKeys=headers.map(purchaseHeaderKey);
+  const needItem=['maddekodu','itemcode','malzemekodu'];
+  const needSearch=['aramaadi','urunadi','searchname','kod'];
+  const hasItem=headerKeys.some(h=>needItem.includes(h)||h==='maddekodu');
+  const hasSearch=headerKeys.some(h=>needSearch.includes(h)||h==='aramaadi');
+  // Klasik Dynamics export: Madde kodu + Arama adı
+  if(!headers.includes('Madde kodu')||!headers.includes('Arama adı')){
+    if(!(hasItem&&hasSearch))throw new Error('Eksik Excel sütunu: Madde kodu, Arama adı (Dynamics ürün listesi)');
+  }
+  const costAliases=[
+    'Birim maliyet','Maliyet','Maliyet fiyatı','Maliyet fiyati','Alış fiyatı','Alis fiyati',
+    'Ortalama maliyet','Stok maliyeti','Envanter maliyeti','Unit cost','Cost price','Birim maliyet tutarı'
+  ];
+  const costHeaderFound=headers.some(h=>costAliases.map(purchaseHeaderKey).includes(purchaseHeaderKey(h)));
+  const stockHeaderFound=headers.some(h=>['Fiziksel stok','Kullanılabilir fiziksel miktar','Kullanilabilir fiziksel miktar'].map(purchaseHeaderKey).includes(purchaseHeaderKey(h)));
+
+  const parsed=rows.map((r,index)=>{
+    const itemCode=String(dynamicsRowPick(r,['Madde kodu','Item Code','Malzeme Kodu'])||r['Madde kodu']||'').trim();
+    const searchName=String(dynamicsRowPick(r,['Arama adı','Arama adi','Search name'])||r['Arama adı']||'').trim();
+    const physicalStock=normalizeNumber(dynamicsRowPick(r,['Fiziksel stok','Physical inventory'])||r['Fiziksel stok']||0);
+    const reservedStock=normalizeNumber(dynamicsRowPick(r,['Fiziksel rezerve miktar','Physical reserved'])||r['Fiziksel rezerve miktar']||0);
+    const availableStock=normalizeNumber(dynamicsRowPick(r,['Kullanılabilir fiziksel miktar','Kullanilabilir fiziksel miktar','Available physical'])||r['Kullanılabilir fiziksel miktar']||0);
+    const purchasePrice=normalizeNumber(dynamicsRowPick(r,costAliases)||0);
+    const stockQty=availableStock>0||physicalStock>0?(availableStock||physicalStock):0;
+    return{
+      rowNo:index+2,
+      itemCode,
+      dynamicsName:String(dynamicsRowPick(r,['Ürün adı','Urun adi','Product name'])||r['Ürün adı']||'').trim(),
+      searchName,
+      physicalStock,reservedStock,availableStock,stockQty,
+      purchasePrice,
+      unit:String(dynamicsRowPick(r,['Stok birimi','Unit'])||r['Stok birimi']||'Adet').trim(),
+      dynamicsProductId:String(dynamicsRowPick(r,['Ürün kimliği','Urun kimligi','Product id'])||r['Ürün kimliği']||itemCode).trim()
+    };
+  }).filter(r=>r.itemCode||r.searchName);
+  parsed._meta={costHeaderFound,stockHeaderFound,headers};
+  return parsed;
+}
+function dynamicsApplyStock(s,productCode,warehouseId,targetQty,actor='Dynamics Excel'){
+  const code=String(productCode||'').trim();
+  if(!code||!warehouseId)return false;
+  const target=Math.max(0,Math.round(Number(targetQty)||0));
+  const before=Number(currentStock(s,code,warehouseId)?.quantity||0);
+  const delta=target-before;
+  if(delta===0)return false;
+  addStockMovement(s,{
+    productCode:code,warehouseId,type:'dynamics-import',quantity:delta,
+    reference:'Dynamics Excel',note:'Dynamics stok senkron',user:actor
+  });
+  return true;
 }
 function dynamicsExistingProduct(s,row){
   const item=normKey(row.itemCode),search=normKey(row.searchName),pid=normKey(row.dynamicsProductId);
@@ -3528,18 +3590,24 @@ app.post('/web-api/admin/dynamics-excel-preview',requireAdmin,dynamicsUpload.sin
   try{
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const s=readStore(),rows=parseDynamicsWorkbook(req.file.buffer);
+    const meta=rows._meta||{};
     ensureDynamicsCoreCategories(s);writeStore(s);
-    let newCount=0,existingCount=0,invalidCount=0;
+    let newCount=0,existingCount=0,invalidCount=0,withCost=0,withStock=0;
     const preview=rows.map(r=>{
       const existing=dynamicsExistingProduct(s,r);
       const valid=Boolean(String(r.searchName||'').trim());
       if(!valid)invalidCount++;else if(existing)existingCount++;else newCount++;
+      if(r.purchasePrice>0)withCost++;
+      if(r.stockQty>0||r.physicalStock>0)withStock++;
       return{
         itemCode:r.itemCode,
         searchName:r.searchName,
         status:!valid?'invalid':existing?'existing':'new',
         existingCode:existing?.code||'',
-        suggestedCategoryId:valid&&!existing?dynamicsSuggestedCategoryId(s,r.searchName):''
+        suggestedCategoryId:valid&&!existing?dynamicsSuggestedCategoryId(s,r.searchName):'',
+        stockQty:r.stockQty,
+        purchasePrice:r.purchasePrice,
+        currentPurchasePrice:existing?normalizeNumber(existing.purchasePrice||0):0
       };
     });
     const categories=(s.categories||[])
@@ -3550,9 +3618,14 @@ app.post('/web-api/admin/dynamics-excel-preview',requireAdmin,dynamicsUpload.sin
         if(String(b.name).toLocaleLowerCase('tr-TR')==='diğer')return -1;
         return String(a.name).localeCompare(String(b.name),'tr');
       });
+    const warehouses=(s.warehouses||[]).filter(w=>w.active!==false).map(w=>({id:w.id,name:w.name}));
     res.json({
       ok:true,total:rows.length,newCount,existingCount,invalidCount,
-      preview:preview.slice(0,500),truncated:preview.length>500,categories
+      withCost,withStock,
+      costHeaderFound:Boolean(meta.costHeaderFound),
+      stockHeaderFound:Boolean(meta.stockHeaderFound),
+      preview:preview.slice(0,500),truncated:preview.length>500,categories,warehouses,
+      note:'Canlı Dynamics API bağlı değil. Excel’i Dynamics’ten indirip buraya yükleyin; stok ve maliyet sütunları varsa güncellenir.'
     });
   }catch(e){
     res.status(400).json({error:e.message||'Excel okunamadı'})
@@ -3566,36 +3639,65 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,dynamicsUpload.sing
     try{categoryMap=JSON.parse(String(req.body?.categoryMap||'{}'))||{}}
     catch(_){return res.status(400).json({error:'Kategori seçimleri okunamadı'})}
 
-    let added=0,skipped=0,invalid=0,categoryMissing=0;
+    const createNew=String(req.body?.createNew??'1')!=='0';
+    const updateStock=String(req.body?.updateStock||'0')==='1';
+    const updatePurchasePrice=String(req.body?.updatePurchasePrice||'0')==='1';
+    const warehouseId=String(req.body?.warehouseId||s.warehouses?.find(w=>w.active!==false)?.id||'');
+    const actor=currentSessionUser(req)?.name||'Dynamics Excel';
+
+    let added=0,skipped=0,invalid=0,categoryMissing=0,stockUpdated=0,priceUpdated=0,existingUpdated=0;
     for(const r of rows){
       const searchName=String(r.searchName||'').trim();
       if(!searchName){invalid++;continue}
-      const existing=dynamicsExistingProduct(s,r);
-      if(existing){skipped++;continue}
+      let product=dynamicsExistingProduct(s,r);
 
-      const selected=String(categoryMap[r.itemCode]||categoryMap[searchName]||'').trim();
-      const cat=(s.categories||[]).find(c=>String(c.id)===selected&&c.active!==false);
-      if(!cat){categoryMissing++;continue}
+      if(!product){
+        if(!createNew){skipped++;continue}
+        const selected=String(categoryMap[r.itemCode]||categoryMap[searchName]||'').trim();
+        const cat=(s.categories||[]).find(c=>String(c.id)===selected&&c.active!==false);
+        if(!cat){categoryMissing++;continue}
+        const brand=dynamicsBrand(r.searchName,r.dynamicsName);
+        product=sanitizeProduct({
+          code:searchName,
+          name:searchName,
+          itemCode:r.itemCode,
+          searchName,
+          dynamicsName:r.dynamicsName,
+          dynamicsProductId:r.dynamicsProductId,
+          brand,
+          category:cat.id,
+          purchasePrice:updatePurchasePrice&&r.purchasePrice>0?r.purchasePrice:0,
+          stock:0,
+          active:true,
+          tags:['dynamics-excel','sales-code']
+        });
+        s.products.unshift(product);
+        added++;
+        if(updatePurchasePrice&&r.purchasePrice>0)priceUpdated++;
+      }else{
+        let touched=false;
+        if(updatePurchasePrice&&r.purchasePrice>0){
+          product.purchasePrice=r.purchasePrice;
+          product.updatedAt=new Date().toISOString();
+          priceUpdated++;touched=true;
+        }
+        // Kimlik alanlarını boşsa doldur
+        if(!product.itemCode&&r.itemCode){product.itemCode=r.itemCode;touched=true}
+        if(!product.searchName){product.searchName=searchName;touched=true}
+        if(!product.dynamicsProductId&&r.dynamicsProductId){product.dynamicsProductId=r.dynamicsProductId;touched=true}
+        if(touched)existingUpdated++;
+        else if(!updateStock)skipped++;
+      }
 
-      const brand=dynamicsBrand(r.searchName,r.dynamicsName);
-      const p=sanitizeProduct({
-        code:searchName,
-        name:searchName,
-        itemCode:r.itemCode,
-        searchName,
-        dynamicsName:r.dynamicsName,
-        dynamicsProductId:r.dynamicsProductId,
-        brand,
-        category:cat.id,
-        stock:0,
-        active:true,
-        tags:['dynamics-excel','sales-code']
-      });
-      s.products.unshift(p);added++;
+      if(updateStock&&warehouseId&&product){
+        if(dynamicsApplyStock(s,product.code,warehouseId,r.stockQty,actor))stockUpdated++;
+      }
     }
-    audit(s,'Dynamics Arama adı ürün aktarımı','Excel',{added,skipped,invalid,categoryMissing});
+    audit(s,'Dynamics Excel aktarımı (ürün/stok/maliyet)','Excel',{
+      added,skipped,invalid,categoryMissing,stockUpdated,priceUpdated,existingUpdated
+    });
     writeStore(s);
-    res.json({ok:true,added,skipped,invalid,categoryMissing,stockUpdated:0});
+    res.json({ok:true,added,skipped,invalid,categoryMissing,stockUpdated,priceUpdated,existingUpdated});
   }catch(e){
     res.status(400).json({error:e.message||'Excel aktarılamadı'})
   }
