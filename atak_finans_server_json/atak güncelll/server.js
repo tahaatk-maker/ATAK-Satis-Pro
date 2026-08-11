@@ -804,8 +804,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.31-alis-hata-duzelt',
-  build:'fix-v30',
+  version:'6.3.32-alis-stok-veya-maliyet',
+  build:'fix-v31',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -4159,26 +4159,32 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
     const s=readStore();
     const rows=parsePurchaseWorkbook(req.file.buffer,req.file.originalname||'');
     const actor=currentSessionUser(req)?.name||'Yönetici';
-    const mode=String(req.body?.mode||'both'); // both | products | cost
-    const createMissingProducts=mode==='both'||mode==='products';
-    const updatePurchasePrice=mode==='both'||mode==='cost';
-    const addStock=String(req.body?.addStock||'0')==='1';
+    const mode=String(req.body?.mode||'cost'); // cost | stock | both
+    const createMissingProducts=true; // yoksa kart açılsın
+    const updatePurchasePrice=mode==='cost'||mode==='both';
+    const addStock=mode==='stock'||mode==='both'||String(req.body?.addStock||'0')==='1';
     const pricesIncludeVat=String(req.body?.pricesIncludeVat??'1')!=='0';
     const warehouseId=String(req.body?.warehouseId||'');
     const supplierFallback=String(req.body?.supplierName||'Arçelik A.Ş.').trim()||'Arçelik A.Ş.';
+    if(addStock&&!warehouseId)return res.status(400).json({error:'Stok aktarımı için depo seçilmelidir'});
 
     const items=rows
-      .filter(r=>r.quantity>0&&r.unitCost>0&&(r.productCode||r.productName||r.itemCode))
+      .filter(r=>{
+        const hasCode=r.productCode||r.productName||r.itemCode;
+        if(!hasCode)return false;
+        if(mode==='stock')return (r.quantity>0)&&(r.unitCost>0||true);
+        return r.quantity>0&&r.unitCost>0;
+      })
       .map(r=>({
         productCode:r.productCode,
         productName:r.productName,
         itemCode:r.itemCode,
         searchName:r.searchName,
-        quantity:r.quantity,
-        unitCost:r.unitCost,
+        quantity:r.quantity>0?r.quantity:1,
+        unitCost:r.unitCost>0?r.unitCost:0.01, // stok-only yeni üründe kart açılsın diye sembolik; mevcutta maliyet yazılmaz
         vatRate:r.vatRate
       }));
-    if(!items.length)return res.status(400).json({error:'Aktarılacak satır yok. Madde kodu / Arama adı + Maliyet tutarı gerekli.'});
+    if(!items.length)return res.status(400).json({error:'Aktarılacak satır yok. Madde kodu / Miktar / Maliyet tutarı kontrol edin.'});
 
     const invoiceNo=String(req.body?.invoiceNo||rows.find(r=>r.invoiceNo)?.invoiceNo||'').trim();
     const date=String(req.body?.date||rows.find(r=>r.date)?.date||todayISO()).slice(0,10);
@@ -4191,8 +4197,18 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
       updatePurchasePrice,addStock,pricesIncludeVat,createMissingProducts,
       items,actor
     });
+    // Stok modunda yeni ürüne yazılan sembolik 0.01'i temizle — maliyet bilinmiyorsa 0 kalsın
+    if(mode==='stock'){
+      for(const line of invoice.items||[]){
+        if(line.created&&Number(line.unitCost)===0.01){
+          const p=(s.products||[]).find(x=>x.id===line.productId||normKey(x.code)===normKey(line.productCode));
+          if(p){p.purchasePrice=0;line.unitCost=0}
+        }
+      }
+      invoice.priceUpdated=0;
+    }
     audit(s,'Alış faturası Excel aktarımı',invoice.invoiceNo||invoice.id,{
-      mode,matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,total:invoice.total
+      mode,matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total
     });
     writeStore(s);
     res.json({ok:true,invoice:{

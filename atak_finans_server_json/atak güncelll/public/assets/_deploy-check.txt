@@ -1,3 +1,3 @@
-fix-v30
-expect-health=6.3.31-alis-hata-duzelt
-alis-hata-duzelt
+fix-v31
+expect-health=6.3.32-alis-stok-veya-maliyet
+alis-stok-veya-maliyet
