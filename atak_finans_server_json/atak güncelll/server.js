@@ -804,8 +804,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.28-alis-urun-ekle',
-  build:'fix-v27',
+  version:'6.3.29-alis-geri-al',
+  build:'fix-v28',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3864,7 +3864,7 @@ function ensureProductFromPurchase(s,{productCode,productName,itemCode,searchNam
   const name=String(productName||searchName||productCode||code).trim()||code;
   ensureDynamicsCoreCategories(s);
   const category=dynamicsSuggestedCategoryId(s,searchName||code);
-  const brand=purchaseBrandFromSupplier(supplierName,name);
+  const brand=purchaseBrandFromSupplier(supplierName,`${name} ${searchName||''}`);
   const product=sanitizeProduct({
     code,
     name,
