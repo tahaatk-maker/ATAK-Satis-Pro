@@ -183,21 +183,54 @@ function ensureStore(store) {
   }
   store.categories = store.categories.map((c,i)=>({ id:c.id||slug(c.name)||crypto.randomUUID(), name:c.name||'Kategori', active:c.active!==false, sort:Number(c.sort??i), description:c.description||'' }));
   store.brands = store.brands.map((b,i)=>({ id:b.id||slug(b.name)||crypto.randomUUID(), name:b.name||'Marka', active:b.active!==false, sort:Number(b.sort??i), logo:b.logo||'' }));
+  // İstikbal ürünleri yanlışlıkla "Diğer"de kaldıysa → Mobilya
+  const mobilyaCat=(store.categories||[]).find(c=>c.id==='mobilya'||String(c.name||'').toLocaleLowerCase('tr-TR')==='mobilya');
+  const mobilyaId=mobilyaCat?.id||'mobilya';
+  if(!mobilyaCat)store.categories.push({id:'mobilya',name:'Mobilya',active:true,sort:50,description:''});
+  let istikbalFixed=0;
   store.products = store.products.map(p=>{
     const row={
       tags:[], campaignId:'', barcode:'', purchasePrice:0, listPrice:Number(p.oldPrice||p.bekoPrice||0),
       cashPrice:Number(p.salePrice||0), cardPrice:Number(p.salePrice||0), minimumSalePrice:0,
       ...p
     };
+    const brand=String(row.brand||'').toLocaleLowerCase('tr-TR');
+    const tags=(row.tags||[]).map(t=>String(t).toLocaleLowerCase('tr-TR'));
+    const isIstikbal=/istikbal/.test(brand)||tags.includes('istikbal');
+    if(isIstikbal&&row.category!==mobilyaId){
+      row.category=mobilyaId;
+      row.vatRate=10;
+      istikbalFixed++;
+    }
     row.vatRate=resolveVatRate(row);
     return row;
   });
+  if(istikbalFixed>0)store.__istikbalCategoryFixed=istikbalFixed;
   store.campaigns = store.campaigns.map((c,i)=>({ id:c.id||crypto.randomUUID(), title:c.title||'Kampanya', subtitle:c.subtitle||'', label:c.label||'FIRSAT', startDate:c.startDate||'', endDate:c.endDate||'', active:c.active!==false, homepage:c.homepage!==false, sort:Number(c.sort??i), productIds:Array.isArray(c.productIds)?c.productIds:[] }));
   if (!store.banners.length) store.banners.push({ id:crypto.randomUUID(), headline:'Evinizi sadece döşemeyin. Yaşatın.', subheadline:'Beko ürünleri, mobilya, klima, TV ve ev yaşam çözümleri Atak Home’da.', ctaText:'Ürünleri keşfet', ctaUrl:'#products', desktopImage:'', mobileImage:'', active:true, sort:0 });
   return store;
 }
-function readStore(){ return ensureStore(JSON.parse(fs.readFileSync(STORE_PATH,'utf8'))); }
-function writeStore(store){ const t=`${STORE_PATH}.tmp`; fs.writeFileSync(t,JSON.stringify(ensureStore(store),null,2),'utf8'); fs.renameSync(t,STORE_PATH); }
+function readStore(){
+  const s=ensureStore(JSON.parse(fs.readFileSync(STORE_PATH,'utf8')));
+  if(s.__istikbalCategoryFixed){
+    const n=s.__istikbalCategoryFixed;
+    delete s.__istikbalCategoryFixed;
+    try{
+      const t=`${STORE_PATH}.tmp`;
+      fs.writeFileSync(t,JSON.stringify(s,null,2),'utf8');
+      fs.renameSync(t,STORE_PATH);
+      console.log(`[istikbal] ${n} ürün Mobilya kategorisine taşındı`);
+    }catch(e){console.error('[istikbal] kategori kaydı yazılamadı',e.message)}
+  }
+  return s;
+}
+function writeStore(store){
+  const clean={...ensureStore(store)};
+  delete clean.__istikbalCategoryFixed;
+  const t=`${STORE_PATH}.tmp`;
+  fs.writeFileSync(t,JSON.stringify(clean,null,2),'utf8');
+  fs.renameSync(t,STORE_PATH);
+}
 function normalizeNumber(value){
   if(value===null||value===undefined||value==='') return 0;
   if(typeof value==='number') return Number.isFinite(value)?value:0;
@@ -830,8 +863,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.37-istikbal-mobilya',
-  build:'fix-v36',
+  version:'6.3.38-istikbal-mobilya-duzelt',
+  build:'fix-v37',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
