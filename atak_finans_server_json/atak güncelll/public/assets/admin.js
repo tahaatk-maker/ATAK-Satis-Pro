@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v20 */
+/* ATAK_ADMIN_BUILD=fix-v22 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -602,7 +602,7 @@ async function loadFoundation(){foundationData=await api('/web-api/admin/foundat
 function renderFoundation(){
   if(!foundationData||!q('#foundationSummary'))return;
   const f=foundationData,s=f.summary;
-  q('#foundationSummary').innerHTML=`<article><b>${money(s.totalTurnover)}</b><span>Bugünkü Toplam Ciro</span></article><article><b>${s.completedStores}/${s.storeCount}</b><span>Ciro Giren Mağaza</span></article><article><b>${f.staff.filter(x=>x.active).length}</b><span>Aktif Personel</span></article><article><b>${f.announcements.filter(x=>x.active).length}</b><span>Aktif Duyuru</span></article>`;
+  q('#foundationSummary').innerHTML=`<article><b>${money(s.totalTurnover)}</b><span>Bugünkü Ciro · ${Number(s.saleCount||0)} satış</span></article><article><b>${money(s.beko)} / ${money(s.istikbal)}</b><span>Beko / İstikbal</span></article><article><b>${s.completedStores}/${s.storeCount}</b><span>Satış Yapan Mağaza</span></article><article><b>${f.staff.filter(x=>x.active).length}</b><span>Aktif Personel</span></article>`;
   const activeStores=f.stores.filter(x=>x.active);
   const passiveStores=f.stores.filter(x=>!x.active);
   // Pasif mağazalar seçilemez ama listede görünür — "neden yok?" karışıklığını önler
@@ -620,15 +620,24 @@ function renderFoundation(){
   q('#fStoreList').innerHTML=f.stores.map(x=>`<button type="button" class="${x.active?'':'fnd-passive'}" data-fstore="${x.id}"><b>${x.name}</b><small>${x.code||''} · ${x.active?'Aktif':'Pasif — seçilemez'}</small></button>`).join('')||'<p class="note">Henüz mağaza yok.</p>';
   q('#fStaffList').innerHTML=f.staff.map(x=>`<button type="button" data-fstaff="${x.id}"><b>${x.name}</b><small>${x.storeName} · ${x.active?'Aktif':'Pasif'}</small></button>`).join('');
   q('#fAnnouncementList').innerHTML=f.announcements.map(x=>`<div><b>${x.title}</b><small>${x.storeId?f.stores.find(s=>s.id===x.storeId)?.name:'Tüm personel'}</small><button type="button" data-fannouncement-delete="${x.id}">Sil</button></div>`).join('');
-  q('#fTurnoverCount').textContent=`${f.turnovers.length} kayıt`;
-  q('#fTurnoverList').innerHTML=f.turnovers.length?`<table><thead><tr><th>Tarih</th><th>Mağaza</th><th>Personel</th><th>Sipariş</th><th>Net Ciro</th></tr></thead><tbody>${f.turnovers.map(x=>`<tr><td>${x.date}</td><td>${x.storeName}</td><td>${x.staffName}</td><td>${x.orderCount}</td><td><b>${money(x.netAmount)}</b></td></tr>`).join('')}</tbody></table>`:'<p>Henüz personel ciro girişi yok.</p>';
+  q('#fTurnoverCount').textContent=`${f.turnovers.length} gün · mağaza satırı`;
+  const brandPill=x=>{
+    const parts=[];
+    if(Number(x.beko||0)>0)parts.push(`<span class="ck-brand-pill beko">Beko ${money(x.beko)}</span>`);
+    if(Number(x.istikbal||0)>0)parts.push(`<span class="ck-brand-pill istikbal">İstikbal ${money(x.istikbal)}</span>`);
+    if(Number(x.other||0)>0)parts.push(`<span class="ck-brand-pill other">Diğer ${money(x.other)}</span>`);
+    return parts.join(' ')||'—';
+  };
+  q('#fTurnoverList').innerHTML=f.turnovers.length
+    ?`<table><thead><tr><th>Tarih</th><th>Mağaza</th><th>Personel</th><th>Satış</th><th>Bayi Dağılımı</th><th>Net Ciro</th></tr></thead><tbody>${f.turnovers.map(x=>`<tr><td>${x.date}</td><td>${x.storeName}</td><td>${x.staffName}</td><td>${x.orderCount}</td><td>${brandPill(x)}</td><td><b>${money(x.netAmount)}</b></td></tr>`).join('')}</tbody></table>`
+    :'<p class="note">Bu dönemde satış yok. Satış girildikçe bu tablo kendiliğinden dolar.</p>';
   qa('[data-fstore]').forEach(b=>b.onclick=()=>{const x=f.stores.find(v=>v.id===b.dataset.fstore);q('#fStoreId').value=x.id;q('#fStoreName').value=x.name;q('#fStoreCode').value=x.code||'';q('#fStoreAddress').value=x.address||'';q('#fStoreActive').checked=x.active});
   qa('[data-fstaff]').forEach(b=>b.onclick=()=>{const x=f.staff.find(v=>v.id===b.dataset.fstaff);q('#fStaffId').value=x.id;q('#fStaffName').value=x.name;q('#fStaffUsername').value=x.username;q('#fStaffPassword').value='';q('#fStaffStore').value=x.storeId;q('#fStaffActive').checked=x.active});
   qa('[data-fannouncement-delete]').forEach(b=>b.onclick=async()=>{if(!confirm('Duyuru silinsin mi?'))return;await api('/web-api/admin/announcement/'+b.dataset.fannouncementDelete,{method:'DELETE'});await loadFoundation()});
   if(q('#fndCountStore'))q('#fndCountStore').textContent=`${f.stores.length} kayıt`;
   if(q('#fndCountStaff'))q('#fndCountStaff').textContent=`${f.staff.filter(x=>x.active).length} aktif`;
   if(q('#fndCountAnnounce'))q('#fndCountAnnounce').textContent=`${f.announcements.filter(x=>x.active).length} yayında`;
-  if(q('#fndCountTurnover'))q('#fndCountTurnover').textContent=`${f.turnovers.length} kayıt`;
+  if(q('#fndCountTurnover'))q('#fndCountTurnover').textContent=`otomatik · ${f.turnovers.length} satır`;
 }
 /* Foundation alt sekmeleri: Mağaza / Personel / Duyuru / Ciro */
 function setFoundationTab(name){

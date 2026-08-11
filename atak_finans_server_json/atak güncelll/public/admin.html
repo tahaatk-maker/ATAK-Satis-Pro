@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v21" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v21" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v22" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v22" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1241,7 +1241,7 @@ body.inv-full #pageTitle{font-size:18px}
   <button type="button" class="fnd-tab active" data-fnd-tab="store"><span class="fnd-tab-ico">M</span><span>Mağaza<small id="fndCountStore">—</small></span></button>
   <button type="button" class="fnd-tab" data-fnd-tab="staff"><span class="fnd-tab-ico">P</span><span>Personel<small id="fndCountStaff">—</small></span></button>
   <button type="button" class="fnd-tab" data-fnd-tab="announce"><span class="fnd-tab-ico">D</span><span>Duyuru<small id="fndCountAnnounce">—</small></span></button>
-  <button type="button" class="fnd-tab" data-fnd-tab="turnover"><span class="fnd-tab-ico">C</span><span>Ciro Girişleri<small id="fndCountTurnover">—</small></span></button>
+  <button type="button" class="fnd-tab" data-fnd-tab="turnover"><span class="fnd-tab-ico">C</span><span>Ciro Özeti<small id="fndCountTurnover">—</small></span></button>
 </nav>
 
 <div class="fnd-pane active" data-fnd-pane="store">
@@ -1302,7 +1302,11 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 
 <div class="fnd-pane" data-fnd-pane="turnover">
-  <div class="panel"><div class="panel-head"><h2>💰 Tüm Ciro Girişleri</h2><span id="fTurnoverCount"></span></div><div class="turnover-table" id="fTurnoverList"></div></div>
+  <div class="panel">
+    <div class="panel-head"><div><h2>💰 Ciro Özeti</h2><p class="note">Son 30 gün · gün ve mağaza bazında</p></div><span id="fTurnoverCount"></span></div>
+    <div class="fnd-note">Ciro <b>elle girilmez</b>. Satış Merkezi’nden girilen satışlardan otomatik hesaplanır; tahsilat ve senetler cariye işlenir. Bu ekran sadece görüntüleme içindir.</div>
+    <div class="turnover-table" id="fTurnoverList"></div>
+  </div>
 </div>
 </section>
 <section class="tab" id="dynamicsExcelImport">
@@ -1845,5 +1849,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v21"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v22"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

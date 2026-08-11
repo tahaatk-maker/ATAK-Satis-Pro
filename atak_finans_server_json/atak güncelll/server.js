@@ -607,15 +607,86 @@ function publicStaff(x,store){
   return{id:x.id,name:x.name,username:x.username,role:x.role||'staff',storeId:x.storeId,storeName:branch?.name||'Mağaza',active:x.active!==false};
 }
 function todayISO(){return new Date().toISOString().slice(0,10)}
-function foundationSummary(s,date=todayISO()){
-  const rows=s.turnovers.filter(x=>x.date===date);
-  const total=rows.reduce((a,x)=>a+Number(x.netAmount||0),0);
-  const completed=new Set(rows.map(x=>x.storeId));
+/** Satışı yapan personelden mağazayı bul — ciro artık elle girilmiyor, satıştan türetiliyor */
+function resolveSaleStore(s,tx){
+  const staffList=s.staff||[];
+  const byId=String(tx.salespersonId||'')||String(tx.createdById||'');
+  let member=byId?staffList.find(x=>String(x.id)===byId):null;
+  if(!member)member=staffList.find(x=>txBelongsToActor(tx,x));
+  if(member){
+    const branch=(s.stores||[]).find(v=>String(v.id)===String(member.storeId));
+    return{storeId:member.storeId||'',storeName:branch?.name||'Mağaza atanmamış',staffId:member.id,staffName:member.name};
+  }
   return{
-    date,totalTurnover:total,entryCount:rows.length,
-    storeCount:s.stores.filter(x=>x.active!==false).length,
-    completedStores:completed.size,
-    missingStores:s.stores.filter(x=>x.active!==false&&!completed.has(x.id)).map(x=>({id:x.id,name:x.name}))
+    storeId:'',
+    storeName:'Mağaza atanmamış',
+    staffId:String(tx.salespersonId||tx.createdById||''),
+    staffName:String(tx.salespersonName||tx.createdBy||'Bilinmiyor')
+  };
+}
+/** Gün + mağaza + personel bazında otomatik ciro satırları (POS satışlarından) */
+function buildAutoTurnovers(s,{days=30}={}){
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  const today=todayISO();
+  const from=new Date(`${today}T12:00:00`);
+  from.setDate(from.getDate()-(Math.max(1,days)-1));
+  const fromKey=from.toISOString().slice(0,10);
+  const map=new Map();
+  for(const t of (s.financeTransactions||[])){
+    if(t.kind!=='sale'||t.cancelled)continue;
+    const date=txDateKey(t);
+    if(!date||date<fromKey||date>today)continue;
+    const who=resolveSaleStore(s,t);
+    const key=`${date}::${who.storeId}::${who.staffId||who.staffName}`;
+    if(!map.has(key)){
+      map.set(key,{
+        id:key,date,storeId:who.storeId,storeName:who.storeName,
+        staffId:who.staffId,staffName:who.staffName,
+        grossAmount:0,returnAmount:0,netAmount:0,orderCount:0,
+        beko:0,istikbal:0,other:0,source:'auto'
+      });
+    }
+    const row=map.get(key);
+    const amount=saleAmount(t);
+    const gross=Number(t.grossTotal!=null&&t.grossTotal!==''?t.grossTotal:amount)||0;
+    row.grossAmount+=gross;
+    row.netAmount+=amount;
+    row.orderCount+=1;
+    row[dealerBrandKey(t)]+=amount;
+  }
+  return [...map.values()].map(r=>({
+    ...r,
+    grossAmount:round(r.grossAmount),
+    netAmount:round(r.netAmount),
+    beko:round(r.beko),istikbal:round(r.istikbal),other:round(r.other)
+  })).sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(a.storeName).localeCompare(String(b.storeName),'tr'));
+}
+function foundationSummary(s,date=todayISO()){
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  let total=0,count=0,beko=0,istikbal=0;
+  const soldStores=new Set();
+  for(const t of (s.financeTransactions||[])){
+    if(t.kind!=='sale'||t.cancelled)continue;
+    if(txDateKey(t)!==date)continue;
+    const amount=saleAmount(t);
+    total+=amount;count+=1;
+    const b=dealerBrandKey(t);
+    if(b==='beko')beko+=amount;else if(b==='istikbal')istikbal+=amount;
+    const who=resolveSaleStore(s,t);
+    if(who.storeId)soldStores.add(who.storeId);
+  }
+  const activeStores=s.stores.filter(x=>x.active!==false);
+  return{
+    date,
+    totalTurnover:round(total),
+    saleCount:count,
+    entryCount:count,
+    beko:round(beko),
+    istikbal:round(istikbal),
+    storeCount:activeStores.length,
+    completedStores:soldStores.size,
+    source:'auto',
+    missingStores:activeStores.filter(x=>!soldStores.has(x.id)).map(x=>({id:x.id,name:x.name}))
   };
 }
 
@@ -710,8 +781,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.22-magaza-bayi-ayrim',
-  build:'fix-v21',
+  version:'6.3.23-otomatik-ciro',
+  build:'fix-v22',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -857,21 +928,21 @@ app.get('/foundation-api/me',(req,res)=>{
 });
 app.get('/foundation-api/dashboard',requireStaff,(req,res)=>{
   const s=readStore(),u=staffSession(req),date=todayISO();
-  const own=s.turnovers.filter(x=>x.staffId===u.id).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,14);
+  // Ciro elle girilmiyor: personelin kendi satışlarından hesaplanır
+  const own=buildAutoTurnovers(s,{days:30})
+    .filter(x=>String(x.staffId)===String(u.id))
+    .slice(0,14);
   const announcements=s.announcements.filter(x=>x.active!==false&&(!x.storeId||x.storeId===u.storeId)&&(!x.endDate||x.endDate>=date))
     .map(x=>({...x,read:s.announcementReads.some(r=>r.announcementId===x.id&&r.staffId===u.id)}))
     .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
-  res.json({user:u,today:own.find(x=>x.date===date)||null,history:own,announcements});
+  res.json({user:u,today:own.find(x=>x.date===date)||null,history:own,announcements,turnoverSource:'auto'});
 });
+/** Elle ciro girişi kaldırıldı — satışlar POS'tan giriliyor, ciro otomatik hesaplanıyor */
 app.post('/foundation-api/turnover',requireStaff,(req,res)=>{
-  const s=readStore(),u=staffSession(req),date=String(req.body?.date||todayISO()).slice(0,10);
-  const gross=cleanMoney(req.body?.grossAmount),returns=cleanMoney(req.body?.returnAmount),orders=Math.max(0,Math.round(normalizeNumber(req.body?.orderCount)));
-  if(!gross&&orders===0)return res.status(400).json({error:'Ciro veya sipariş adedi girilmelidir'});
-  const existing=s.turnovers.find(x=>x.staffId===u.id&&x.storeId===u.storeId&&x.date===date);
-  const row={id:existing?.id||crypto.randomUUID(),date,staffId:u.id,staffName:u.name,storeId:u.storeId,storeName:u.storeName,grossAmount:gross,returnAmount:returns,netAmount:Math.max(0,gross-returns),orderCount:orders,note:String(req.body?.note||'').slice(0,500),updatedAt:new Date().toISOString()};
-  if(existing)Object.assign(existing,row);else s.turnovers.unshift(row);
-  audit(s,existing?'Personel ciro güncelledi':'Personel ciro girdi',u.name,{store:u.storeName,date,netAmount:row.netAmount});
-  writeStore(s);res.json({ok:true,row});
+  res.status(410).json({
+    error:'Ciro girişi kaldırıldı. Satışı Satış Merkezi’nden girin; ciro ve prim otomatik hesaplanır.',
+    turnoverSource:'auto'
+  });
 });
 app.post('/foundation-api/announcement/:id/read',requireStaff,(req,res)=>{
   const s=readStore(),u=staffSession(req);
@@ -881,7 +952,17 @@ app.post('/foundation-api/announcement/:id/read',requireStaff,(req,res)=>{
 
 app.get('/web-api/admin/foundation',requireAdmin,(req,res)=>{
   const s=readStore();
-  res.json({stores:s.stores,staff:s.staff.map(x=>publicStaff(x,s)),turnovers:s.turnovers,announcements:s.announcements,announcementReads:s.announcementReads,summary:foundationSummary(s)});
+  const days=Math.min(180,Math.max(1,Math.round(Number(req.query.days)||30)));
+  res.json({
+    stores:s.stores,
+    staff:s.staff.map(x=>publicStaff(x,s)),
+    turnovers:buildAutoTurnovers(s,{days}),
+    turnoverSource:'auto',
+    turnoverDays:days,
+    announcements:s.announcements,
+    announcementReads:s.announcementReads,
+    summary:foundationSummary(s)
+  });
 });
 app.post('/web-api/admin/store-location',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},name=String(x.name||'').trim();
