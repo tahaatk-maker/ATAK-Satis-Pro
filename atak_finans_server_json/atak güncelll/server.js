@@ -804,8 +804,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.26-dynamics-stok-maliyet',
-  build:'fix-v25',
+  version:'6.3.27-dynamics-tek-aktar',
+  build:'fix-v26',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3639,9 +3639,7 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,dynamicsUpload.sing
     try{categoryMap=JSON.parse(String(req.body?.categoryMap||'{}'))||{}}
     catch(_){return res.status(400).json({error:'Kategori seçimleri okunamadı'})}
 
-    const createNew=String(req.body?.createNew??'1')!=='0';
-    const updateStock=String(req.body?.updateStock||'0')==='1';
-    const updatePurchasePrice=String(req.body?.updatePurchasePrice||'0')==='1';
+    // Tek akış: yeni ürün ekle + maliyet her zaman Excel'deki yenisi (değer varsa) + stok güncelle
     const warehouseId=String(req.body?.warehouseId||s.warehouses?.find(w=>w.active!==false)?.id||'');
     const actor=currentSessionUser(req)?.name||'Dynamics Excel';
 
@@ -3652,7 +3650,6 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,dynamicsUpload.sing
       let product=dynamicsExistingProduct(s,r);
 
       if(!product){
-        if(!createNew){skipped++;continue}
         const selected=String(categoryMap[r.itemCode]||categoryMap[searchName]||'').trim();
         const cat=(s.categories||[]).find(c=>String(c.id)===selected&&c.active!==false);
         if(!cat){categoryMissing++;continue}
@@ -3666,34 +3663,36 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,dynamicsUpload.sing
           dynamicsProductId:r.dynamicsProductId,
           brand,
           category:cat.id,
-          purchasePrice:updatePurchasePrice&&r.purchasePrice>0?r.purchasePrice:0,
+          purchasePrice:r.purchasePrice>0?r.purchasePrice:0,
           stock:0,
           active:true,
           tags:['dynamics-excel','sales-code']
         });
         s.products.unshift(product);
         added++;
-        if(updatePurchasePrice&&r.purchasePrice>0)priceUpdated++;
+        if(r.purchasePrice>0)priceUpdated++;
       }else{
         let touched=false;
-        if(updatePurchasePrice&&r.purchasePrice>0){
+        // Yeni Excel'deki maliyet her zaman kazanır (0/boş ise eski alışa dokunma)
+        if(r.purchasePrice>0){
           product.purchasePrice=r.purchasePrice;
           product.updatedAt=new Date().toISOString();
+          product.purchasePriceSource='dynamics-excel';
+          product.purchasePriceUpdatedAt=new Date().toISOString();
           priceUpdated++;touched=true;
         }
-        // Kimlik alanlarını boşsa doldur
         if(!product.itemCode&&r.itemCode){product.itemCode=r.itemCode;touched=true}
         if(!product.searchName){product.searchName=searchName;touched=true}
         if(!product.dynamicsProductId&&r.dynamicsProductId){product.dynamicsProductId=r.dynamicsProductId;touched=true}
         if(touched)existingUpdated++;
-        else if(!updateStock)skipped++;
+        else skipped++;
       }
 
-      if(updateStock&&warehouseId&&product){
+      if(warehouseId&&product){
         if(dynamicsApplyStock(s,product.code,warehouseId,r.stockQty,actor))stockUpdated++;
       }
     }
-    audit(s,'Dynamics Excel aktarımı (ürün/stok/maliyet)','Excel',{
+    audit(s,'Dynamics Excel tek aktarım (ürün+maliyet+stok)','Excel',{
       added,skipped,invalid,categoryMissing,stockUpdated,priceUpdated,existingUpdated
     });
     writeStore(s);

@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v25" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v25" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v26" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v26" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1312,17 +1312,14 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 </section>
 <section class="tab" id="dynamicsExcelImport">
-  <div class="panel dynamics-import-head"><div><small>ÜRÜN & STOK</small><h2>Dynamics Excel Aktarımı</h2><p>Canlı Dynamics API bağlı değil — Rapid erişimi gelene kadar Dynamics’ten <b>Excel indirip buraya yükleyin</b>. Ürün kodu + isteğe bağlı <b>stok</b> ve <b>alış/maliyet</b> güncellenir.</p></div></div>
+  <div class="panel dynamics-import-head"><div><small>ÜRÜN & STOK</small><h2>Dynamics Excel Aktarımı</h2><p><b>Tek işlem:</b> Dynamics Excel’ini yükle → yeni ürünler eklenir, mevcut ürünlerde <b>maliyet her zaman Excel’deki yenisiyle değişir</b> (çakışma yok), stok da güncellenir.</p></div></div>
   <div class="dynamics-import-grid">
     <div class="panel dynamics-import-form">
       <label>Dynamics Excel Dosyası<input id="dynamicsExcelFile" type="file" accept=".xlsx,.xls"></label>
-      <label>Depo (stok güncelleme için)<select id="dynamicsWarehouse"></select></label>
-      <label class="check-row"><input id="dynamicsUpdateStock" type="checkbox" checked/> Exceldeki stoğu depoya yaz</label>
-      <label class="check-row"><input id="dynamicsUpdateCost" type="checkbox" checked/> Exceldeki maliyeti alış fiyatına yaz</label>
-      <label class="check-row"><input id="dynamicsCreateNew" type="checkbox" checked/> Yeni ürünleri oluştur</label>
+      <label>Depo<select id="dynamicsWarehouse"></select></label>
       
-      <div class="dynamics-info-box dynamics-stock-info"><b>Otomatik çekim?</b><span>Hayır — Dynamics sunucusuna doğrudan bağlanmıyoruz. Siz Dynamics’ten listeyi Excel olarak alıp yüklersiniz; sistem stok + maliyet sütunlarını da okur.</span></div>
-<div class="dynamics-info-box"><b>Mükerrer Kontrolü</b><span>Madde kodu, Arama adı, Ürün kimliği ve mevcut ürün kodu karşılaştırılır. Mevcut ürünler tekrar eklenmez; stok/maliyet seçiliyse <b>güncellenir</b>.</span></div>
+      <div class="dynamics-info-box dynamics-stock-info"><b>Nasıl çalışır?</b><span>1) Önizle → 2) Aktar. Ürün yoksa ekler; varsa tekrar oluşturmaz. Maliyet sütununda değer varsa <b>eski alış silinir, yenisi yazılır</b>. Son yüklediğin Excel geçerlidir.</span></div>
+<div class="dynamics-info-box"><b>Mükerrer yok</b><span>Madde kodu / Arama adı / Ürün kimliği eşleşirse ürün bir kez kalır; sadece stok ve maliyet güncellenir.</span></div>
       <div class="dynamics-info-box"><b>Kategori Seçimi</b><span>Sistem kategori önerisini otomatik seçer. Yanlışsa ürünün karşısındaki listeden değiştirin. Bulamadığı ürünleri Diğer olarak bırakır.</span></div>
       <div class="dynamics-info-box">
 <b>Otomatik Kategori Kuralları</b>
@@ -1348,11 +1345,11 @@ Bulunamayan → Diğer.
   </label>
   <button id="dynamicsApplyBulkCategory" class="secondary-btn" type="button">Seçili Kategoriyi Tüm Yenilere Uygula</button>
 </div>
-<div class="dynamics-import-actions"><button id="dynamicsPreviewBtn" class="secondary-btn" type="button">Excel'i Önizle</button><button id="dynamicsImportBtn" class="primary" type="button" disabled>Aktar (ürün / stok / maliyet)</button></div>
+<div class="dynamics-import-actions"><button id="dynamicsPreviewBtn" class="secondary-btn" type="button">Excel'i Önizle</button><button id="dynamicsImportBtn" class="primary" type="button" disabled>Tek Tıkla Aktar</button></div>
       <div id="dynamicsImportStatus" class="form-status"></div>
     </div>
-    <div class="panel"><h3>Aktarım Özeti</h3><div id="dynamicsImportSummary" class="dynamics-summary"><article><b>0</b><span>Toplam Satır</span></article><article><b>0</b><span>Yeni Ürün</span></article><article><b>0</b><span>Zaten Var</span></article><article><b>0</b><span>Hatalı</span></article></div>
-    <p class="note" id="dynamicsCostStockHint" style="margin-top:12px">Maliyet sütunu: Dynamics export’ta “Birim maliyet / Alış fiyatı / Ortalama maliyet” varsa okunur. Yoksa <b>Alış Faturaları</b> ekranından Arçelik faturasını yükleyin.</p>
+    <div class="panel"><h3>Aktarım Özeti</h3><div id="dynamicsImportSummary" class="dynamics-summary"><article><b>0</b><span>Toplam Satır</span></article><article><b>0</b><span>Yeni Ürün</span></article><article><b>0</b><span>Güncellenecek</span></article><article><b>0</b><span>Hatalı</span></article></div>
+    <p class="note" id="dynamicsCostStockHint" style="margin-top:12px">Excel’de “Birim maliyet / Alış fiyatı / Ortalama maliyet” olsun. Yoksa maliyet gelmez — o zaman Alış Faturaları’ndan Arçelik listesini yükle.</p>
     </div>
   </div>
   <div class="panel table-wrap dynamics-preview-wrap"><table><thead><tr><th>DURUM</th><th>ARAMA ADI / SATIŞ ÜRÜN KODU</th><th>STOK</th><th>MALİYET</th><th>KATEGORİ</th></tr></thead><tbody id="dynamicsPreviewTable"></tbody></table><div id="dynamicsPreviewEmpty" class="empty">Excel seçip “Excel'i Önizle” butonuna basın.</div></div>
@@ -1998,5 +1995,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v25"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v26"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
