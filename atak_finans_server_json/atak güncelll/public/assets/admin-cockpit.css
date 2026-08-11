@@ -112,6 +112,38 @@
 .ck-brand-pill.other{background:#f1f5f9;color:#64748b}
 .ck-empty{padding:26px;text-align:center;color:var(--ck-muted);font-weight:650}
 
+/* ---- Kâr & Maliyet ---- */
+.profit-filters{
+  display:flex;gap:12px;align-items:end;flex-wrap:wrap
+}
+.profit-filters label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#667890}
+.profit-filters input,.profit-filters select{
+  min-height:44px;border:1px solid var(--ck-line,#dce4ef);border-radius:11px;padding:0 12px;background:#fff
+}
+.profit-filters .primary{min-height:44px;border-radius:11px;padding:0 18px}
+.profit-quick{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.profit-quick .mini-btn{min-height:38px;padding:0 14px;border-radius:10px}
+.profit-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:16px 0}
+.profit-kpis article{
+  background:#fff;border:1px solid var(--ck-line,#dce4ef);border-radius:18px;padding:18px;
+  display:grid;gap:4px;box-shadow:0 8px 22px rgba(7,26,51,.06)
+}
+.profit-kpis small{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#667890}
+.profit-kpis b{font-size:24px;color:#0c1a33;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.profit-kpis span{font-size:12px;color:#8a97ab;font-weight:650}
+.profit-kpis .profit-gross{border-color:#b7e4c7;background:linear-gradient(180deg,#fff,#f0fdf4)}
+.profit-kpis .profit-gross b{color:#15803d}
+.profit-kpis .profit-net{border-color:#8fb4e5;background:linear-gradient(180deg,#fff,#eef5ff)}
+.profit-kpis .profit-net b{color:#0b4d94}
+#profitCenter .turnover-table table{min-width:640px}
+#profitCenter td small.warn-text{display:block;font-size:11px}
+@media(max-width:1200px){.profit-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){
+  .profit-kpis{grid-template-columns:1fr 1fr}
+  .profit-filters{flex-direction:column;align-items:stretch}
+  .profit-quick{margin-left:0}
+}
+
 /* ---- Foundation alt sekmeleri ---- */
 .fnd-tabs{
   display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px

@@ -287,6 +287,7 @@ const PERMISSION_CATALOG=[
   {id:'screen_my_sales',name:'Satışlarım & Primim',group:'Finans & Cari'},
   {id:'screen_staff_sales_report',name:'Personel Satış Raporu',group:'Finans & Cari'},
   {id:'screen_manager_approvals',name:'Yönetici Onayları',group:'Finans & Cari'},
+  {id:'screen_profit',name:'Kâr & Maliyet',group:'Finans & Cari'},
   {id:'screen_invoice_center',name:'e-Fatura Merkezi',group:'Finans & Cari'},
   {id:'orders_manage',name:'Satış kaydı yap (POS API)',group:'Satış işlemleri'},
   {id:'sale_docs',name:'Sözleşme / Senet bas',group:'Satış işlemleri'},
@@ -315,7 +316,7 @@ const ROLE_PRESETS={
   admin:{name:'Yönetici',permissions:[
     'dashboard_view','products_manage','marketing_manage','finance_manage','sync_manage','users_manage',
     'orders_manage','sale_docs','sale_offer','sale_invoice_qnb','sale_deduct_stock','customers_manage','invoices_manage',
-    ...STAFF_DEFAULT_SCREENS,'screen_staff_sales_report','screen_manager_approvals','stock_manage','foundation_manage','settings_manage','reports_view'
+    ...STAFF_DEFAULT_SCREENS,'screen_staff_sales_report','screen_manager_approvals','screen_profit','stock_manage','foundation_manage','settings_manage','reports_view'
   ]},
   super_admin:{name:'Süper Admin',permissions:['*']},
   sales:{name:'Satış Personeli',permissions:[
@@ -327,7 +328,7 @@ const ROLE_PRESETS={
   warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','stock_view','orders_view','screen_sales_tracking']},
   accounting:{name:'Muhasebe',permissions:[
     'dashboard_view','finance_manage','finance_view','orders_view','invoices_manage','sale_invoice_qnb',
-    'screen_finance','screen_uninvoiced','screen_customer_payments','screen_customers','screen_invoice_center','screen_my_sales'
+    'screen_finance','screen_uninvoiced','screen_customer_payments','screen_customers','screen_invoice_center','screen_my_sales','screen_profit'
   ]},
   service:{name:'Servis',permissions:['dashboard_view','orders_view','screen_sales_tracking']},
   viewer:{name:'Sadece Görüntüleme',permissions:['dashboard_view','products_view','orders_view']}
@@ -781,8 +782,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.23-otomatik-ciro',
-  build:'fix-v22',
+  version:'6.3.24-kar-maliyet',
+  build:'fix-v23',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -1693,7 +1694,18 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     const product=(s.products||[]).find(p=>String(p.code)===productCode);
     const itemCode=String(i.itemCode||product?.itemCode||'').trim();
     const materialCode=String(i.materialCode||product?.searchName||product?.code||i.productName||productCode).trim();
-    return{productCode,itemCode,materialCode,productName:materialCode,brand:String(i.brand||product?.brand||'').trim(),quantity:qty,unitPrice,total:qty*unitPrice};
+    // Maliyet ve KDV satış anında sabitlenir; ürün kartı sonradan değişse geçmiş kâr bozulmaz
+    const unitCost=normalizeNumber(product?.purchasePrice||0);
+    const vatRate=Number(product?.vatRate!=null?product.vatRate:20)||20;
+    return{
+      productCode,itemCode,materialCode,productName:materialCode,
+      brand:String(i.brand||product?.brand||'').trim(),
+      quantity:qty,unitPrice,total:qty*unitPrice,
+      vatRate,
+      unitCost,
+      costTotal:Math.round(qty*unitCost*100)/100,
+      costMissing:unitCost<=0
+    };
   });
   total=Math.round(total*100)/100;
   const grossTotal=total;
@@ -1986,7 +1998,17 @@ function normalizeSaleEditItems(s,items){
     const product=(s.products||[]).find(p=>String(p.code)===productCode);
     const itemCode=String(i.itemCode||product?.itemCode||'').trim();
     const materialCode=String(i.materialCode||product?.searchName||product?.code||i.productName||productCode).trim();
-    return{productCode,itemCode,materialCode,productName:materialCode,quantity:qty,unitPrice,total:Math.round(qty*unitPrice*100)/100};
+    const unitCost=normalizeNumber(i.unitCost!=null?i.unitCost:(product?.purchasePrice||0));
+    const vatRate=Number(i.vatRate!=null?i.vatRate:(product?.vatRate!=null?product.vatRate:20))||20;
+    return{
+      productCode,itemCode,materialCode,productName:materialCode,
+      brand:String(i.brand||product?.brand||'').trim(),
+      quantity:qty,unitPrice,total:Math.round(qty*unitPrice*100)/100,
+      vatRate,
+      unitCost,
+      costTotal:Math.round(qty*unitCost*100)/100,
+      costMissing:unitCost<=0
+    };
   });
   if(!clean.length)throw new Error('En az bir ürün gerekli');
   return clean;
@@ -2266,6 +2288,195 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
     people:salesPeople(s,req)
   };
 }
+/**
+ * Bir satışın maliyet ve kâr dökümü.
+ * Fiyatlar ve alış maliyeti KDV dahil tutulduğu için kâr KDV hariç hesaplanır.
+ * İskonto kalemlere oransal dağıtılır; maliyeti girilmemiş kalemler ayrıca sayılır.
+ */
+function saleProfitBreakdown(s,tx){
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  const items=Array.isArray(tx.items)?tx.items:[];
+  const productByCode=new Map((s.products||[]).map(p=>[String(p.code),p]));
+  const gross=Number(tx.grossTotal!=null&&tx.grossTotal!==''?tx.grossTotal:saleAmount(tx))||0;
+  const net=saleAmount(tx);
+  const factor=gross>0?net/gross:1;
+
+  let revenueExVat=0,costExVat=0,vatAmount=0,itemRevenue=0;
+  let missingCostCount=0,missingCostRevenue=0,estimatedCostCount=0;
+
+  for(const it of items){
+    const qty=Number(it.quantity||0);
+    const lineGross=Number(it.total!=null?it.total:qty*Number(it.unitPrice||0))||0;
+    const lineRevenue=round(lineGross*factor);
+    itemRevenue+=lineRevenue;
+
+    const product=productByCode.get(String(it.productCode||''));
+    const vatRate=Number(it.vatRate!=null?it.vatRate:(product?.vatRate!=null?product.vatRate:20))||20;
+
+    // Eski satışlarda maliyet yoksa ürün kartından tahmin et (işaretlenir)
+    let unitCost=Number(it.unitCost||0);
+    if(!(unitCost>0)&&it.unitCost==null){
+      const fallback=normalizeNumber(product?.purchasePrice||0);
+      if(fallback>0){unitCost=fallback;estimatedCostCount+=1}
+    }
+    const lineCost=unitCost>0?round(qty*unitCost):0;
+
+    const lineRevenueExVat=round(lineRevenue/(1+vatRate/100));
+    const lineCostExVat=round(lineCost/(1+vatRate/100));
+    revenueExVat+=lineRevenueExVat;
+    costExVat+=lineCostExVat;
+    vatAmount+=round(lineRevenue-lineRevenueExVat);
+
+    if(!(unitCost>0)){missingCostCount+=1;missingCostRevenue+=lineRevenue}
+  }
+
+  const commission=Number(tx.commissionAmount||0);
+  const grossProfit=round(revenueExVat-costExVat);
+  return{
+    saleId:tx.id,
+    date:txDateKey(tx),
+    reference:tx.reference||'',
+    brand:dealerBrandKey(tx),
+    dealerName:tx.dealerName||'',
+    salespersonName:tx.salespersonName||tx.createdBy||'',
+    gross:round(gross),
+    discount:round(gross-net),
+    revenue:round(net),
+    revenueExVat:round(revenueExVat),
+    vatAmount:round(vatAmount),
+    cost:round(costExVat),
+    grossProfit,
+    commission:round(commission),
+    netProfit:round(grossProfit-commission),
+    marginPct:revenueExVat>0?round(grossProfit/revenueExVat*100):0,
+    itemCount:items.length,
+    missingCostCount,
+    missingCostRevenue:round(missingCostRevenue),
+    estimatedCostCount,
+    costReliable:missingCostCount===0
+  };
+}
+/** Stok değerleme: eldeki stok × alış fiyatı (KDV hariç ve dahil) */
+function inventoryValuation(s){
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  const productByCode=new Map((s.products||[]).map(p=>[String(p.code).toLocaleUpperCase('tr-TR'),p]));
+  const warehouseName=id=>(s.warehouses||[]).find(w=>String(w.id)===String(id))?.name||'Depo';
+  let totalQty=0,valueIncVat=0,valueExVat=0,missingCostProducts=new Set(),missingCostQty=0;
+  const byWarehouse=new Map();
+  for(const row of (s.productStocks||[])){
+    const qty=Number(row.quantity||0)-Number(row.reserved||0);
+    if(qty<=0)continue;
+    const p=productByCode.get(String(row.productCode||'').toLocaleUpperCase('tr-TR'));
+    const cost=normalizeNumber(p?.purchasePrice||0);
+    const vat=Number(p?.vatRate!=null?p.vatRate:20)||20;
+    totalQty+=qty;
+    if(!(cost>0)){missingCostProducts.add(String(row.productCode||''));missingCostQty+=qty;continue}
+    const inc=round(qty*cost);
+    const ex=round(inc/(1+vat/100));
+    valueIncVat+=inc;valueExVat+=ex;
+    const key=String(row.warehouseId||'');
+    if(!byWarehouse.has(key))byWarehouse.set(key,{warehouseId:key,warehouseName:warehouseName(key),quantity:0,valueExVat:0});
+    const w=byWarehouse.get(key);
+    w.quantity+=qty;w.valueExVat=round(w.valueExVat+ex);
+  }
+  return{
+    totalQuantity:totalQty,
+    valueExVat:round(valueExVat),
+    valueIncVat:round(valueIncVat),
+    missingCostProducts:missingCostProducts.size,
+    missingCostQuantity:missingCostQty,
+    byWarehouse:[...byWarehouse.values()].sort((a,b)=>b.valueExVat-a.valueExVat)
+  };
+}
+/** Kâr / maliyet raporu */
+app.get('/web-api/admin/profit-report',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  const today=todayISO();
+  const monthStart=`${today.slice(0,7)}-01`;
+  const from=String(req.query.from||monthStart).slice(0,10);
+  const to=String(req.query.to||today).slice(0,10);
+  const dealerId=String(req.query.dealerId||'');
+
+  const sales=(s.financeTransactions||[]).filter(t=>{
+    if(t.kind!=='sale'||t.cancelled)return false;
+    const key=txDateKey(t);
+    if(!key||key<from||key>to)return false;
+    if(dealerId&&String(t.dealerId||'')!==dealerId)return false;
+    return true;
+  });
+
+  const blank=()=>({revenue:0,revenueExVat:0,cost:0,grossProfit:0,commission:0,netProfit:0,vatAmount:0,count:0});
+  const sum={...blank(),gross:0,discount:0,missingCostCount:0,missingCostRevenue:0,estimatedCostCount:0};
+  const byBrand={beko:blank(),istikbal:blank(),other:blank()};
+  const byProduct=new Map();
+  const rows=[];
+
+  for(const t of sales){
+    const b=saleProfitBreakdown(s,t);
+    rows.push(b);
+    sum.count+=1;
+    sum.gross+=b.gross;sum.discount+=b.discount;
+    sum.revenue+=b.revenue;sum.revenueExVat+=b.revenueExVat;sum.vatAmount+=b.vatAmount;
+    sum.cost+=b.cost;sum.grossProfit+=b.grossProfit;
+    sum.commission+=b.commission;sum.netProfit+=b.netProfit;
+    sum.missingCostCount+=b.missingCostCount;
+    sum.missingCostRevenue+=b.missingCostRevenue;
+    sum.estimatedCostCount+=b.estimatedCostCount;
+
+    const bucket=byBrand[b.brand]||byBrand.other;
+    bucket.count+=1;bucket.revenue+=b.revenue;bucket.revenueExVat+=b.revenueExVat;
+    bucket.cost+=b.cost;bucket.grossProfit+=b.grossProfit;
+    bucket.commission+=b.commission;bucket.netProfit+=b.netProfit;bucket.vatAmount+=b.vatAmount;
+
+    // Ürün bazında kâr
+    const gross=b.gross>0?b.gross:1;
+    const factor=b.revenue/gross;
+    for(const it of (t.items||[])){
+      const code=String(it.productCode||'-');
+      if(!byProduct.has(code))byProduct.set(code,{productCode:code,productName:it.productName||it.materialCode||code,quantity:0,revenueExVat:0,cost:0,grossProfit:0,costMissing:false});
+      const row=byProduct.get(code);
+      const qty=Number(it.quantity||0);
+      const lineRevenue=Number(it.total||0)*factor;
+      const vat=Number(it.vatRate!=null?it.vatRate:20)||20;
+      const unitCost=Number(it.unitCost||0);
+      const lineRevEx=lineRevenue/(1+vat/100);
+      const lineCostEx=unitCost>0?(qty*unitCost)/(1+vat/100):0;
+      row.quantity+=qty;
+      row.revenueExVat=round(row.revenueExVat+lineRevEx);
+      row.cost=round(row.cost+lineCostEx);
+      row.grossProfit=round(row.revenueExVat-row.cost);
+      if(!(unitCost>0))row.costMissing=true;
+    }
+  }
+
+  const finish=o=>({
+    ...o,
+    revenue:round(o.revenue),revenueExVat:round(o.revenueExVat),cost:round(o.cost),
+    grossProfit:round(o.grossProfit),commission:round(o.commission),netProfit:round(o.netProfit),
+    vatAmount:round(o.vatAmount),
+    marginPct:o.revenueExVat>0?round(o.grossProfit/o.revenueExVat*100):0
+  });
+
+  res.json({
+    ok:true,from,to,dealerId,
+    summary:{
+      ...finish(sum),
+      gross:round(sum.gross),
+      discount:round(sum.discount),
+      missingCostCount:sum.missingCostCount,
+      missingCostRevenue:round(sum.missingCostRevenue),
+      estimatedCostCount:sum.estimatedCostCount,
+      costReliable:sum.missingCostCount===0
+    },
+    byBrand:{beko:finish(byBrand.beko),istikbal:finish(byBrand.istikbal),other:finish(byBrand.other)},
+    byProduct:[...byProduct.values()].sort((a,b)=>b.grossProfit-a.grossProfit).slice(0,25),
+    rows:rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,100),
+    inventory:inventoryValuation(s),
+    dealers:(s.dealerSettings||[]).map(d=>({id:d.id,name:d.name})),
+    note:'Kâr KDV hariç hesaplanır. Maliyet, ürün kartındaki alış fiyatından satış anında sabitlenir.'
+  });
+});
 /** Dashboard kokpiti: tek istekte KPI + günlük seri + marka kırılımı + son satışlar */
 app.get('/web-api/admin/dashboard-cockpit',requireAdmin,(req,res)=>{
   const s=readStore();

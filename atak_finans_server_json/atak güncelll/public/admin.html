@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v22" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v22" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v23" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v23" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -593,6 +593,7 @@ body.inv-full #pageTitle{font-size:18px}
 <button data-tab="mySalesReport" type="button">📈 Satışlarım & Primim</button>
 <button data-tab="staffSalesReport" type="button">👥 Personel Satış Raporu</button>
 <button data-tab="managerApprovals" type="button">✅ Yönetici Onayları</button>
+<button data-tab="profitCenter" type="button">📊 Kâr &amp; Maliyet</button>
 <button data-tab="invoiceCenter" type="button">🧾 e-Fatura Merkezi</button>
 <small class="menu-label">ÜRÜN &amp; STOK</small>
 <button data-tab="products" type="button">▦ Tüm Ürünler</button>
@@ -1745,6 +1746,50 @@ Bulunamayan → Diğer.
 </div>
 </div>
 </section>
+<section class="tab" id="profitCenter">
+<div class="foundation-head panel">
+  <div><small class="eyebrow">KÂR & MALİYET</small><h2>Kârlılık Raporu</h2><p class="note">Kâr <b>KDV hariç</b> hesaplanır. Maliyet, ürün kartındaki <b>alış fiyatından satış anında</b> sabitlenir.</p></div>
+  <button class="backup-btn" id="profitExportBtn" type="button">⬇ Excel / CSV İndir</button>
+</div>
+
+<div class="panel profit-filters">
+  <label>Başlangıç<input id="profitFrom" type="date"/></label>
+  <label>Bitiş<input id="profitTo" type="date"/></label>
+  <label>Bayi<select id="profitDealer"><option value="">Tümü</option></select></label>
+  <button class="primary" id="profitRefreshBtn" type="button">Raporu Getir</button>
+  <div class="profit-quick">
+    <button type="button" class="mini-btn" data-profit-range="today">Bugün</button>
+    <button type="button" class="mini-btn" data-profit-range="month">Bu Ay</button>
+    <button type="button" class="mini-btn" data-profit-range="prevmonth">Geçen Ay</button>
+    <button type="button" class="mini-btn" data-profit-range="year">Bu Yıl</button>
+  </div>
+</div>
+
+<div id="profitWarning" class="warn-banner hidden"></div>
+<div class="profit-kpis" id="profitKpis"></div>
+
+<div class="ck-grid ck-grid-2">
+  <div class="panel">
+    <div class="panel-head"><div><small class="v4-kicker">BAYİ KIRILIMI</small><h2>Beko / İstikbal Kârı</h2></div></div>
+    <div class="turnover-table" id="profitBrandTable"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><div><small class="v4-kicker">STOK DEĞERİ</small><h2>Envanter Maliyeti</h2></div></div>
+    <div id="profitInventory"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div><small class="v4-kicker">ÜRÜN BAZINDA</small><h2>En Kârlı Ürünler</h2><p class="note">İlk 25 kalem</p></div></div>
+  <div class="turnover-table" id="profitProductTable"></div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div><small class="v4-kicker">SATIŞ BAZINDA</small><h2>Satış Kâr Dökümü</h2></div><span id="profitRowCount"></span></div>
+  <div class="turnover-table" id="profitRowsTable"></div>
+</div>
+<div class="form-status" id="profitStatus"></div>
+</section>
 <section class="tab" id="settings">
 <div class="foundation-head panel"><div><small class="eyebrow">SİSTEM AYARLARI</small><h2>Ayarlar</h2><p class="note">Kasa/banka hesapları, senet ve bayi/prim ayarları burada. QNB e-Fatura ayarları <b>e-Fatura Merkezi → Kurulum</b> altındadır.</p></div></div>
 <div class="settings-grid">
@@ -1849,5 +1894,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v22"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v23"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

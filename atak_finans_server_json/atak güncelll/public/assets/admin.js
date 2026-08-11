@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v22 */
+/* ATAK_ADMIN_BUILD=fix-v23 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -97,6 +97,7 @@ function goTab(id,{remember=true}={}){
   if(id==='mySalesReport')setTimeout(loadMySalesReport,20);
   if(id==='staffSalesReport')setTimeout(loadStaffSalesReport,20);
   if(id==='managerApprovals')setTimeout(loadApprovals,20);
+  if(id==='profitCenter')setTimeout(()=>loadProfitReport(),20);
   if(id==='salesTracking')setTimeout(loadSalesTracking,20);
   if(id==='customerPayments')setTimeout(()=>loadCustomerPayments().catch(e=>toast(e.message)),20);
   if(id==='dynamicsExcelImport')setTimeout(()=>loadDynamicsImport(),20);
@@ -181,6 +182,156 @@ async function renderDashboardRevenue(){
       <div class="stat total"><small>Toplam ciro</small><strong>${money(total)}</strong><em>KDV dahil · POS dahil</em></div>`;
   }catch(e){console.error(e)}
 }
+/* ===== Kâr & Maliyet raporu ===== */
+let profitData=null;
+function profitPct(v){return `%${Number(v||0).toLocaleString('tr-TR',{minimumFractionDigits:1,maximumFractionDigits:1})}`}
+function profitRangePreset(kind){
+  const now=new Date();
+  const iso=d=>localDate(d);
+  if(kind==='today')return{from:iso(now),to:iso(now)};
+  if(kind==='month')return{from:iso(new Date(now.getFullYear(),now.getMonth(),1)),to:iso(now)};
+  if(kind==='prevmonth'){
+    const first=new Date(now.getFullYear(),now.getMonth()-1,1);
+    const last=new Date(now.getFullYear(),now.getMonth(),0);
+    return{from:iso(first),to:iso(last)};
+  }
+  if(kind==='year')return{from:iso(new Date(now.getFullYear(),0,1)),to:iso(now)};
+  return{from:iso(now),to:iso(now)};
+}
+async function loadProfitReport(){
+  const st=q('#profitStatus');
+  if(!q('#profitKpis'))return;
+  if(!q('#profitFrom').value||!q('#profitTo').value){
+    const r=profitRangePreset('month');
+    q('#profitFrom').value=r.from;q('#profitTo').value=r.to;
+  }
+  if(st){st.textContent='Hesaplanıyor…';st.className='form-status'}
+  try{
+    const p=new URLSearchParams({from:q('#profitFrom').value,to:q('#profitTo').value});
+    const dealer=q('#profitDealer')?.value||'';
+    if(dealer)p.set('dealerId',dealer);
+    const d=await api('/web-api/admin/profit-report?'+p.toString());
+    profitData=d;
+    renderProfitReport(d);
+    if(st){st.textContent=`${d.summary.count} satış · ${d.from} → ${d.to}`;st.className='form-status success'}
+  }catch(e){
+    if(st){st.textContent=e.message;st.className='form-status error'}
+  }
+}
+function renderProfitReport(d){
+  const s=d.summary||{};
+  // Maliyeti girilmemiş ürün varsa rakama güvenilmez — açıkça uyar
+  const warn=q('#profitWarning');
+  if(warn){
+    if(Number(s.missingCostCount||0)>0){
+      warn.classList.remove('hidden');
+      warn.innerHTML=`<b>Dikkat:</b> ${s.missingCostCount} satış kaleminde alış fiyatı girilmemiş (${money(s.missingCostRevenue)} ciro). Bu kalemler maliyetsiz sayıldığı için <b>kâr olduğundan yüksek görünüyor</b>. Ürün kartlarına “Alış fiyatı” girin.`;
+    }else{
+      warn.classList.add('hidden');
+    }
+  }
+  q('#profitKpis').innerHTML=`
+    <article><small>Net Satış (KDV dahil)</small><b>${money(s.revenue)}</b><span>${Number(s.count||0)} satış · iskonto ${money(s.discount)}</span></article>
+    <article><small>Matrah (KDV hariç)</small><b>${money(s.revenueExVat)}</b><span>KDV ${money(s.vatAmount)}</span></article>
+    <article><small>Maliyet (KDV hariç)</small><b>${money(s.cost)}</b><span>satılan malın maliyeti</span></article>
+    <article class="profit-gross"><small>Brüt Kâr</small><b>${money(s.grossProfit)}</b><span>marj ${profitPct(s.marginPct)}</span></article>
+    <article class="profit-net"><small>Net Kâr (prim sonrası)</small><b>${money(s.netProfit)}</b><span>prim ${money(s.commission)}</span></article>`;
+
+  const brandRow=(label,cls,v)=>`<tr>
+    <td><span class="ck-brand-pill ${cls}">${label}</span></td>
+    <td>${Number(v.count||0)}</td>
+    <td>${money(v.revenueExVat)}</td>
+    <td>${money(v.cost)}</td>
+    <td><b>${money(v.grossProfit)}</b></td>
+    <td>${profitPct(v.marginPct)}</td>
+    <td><b>${money(v.netProfit)}</b></td>
+  </tr>`;
+  const b=d.byBrand||{};
+  q('#profitBrandTable').innerHTML=`<table><thead><tr><th>Bayi</th><th>Satış</th><th>Matrah</th><th>Maliyet</th><th>Brüt Kâr</th><th>Marj</th><th>Net Kâr</th></tr></thead><tbody>
+    ${brandRow('Beko','beko',b.beko||{})}
+    ${brandRow('İstikbal','istikbal',b.istikbal||{})}
+    ${Number(b.other?.count||0)>0?brandRow('Diğer','other',b.other):''}
+  </tbody></table>`;
+
+  const inv=d.inventory||{};
+  q('#profitInventory').innerHTML=`
+    <div class="ck-money-grid">
+      <article class="bank"><small>Stok Değeri (KDV hariç)</small><b>${money(inv.valueExVat)}</b></article>
+      <article><small>Stok Değeri (KDV dahil)</small><b>${money(inv.valueIncVat)}</b></article>
+      <article class="cash"><small>Toplam Adet</small><b>${Number(inv.totalQuantity||0)}</b></article>
+      <article class="${Number(inv.missingCostProducts||0)>0?'debt':''}"><small>Maliyeti Eksik Ürün</small><b>${Number(inv.missingCostProducts||0)}</b></article>
+    </div>
+    ${(inv.byWarehouse||[]).length?`<div class="turnover-table" style="margin-top:12px"><table><thead><tr><th>Depo</th><th>Adet</th><th>Değer (KDV hariç)</th></tr></thead><tbody>${inv.byWarehouse.map(w=>`<tr><td>${w.warehouseName}</td><td>${w.quantity}</td><td><b>${money(w.valueExVat)}</b></td></tr>`).join('')}</tbody></table></div>`:'<p class="note" style="margin-top:10px">Depo bazlı stok kaydı yok.</p>'}`;
+
+  const prods=d.byProduct||[];
+  q('#profitProductTable').innerHTML=prods.length
+    ?`<table><thead><tr><th>Ürün</th><th>Adet</th><th>Matrah</th><th>Maliyet</th><th>Brüt Kâr</th><th>Marj</th></tr></thead><tbody>${prods.map(p=>{
+        const marj=p.revenueExVat>0?p.grossProfit/p.revenueExVat*100:0;
+        return `<tr><td><b>${ckEsc(p.productName||p.productCode)}</b>${p.costMissing?'<small class="warn-text">alış fiyatı eksik</small>':''}</td><td>${p.quantity}</td><td>${money(p.revenueExVat)}</td><td>${money(p.cost)}</td><td><b>${money(p.grossProfit)}</b></td><td>${profitPct(marj)}</td></tr>`;
+      }).join('')}</tbody></table>`
+    :'<p class="note">Bu dönemde satış yok.</p>';
+
+  const rows=d.rows||[];
+  if(q('#profitRowCount'))q('#profitRowCount').textContent=`${rows.length} satış`;
+  const label={beko:'Beko',istikbal:'İstikbal',other:'Diğer'};
+  q('#profitRowsTable').innerHTML=rows.length
+    ?`<table><thead><tr><th>Tarih</th><th>Referans</th><th>Bayi</th><th>Personel</th><th>Matrah</th><th>Maliyet</th><th>Brüt Kâr</th><th>Marj</th><th>Net Kâr</th></tr></thead><tbody>${rows.map(r=>`<tr class="${r.costReliable?'':'price-warning'}">
+        <td>${ckEsc(r.date||'')}</td>
+        <td>${ckEsc(r.reference||'-')}</td>
+        <td><span class="ck-brand-pill ${r.brand}">${label[r.brand]||'Diğer'}</span></td>
+        <td>${ckEsc(r.salespersonName||'-')}</td>
+        <td>${money(r.revenueExVat)}</td>
+        <td>${money(r.cost)}${r.missingCostCount?'<small class="warn-text">eksik maliyet</small>':''}</td>
+        <td><b>${money(r.grossProfit)}</b></td>
+        <td>${profitPct(r.marginPct)}</td>
+        <td><b>${money(r.netProfit)}</b></td>
+      </tr>`).join('')}</tbody></table>`
+    :'<p class="note">Bu dönemde satış yok.</p>';
+
+  const sel=q('#profitDealer');
+  if(sel&&sel.options.length<=1&&(d.dealers||[]).length){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Tümü</option>'+d.dealers.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+    sel.value=cur;
+  }
+}
+function profitExportCsv(){
+  if(!profitData){toast('Önce raporu getirin');return}
+  const s=profitData.summary||{};
+  const lines=[];
+  const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  lines.push(['ATAK KAR RAPORU',profitData.from+' - '+profitData.to].map(esc).join(';'));
+  lines.push([]);
+  lines.push(['OZET'].map(esc).join(';'));
+  lines.push([['Satış adedi',s.count],['Brüt satış',s.gross],['İskonto',s.discount],['Net satış (KDV dahil)',s.revenue],['Matrah (KDV hariç)',s.revenueExVat],['KDV',s.vatAmount],['Maliyet (KDV hariç)',s.cost],['Brüt kâr',s.grossProfit],['Marj %',s.marginPct],['Prim',s.commission],['Net kâr',s.netProfit],['Maliyeti eksik kalem',s.missingCostCount]].map(r=>r.map(esc).join(';')).join('\n'));
+  lines.push([]);
+  lines.push(['SATIS DOKUMU'].map(esc).join(';'));
+  lines.push(['Tarih','Referans','Bayi','Personel','Matrah','Maliyet','Brüt Kâr','Marj %','Prim','Net Kâr','Eksik maliyet kalemi'].map(esc).join(';'));
+  (profitData.rows||[]).forEach(r=>{
+    lines.push([r.date,r.reference,r.dealerName||r.brand,r.salespersonName,r.revenueExVat,r.cost,r.grossProfit,r.marginPct,r.commission,r.netProfit,r.missingCostCount].map(esc).join(';'));
+  });
+  lines.push([]);
+  lines.push(['URUN BAZINDA'].map(esc).join(';'));
+  lines.push(['Ürün','Adet','Matrah','Maliyet','Brüt Kâr','Alış fiyatı eksik'].map(esc).join(';'));
+  (profitData.byProduct||[]).forEach(p=>{
+    lines.push([p.productName||p.productCode,p.quantity,p.revenueExVat,p.cost,p.grossProfit,p.costMissing?'EVET':'hayır'].map(esc).join(';'));
+  });
+  const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`atak-kar-raporu-${profitData.from}_${profitData.to}.csv`;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+q('#profitRefreshBtn')?.addEventListener('click',()=>loadProfitReport());
+q('#profitDealer')?.addEventListener('change',()=>loadProfitReport());
+q('#profitExportBtn')?.addEventListener('click',profitExportCsv);
+qa('[data-profit-range]').forEach(b=>b.addEventListener('click',()=>{
+  const r=profitRangePreset(b.dataset.profitRange);
+  q('#profitFrom').value=r.from;q('#profitTo').value=r.to;
+  loadProfitReport();
+}));
+
 /* ===== Kokpit: SVG grafikler (harici kütüphane yok) ===== */
 const CK_COLORS={beko:'#1565c0',istikbal:'#c4a15a',other:'#94a3b8'};
 function ckShortMoney(n){
@@ -519,7 +670,8 @@ const PERM_ALIASES={
   screen_finance:['finance_view','finance_manage'],
   screen_invoice_center:['invoices_manage'],
   screen_uninvoiced:['invoices_manage'],
-  screen_sales_tracking:['sales_manage','orders_manage']
+  screen_sales_tracking:['sales_manage','orders_manage'],
+  screen_profit:['reports_view','finance_manage']
 };
 function can(permission,user=window.__currentAdminUser){
   const p=user?.permissions||[];
@@ -536,6 +688,7 @@ const TAB_PERMISSION_MAP={
   mySalesReport:'screen_my_sales',
   staffSalesReport:'screen_staff_sales_report',
   managerApprovals:'screen_manager_approvals',
+  profitCenter:'screen_profit',
   invoiceCenter:'screen_invoice_center',
   uninvoicedSales:'screen_uninvoiced',
   financeDashboard:'screen_finance',
