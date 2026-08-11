@@ -804,8 +804,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.29-alis-geri-al',
-  build:'fix-v28',
+  version:'6.3.30-alis-tek-buton',
+  build:'fix-v29',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
