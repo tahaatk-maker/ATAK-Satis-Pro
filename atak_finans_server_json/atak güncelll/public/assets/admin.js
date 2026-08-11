@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v19 */
+/* ATAK_ADMIN_BUILD=fix-v20 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -614,11 +614,46 @@ function renderFoundation(){
   qa('[data-fstore]').forEach(b=>b.onclick=()=>{const x=f.stores.find(v=>v.id===b.dataset.fstore);q('#fStoreId').value=x.id;q('#fStoreName').value=x.name;q('#fStoreCode').value=x.code||'';q('#fStoreAddress').value=x.address||'';q('#fStoreActive').checked=x.active});
   qa('[data-fstaff]').forEach(b=>b.onclick=()=>{const x=f.staff.find(v=>v.id===b.dataset.fstaff);q('#fStaffId').value=x.id;q('#fStaffName').value=x.name;q('#fStaffUsername').value=x.username;q('#fStaffPassword').value='';q('#fStaffStore').value=x.storeId;q('#fStaffActive').checked=x.active});
   qa('[data-fannouncement-delete]').forEach(b=>b.onclick=async()=>{if(!confirm('Duyuru silinsin mi?'))return;await api('/web-api/admin/announcement/'+b.dataset.fannouncementDelete,{method:'DELETE'});await loadFoundation()});
+  if(q('#fndCountStore'))q('#fndCountStore').textContent=`${f.stores.length} kayıt`;
+  if(q('#fndCountStaff'))q('#fndCountStaff').textContent=`${f.staff.filter(x=>x.active).length} aktif`;
+  if(q('#fndCountAnnounce'))q('#fndCountAnnounce').textContent=`${f.announcements.filter(x=>x.active).length} yayında`;
+  if(q('#fndCountTurnover'))q('#fndCountTurnover').textContent=`${f.turnovers.length} kayıt`;
 }
+/* Foundation alt sekmeleri: Mağaza / Personel / Duyuru / Ciro */
+function setFoundationTab(name){
+  const target=name||'store';
+  qa('.fnd-tab').forEach(b=>b.classList.toggle('active',b.dataset.fndTab===target));
+  qa('.fnd-pane').forEach(p=>p.classList.toggle('active',p.dataset.fndPane===target));
+  try{sessionStorage.setItem('atakFoundationTab',target)}catch(e){}
+}
+qa('.fnd-tab').forEach(b=>b.addEventListener('click',()=>setFoundationTab(b.dataset.fndTab)));
+function resetFoundationForm(kind){
+  if(kind==='store'){
+    q('#storeFoundationForm')?.reset();
+    if(q('#fStoreId'))q('#fStoreId').value='';
+    if(q('#fStoreActive'))q('#fStoreActive').checked=true;
+  }else if(kind==='staff'){
+    q('#staffFoundationForm')?.reset();
+    if(q('#fStaffId'))q('#fStaffId').value='';
+    if(q('#fStaffActive'))q('#fStaffActive').checked=true;
+  }else if(kind==='announce'){
+    q('#announcementFoundationForm')?.reset();
+  }
+  renderFoundation();
+}
+qa('[data-fnd-reset]').forEach(b=>b.addEventListener('click',()=>resetFoundationForm(b.dataset.fndReset)));
 q('#storeFoundationForm').onsubmit=async e=>{e.preventDefault();try{const result=await api('/web-api/admin/store-location',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#fStoreId').value,name:q('#fStoreName').value,code:q('#fStoreCode').value,address:q('#fStoreAddress').value,active:q('#fStoreActive').checked})});e.target.reset();q('#fStoreId').value='';q('#fStoreActive').checked=true;await loadFoundation();toast(`Mağaza kaydedildi: ${result.row?.name||''}`)}catch(err){toast('Mağaza kaydedilemedi: '+err.message)}};
 q('#staffFoundationForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/staff-member',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#fStaffId').value,name:q('#fStaffName').value,username:q('#fStaffUsername').value,password:q('#fStaffPassword').value,storeId:q('#fStaffStore').value,active:q('#fStaffActive').checked})});e.target.reset();q('#fStaffId').value='';q('#fStaffActive').checked=true;await loadFoundation();toast('Personel kaydedildi')};
 q('#announcementFoundationForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/announcement',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:q('#fAnnouncementType').value,title:q('#fAnnouncementTitle').value,message:q('#fAnnouncementMessage').value,storeId:q('#fAnnouncementStore').value,endDate:q('#fAnnouncementEnd').value,active:true})});e.target.reset();await loadFoundation();toast('Duyuru yayınlandı')};
-const oldGoTab=goTab;goTab=function(id){oldGoTab(id);if(id==='foundation')loadFoundation().catch(e=>toast(e.message))};
+const oldGoTab=goTab;goTab=function(id){
+  oldGoTab(id);
+  if(id==='foundation'){
+    let saved='store';
+    try{saved=sessionStorage.getItem('atakFoundationTab')||'store'}catch(e){}
+    setFoundationTab(saved);
+    loadFoundation().catch(e=>toast(e.message));
+  }
+};
 
 
 let stockData=null;

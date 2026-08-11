@@ -112,6 +112,43 @@
 .ck-brand-pill.other{background:#f1f5f9;color:#64748b}
 .ck-empty{padding:26px;text-align:center;color:var(--ck-muted);font-weight:650}
 
+/* ---- Foundation alt sekmeleri ---- */
+.fnd-tabs{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px
+}
+.fnd-tab{
+  display:grid;grid-template-columns:38px 1fr;gap:11px;align-items:center;
+  padding:13px 15px;border:1px solid var(--ck-line,#dce4ef);border-radius:14px;background:#fff;
+  cursor:pointer;font:inherit;text-align:left;color:#667890;
+  transition:border-color .14s,box-shadow .14s,transform .12s,background .14s
+}
+.fnd-tab:hover{border-color:#9db8d8;transform:translateY(-1px)}
+.fnd-tab>span:last-child{display:grid;gap:2px;font-size:14px;font-weight:800;color:#0c1a33}
+.fnd-tab small{font-size:11px;font-weight:650;color:#8a97ab}
+.fnd-tab-ico{
+  display:grid;place-items:center;width:38px;height:38px;border-radius:11px;
+  background:linear-gradient(180deg,#eef5ff,#dcecff);color:#1565c0;font-size:14px;font-weight:900
+}
+.fnd-tab.active{
+  border-color:#8fb4e5;background:linear-gradient(180deg,#fff,#eef5ff);
+  box-shadow:0 8px 18px rgba(21,101,192,.12)
+}
+.fnd-tab.active .fnd-tab-ico{background:linear-gradient(180deg,#1565c0,#0b4d94);color:#fff}
+.fnd-pane{display:none}
+.fnd-pane.active{display:block}
+.fnd-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.8fr);gap:16px;align-items:start}
+.fnd-split .mini-list{max-height:min(58vh,540px)}
+@media(max-width:1000px){
+  .fnd-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fnd-split{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .fnd-tabs{grid-template-columns:1fr 1fr;gap:8px}
+  .fnd-tab{padding:11px;grid-template-columns:32px 1fr;gap:8px}
+  .fnd-tab-ico{width:32px;height:32px}
+  .fnd-tab small{display:none}
+}
+
 /* ---- Para transferi modalı ---- */
 .fin-transfer-card{width:min(520px,96vw);display:grid;gap:12px}
 .fin-transfer-card h2{margin:0}

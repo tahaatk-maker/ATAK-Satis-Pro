@@ -710,8 +710,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.20-ayarlar-kasa',
-  build:'fix-v19',
+  version:'6.3.21-foundation-sekme',
+  build:'fix-v20',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
