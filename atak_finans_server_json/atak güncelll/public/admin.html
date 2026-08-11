@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v26" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v26" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v27" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v27" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1359,7 +1359,7 @@ Bulunamayan → Diğer.
   <div>
     <small class="eyebrow">ÜRÜN & STOK · MALİYET</small>
     <h2>Alış Faturaları</h2>
-    <p class="note">Arçelik (veya diğer tedarikçi) faturalarını buradan girin. Satırdaki <b>birim fiyat ürün kartının alış fiyatına</b> yazılır; sonraki satışlarda kâr buna göre hesaplanır.</p>
+    <p class="note">Arçelik Excel’ini yükle: <b>sistemde olmayan ürünler otomatik eklenir</b>, olanların maliyeti Excel’deki <b>yenisiyle</b> güncellenir. Dynamics aktarımına dokunulmaz.</p>
   </div>
   <a class="backup-btn" id="purchaseTemplateBtn" href="/web-api/admin/purchase-invoice-template">⬇ Excel Şablonu İndir</a>
 </div>
@@ -1395,11 +1395,11 @@ Bulunamayan → Diğer.
       <h3>Önizleme Özeti</h3>
       <div id="purchaseExcelSummary" class="dynamics-summary">
         <article><b>0</b><span>Toplam Satır</span></article>
-        <article class="good"><b>0</b><span>Eşleşen Ürün</span></article>
-        <article class="warn"><b>0</b><span>Eşleşmeyen</span></article>
+        <article class="good"><b>0</b><span>Eşleşen (maliyet güncellenecek)</span></article>
+        <article class="warn"><b>0</b><span>Yeni eklenecek ürün</span></article>
         <article class="bad"><b>0</b><span>Hatalı</span></article>
       </div>
-      <p class="note" style="margin-top:12px">Eşleşmeyen satırlar (sistemde ürün yok) aktarımda atlanır. Önce Dynamics ile ürünleri ekleyin.</p>
+      <p class="note" style="margin-top:12px">Sistemde yoksa ürün kartı oluşturulur + alış fiyatı yazılır. Varsa sadece maliyet yenilenir (son Excel kazanır).</p>
     </div>
   </div>
   <div class="panel table-wrap dynamics-preview-wrap">
@@ -1995,5 +1995,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v26"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v27"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

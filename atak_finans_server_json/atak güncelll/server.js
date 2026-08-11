@@ -804,8 +804,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.27-dynamics-tek-aktar',
-  build:'fix-v26',
+  version:'6.3.28-alis-urun-ekle',
+  build:'fix-v27',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3668,6 +3668,10 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,dynamicsUpload.sing
           active:true,
           tags:['dynamics-excel','sales-code']
         });
+        if(r.purchasePrice>0){
+          product.purchasePriceSource='dynamics-excel';
+          product.purchasePriceUpdatedAt=new Date().toISOString();
+        }
         s.products.unshift(product);
         added++;
         if(r.purchasePrice>0)priceUpdated++;
@@ -3791,6 +3795,41 @@ function parsePurchaseWorkbook(buffer){
   }
   return parsed;
 }
+function purchaseBrandFromSupplier(supplierName='',productName=''){
+  const blob=`${supplierName} ${productName}`.toLocaleLowerCase('tr-TR');
+  if(/istikbal|doğtaş|dogtas/.test(blob))return 'İstikbal';
+  if(/grundig/.test(blob))return 'Grundig';
+  if(/arçelik|arcelik|beko/.test(blob))return 'Beko';
+  return 'Beko';
+}
+function ensureProductFromPurchase(s,{productCode,productName,unitCost,vatRate,supplierName}){
+  const code=String(productCode||productName||'').trim();
+  if(!code)return null;
+  const name=String(productName||productCode||code).trim()||code;
+  ensureDynamicsCoreCategories(s);
+  const category=dynamicsSuggestedCategoryId(s,code);
+  const brand=purchaseBrandFromSupplier(supplierName,name);
+  const product=sanitizeProduct({
+    code,
+    name,
+    searchName:code,
+    itemCode:code,
+    brand,
+    category,
+    purchasePrice:normalizeNumber(unitCost||0),
+    vatRate:normalizeNumber(vatRate||20)||20,
+    listPrice:0,
+    cashPrice:0,
+    cardPrice:0,
+    stock:0,
+    active:true,
+    tags:['alis-faturasi','auto-created']
+  });
+  product.purchasePriceSource='purchase-invoice';
+  product.purchasePriceUpdatedAt=new Date().toISOString();
+  s.products.unshift(product);
+  return product;
+}
 function applyPurchaseInvoiceToStore(s,{
   supplierName='Arçelik A.Ş.',
   invoiceNo='',
@@ -3801,13 +3840,14 @@ function applyPurchaseInvoiceToStore(s,{
   updatePurchasePrice=true,
   addStock=false,
   pricesIncludeVat=true,
+  createMissingProducts=true,
   items=[],
   actor='Yönetici'
 }={}){
   const round=n=>Math.round(Number(n||0)*100)/100;
   const wh=String(warehouseId||s.warehouses?.find(w=>w.active!==false)?.id||'');
   const cleanItems=[];
-  let matched=0,unmatched=0,priceUpdated=0,stockUpdated=0,total=0;
+  let matched=0,unmatched=0,created=0,priceUpdated=0,stockUpdated=0,total=0;
 
   for(const raw of (Array.isArray(items)?items:[])){
     const productCode=String(raw.productCode||'').trim();
@@ -3818,7 +3858,13 @@ function applyPurchaseInvoiceToStore(s,{
     if(!(qty>0)||!(unitCost>0)||(!productCode&&!productName)){unmatched++;continue}
     // Excel net (KDV hariç) geldiyse KDV dahil alış fiyatına çevir
     if(!pricesIncludeVat)unitCost=round(unitCost*(1+vatRate/100));
-    const product=findProductForPurchase(s,productCode,productName);
+
+    let product=findProductForPurchase(s,productCode,productName);
+    let createdNow=false;
+    if(!product&&createMissingProducts){
+      product=ensureProductFromPurchase(s,{productCode,productName,unitCost,vatRate,supplierName});
+      if(product){created++;createdNow=true}
+    }
     const lineTotal=round(qty*unitCost);
     total+=lineTotal;
     const line={
@@ -3828,13 +3874,17 @@ function applyPurchaseInvoiceToStore(s,{
       unitCost,
       lineTotal,
       vatRate,
-      matched:Boolean(product),
-      previousPurchasePrice:product?normalizeNumber(product.purchasePrice||0):0
+      matched:Boolean(product)&&!createdNow,
+      created:createdNow,
+      previousPurchasePrice:createdNow?0:normalizeNumber(product?.purchasePrice||0)
     };
     if(!product){unmatched++;cleanItems.push(line);continue}
-    matched++;
-    if(updatePurchasePrice){
+    if(!createdNow)matched++;
+    // Maliyet: Excel'deki yenisi her zaman yazılır
+    if(updatePurchasePrice||createdNow){
       product.purchasePrice=unitCost;
+      product.purchasePriceSource='purchase-invoice';
+      product.purchasePriceUpdatedAt=new Date().toISOString();
       product.updatedAt=new Date().toISOString();
       priceUpdated++;
     }
@@ -3864,10 +3914,11 @@ function applyPurchaseInvoiceToStore(s,{
     source:String(source||'manual'),
     updatePurchasePrice:Boolean(updatePurchasePrice),
     addStock:Boolean(addStock),
+    createMissingProducts:Boolean(createMissingProducts),
     pricesIncludeVat:Boolean(pricesIncludeVat),
     items:cleanItems,
     total:round(total),
-    matched,unmatched,priceUpdated,stockUpdated,
+    matched,unmatched,created,priceUpdated,stockUpdated,
     createdBy:actor,
     createdAt:new Date().toISOString()
   };
@@ -3880,7 +3931,7 @@ app.get('/web-api/admin/purchase-invoices',requireAdmin,(req,res)=>{
   const s=readStore();
   const list=(s.purchaseInvoices||[]).slice(0,100).map(inv=>({
     id:inv.id,date:inv.date,supplierName:inv.supplierName,invoiceNo:inv.invoiceNo,
-    total:inv.total,matched:inv.matched,unmatched:inv.unmatched,
+    total:inv.total,matched:inv.matched,unmatched:inv.unmatched,created:inv.created||0,
     priceUpdated:inv.priceUpdated,stockUpdated:inv.stockUpdated,
     source:inv.source,itemCount:(inv.items||[]).length,createdAt:inv.createdAt,createdBy:inv.createdBy
   }));
@@ -3929,7 +3980,7 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,dynamicsUpload.s
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const s=readStore();
     const rows=parsePurchaseWorkbook(req.file.buffer);
-    let matched=0,unmatched=0,invalid=0;
+    let matched=0,willCreate=0,invalid=0;
     const preview=rows.map(r=>{
       if(!(r.quantity>0)||!(r.unitCost>0)||(!r.productCode&&!r.productName)){
         invalid++;
@@ -3937,17 +3988,17 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,dynamicsUpload.s
       }
       const p=findProductForPurchase(s,r.productCode,r.productName);
       if(p){matched++;return{...r,status:'matched',matchCode:p.code,productName:r.productName||p.name,currentPurchasePrice:normalizeNumber(p.purchasePrice||0)}}
-      unmatched++;
-      return{...r,status:'unmatched',matchCode:'',currentPurchasePrice:0};
+      willCreate++;
+      return{...r,status:'will_create',matchCode:'',currentPurchasePrice:0};
     });
     const invoiceNos=[...new Set(preview.map(x=>x.invoiceNo).filter(Boolean))];
     res.json({
       ok:true,
-      total:preview.length,matched,unmatched,invalid,
+      total:preview.length,matched,willCreate,unmatched:willCreate,invalid,
       invoiceNos,
       preview:preview.slice(0,400),
       truncated:preview.length>400,
-      note:'Birim Fiyat varsayılan olarak KDV dahil kabul edilir. Net fiyat yüklüyorsanız aktarımda “KDV hariç” seçin.'
+      note:'Sistemde olmayan ürünler aktarımda otomatik eklenir; maliyeti Excel’deki birim fiyattan yazılır. Sonraki Excel’de maliyet yine yenisiyle güncellenir.'
     });
   }catch(e){
     res.status(400).json({error:e.message||'Excel okunamadı'});
@@ -3965,11 +4016,10 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
     const pricesIncludeVat=String(req.body?.pricesIncludeVat??'1')!=='0';
     const warehouseId=String(req.body?.warehouseId||'');
     const supplierFallback=String(req.body?.supplierName||'Arçelik A.Ş.').trim()||'Arçelik A.Ş.';
-    const onlyMatched=String(req.body?.onlyMatched??'1')!=='0';
+    const createMissingProducts=String(req.body?.createMissingProducts??'1')!=='0';
 
     const items=rows
       .filter(r=>r.quantity>0&&r.unitCost>0&&(r.productCode||r.productName))
-      .filter(r=>!onlyMatched||findProductForPurchase(s,r.productCode,r.productName))
       .map(r=>({
         productCode:r.productCode,
         productName:r.productName,
@@ -3977,7 +4027,7 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
         unitCost:r.unitCost,
         vatRate:r.vatRate
       }));
-    if(!items.length)return res.status(400).json({error:'Aktarılacak eşleşen satır yok. Önce ürünleri Dynamics ile ekleyin veya Exceldeki ürün kodlarını kontrol edin.'});
+    if(!items.length)return res.status(400).json({error:'Aktarılacak satır yok. Excelde Ürün Kodu, Miktar ve Birim Fiyat gerekli.'});
 
     const invoiceNo=String(req.body?.invoiceNo||rows.find(r=>r.invoiceNo)?.invoiceNo||'').trim();
     const date=String(req.body?.date||rows.find(r=>r.date)?.date||todayISO()).slice(0,10);
@@ -3987,16 +4037,16 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
       supplierName,invoiceNo,date,warehouseId,
       note:String(req.body?.note||'Excel alış faturası'),
       source:'excel',
-      updatePurchasePrice,addStock,pricesIncludeVat,
+      updatePurchasePrice,addStock,pricesIncludeVat,createMissingProducts,
       items,actor
     });
     audit(s,'Alış faturası Excel aktarımı',invoice.invoiceNo||invoice.id,{
-      matched:invoice.matched,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total
+      matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total
     });
     writeStore(s);
     res.json({ok:true,invoice:{
       id:invoice.id,date:invoice.date,invoiceNo:invoice.invoiceNo,supplierName:invoice.supplierName,
-      total:invoice.total,matched:invoice.matched,unmatched:invoice.unmatched,
+      total:invoice.total,matched:invoice.matched,unmatched:invoice.unmatched,created:invoice.created,
       priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,itemCount:invoice.items.length
     }});
   }catch(e){
@@ -4021,10 +4071,11 @@ app.post('/web-api/admin/purchase-invoice',requireAdmin,(req,res)=>{
       updatePurchasePrice:x.updatePurchasePrice!==false,
       addStock:Boolean(x.addStock),
       pricesIncludeVat:x.pricesIncludeVat!==false,
+      createMissingProducts:x.createMissingProducts!==false,
       items,actor
     });
     audit(s,'Alış faturası manuel kayıt',invoice.invoiceNo||invoice.id,{
-      matched:invoice.matched,priceUpdated:invoice.priceUpdated,total:invoice.total
+      matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,total:invoice.total
     });
     writeStore(s);
     res.json({ok:true,invoice});
