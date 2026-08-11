@@ -1,4 +1,3 @@
-fix-v18
-expect-health=6.3.19-kokpit
-kokpit-dashboard
-kiosk-personel
+fix-v19
+expect-health=6.3.20-ayarlar-kasa
+kasa-banka-ayarlara-tasindi

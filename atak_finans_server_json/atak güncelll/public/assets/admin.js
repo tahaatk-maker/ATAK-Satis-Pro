@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v18 */
+/* ATAK_ADMIN_BUILD=fix-v19 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -93,7 +93,7 @@ function goTab(id,{remember=true}={}){
   if(id==='customersPage')setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),20);
   if(id==='salesCenter')setTimeout(()=>loadSalesCenter(),20);
   if(id==='webOrders')setTimeout(()=>loadWebOrders(),20);
-  if(id==='settings')setTimeout(()=>{loadPromissorySettings();loadDealerSettings().catch(()=>{})},20);
+  if(id==='settings')setTimeout(()=>{loadPromissorySettings();loadDealerSettings().catch(()=>{});loadFinanceCenter().catch(()=>{})},20);
   if(id==='mySalesReport')setTimeout(loadMySalesReport,20);
   if(id==='staffSalesReport')setTimeout(loadStaffSalesReport,20);
   if(id==='managerApprovals')setTimeout(loadApprovals,20);
@@ -690,8 +690,20 @@ q('#financeDate').value=q('#transferDate').value=new Date().toISOString().slice(
 q('#financeAccountForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/finance-account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#financeAccountId').value,name:q('#financeAccountName').value,type:q('#financeAccountType').value,storeId:q('#financeAccountStore').value,openingBalance:q('#financeOpeningBalance').value,active:q('#financeAccountActive').checked})});e.target.reset();q('#financeAccountId').value='';q('#financeOpeningBalance').value=0;q('#financeAccountActive').checked=true;await loadFinanceCenter();toast('Hesap kaydedildi')};
 
 q('#financeMovementForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/finance-transaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:q('#financeKind').value,date:q('#financeDate').value,accountId:q('#financeMovementAccount').value,customerId:q('#financeCustomer').value,amount:q('#financeAmount').value,category:q('#financeCategory').value,description:q('#financeDescription').value})});e.target.reset();q('#financeDate').value=new Date().toISOString().slice(0,10);await loadFinanceCenter();toast('Finans hareketi kaydedildi')};
-q('#financeTransferForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/finance-transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:q('#transferDate').value,fromAccountId:q('#transferFromAccount').value,toAccountId:q('#transferToAccount').value,amount:q('#transferFinanceAmount').value,description:q('#transferFinanceDescription').value})});e.target.reset();q('#transferDate').value=new Date().toISOString().slice(0,10);await loadFinanceCenter();toast('Transfer tamamlandı')};
-const stockGoTab=goTab;goTab=function(id){stockGoTab(id);if(id==='financeCenter')loadFinanceCenter().catch(e=>toast(e.message))};
+q('#financeTransferForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/finance-transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:q('#transferDate').value,fromAccountId:q('#transferFromAccount').value,toAccountId:q('#transferToAccount').value,amount:q('#transferFinanceAmount').value,description:q('#transferFinanceDescription').value})});e.target.reset();q('#transferDate').value=new Date().toISOString().slice(0,10);closeFinanceTransfer();await loadFinanceCenter();toast('Transfer tamamlandı')};
+function openFinanceTransfer(){
+  const m=q('#financeTransferModal');
+  if(!m)return;
+  if(q('#transferDate')&&!q('#transferDate').value)q('#transferDate').value=new Date().toISOString().slice(0,10);
+  m.classList.remove('hidden');
+  setTimeout(()=>q('#transferFinanceAmount')?.focus(),40);
+}
+function closeFinanceTransfer(){q('#financeTransferModal')?.classList.add('hidden')}
+q('#financeTransferOpenBtn')?.addEventListener('click',openFinanceTransfer);
+q('#financeTransferClose')?.addEventListener('click',closeFinanceTransfer);
+q('#financeTransferModal')?.addEventListener('click',e=>{if(e.target===q('#financeTransferModal'))closeFinanceTransfer()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeFinanceTransfer()});
+const stockGoTab=goTab;goTab=function(id){stockGoTab(id);if(id==='financeCenter'||id==='settings')loadFinanceCenter().catch(e=>toast(e.message))};
 
 
 

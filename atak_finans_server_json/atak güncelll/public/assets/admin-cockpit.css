@@ -112,6 +112,15 @@
 .ck-brand-pill.other{background:#f1f5f9;color:#64748b}
 .ck-empty{padding:26px;text-align:center;color:var(--ck-muted);font-weight:650}
 
+/* ---- Para transferi modalı ---- */
+.fin-transfer-card{width:min(520px,96vw);display:grid;gap:12px}
+.fin-transfer-card h2{margin:0}
+.fin-transfer-card .note{margin:0 0 4px}
+.fin-transfer-card label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#667890}
+.fin-transfer-card .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fin-transfer-card button[type="submit"]{min-height:48px;border-radius:12px;font-weight:800}
+@media(max-width:520px){.fin-transfer-card .two-cols{grid-template-columns:1fr}}
+
 @media(max-width:1300px){
   .ck-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
   .cockpit .stats{grid-template-columns:repeat(3,minmax(0,1fr))}

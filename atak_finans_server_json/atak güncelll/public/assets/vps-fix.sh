@@ -1,9 +1,9 @@
 #!/bin/bash
-# ATAK VPS kesin deploy (fix-v18) — health 6.3.19-kokpit olmadan DONE yazmaz
+# ATAK VPS kesin deploy (fix-v19) — health 6.3.20-ayarlar-kasa olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/satis-merkezi-iskonto-prim-bd99}"
-EXPECT_HEALTH=6.3.19-kokpit
-EXPECT_BUILD=fix-v18
+EXPECT_HEALTH=6.3.20-ayarlar-kasa
+EXPECT_BUILD=fix-v19
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 exec > >(tee "$OUT") 2>&1

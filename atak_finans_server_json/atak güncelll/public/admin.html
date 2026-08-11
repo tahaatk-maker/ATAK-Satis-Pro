@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v18" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v18" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v19" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v19" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1472,23 +1472,10 @@ Bulunamayan → Diğer.
 </div>
 </section>
 <section class="tab" id="financeCenter">
-<div class="foundation-head panel"><div><small class="eyebrow">V3.2 FİNANS &amp; CARİ</small><h2>Finans ve Cari Merkezi</h2><p class="note">Kasa, banka, müşteri cari, tahsilat, masraf ve transfer tek ekranda. Kesilmeyen faturalar <b>e-Fatura Merkezi</b>’ndedir.</p></div></div>
+<div class="foundation-head panel"><div><small class="eyebrow">V3.2 FİNANS &amp; CARİ</small><h2>Finans ve Cari Merkezi</h2><p class="note">Günlük para işlemleri: tahsilat, masraf ve transfer. Kasa / banka <b>hesap tanımları Ayarlar</b>’dadır; kesilmeyen faturalar <b>e-Fatura Merkezi</b>’ndedir.</p></div>
+<button class="secondary-btn" data-go="settings" type="button">Hesap Ayarları →</button></div>
 <div class="foundation-summary" id="financeSummary"></div>
 <div class="finance-grid">
-<form class="panel form-stack" id="financeAccountForm">
-<h2>💵 Kasa / Banka</h2><input id="financeAccountId" type="hidden"/>
-<label>Hesap adı<input id="financeAccountName" required=""/></label>
-<label>Tür<select id="financeAccountType"><option value="cash">Kasa</option><option value="bank">Banka</option></select></label>
-<label>Mağaza<select id="financeAccountStore"></select></label>
-<label>Açılış bakiyesi<input id="financeOpeningBalance" step="0.01" type="number" value="0"/></label>
-<label class="check"><input checked="" id="financeAccountActive" type="checkbox"/> Aktif</label>
-<button type="submit">Hesabı Kaydet</button><div class="mini-list" id="financeAccountList"></div>
-</form>
-<section class="panel customer-shortcut">
-<div><small class="eyebrow">MÜŞTERİ YÖNETİMİ</small><h2>👥 Müşteriler ayrı sayfada</h2>
-<p class="note">Yeni müşteri eklemek, cari kartını görmek ve düzenlemek için Müşteriler sayfasını kullanın.</p></div>
-<button class="primary" id="openCustomersPage" type="button">Müşteriler Sayfasını Aç</button>
-</section>
 <form class="panel form-stack" id="financeMovementForm">
 <h2>🧾 Finans Hareketi</h2>
 <label>İşlem<select id="financeKind"><option value="collection">Tahsilat</option><option value="sale">Vadeli Satış / Borçlandırma</option><option value="income">Diğer Gelir</option><option value="expense">Masraf</option><option value="payment">Ödeme</option></select></label>
@@ -1500,18 +1487,14 @@ Bulunamayan → Diğer.
 <label>Açıklama<textarea id="financeDescription"></textarea></label>
 <button type="submit">Hareketi Kaydet</button>
 </form>
-<form class="panel form-stack" id="financeTransferForm">
-<h2>🔄 Para Transferi</h2>
-<label>Tarih<input id="transferDate" required="" type="date"/></label>
-<label>Kaynak<select id="transferFromAccount" required=""></select></label>
-<label>Hedef<select id="transferToAccount" required=""></select></label>
-<label>Tutar<input id="transferFinanceAmount" min="0" required="" step="0.01" type="number"/></label>
-<label>Açıklama<input id="transferFinanceDescription"/></label>
-<button type="submit">Transfer Et</button>
-</form>
+<section class="panel customer-shortcut">
+<div><small class="eyebrow">MÜŞTERİ YÖNETİMİ</small><h2>👥 Müşteriler ayrı sayfada</h2>
+<p class="note">Yeni müşteri eklemek, cari kartını görmek ve düzenlemek için Müşteriler sayfasını kullanın.</p></div>
+<button class="primary" id="openCustomersPage" type="button">Müşteriler Sayfasını Aç</button>
+</section>
 </div>
 <div class="panel">
-<div class="panel-head"><h2>Hesap Bakiyeleri</h2><span id="financeAccountCount"></span></div>
+<div class="panel-head"><div><h2>Hesap Bakiyeleri</h2><p class="note">Yeni hesap eklemek / düzenlemek için Ayarlar → Kasa ve Banka Hesapları.</p></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="financeAccountCount"></span><button class="secondary-btn" id="financeTransferOpenBtn" type="button">🔄 Para Transferi</button></div></div>
 <div class="turnover-table" id="financeAccountsTable"></div>
 </div>
 <div class="panel">
@@ -1521,6 +1504,23 @@ Bulunamayan → Diğer.
 <div class="panel">
 <div class="panel-head"><h2>Son Finans Hareketleri</h2><span id="financeTransactionCount"></span></div>
 <div class="turnover-table" id="financeTransactionTable"></div>
+</div>
+<div class="modal hidden" id="financeTransferModal">
+<form class="modal-card fin-transfer-card" id="financeTransferForm">
+<button class="x" id="financeTransferClose" type="button">×</button>
+<h2>🔄 Para Transferi</h2>
+<p class="note">Kasadan bankaya (veya tersi) para aktarımı. Bakiyeler anında güncellenir.</p>
+<div class="two-cols">
+<label>Tarih<input id="transferDate" required="" type="date"/></label>
+<label>Tutar<input id="transferFinanceAmount" min="0" required="" step="0.01" type="number"/></label>
+</div>
+<div class="two-cols">
+<label>Kaynak<select id="transferFromAccount" required=""></select></label>
+<label>Hedef<select id="transferToAccount" required=""></select></label>
+</div>
+<label>Açıklama<input id="transferFinanceDescription"/></label>
+<button class="primary" type="submit">Transfer Et</button>
+</form>
 </div>
 </section>
 <section class="tab" id="customerPayments">
@@ -1680,8 +1680,21 @@ Bulunamayan → Diğer.
 </div>
 </section>
 <section class="tab" id="settings">
-<div class="foundation-head panel"><div><small class="eyebrow">SİSTEM AYARLARI</small><h2>Ayarlar</h2><p class="note">Senet ve bayi/prim ayarları burada. QNB e-Fatura ayarları <b>e-Fatura Merkezi → Kurulum</b> altındadır.</p></div></div>
+<div class="foundation-head panel"><div><small class="eyebrow">SİSTEM AYARLARI</small><h2>Ayarlar</h2><p class="note">Kasa/banka hesapları, senet ve bayi/prim ayarları burada. QNB e-Fatura ayarları <b>e-Fatura Merkezi → Kurulum</b> altındadır.</p></div></div>
 <div class="settings-grid">
+<form class="panel form-stack" id="financeAccountForm">
+<div class="panel-head"><div><h2>💵 Kasa ve Banka Hesapları</h2><p class="note">Hesap tanımı bir kurulum işidir. Günlük tahsilat / masraf <b>Finans &amp; Cari</b> ekranındadır.</p></div></div>
+<input id="financeAccountId" type="hidden"/>
+<label>Hesap adı<input id="financeAccountName" required=""/></label>
+<div class="two-cols">
+<label>Tür<select id="financeAccountType"><option value="cash">Kasa</option><option value="bank">Banka</option></select></label>
+<label>Mağaza<select id="financeAccountStore"></select></label>
+</div>
+<label>Açılış bakiyesi<input id="financeOpeningBalance" step="0.01" type="number" value="0"/></label>
+<label class="check"><input checked="" id="financeAccountActive" type="checkbox"/> Aktif</label>
+<div class="button-row"><button class="primary" type="submit">Hesabı Kaydet</button><button class="secondary-btn" data-go="financeCenter" type="button">Finans &amp; Cari →</button></div>
+<div class="mini-list" id="financeAccountList"></div>
+</form>
 <form class="panel form-stack" id="promissorySettingsForm">
 <div class="panel-head"><div><h2>Senet Ayarları</h2><p class="note">Müşteriye basılan senetlerin varsayılan bilgileri.</p></div></div>
 <div class="two-col"><label>Alacaklı / Firma<input id="noteCreditor"/></label><label>Ödeme Yeri<input id="notePaymentPlace" placeholder="İstanbul"/></label></div>
@@ -1770,5 +1783,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v18"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v19"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
