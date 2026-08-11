@@ -113,6 +113,11 @@
 .ck-empty{padding:26px;text-align:center;color:var(--ck-muted);font-weight:650}
 
 /* ---- Kâr & Maliyet ---- */
+#profitCenter .warn-banner{
+  margin:0 0 12px;padding:12px 14px;border-radius:12px;
+  background:#fff7ed;border:1px solid #f0d2a8;color:#9a3412;font-size:13px;font-weight:700
+}
+#profitCenter .warn-banner.hidden{display:none}
 .profit-filters{
   display:flex;gap:12px;align-items:end;flex-wrap:wrap
 }
