@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v20" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v20" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v21" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v21" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1253,6 +1253,7 @@ body.inv-full #pageTitle{font-size:18px}
       <label>Kod<input id="fStoreCode"/></label>
       <label>Adres<textarea id="fStoreAddress"></textarea></label>
       <label class="check"><input checked="" id="fStoreActive" type="checkbox"/> Aktif</label>
+      <div class="fnd-note">Pasif mağazalar personel ve duyuru listelerinde seçilemez. Bir mağaza görünmüyorsa buradan <b>Aktif</b> yapın.</div>
       <div class="button-row"><button class="primary" type="submit">Mağazayı Kaydet</button><button class="secondary-btn" type="button" data-fnd-reset="store">Formu Temizle</button></div>
     </form>
     <div class="panel">
@@ -1270,7 +1271,8 @@ body.inv-full #pageTitle{font-size:18px}
       <label>Ad Soyad<input id="fStaffName" required=""/></label>
       <label>Kullanıcı adı<input id="fStaffUsername" required=""/></label>
       <label>Şifre<input id="fStaffPassword" placeholder="Düzenlemede boş bırakılabilir" type="password"/></label>
-      <label>Mağaza<select id="fStaffStore"></select></label>
+      <label>Mağaza<select id="fStaffStore"></select><small class="field-hint" id="fStaffStoreHint"></small></label>
+      <div class="fnd-note">Buradaki liste <b>fiziksel mağazalardır</b>. <b>Atak Beko / Atak İstikbal</b> ise <b>bayi</b> tanımıdır; satış ekranında seçilir ve prim/marka ayrımını belirler. Bayi oranları <b>Ayarlar → Bayi Kâr / Prim</b> altındadır.</div>
       <label class="check"><input checked="" id="fStaffActive" type="checkbox"/> Aktif</label>
       <div class="button-row"><button class="primary" type="submit">Personeli Kaydet</button><button class="secondary-btn" type="button" data-fnd-reset="staff">Formu Temizle</button></div>
     </form>
@@ -1843,5 +1845,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v20"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v21"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

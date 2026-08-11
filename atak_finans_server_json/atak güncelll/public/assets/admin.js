@@ -603,10 +603,21 @@ function renderFoundation(){
   if(!foundationData||!q('#foundationSummary'))return;
   const f=foundationData,s=f.summary;
   q('#foundationSummary').innerHTML=`<article><b>${money(s.totalTurnover)}</b><span>Bugünkü Toplam Ciro</span></article><article><b>${s.completedStores}/${s.storeCount}</b><span>Ciro Giren Mağaza</span></article><article><b>${f.staff.filter(x=>x.active).length}</b><span>Aktif Personel</span></article><article><b>${f.announcements.filter(x=>x.active).length}</b><span>Aktif Duyuru</span></article>`;
-  const storeOptions=`<option value="">Tüm mağazalar</option>`+f.stores.filter(x=>x.active).map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-  q('#fStaffStore').innerHTML=f.stores.filter(x=>x.active).map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-  q('#fAnnouncementStore').innerHTML=storeOptions;
-  q('#fStoreList').innerHTML=f.stores.map(x=>`<button type="button" data-fstore="${x.id}"><b>${x.name}</b><small>${x.code||''} · ${x.active?'Aktif':'Pasif'}</small></button>`).join('');
+  const activeStores=f.stores.filter(x=>x.active);
+  const passiveStores=f.stores.filter(x=>!x.active);
+  // Pasif mağazalar seçilemez ama listede görünür — "neden yok?" karışıklığını önler
+  const passiveOptions=passiveStores.map(x=>`<option value="${x.id}" disabled>${x.name} (Pasif — Mağaza sekmesinden aktif edin)</option>`).join('');
+  const activeOptions=activeStores.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+  const prevStaffStore=q('#fStaffStore')?.value||'';
+  q('#fStaffStore').innerHTML=(activeOptions||'<option value="">Aktif mağaza yok — önce Mağaza sekmesinden ekleyin</option>')+passiveOptions;
+  if(prevStaffStore&&activeStores.some(x=>String(x.id)===String(prevStaffStore)))q('#fStaffStore').value=prevStaffStore;
+  q('#fAnnouncementStore').innerHTML=`<option value="">Tüm mağazalar</option>`+activeOptions+passiveOptions;
+  if(q('#fStaffStoreHint')){
+    q('#fStaffStoreHint').textContent=passiveStores.length
+      ? `${activeStores.length} aktif mağaza. Pasif: ${passiveStores.map(x=>x.name).join(', ')} — seçebilmek için Mağaza sekmesinden aktif edin.`
+      : `${activeStores.length} aktif mağaza listelendi.`;
+  }
+  q('#fStoreList').innerHTML=f.stores.map(x=>`<button type="button" class="${x.active?'':'fnd-passive'}" data-fstore="${x.id}"><b>${x.name}</b><small>${x.code||''} · ${x.active?'Aktif':'Pasif — seçilemez'}</small></button>`).join('')||'<p class="note">Henüz mağaza yok.</p>';
   q('#fStaffList').innerHTML=f.staff.map(x=>`<button type="button" data-fstaff="${x.id}"><b>${x.name}</b><small>${x.storeName} · ${x.active?'Aktif':'Pasif'}</small></button>`).join('');
   q('#fAnnouncementList').innerHTML=f.announcements.map(x=>`<div><b>${x.title}</b><small>${x.storeId?f.stores.find(s=>s.id===x.storeId)?.name:'Tüm personel'}</small><button type="button" data-fannouncement-delete="${x.id}">Sil</button></div>`).join('');
   q('#fTurnoverCount').textContent=`${f.turnovers.length} kayıt`;

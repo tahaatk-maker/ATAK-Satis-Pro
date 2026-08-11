@@ -134,6 +134,14 @@
   box-shadow:0 8px 18px rgba(21,101,192,.12)
 }
 .fnd-tab.active .fnd-tab-ico{background:linear-gradient(180deg,#1565c0,#0b4d94);color:#fff}
+.fnd-note{
+  margin:2px 0 4px;padding:10px 12px;border-radius:12px;
+  background:#f5f9ff;border:1px solid #cfe0f4;color:#31506f;
+  font-size:12px;font-weight:650;line-height:1.45
+}
+.fnd-note b{color:#0b2a4a}
+.mini-list>button.fnd-passive{opacity:.62;border-style:dashed}
+.mini-list>button.fnd-passive small{color:#b45309;font-weight:800}
 .fnd-pane{display:none}
 .fnd-pane.active{display:block}
 .fnd-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.8fr);gap:16px;align-items:start}
