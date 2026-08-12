@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v65 */
+/* ATAK_ADMIN_BUILD=fix-v66 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1303,6 +1303,32 @@ function renderCustomerSaleItems(items=[]){
     return `<div class="customer-sale-item"><div><b>${qty}× ${name}</b>${code?`<small>${code}</small>`:''}<small>Birim: ${money2(i.unitPrice||0)}</small></div><strong>${money2(line)}</strong></div>`;
   }).join('')}</div>`;
 }
+function renderCustomerSaleCard(t){
+  const kind=String(t.kind||'');
+  const cancelled=t.cancelled||kind==='sale_cancel';
+  const label=customerTxKindLabel(kind);
+  const net=Number(t.displayAmount!=null?t.displayAmount:(t.total!=null?t.total:Math.abs(Number(t.customerDelta||0))));
+  const gross=Number(t.grossTotal!=null?t.grossTotal:net);
+  const disc=Number(t.discountAmount!=null?t.discountAmount:Math.max(0,gross-net));
+  const meta=[t.reference,t.salespersonName||t.createdBy,t.paymentMethod,t.dealerName].filter(Boolean).join(' · ');
+  const itemCount=(t.items||[]).length;
+  const docs=t.id&&kind==='sale'&&!cancelled
+    ?`<button type="button" class="tx-docs-btn" data-sale-docs="${String(t.id).replace(/"/g,'&quot;')}">Belge Yazdır</button>`
+    :'';
+  return `<article class="customer-sale-card${cancelled?' is-cancelled':''}">
+    <div class="customer-tx-sale-head">
+      <div><b>${t.date||'-'} · ${label}</b><small>${meta||t.description||''}</small>${itemCount?`<small>${itemCount} kalem</small>`:''}</div>
+      <strong class="${kind==='sale_cancel'?'credit':'debt'}">${money2(net)}</strong>
+    </div>
+    ${renderCustomerSaleItems(t.items||[])}
+    <div class="customer-sale-totals">
+      <span>Brüt ${money2(gross)}</span>
+      ${disc>0?`<span>İskonto %${Number(t.discountPct||0)} (−${money2(disc)})</span>`:''}
+      <span><b>Net ${money2(net)}</b></span>
+      ${docs}
+    </div>
+  </article>`;
+}
 function renderCustomerTransaction(t){
   const kind=String(t.kind||'');
   const isSale=kind==='sale'||kind==='sale_cancel';
@@ -1310,21 +1336,9 @@ function renderCustomerTransaction(t){
   const label=customerTxKindLabel(kind);
   if(isSale){
     const net=Number(t.displayAmount!=null?t.displayAmount:(t.total!=null?t.total:Math.abs(Number(t.customerDelta||0))));
-    const gross=Number(t.grossTotal!=null?t.grossTotal:net);
-    const disc=Number(t.discountAmount!=null?t.discountAmount:Math.max(0,gross-net));
-    const meta=[t.reference,t.salespersonName||t.createdBy,t.paymentMethod,t.dealerName].filter(Boolean).join(' · ');
-    return `<article class="customer-tx customer-tx-sale${cancelled?' is-cancelled':''}">
-      <div class="customer-tx-sale-head">
-        <div><b>${t.date||'-'} · ${label}</b><small>${meta||t.description||''}</small></div>
-        <strong class="${kind==='sale_cancel'?'credit':'debt'}">${money2(net)}</strong>
-      </div>
-      ${renderCustomerSaleItems(t.items||[])}
-      <div class="customer-sale-totals">
-        <span>Brüt ${money2(gross)}</span>
-        ${disc>0?`<span>İskonto %${Number(t.discountPct||0)} (−${money2(disc)})</span>`:''}
-        <span><b>Net ${money2(net)}</b></span>
-      </div>
-    </article>`;
+    const summary=t.itemSummary||(t.items||[]).map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', ');
+    const meta=[t.reference,t.paymentMethod,summary].filter(Boolean).join(' · ');
+    return `<div class="customer-tx customer-tx-sale-compact${cancelled?' is-cancelled':''}"><div><b>${t.date||'-'} · ${label}</b><small>${meta||t.description||'-'}</small></div><strong class="${kind==='sale_cancel'?'credit':'debt'}">${money2(net)}</strong></div>`;
   }
   const amt=Number(t.displayAmount!=null?t.displayAmount:t.amount||0);
   const cls=amt<0||kind==='collection'||kind==='collection_cancel'?(amt<=0&&kind==='collection'?'credit':(amt<0?'credit':'debt')):(Number(t.customerDelta||0)<0?'credit':'debt');
@@ -1446,8 +1460,23 @@ async function selectCustomerPage(id){
     renderCustomerBillingCards(c);
     renderCustomerDebtAndPay(d);
     const tx=d.transactions||[];
-    const saleCount=tx.filter(t=>t.kind==='sale'&&!t.cancelled).length;
-    if(q('#customerTransactionCount'))q('#customerTransactionCount').textContent=`${tx.length} hareket · ${saleCount} satış`;
+    const sales=tx.filter(t=>t.kind==='sale'||t.kind==='sale_cancel');
+    const activeSales=sales.filter(t=>t.kind==='sale'&&!t.cancelled);
+    const salesTotal=activeSales.reduce((a,t)=>a+Number(t.displayAmount!=null?t.displayAmount:t.total||0),0);
+    if(q('#customerSalesCount'))q('#customerSalesCount').textContent=activeSales.length?`${activeSales.length} alışveriş · ${money2(salesTotal)}`:(sales.length?`${sales.length} kayıt`:'0 alışveriş');
+    const salesList=q('#customerSalesList');
+    if(salesList){
+      salesList.innerHTML=sales.length
+        ?sales.slice(0,50).map(renderCustomerSaleCard).join('')
+        :'<div class="note">Bu müşterinin henüz alışverişi yok.</div>';
+      salesList.querySelectorAll('[data-sale-docs]').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          const id=btn.dataset.saleDocs;
+          if(id)window.open('/web-api/admin/sale/'+encodeURIComponent(id)+'/print-docs','_blank');
+        });
+      });
+    }
+    if(q('#customerTransactionCount'))q('#customerTransactionCount').textContent=`${tx.length} hareket · ${activeSales.length} satış`;
     const list=q('#customerTransactionList');
     if(list){
       const banners=[];
