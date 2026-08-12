@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v67 */
+/* ATAK_ADMIN_BUILD=fix-v68 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1389,13 +1389,15 @@ function customerNoteRemain(n){
 function renderCustomerDebtAndPay(d){
   const c=d.customer||{};
   const notes=(d.promissoryNotes||[]).map(n=>{
-    const remain=customerNoteRemain(n);
-    const status=remain<=0.009?'paid':(String(n.status||'open'));
-    const overdue=remain>0.009&&String(n.dueDate||'')<localDate();
+    const remain=n.remain!=null?Number(n.remain):customerNoteRemain(n);
+    const status=remain<=0.009&&String(n.status)!=='cancelled'?'paid':(String(n.status||'open'));
+    const overdue=remain>0.009&&status!=='cancelled'&&String(n.dueDate||'')<localDate();
     return{...n,remain,status,overdue};
   });
   const openNotes=notes.filter(n=>!['paid','cancelled'].includes(String(n.status)));
+  const orphanNotes=openNotes.filter(n=>n.orphan||(!n.saleId&&!n.saleReference));
   const overdueAmount=openNotes.filter(n=>n.overdue).reduce((a,n)=>a+n.remain,0);
+  const openSenet=openNotes.reduce((a,n)=>a+n.remain,0);
   const month=localDate().slice(0,7);
   const dueMonth=openNotes.filter(n=>String(n.dueDate||'').startsWith(month)).reduce((a,n)=>a+n.remain,0);
   const balance=Number(c.balance||0);
@@ -1403,24 +1405,46 @@ function renderCustomerDebtAndPay(d){
   if(debtBox){
     debtBox.innerHTML=`
       <article class="${balance>0.009?'bad':''}"><small>Cari borç</small><b>${money2(Math.max(balance,0))}</b></article>
+      <article class="${openSenet>0.009?'warn':''}"><small>Açık senet</small><b>${money2(openSenet)}</b></article>
       <article class="${overdueAmount>0.009?'bad':''}"><small>Geciken senet</small><b>${money2(overdueAmount)}</b></article>
       <article class="${dueMonth>0.009?'warn':''}"><small>Bu ay vade</small><b>${money2(dueMonth)}</b></article>`;
+  }
+  const orphanWarn=q('#customerNotesOrphanWarn');
+  if(orphanWarn){
+    if(orphanNotes.length){
+      const tot=orphanNotes.reduce((a,n)=>a+n.remain,0);
+      orphanWarn.classList.remove('hidden');
+      orphanWarn.innerHTML=`⚠ ${orphanNotes.length} senet <b>satışa bağlı değil</b> (toplam ${money2(tot)}). Cari bakiyeyi şişirmez ama tahsilat / müşteri ödemelerinde alacak gibi görünür. Hatalıysa satırdan <b>İptal</b> edin.`;
+    }else{orphanWarn.classList.add('hidden');orphanWarn.innerHTML=''}
   }
   const tbody=q('#customerNotesList');
   if(tbody){
     tbody.innerHTML=notes.length
       ?notes.map(n=>{
         const open=!['paid','cancelled'].includes(String(n.status));
-        return `<tr class="${n.overdue?'pay-note-overdue':''} ${n.status==='paid'?'pay-note-paid':''}">
+        const link=n.orphan||(!n.saleId&&!n.saleReference)
+          ?`<span class="note-link orphan">Satışa bağlı değil</span>`
+          :(n.saleCancelled
+            ?`<span class="note-link warn">${salesEsc(n.linkLabel||n.saleReference||'Satış iptal')}</span>`
+            :`<span class="note-link">${salesEsc(n.saleReference||n.linkLabel||'—')}</span>`);
+        const cancelBtn=open
+          ?`<button type="button" class="note-cancel-btn" data-note-cancel="${n.id}" data-ref="${salesEsc(n.serial||'')}">İptal</button>`
+          :'';
+        return `<tr class="${n.overdue?'pay-note-overdue':''} ${n.status==='paid'?'pay-note-paid':''} ${n.status==='cancelled'?'pay-note-cancelled':''} ${n.orphan?'pay-note-orphan':''}">
           <td>${open?`<input type="checkbox" class="customer-pay-note" value="${n.id}">`:''}</td>
-          <td>${n.serial||String(n.id||'').slice(0,8)}</td>
+          <td>${salesEsc(n.serial||String(n.id||'').slice(0,8))}</td>
+          <td>${link}</td>
           <td>${n.dueDate||'—'}</td>
           <td>${money2(n.amount)}</td>
           <td>${money2(n.remain)}</td>
-          <td>${n.status==='paid'?'Ödendi':(n.overdue?'Gecikmiş':(n.status==='partial'?'Kısmi':'Açık'))}</td>
+          <td>${n.status==='cancelled'?'İptal':(n.status==='paid'?'Ödendi':(n.overdue?'Gecikmiş':(n.status==='partial'?'Kısmi':'Açık')))}</td>
+          <td>${cancelBtn}</td>
         </tr>`;
       }).join('')
-      :'<tr><td colspan="6">Senet / taksit yok. Tahsilat cari bakiyeden düşer.</td></tr>';
+      :'<tr><td colspan="8">Senet / taksit yok. Tahsilat cari bakiyeden düşer.</td></tr>';
+    tbody.querySelectorAll('[data-note-cancel]').forEach(btn=>{
+      btn.addEventListener('click',()=>cancelCustomerPromissoryNote(btn.dataset.noteCancel,btn.dataset.ref||''));
+    });
   }
   const acc=q('#customerPayAccount');
   if(acc){
@@ -1428,7 +1452,7 @@ function renderCustomerDebtAndPay(d){
     acc.innerHTML=(d.accounts||[]).map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Kasa yok</option>';
     if(cur&&[...acc.options].some(o=>o.value===cur))acc.value=cur;
   }
-  const suggest=overdueAmount>0.009?overdueAmount:(dueMonth>0.009?dueMonth:Math.max(balance,0));
+  const suggest=overdueAmount>0.009?overdueAmount:(dueMonth>0.009?dueMonth:(openSenet>0.009?openSenet:Math.max(balance,0)));
   if(q('#customerPayAmount'))q('#customerPayAmount').value=suggest>0?suggest.toFixed(2):'';
   if(q('#customerPayDate')&&!q('#customerPayDate').value)q('#customerPayDate').value=localDate();
   if(q('#customerPayDesc'))q('#customerPayDesc').value='';
@@ -1444,6 +1468,19 @@ function renderCustomerDebtAndPay(d){
       const total=(customersPageData._notes||[]).filter(n=>ids.includes(String(n.id))).reduce((a,n)=>a+Number(n.remain||0),0);
       if(q('#customerPayAmount'))q('#customerPayAmount').value=total.toFixed(2);
     };
+  });
+}
+function cancelCustomerPromissoryNote(noteId,ref=''){
+  openReasonModal({
+    title:'Senet İptal Sebebi',
+    hint:`${ref||'Senet'} iptal edilecek. Satışa bağlı değilse tahsilat listesindeki sahipsiz alacak kalkar. Cari bakiye değişmez.`,
+    onSubmit:async(reason)=>{
+      try{
+        await api('/web-api/admin/promissory-note/'+encodeURIComponent(noteId)+'/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason})});
+        toast('Senet iptal edildi');
+        if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId);
+      }catch(e){toast(e.message)}
+    }
   });
 }
 function renderCustomerBillingCards(c={}){

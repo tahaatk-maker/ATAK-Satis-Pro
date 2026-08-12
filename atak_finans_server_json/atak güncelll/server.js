@@ -943,8 +943,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.68-musteri-satis-duzenle',
-  build:'fix-v67',
+  version:'6.3.69-senet-orphan-fix',
+  build:'fix-v68',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -1836,7 +1836,11 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
     accounts:s.financeAccounts.filter(x=>x.active!==false).map(x=>({...x,balance:accountBalance(s,x.id)})),
     products:(s.products||[]).filter(x=>x.active!==false).map(x=>({code:x.code,name:x.name,price:Number(x.cashPrice||x.salePrice||x.price||0),cardPrice:Number(x.cardPrice||x.cashPrice||x.salePrice||0),brand:x.brand||''})),
     warehouses:(s.warehouses||[]).filter(x=>x.active!==false),
-    promissoryNotes:(s.promissoryNotes||[]).filter(n=>n.customerId===customer.id).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))
+    promissoryNotes:(s.promissoryNotes||[])
+      .filter(n=>n.customerId===customer.id)
+      .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))
+      .map(n=>enrichPromissoryNote(s,n)),
+    orphanNotesCount:(s.promissoryNotes||[]).filter(n=>n.customerId===customer.id&&!['paid','cancelled'].includes(String(n.status||'open'))&&!n.saleId&&!n.saleReference).length
   });
 });
 
@@ -2271,11 +2275,60 @@ function relatedSaleCollections(s,sale){
     (sale.reference && String(t.description||'').includes(String(sale.reference)))
   ));
 }
+function noteRemaining(n){
+  return Math.max(0,Math.round((Number(n.amount||0)-Number(n.paidAmount||0))*100)/100);
+}
+function cancelPromissoryNoteInStore(n,actor,reason=''){
+  if(!n||['paid','cancelled'].includes(String(n.status||'')))return false;
+  n.status='cancelled';
+  n.cancelledAt=new Date().toISOString();
+  n.cancelledBy=actor||'';
+  n.cancelReason=String(reason||'').slice(0,500);
+  return true;
+}
+function linkedPromissoryNotes(s,sale){
+  if(!sale)return[];
+  const saleId=String(sale.id||'');
+  const planId=String(sale.promissoryPlanId||'');
+  return(s.promissoryNotes||[]).filter(n=>
+    (saleId&&String(n.saleId||'')===saleId)||
+    (planId&&String(n.planId||'')===planId)||
+    (sale.reference&&String(n.saleReference||'')===String(sale.reference))
+  );
+}
+function cancelPromissoryNotesForSale(s,sale,actor,reason=''){
+  let count=0;
+  for(const n of linkedPromissoryNotes(s,sale)){
+    if(cancelPromissoryNoteInStore(n,actor,reason||`Satış iptali ${sale.reference||sale.id||''}`))count++;
+  }
+  return count;
+}
+function enrichPromissoryNote(s,n){
+  const sale=(s.financeTransactions||[]).find(t=>t.kind==='sale'&&(
+    String(t.id)===String(n.saleId||'')||
+    (n.planId&&String(t.promissoryPlanId||'')===String(n.planId))||
+    (n.saleReference&&String(t.reference||'')===String(n.saleReference))
+  ));
+  const remain=noteRemaining(n);
+  const orphan=!n.saleId&&!n.saleReference&&!(sale&&sale.id);
+  return{
+    ...n,
+    remain,
+    paidAmount:Number(n.paidAmount||0),
+    orphan,
+    saleId:n.saleId||sale?.id||'',
+    saleReference:n.saleReference||sale?.reference||'',
+    saleCancelled:Boolean(sale?.cancelled),
+    saleTotal:sale?Number(sale.total||0):null,
+    linkLabel:orphan?'Satışa bağlı değil':(sale?.cancelled?`Satış iptal · ${sale.reference||''}`:(n.saleReference||sale?.reference||'Satışa bağlı'))
+  };
+}
 function cancelSaleInStore(s,sale,actor,reason=''){
   if(!sale||sale.kind!=='sale')throw new Error('Satış bulunamadı');
   if(sale.cancelled)return {already:true};
   const related=relatedSaleCollections(s,sale);
   related.forEach(c=>cancelCollectionInStore(s,c,actor,`Satış iptali: ${reason}`));
+  const notesCancelled=cancelPromissoryNotesForSale(s,sale,actor,`Satış iptali: ${reason}`);
   const reversal=financeTx(s,{
     date:todayISO(),kind:'sale_cancel',customerId:sale.customerId,amount:0,
     customerDelta:-Number(sale.customerDelta||sale.total||0),category:'Satış İptali',
@@ -2298,7 +2351,7 @@ function cancelSaleInStore(s,sale,actor,reason=''){
   sale.commissionCancelled=true;sale.cancelledCommissionAmount=Number(sale.commissionAmount||0);
   const iq=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id));
   if(iq&&iq.status!=='issued'){iq.status='cancelled';iq.error='Satış iptal edildi';iq.updatedAt=new Date().toISOString()}
-  return {already:false,linkedCollections:related.length,stockRestored:Boolean((sale.deductStock||sale.reserveStock)&&sale.warehouseId)};
+  return {already:false,linkedCollections:related.length,notesCancelled,stockRestored:Boolean((sale.deductStock||sale.reserveStock)&&sale.warehouseId)};
 }
 function normalizeSaleEditItems(s,items){
   const clean=(Array.isArray(items)?items:[]).filter(i=>String(i.productCode||'').trim()&&Number(i.quantity)>0).map(i=>{
@@ -2420,12 +2473,39 @@ function applySaleEditInStore(s,sale,patch={},actor='Yönetici',reason=''){
   sale.editHistory=Array.isArray(sale.editHistory)?sale.editHistory:[];
   sale.editHistory.unshift({at:sale.editedAt,by:actor,reason,before:{total:before.total,items:before.items.length,payments:before.payments},after:{total,items:cleanItems.length,payments:payments.length}});
 
+  // Senet senkronu: düzenlemede senet tutarı değişince açık (ödenmemiş) senetleri güncelle
+  const senetPay=Math.round(payments.filter(p=>/senet/i.test(String(p.method||''))).reduce((a,p)=>a+Number(p.amount||0),0)*100)/100;
+  const linkedNotes=linkedPromissoryNotes(s,sale);
+  let notesCancelled=0;
+  for(const n of linkedNotes){
+    if(String(n.status)==='paid')continue;
+    if(cancelPromissoryNoteInStore(n,actor,`Satış düzenleme: ${reason}`))notesCancelled++;
+  }
+  if(senetPay>0.009){
+    const settings=s.promissorySettings||{};
+    const planId=sale.promissoryPlanId||crypto.randomUUID();
+    const firstDue=linkedNotes.find(n=>n.dueDate)?.dueDate||new Date(Date.now()+Number(settings.firstDueDays||30)*86400000).toISOString().slice(0,10);
+    const note={
+      id:crypto.randomUUID(),planId,
+      serial:`${settings.prefix||'ATAK'}-${Date.now().toString().slice(-8)}-01`,
+      customerId:sale.customerId,saleId:sale.id,saleReference:sale.reference||'',
+      amount:senetPay,dueDate:firstDue,issueDate:String(sale.date||todayISO()),
+      status:'open',createdAt:new Date().toISOString(),
+      description:`${sale.reference||''} satış senedi (düzenleme)`,source:'sale_edit'
+    };
+    s.promissoryNotes.push(note);
+    sale.promissoryPlanId=planId;
+    sale.promissoryAmount=senetPay;
+  }else{
+    sale.promissoryAmount=0;
+  }
+
   const iq=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id));
   if(iq&&iq.status!=='issued'){
     iq.items=cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)}));
     iq.total=total;iq.updatedAt=new Date().toISOString();
   }
-  return {before,after:{items:cleanItems,grossTotal,discountPct,discountAmount,total,commissionAmount,payments,description:sale.description},collections:collections.length};
+  return {before,after:{items:cleanItems,grossTotal,discountPct,discountAmount,total,commissionAmount,payments,description:sale.description,promissoryAmount:sale.promissoryAmount||0},collections:collections.length,notesCancelled};
 }
 
 
@@ -3729,13 +3809,71 @@ app.post('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{
   res.json({ok:true,settings:s.promissorySettings});
 });
 app.post('/web-api/admin/promissory-plan',requireAdminOrStaff('orders_manage'),(req,res)=>{
- const s=readStore(),x=req.body||{},customer=s.customers.find(c=>c.id===x.customerId);if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
- const total=cleanMoney(x.totalAmount),count=Math.min(36,Math.max(1,Math.round(Number(x.installments)||1)));if(total<=0)return res.status(400).json({error:'Senet toplamı sıfırdan büyük olmalıdır'});
- const settings=s.promissorySettings||{};const interval=Math.min(12,Math.max(1,Math.round(Number(x.intervalMonths)||settings.intervalMonths||1)));
- const first=x.firstDueDate?new Date(x.firstDueDate+'T12:00:00'):new Date(Date.now()+Number(settings.firstDueDays||30)*86400000);if(Number.isNaN(first.getTime()))return res.status(400).json({error:'İlk vade tarihi geçersiz'});
- const base=Math.floor((total/count)*100)/100;let remaining=Math.round(total*100)/100;const planId=crypto.randomUUID(),notes=[];
- for(let i=0;i<count;i++){const due=new Date(first);due.setMonth(due.getMonth()+i*interval);const amount=i===count-1?Math.round(remaining*100)/100:base;remaining=Math.round((remaining-amount)*100)/100;notes.push({id:crypto.randomUUID(),planId,serial:`${settings.prefix||'ATAK'}-${Date.now().toString().slice(-8)}-${String(i+1).padStart(2,'0')}`,customerId:customer.id,amount,dueDate:due.toISOString().slice(0,10),issueDate:String(x.issueDate||todayISO()),status:'open',createdAt:new Date().toISOString(),description:String(x.description||'')})}
- s.promissoryNotes.push(...notes);audit(s,'Senet planı oluşturuldu',customer.name,{planId,total,count,interval});writeStore(s);res.json({ok:true,planId,notes,printUrl:`/web-api/admin/promissory-plan/${planId}/print`})
+  const s=readStore(),x=req.body||{},customer=s.customers.find(c=>c.id===x.customerId);
+  if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
+  const total=cleanMoney(x.totalAmount),count=Math.min(36,Math.max(1,Math.round(Number(x.installments)||1)));
+  if(total<=0)return res.status(400).json({error:'Senet toplamı sıfırdan büyük olmalıdır'});
+  const saleId=String(x.saleId||'').trim();
+  let sale=null;
+  if(saleId){
+    sale=(s.financeTransactions||[]).find(t=>String(t.id)===saleId&&t.kind==='sale');
+    if(!sale)return res.status(404).json({error:'Bağlanacak satış bulunamadı'});
+    if(sale.cancelled)return res.status(400).json({error:'İptal edilmiş satışa senet bağlanamaz'});
+    if(String(sale.customerId)!==String(customer.id))return res.status(400).json({error:'Satış bu müşteriye ait değil'});
+  }else{
+    // Satışsız senet yalnızca yönetici + açık onay ile (eski orphan bug’ını önlemek için)
+    if(!actorIsManager(req))return res.status(403).json({error:'Satışa bağlı olmayan senet yalnızca yönetici oluşturabilir'});
+    if(x.allowOrphan!==true&&String(x.confirmOrphan||'')!=='ORPHAN'){
+      return res.status(400).json({error:'Satışsız senet için saleId zorunlu veya allowOrphan:true + sebep girilmeli. Aksi halde tahsilat listesinde sahipsiz alacak görünür.'});
+    }
+    const orphanReason=String(x.reason||x.description||'').trim();
+    if(orphanReason.length<5)return res.status(400).json({error:'Satışsız senet için en az 5 karakter sebep yazın'});
+  }
+  const settings=s.promissorySettings||{};
+  const interval=Math.min(12,Math.max(1,Math.round(Number(x.intervalMonths)||settings.intervalMonths||1)));
+  const first=x.firstDueDate?new Date(x.firstDueDate+'T12:00:00'):new Date(Date.now()+Number(settings.firstDueDays||30)*86400000);
+  if(Number.isNaN(first.getTime()))return res.status(400).json({error:'İlk vade tarihi geçersiz'});
+  const base=Math.floor((total/count)*100)/100;
+  let remaining=Math.round(total*100)/100;
+  const planId=crypto.randomUUID(),notes=[];
+  const desc=String(x.description||(sale?`${sale.reference} satış senedi`:'Manuel senet planı')).slice(0,500);
+  for(let i=0;i<count;i++){
+    const due=new Date(first);due.setMonth(due.getMonth()+i*interval);
+    const amount=i===count-1?Math.round(remaining*100)/100:base;
+    remaining=Math.round((remaining-amount)*100)/100;
+    notes.push({
+      id:crypto.randomUUID(),planId,
+      serial:`${settings.prefix||'ATAK'}-${Date.now().toString().slice(-8)}-${String(i+1).padStart(2,'0')}`,
+      customerId:customer.id,
+      saleId:sale?.id||'',
+      saleReference:sale?.reference||'',
+      amount,dueDate:due.toISOString().slice(0,10),
+      issueDate:String(x.issueDate||todayISO()),status:'open',
+      createdAt:new Date().toISOString(),description:desc,
+      source:sale?'manual_linked':'manual_orphan',
+      orphanReason:sale?'':String(x.reason||x.description||'')
+    });
+  }
+  s.promissoryNotes.push(...notes);
+  if(sale){sale.promissoryPlanId=planId;sale.promissoryAmount=Math.round((Number(sale.promissoryAmount||0)+total)*100)/100}
+  audit(s,sale?'Satışa senet planı bağlandı':'Senet planı oluşturuldu (satışsız)',customer.name,{planId,total,count,interval,saleId:sale?.id||'',orphan:!sale});
+  writeStore(s);
+  res.json({ok:true,planId,notes,printUrl:`/web-api/admin/promissory-plan/${planId}/print`,orphan:!sale});
+});
+app.post('/web-api/admin/promissory-note/:id/cancel',requireAdminOrStaffAny('finance_manage','orders_manage','customers_manage'),(req,res)=>{
+  if(!actorIsManager(req))return res.status(403).json({error:'Senet iptali için yönetici yetkisi gerekir'});
+  const s=readStore(),note=(s.promissoryNotes||[]).find(n=>String(n.id)===String(req.params.id));
+  if(!note)return res.status(404).json({error:'Senet bulunamadı'});
+  if(String(note.status)==='cancelled')return res.status(400).json({error:'Senet zaten iptal'});
+  if(String(note.status)==='paid')return res.status(400).json({error:'Ödenmiş senet iptal edilemez'});
+  const reason=String(req.body?.reason||'').trim();
+  if(reason.length<3)return res.status(400).json({error:'İptal sebebi zorunlu (en az 3 karakter)'});
+  const actor=currentActor(req)?.name||'Yönetici';
+  cancelPromissoryNoteInStore(note,actor,reason);
+  const customer=(s.customers||[]).find(c=>String(c.id)===String(note.customerId));
+  audit(s,'Senet iptal edildi',customer?.name||note.serial,{noteId:note.id,serial:note.serial,amount:note.amount,reason,orphan:!note.saleId});
+  writeStore(s);
+  res.json({ok:true,note:enrichPromissoryNote(s,note)});
 });
 app.get('/web-api/admin/promissory-plan/:planId/print',requireAdminOrStaff('orders_manage'),(req,res)=>{
   const s=readStore(),notes=(s.promissoryNotes||[]).filter(n=>n.planId===req.params.planId).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
