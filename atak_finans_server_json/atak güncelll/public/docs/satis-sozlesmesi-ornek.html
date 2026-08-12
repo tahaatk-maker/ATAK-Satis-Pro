@@ -30,6 +30,10 @@ body{background:#b7c2d0;font:8.6px/1.3 "Segoe UI",system-ui,Arial,sans-serif;col
   background:radial-gradient(ellipse at center,#0a27480d,#0000 72%);
   pointer-events:none;
 }
+.logo-top{display:flex;justify-content:center;align-items:center;margin:0 0 4px;position:relative;z-index:1}
+.logo-top img{height:14mm;width:auto;object-fit:contain}
+.logo-bottom{display:flex;justify-content:center;align-items:center;margin-top:3px;padding-top:3px;border-top:1px solid var(--line);position:relative;z-index:1}
+.logo-bottom img{height:9mm;width:auto;object-fit:contain;opacity:.95}
 .top{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start;position:relative;z-index:1}
 .co .name{font-size:10.5px;font-weight:800;color:var(--navy);letter-spacing:.01em}
 .co .meta{margin-top:3px;color:var(--muted);font-size:7.5px;line-height:1.4}
@@ -111,6 +115,7 @@ td{height:13px;font-size:8px}
 <body>
 <div class="toolbar"><b>ATAK Sözleşme + Senet</b><button onclick="window.print()">Yazdır / PDF</button></div>
 <section class="sheet">
+  <div class="logo-top"><img src="../assets/atak-header-logo.png" alt="ATAK Pazarlama"/></div>
   <div class="top">
     <div class="co">
       <div class="name">ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.</div>
@@ -200,7 +205,6 @@ td{height:13px;font-size:8px}
     <div class="senet">
       <div class="senet-side">
         <strong>ATAK EV GEREÇLERİ<br/>PAZ. TİC. LTD. ŞTİ.</strong>
-        <div class="pills" style="justify-content:flex-start;flex-wrap:wrap"><span class="pill">beko</span><span class="pill">Bellona</span><span class="pill">istikbal</span></div>
         <div>Tarabya / Sarıyer<br/>0212 223 28 71<br/>tarabyabeko@gmail.com<br/>VD: Sarıyer</div>
       </div>
       <div class="senet-main">
@@ -230,6 +234,7 @@ td{height:13px;font-size:8px}
       </div>
     </div>
   </div>
+  <div class="logo-bottom"><img src="../assets/atak-header-logo.png" alt="ATAK Pazarlama"/></div>
   <div class="foot">ATAK Home · Sözleşme + Senet · tek A4</div>
 </section>
 </body>
