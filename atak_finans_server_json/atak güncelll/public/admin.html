@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v52" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v52" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v53" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v53" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1103,7 +1103,7 @@ body.inv-full #pageTitle{font-size:18px}
 
 <section class="tab" id="managerApprovals">
 <div class="panel">
-<div class="panel-head"><div><small class="eyebrow">YÖNETİCİ</small><h2>Yönetici Onayları</h2><p>Satış/tahsilat iptalleri, satış düzenlemeleri ve müşteri değişiklikleri.</p></div><button id="approvalRefresh" class="secondary-btn" type="button">Yenile</button></div>
+<div class="panel-head"><div><small class="eyebrow">YÖNETİCİ</small><h2>Yönetici Onayları</h2><p>Satış/tahsilat iptalleri, satış düzenlemeleri, müşteri düzenleme ve silme talepleri.</p></div><button id="approvalRefresh" class="secondary-btn" type="button">Yenile</button></div>
 <div id="approvalInfo" class="form-status"></div>
 <div class="table-wrap"><table><thead><tr><th>Durum</th><th>Tür</th><th>Referans</th><th>Personel</th><th>Sebep</th><th>Tarih</th><th>İşlem</th></tr></thead><tbody id="approvalTable"></tbody></table></div>
 </div></section>
@@ -1822,7 +1822,10 @@ Bulunamayan → Diğer.
 <strong id="customerDetailBalance">₺0</strong>
 </div>
 </div>
-<div class="customer-action-buttons"><button data-customer-action="edit" type="button">✏️ Bilgileri Düzenle</button></div>
+<div class="customer-action-buttons">
+<button data-customer-action="edit" type="button">✏️ Bilgileri Düzenle</button>
+<button data-customer-action="delete" type="button" class="customer-delete-btn">🗑 Sil (Onaya)</button>
+</div>
 <div id="customerBillingCards" class="customer-billing-cards"></div>
 <div class="panel-head compact">
 <h3>Cari Hareketler</h3>
@@ -2106,5 +2109,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v52"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v53"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
