@@ -127,9 +127,11 @@
 .customer-balance-box{text-align:right;padding:14px 18px;border-radius:14px;background:#eef6ff}
 .customer-balance-box small,.customer-balance-box strong{display:block}
 .customer-balance-box strong{font-size:26px;color:#075da8;margin-top:4px}
-.customer-action-buttons{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
-.customer-action-buttons button{height:48px;border:0;border-radius:11px;background:#0a5ca8;color:#fff;font-weight:900}
-.customer-action-buttons button:nth-child(2){background:#087c47}
+.customer-action-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:16px 0}
+.customer-action-buttons button{height:48px;border:0;border-radius:11px;background:#0a5ca8;color:#fff;font-weight:900;cursor:pointer}
+.customer-action-buttons button.customer-delete-btn{background:#b42318}
+.customer-action-buttons button.customer-delete-btn:hover{background:#912018}
+.customer-action-buttons button:nth-child(2):not(.customer-delete-btn){background:#087c47}
 .customer-action-buttons button:nth-child(3){background:#5d6b7f}
 .customer-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 18px}
 .customer-info-grid>div{padding:13px;border:1px solid #e0e7ef;border-radius:10px}
@@ -156,6 +158,7 @@
 .customer-sale-totals{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:12px;color:#5d6b7f}
 .customer-sale-totals b{color:#0a3d6e}
 .customer-pending-banner{padding:10px 12px;border-radius:10px;background:#fff7e6;border:1px solid #f0d48a;color:#8a5a00;font-weight:700;margin-bottom:10px}
+.customer-pending-banner.danger{background:#fef3f2;border-color:#fecdca;color:#b42318}
 .field-hint{display:block;margin-top:4px;font-size:11px;color:#6f7d92;font-weight:600}
 .sale-edit-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
 .sale-edit-grid label{display:grid;gap:4px;font-size:12px;font-weight:800}

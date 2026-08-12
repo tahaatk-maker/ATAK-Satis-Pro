@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v52 */
+/* ATAK_ADMIN_BUILD=fix-v53 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1203,6 +1203,7 @@ function openCustomerModal(c=null){
 function renderCustomerPageList(){
   const term=(q('#customerPageSearch')?.value||'').toLocaleLowerCase('tr-TR');
   const rows=customersPageData.customers.filter(c=>{
+    if(c.active===false||c.deletedAt)return false;
     const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.city||''} ${c.district||''}`.toLocaleLowerCase('tr-TR');
     return !term||hay.includes(term);
   });
@@ -1311,11 +1312,19 @@ async function selectCustomerPage(id){
     if(q('#customerTransactionCount'))q('#customerTransactionCount').textContent=`${tx.length} hareket · ${saleCount} satış`;
     const list=q('#customerTransactionList');
     if(list){
-      const pending=d.pendingEdit?`<div class="customer-pending-banner">Bekleyen düzenleme onayı var · ${d.pendingEdit.requestedByName||'Personel'} · ${String(d.pendingEdit.requestedAt||'').replace('T',' ').slice(0,16)}</div>`:'';
-      list.innerHTML=pending+(tx.length?tx.slice(0,80).map(renderCustomerTransaction).join(''):'<div class="note">Henüz cari hareket yok.</div>');
+      const banners=[];
+      if(d.pendingDelete)banners.push(`<div class="customer-pending-banner danger">Bekleyen silme onayı var · ${salesEsc(d.pendingDelete.requestedByName||'Personel')} · ${String(d.pendingDelete.requestedAt||'').replace('T',' ').slice(0,16)} · ${salesEsc(d.pendingDelete.reason||'')}</div>`);
+      if(d.pendingEdit)banners.push(`<div class="customer-pending-banner">Bekleyen düzenleme onayı var · ${salesEsc(d.pendingEdit.requestedByName||'Personel')} · ${String(d.pendingEdit.requestedAt||'').replace('T',' ').slice(0,16)}</div>`);
+      list.innerHTML=banners.join('')+(tx.length?tx.slice(0,80).map(renderCustomerTransaction).join(''):'<div class="note">Henüz cari hareket yok.</div>');
     }
     customersPageData._selected=c;
     customersPageData._canManage=Boolean(d.canManage);
+    customersPageData._pendingDelete=d.pendingDelete||null;
+    const delBtn=q('[data-customer-action="delete"]');
+    if(delBtn){
+      delBtn.disabled=Boolean(d.pendingDelete)||c.active===false;
+      delBtn.textContent=d.pendingDelete?'🗑 Silme onayı bekliyor':'🗑 Sil (Onaya)';
+    }
   }catch(e){toast(e.message);empty?.classList.remove('hidden');content?.classList.add('hidden')}
 }
 async function loadCustomersPage(){
@@ -1338,9 +1347,35 @@ document.querySelectorAll('input[name="customerPageInvoiceType"]').forEach(r=>r.
 document.addEventListener('click',e=>{
   const edit=e.target.closest('[data-customer-action="edit"]');
   if(edit){e.preventDefault();if(customersPageData._selected)openCustomerModal(customersPageData._selected)}
+  const del=e.target.closest('[data-customer-action="delete"]');
+  if(del){
+    e.preventDefault();
+    requestCustomerDelete();
+  }
   const goCust=e.target.closest('#openCustomersPage');
   if(goCust){e.preventDefault();goTab('customersPage')}
 });
+async function requestCustomerDelete(){
+  const c=customersPageData._selected;
+  if(!c?.id){toast('Önce müşteri seçin');return}
+  if(customersPageData._pendingDelete){toast('Bu müşteri için zaten bekleyen silme onayı var');return}
+  if(c.active===false){toast('Müşteri zaten pasif');return}
+  const bal=Number(c.balance||0);
+  const balNote=Math.abs(bal)>0.009?`\nGüncel cari: ${money2(bal)}`:'';
+  const reason=prompt(`“${c.name||'Müşteri'}” silme talebi yönetici onayına gidecek.${balNote}\n\nSilme sebebini yazın:`,'Müşteri kaydı silinsin');
+  if(reason===null)return;
+  const clean=String(reason||'').trim();
+  if(clean.length<3){toast('Silme sebebi en az 3 karakter olmalı');return}
+  if(!confirm(`Silme talebi yöneticiye gönderilsin mi?\n\nMüşteri: ${c.name||'-'}\nSebep: ${clean}`))return;
+  try{
+    await api('/web-api/admin/customer/'+encodeURIComponent(c.id)+'/delete-request',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:clean})
+    });
+    toast('Silme talebi yönetici onayına gönderildi');
+    await selectCustomerPage(c.id);
+    await loadApprovals().catch(()=>{});
+  }catch(err){toast(err.message||'Talep gönderilemedi')}
+}
 q('#customerPageSaveBtn')?.addEventListener('click',async()=>{
   const st=q('#customerPageStatus');
   try{
@@ -3796,12 +3831,16 @@ async function loadStaffSalesReport(){
   }catch(e){st.textContent=e.message;st.className='form-status error'}
 }
 function approvalTypeLabel(type=''){
-  return({sale:'Satış iptali',collection:'Tahsilat iptali',customer_edit:'Müşteri düzenleme',sale_edit:'Satış düzenleme'}[type]||type||'-');
+  return({sale:'Satış iptali',sale_return:'Satış iadesi',collection:'Tahsilat iptali',customer_edit:'Müşteri düzenleme',customer_delete:'Müşteri silme',sale_edit:'Satış düzenleme'}[type]||type||'-');
 }
 function approvalDetailHtml(r){
   if(r.targetType==='sale_edit'){
     const p=r.payload?.preview||{};
     return `<div class="approval-edit-detail"><div>${salesEsc(r.reason||'Satış düzenleme')}</div><small>Net: ${salesMoney(p.beforeTotal)} → <b>${salesMoney(p.afterTotal)}</b> · ${p.itemCount||0} kalem</small></div>`;
+  }
+  if(r.targetType==='customer_delete'){
+    const p=r.payload||{},b=p.before||{};
+    return `<div class="approval-edit-detail"><div>${salesEsc(r.reason||'Müşteri silme')}</div><small>${salesEsc(b.name||r.targetReference||'-')}${b.phone?' · '+salesEsc(b.phone):''}${p.balance!=null?` · Cari ${salesMoney(p.balance)}`:''}</small><small>Onaylanınca müşteri pasife alınır (silinmiş).</small></div>`;
   }
   if(r.targetType!=='customer_edit'||!r.payload?.after)return salesEsc(r.reason||'-');
   const b=r.payload.before||{},a=r.payload.after||{};
@@ -3815,13 +3854,24 @@ async function loadApprovals(){
     q('#approvalTable').innerHTML=(d.rows||[]).map(r=>`<tr><td><span class="approval-status ${r.status}">${r.status==='pending'?'Bekliyor':r.status==='approved'?'Onaylandı':'Reddedildi'}</span></td><td>${approvalTypeLabel(r.targetType)}</td><td>${r.targetReference||'-'}</td><td>${r.requestedByName||'-'}</td><td>${approvalDetailHtml(r)}</td><td>${String(r.requestedAt||'').replace('T',' ').slice(0,16)}</td><td>${r.status==='pending'?`<button type="button" data-appr="${r.id}" data-type="${r.targetType||''}">Onayla</button> <button type="button" data-rej="${r.id}">Reddet</button>`:(r.reviewedBy||'-')}</td></tr>`).join('');
     qa('[data-appr]').forEach(b=>b.onclick=async()=>{
       const msg=b.dataset.type==='customer_edit'?'Müşteri düzenlemesi uygulansın mı?'
+        :b.dataset.type==='customer_delete'?'Müşteri silme onaylansın mı? Kayıt pasife alınır (listeden düşer). Cari geçmişi korunur.'
         :b.dataset.type==='sale_edit'?'Satış düzenlemesi uygulansın mı? Cari, kasa, stok ve prim güncellenecek.'
         :'İptal onaylansın mı? Satış ise tahsilat, cari, stok ve prim ters kayıtla düzeltilir.';
       if(!confirm(msg))return;
-      try{await api('/web-api/admin/cancellation-request/'+b.dataset.appr+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve'})});toast('Onaylandı');await loadApprovals();await loadStaffSalesReport();await loadMySalesReport();if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId)}catch(e){toast(e.message)}
+      try{
+        await api('/web-api/admin/cancellation-request/'+b.dataset.appr+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve'})});
+        toast('Onaylandı');
+        await loadApprovals();
+        await loadStaffSalesReport();
+        await loadMySalesReport();
+        if(b.dataset.type==='customer_delete'){
+          customersPageData.selectedId='';
+          await loadCustomersPage().catch(()=>{});
+        }else if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId);
+      }catch(e){toast(e.message)}
     });
-    qa('[data-rej]').forEach(b=>b.onclick=async()=>{const note=prompt('Red açıklaması:','')||'';try{await api('/web-api/admin/cancellation-request/'+b.dataset.rej+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reject',note})});toast('Reddedildi');await loadApprovals()}catch(e){toast(e.message)}});
-    info.textContent='İptal, satış düzenleme ve müşteri değişiklikleri burada onaylanır. Onaylanmadan finans değişmez.';info.className='form-status success';
+    qa('[data-rej]').forEach(b=>b.onclick=async()=>{const note=prompt('Red açıklaması:','')||'';try{await api('/web-api/admin/cancellation-request/'+b.dataset.rej+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reject',note})});toast('Reddedildi');await loadApprovals();if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId).catch(()=>{})}catch(e){toast(e.message)}});
+    info.textContent='İptal, satış düzenleme, müşteri düzenleme/silme talepleri burada onaylanır. Onaylanmadan işlem uygulanmaz.';info.className='form-status success';
   }catch(e){info.textContent=e.message;info.className='form-status error'}
 }
 q('#mySalesRefresh')?.addEventListener('click',loadMySalesReport);

@@ -865,8 +865,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.53-kefil',
-  build:'fix-v52',
+  version:'6.3.54-musteri-sil',
+  build:'fix-v53',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -1700,15 +1700,59 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
       };
     });
   const pendingEdit=(s.cancellationRequests||[]).find(r=>r.status==='pending'&&r.targetType==='customer_edit'&&String(r.targetId)===String(customer.id))||null;
+  const pendingDelete=(s.cancellationRequests||[]).find(r=>r.status==='pending'&&r.targetType==='customer_delete'&&String(r.targetId)===String(customer.id))||null;
   res.json({
     customer:{...customer,balance:customerBalance(s,customer.id)},
     transactions,
     pendingEdit,
+    pendingDelete,
     canManage:isSystemManager(req),
     accounts:s.financeAccounts.filter(x=>x.active!==false).map(x=>({...x,balance:accountBalance(s,x.id)})),
     products:(s.products||[]).filter(x=>x.active!==false).map(x=>({code:x.code,name:x.name,price:Number(x.cashPrice||x.salePrice||x.price||0),cardPrice:Number(x.cardPrice||x.cashPrice||x.salePrice||0),brand:x.brand||''})),
     warehouses:(s.warehouses||[]).filter(x=>x.active!==false),
     promissoryNotes:(s.promissoryNotes||[]).filter(n=>n.customerId===customer.id).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))
+  });
+});
+
+app.post('/web-api/admin/customer/:id/delete-request',requireAdminOrStaff('customers_manage'),(req,res)=>{
+  const s=readStore(),customer=(s.customers||[]).find(c=>String(c.id)===String(req.params.id));
+  if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
+  if(customer.active===false||customer.deletedAt)return res.status(400).json({error:'Müşteri zaten pasif / silinmiş'});
+  const reason=String(req.body?.reason||'').trim();
+  if(!reason||reason.length<3)return res.status(400).json({error:'Silme sebebi zorunludur (en az 3 karakter). Yönetici bu sebebi görür.'});
+  if(!Array.isArray(s.cancellationRequests))s.cancellationRequests=[];
+  if(s.cancellationRequests.some(r=>r.status==='pending'&&r.targetType==='customer_delete'&&String(r.targetId)===String(customer.id)))
+    return res.status(409).json({error:'Bu müşteri için bekleyen silme onayı var'});
+  if(s.cancellationRequests.some(r=>r.status==='pending'&&r.targetType==='customer_edit'&&String(r.targetId)===String(customer.id)))
+    return res.status(409).json({error:'Bekleyen düzenleme onayı varken silme talebi açılamaz'});
+  const u=currentSessionUser(req)||currentActor(req);
+  const bal=customerBalance(s,customer.id);
+  const row={
+    id:crypto.randomUUID(),
+    targetType:'customer_delete',
+    targetId:String(customer.id),
+    targetReference:customer.name||customer.id,
+    reason,
+    status:'pending',
+    requestedById:u?.id||'',
+    requestedByName:u?.name||'Personel',
+    requestedAt:new Date().toISOString(),
+    reviewedBy:'',reviewedAt:'',reviewNote:'',
+    managerAlert:true,
+    payload:{
+      before:customerSnapshot(customer),
+      balance:bal,
+      phone:customer.phone||'',
+      tckn:customer.tckn||'',
+      companyName:customer.companyName||''
+    }
+  };
+  s.cancellationRequests.unshift(row);
+  audit(s,'Müşteri silme onayı istendi',customer.name,{reason,personel:row.requestedByName,balance:bal});
+  writeStore(s);
+  res.json({
+    ok:true,pendingApproval:true,row,
+    message:'Silme talebi yöneticiye gönderildi. Onaylanmadan müşteri silinmez.'
   });
 });
 
@@ -2964,7 +3008,10 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny
   const action=String(req.body?.action||''),note=String(req.body?.note||''),actor=currentActor(req)?.name||'Yönetici';
   if(action==='reject'){
     row.status='rejected';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
-    const rejectLabel=row.targetType==='customer_edit'?'Müşteri düzenleme reddedildi':row.targetType==='sale_edit'?'Satış düzenleme reddedildi':(row.requestKind==='return'||row.targetType==='sale_return')?'İade talebi reddedildi':'İptal talebi reddedildi';
+    const rejectLabel=row.targetType==='customer_edit'?'Müşteri düzenleme reddedildi'
+      :row.targetType==='customer_delete'?'Müşteri silme reddedildi'
+      :row.targetType==='sale_edit'?'Satış düzenleme reddedildi'
+      :(row.requestKind==='return'||row.targetType==='sale_return')?'İade talebi reddedildi':'İptal talebi reddedildi';
     audit(s,rejectLabel,row.targetReference||row.targetId,{note});
     writeStore(s);return res.json({ok:true,row});
   }
@@ -2979,6 +3026,23 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny
       audit(s,'Müşteri düzenleme onaylandı',customer.name,{reason:row.reason,personel:row.requestedByName});
       writeStore(s);return res.json({ok:true,row,customer:{...customer,balance:customerBalance(s,customer.id)}});
     }catch(e){return res.status(400).json({error:e.message})}
+  }
+  if(row.targetType==='customer_delete'){
+    const customer=(s.customers||[]).find(c=>String(c.id)===String(row.targetId));
+    if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
+    if(customer.active===false||customer.deletedAt){
+      row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note||'Zaten pasif';
+      writeStore(s);return res.json({ok:true,row,alreadyDeleted:true});
+    }
+    customer.active=false;
+    customer.deletedAt=new Date().toISOString();
+    customer.deletedBy=actor;
+    customer.deleteReason=row.reason||'';
+    customer.updatedAt=new Date().toISOString();
+    row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
+    audit(s,'Müşteri silme onaylandı',customer.name,{reason:row.reason,personel:row.requestedByName,balance:customerBalance(s,customer.id)});
+    writeStore(s);
+    return res.json({ok:true,row,customer:{...customer,balance:customerBalance(s,customer.id)}});
   }
   if(row.targetType==='sale_edit'){
     const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(row.targetId)&&t.kind==='sale');
