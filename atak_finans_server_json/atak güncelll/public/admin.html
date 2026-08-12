@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v60" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v60" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v61" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v61" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1408,13 +1408,14 @@ Bulunamayan → Diğer.
         </select>
       </label>
       <label>Depo (stok aktarımı için)<select id="purchaseExcelWarehouse"></select></label>
-      <label>Kategori (yeni ürünler için)
-        <select id="purchaseExcelCategory" required>
-          <option value="">Kategori seçin…</option>
+      <label>Varsayılan kategori (yeni ürünler)
+        <select id="purchaseExcelCategory">
+          <option value="">Satır satır seç…</option>
         </select>
       </label>
+      <button id="purchaseApplyCategoryBtn" class="secondary-btn" type="button" style="margin-top:4px">Seçileni tüm yenilere uygula</button>
       <label class="check-row"><input id="purchaseExcelIncVat" type="checkbox" checked/> Fiyatlarda KDV dahil</label>
-      <div class="dynamics-info-box"><b>İki seçenek</b><span><b>Sadece maliyet</b> → alış fiyatını yazar (ürün yoksa ekler, stok dokunulmaz). <b>Sadece stok</b> → miktarı depoya ekler (ürün yoksa ekler, mevcut maliyete dokunmaz). Yeni ürün açılacaksa <b>kategori zorunlu</b>. Beğenmezsen aşağıdan <b>Geri Al</b>.</span></div>
+      <div class="dynamics-info-box"><b>İki seçenek</b><span><b>Sadece maliyet</b> → alış fiyatını yazar (ürün yoksa ekler, stok dokunulmaz). <b>Sadece stok</b> → miktarı depoya ekler (ürün yoksa ekler, mevcut maliyete dokunmaz). Yeni ürünlerin kategorisini <b>tabloda satır satır</b> seç (veya üstten tümüne uygula). Beğenmezsen aşağıdan <b>Geri Al</b>.</span></div>
       <div class="dynamics-import-actions" style="flex-wrap:wrap">
         <button id="purchasePreviewBtn" class="secondary-btn" type="button">Excel'i Önizle</button>
         <button id="purchaseCostBtn" class="primary" type="button" disabled>Sadece Maliyet Aktar</button>
@@ -1430,12 +1431,12 @@ Bulunamayan → Diğer.
         <article class="warn"><b>0</b><span>Yeni eklenecek</span></article>
         <article class="bad"><b>0</b><span>Hatalı</span></article>
       </div>
-      <p class="note" style="margin-top:12px">Arçelik: Madde kodu + Maliyet tutarı. Yeni ürünler seçtiğiniz <b>kategoriye</b> eklenir. İstikbal / Doğtaş için varsayılan öneri Mobilya’dır; marka yine İstikbal olur — Malzeme1 + Birim Fiyat.</p>
+      <p class="note" style="margin-top:12px">Arçelik: Madde kodu + Maliyet tutarı. Yeni ürünlerin kategorisini <b>tabloda ürünün yanında</b> seçersin. Üstteki varsayılan ile hepsine birden de uygulanır. İstikbal / Doğtaş → marka İstikbal (Malzeme1 + Birim Fiyat).</p>
     </div>
   </div>
   <div class="panel table-wrap dynamics-preview-wrap">
     <table>
-      <thead><tr><th>DURUM</th><th>ÜRÜN</th><th>MİKTAR</th><th>BİRİM FİYAT</th><th>MEVCUT ALIŞ</th><th>FATURA</th></tr></thead>
+      <thead><tr><th>DURUM</th><th>ÜRÜN</th><th>KATEGORİ</th><th>MİKTAR</th><th>BİRİM FİYAT</th><th>MEVCUT ALIŞ</th><th>FATURA</th></tr></thead>
       <tbody id="purchasePreviewTable"></tbody>
     </table>
     <div id="purchasePreviewEmpty" class="empty">Excel seçip “Excel'i Önizle”ye basın.</div>
@@ -2105,5 +2106,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v60"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v61"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

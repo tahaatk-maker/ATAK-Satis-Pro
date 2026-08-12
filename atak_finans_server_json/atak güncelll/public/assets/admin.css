@@ -350,6 +350,7 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .dynamics-bulk-category select,[data-dynamics-category]{min-height:38px;width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 9px}
 .dynamics-preview-row.existing{opacity:.72}
 .dynamics-preview-row.invalid{opacity:.6}
+.purchase-row-cat{min-width:148px;max-width:240px;width:100%;min-height:34px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 8px;font-size:12px}
 @media(max-width:700px){.dynamics-bulk-category{grid-template-columns:1fr}}
 
 /* V6.2.5.9 Dynamics hızlı kategori ekleme */
