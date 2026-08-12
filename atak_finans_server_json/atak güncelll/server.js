@@ -864,8 +864,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.40-maliyet-sifirla',
-  build:'fix-v39',
+  version:'6.3.41-tum-alis-sifir',
+  build:'fix-v40',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
