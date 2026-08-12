@@ -168,6 +168,12 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .sales-pay-balance.warn{color:#9a6700;background:#fffbeb}
 .sales-pay-balance.bad{color:#b91c1c;background:#fef2f2}
 .promissory-box{margin-top:4px;padding:12px;border:1px solid #f0c0c8;border-radius:12px;background:#fff1f2}
+.sales-kefil-box{margin-top:8px;padding:10px 12px;border:1px dashed #e8a0ae;border-radius:10px;background:#fff7f8;display:grid;gap:8px}
+.sales-kefil-head{display:grid;gap:2px}.sales-kefil-head b{color:#9f1239;font-size:13px}.sales-kefil-head small{color:#7a879a;font-size:11px;line-height:1.35}
+.sales-kefil-actions{display:flex;flex-wrap:wrap;gap:8px}
+.sales-kefil-preview{padding:8px 10px;border-radius:8px;background:#ffe4e9;border:1px solid #f5c2cc;display:grid;gap:2px}
+.sales-kefil-preview b{color:#9f1239}.sales-kefil-preview span{font-size:11px;color:#7a879a}
+.sales-kefil-edit{display:grid;gap:6px}
 .pay-screen-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .senet-btn{border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#e11d48,#9f1239);color:#fff}
 @media(max-width:700px){

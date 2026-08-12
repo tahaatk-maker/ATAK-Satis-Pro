@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v51 */
+/* ATAK_ADMIN_BUILD=fix-v52 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1127,6 +1127,18 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
   if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
   const email=(q(`#${prefix}Email`)?.value||'').trim();
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Geçerli bir e-posta girin (e-Fatura / e-Arşiv için)');
+  const gName=(q(`#${prefix}GuarantorName`)?.value||'').trim();
+  const gTckn=(q(`#${prefix}GuarantorTckn`)?.value||'').trim();
+  if(gTckn&&gTckn.replace(/\D/g,'').length!==11)throw new Error('Kefil TCKN 11 hane olmalıdır');
+  const guarantor=gName?{
+    name:gName,
+    tckn:gTckn,
+    phone:(q(`#${prefix}GuarantorPhone`)?.value||'').trim(),
+    workPhone:(q(`#${prefix}GuarantorWorkPhone`)?.value||'').trim(),
+    homePhone:(q(`#${prefix}GuarantorHomePhone`)?.value||'').trim(),
+    homeAddress:(q(`#${prefix}GuarantorHomeAddress`)?.value||'').trim(),
+    workAddress:(q(`#${prefix}GuarantorWorkAddress`)?.value||'').trim()
+  }:null;
   const payload={
     name,phone,
     email,
@@ -1139,6 +1151,7 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
     taxNo:invoiceType==='corporate'?taxNo:'',
     tckn:tckn||'',
     note:(q(`#${prefix}Note`)?.value||'').trim(),
+    guarantor,
     active:true
   };
   if(requireActive||q(`#${prefix}Active`))payload.active=String(q(`#${prefix}Active`)?.value||'true')!=='false';
@@ -1166,6 +1179,14 @@ function fillCustomerForm(prefix,c={}){
   if(q(`#${prefix}Tckn`))q(`#${prefix}Tckn`).value=c.tckn||(!c.companyName&&String(c.taxNo||'').replace(/\D/g,'').length===11?c.taxNo:'')||'';
   if(q(`#${prefix}Note`))q(`#${prefix}Note`).value=c.note||'';
   if(q(`#${prefix}Active`))q(`#${prefix}Active`).value=c.active===false?'false':'true';
+  const g=c.guarantor&&typeof c.guarantor==='object'?c.guarantor:{};
+  if(q(`#${prefix}GuarantorName`))q(`#${prefix}GuarantorName`).value=g.name||'';
+  if(q(`#${prefix}GuarantorTckn`))q(`#${prefix}GuarantorTckn`).value=g.tckn||'';
+  if(q(`#${prefix}GuarantorPhone`))q(`#${prefix}GuarantorPhone`).value=g.phone||'';
+  if(q(`#${prefix}GuarantorWorkPhone`))q(`#${prefix}GuarantorWorkPhone`).value=g.workPhone||'';
+  if(q(`#${prefix}GuarantorHomePhone`))q(`#${prefix}GuarantorHomePhone`).value=g.homePhone||'';
+  if(q(`#${prefix}GuarantorHomeAddress`))q(`#${prefix}GuarantorHomeAddress`).value=g.homeAddress||g.address||'';
+  if(q(`#${prefix}GuarantorWorkAddress`))q(`#${prefix}GuarantorWorkAddress`).value=g.workAddress||'';
   syncCustomerFormUI(prefix);
 }
 function openCustomerModal(c=null){
@@ -1909,6 +1930,7 @@ function salesCustomerChanged(){
     box.classList.add('hidden');box.innerHTML='';noteWrap?.classList.add('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value='';
     billWrap?.classList.add('hidden');
     if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent='—';
+    salesDetachKefil({silent:true});
     salesUpdatePosSteps(salesCalcState());
     return;
   }
@@ -1924,6 +1946,8 @@ function salesCustomerChanged(){
   }
   noteWrap?.classList.remove('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value=c.note||'';
   if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent=c.name.length>22?c.name.slice(0,21)+'…':c.name;
+  salesDetachKefil({silent:true});
+  salesRefreshKefilUI();
   salesUpdatePosSteps(salesCalcState());
 }
 
@@ -1944,8 +1968,104 @@ function salesPaymentChanged(){
     if(!q('#salesPromissoryFirstDue')?.value)loadSalesPromissoryDefaults();
     if(q('#salesPromissoryWarn'))q('#salesPromissoryWarn').textContent=`⚠ ${salesMoney(noteAmt)} senet için vade tarihi ve taksit girin. Satış kaydında senet düzeneği oluşturulacak.`;
     salesRenderPromissorySchedule();
-  }else if(q('#salesPromissorySchedule'))q('#salesPromissorySchedule').innerHTML='';
+  }else{
+    if(q('#salesPromissorySchedule'))q('#salesPromissorySchedule').innerHTML='';
+    salesDetachKefil({silent:true});
+  }
+  salesRefreshKefilUI();
 }
+
+function normalizeSalesGuarantor(g){
+  if(!g||typeof g!=='object')return null;
+  const name=String(g.name||'').trim();
+  if(!name)return null;
+  return {
+    name,
+    tckn:String(g.tckn||g.taxNo||'').trim(),
+    phone:String(g.phone||g.gsm||'').trim(),
+    workPhone:String(g.workPhone||'').trim(),
+    homePhone:String(g.homePhone||'').trim(),
+    homeAddress:String(g.homeAddress||g.address||'').trim(),
+    workAddress:String(g.workAddress||'').trim()
+  };
+}
+function salesSelectedCustomer(){
+  const id=q('#salesCustomerSelect')?.value||'';
+  return (salesCenterData.customers||[]).find(c=>String(c.id)===String(id))||null;
+}
+function salesCustomerSavedGuarantor(){return normalizeSalesGuarantor(salesSelectedCustomer()?.guarantor)}
+function salesKefilAttached(){return q('#salesKefilAttached')?.value==='1'}
+function salesReadKefilForm(){
+  const name=(q('#salesKefilName')?.value||'').trim();
+  if(!name)return null;
+  const tckn=(q('#salesKefilTckn')?.value||'').trim();
+  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('Kefil TCKN 11 hane olmalıdır');
+  return {
+    name,tckn,
+    phone:(q('#salesKefilPhone')?.value||'').trim(),
+    workPhone:(q('#salesKefilWorkPhone')?.value||'').trim(),
+    homePhone:(q('#salesKefilHomePhone')?.value||'').trim(),
+    homeAddress:(q('#salesKefilHomeAddress')?.value||'').trim(),
+    workAddress:(q('#salesKefilWorkAddress')?.value||'').trim()
+  };
+}
+function salesFillKefilForm(g={}){
+  if(q('#salesKefilName'))q('#salesKefilName').value=g.name||'';
+  if(q('#salesKefilTckn'))q('#salesKefilTckn').value=g.tckn||'';
+  if(q('#salesKefilPhone'))q('#salesKefilPhone').value=g.phone||'';
+  if(q('#salesKefilWorkPhone'))q('#salesKefilWorkPhone').value=g.workPhone||'';
+  if(q('#salesKefilHomePhone'))q('#salesKefilHomePhone').value=g.homePhone||'';
+  if(q('#salesKefilHomeAddress'))q('#salesKefilHomeAddress').value=g.homeAddress||'';
+  if(q('#salesKefilWorkAddress'))q('#salesKefilWorkAddress').value=g.workAddress||'';
+}
+function salesClearKefilForm(){salesFillKefilForm({})}
+function salesRefreshKefilUI(){
+  const noteAmt=Math.max(0,salesNum(q('#payNote')?.value));
+  const saved=salesCustomerSavedGuarantor();
+  const attached=salesKefilAttached();
+  const hint=q('#salesKefilStatusHint');
+  const preview=q('#salesKefilPreview');
+  if(hint){
+    if(noteAmt<=0)hint.textContent='Senet tutarı girilince kefil eklenebilir';
+    else if(attached)hint.textContent='Kefil bu satışın senetine eklendi — A4 düzeni aynı kalır';
+    else if(saved)hint.textContent=`Kayıtlı kefil: ${saved.name}${saved.phone?' · '+saved.phone:''}`;
+    else hint.textContent='Müşteri kartında kefil yok — müşteriyi düzenleyip kefil kaydedin';
+  }
+  q('#salesKefilAddBtn')?.classList.toggle('hidden',noteAmt<=0||attached);
+  q('#salesKefilClearBtn')?.classList.toggle('hidden',!attached);
+  q('#salesKefilEdit')?.classList.toggle('hidden',!attached);
+  if(preview){
+    if(attached){
+      const g=normalizeSalesGuarantor(salesReadKefilFormSafe())||saved||{};
+      preview.classList.remove('hidden');
+      preview.innerHTML=`<b>${salesEsc(g.name||'-')}</b><span>TCKN ${salesEsc(g.tckn||'—')} · GSM ${salesEsc(g.phone||'—')}</span>`;
+    }else{preview.classList.add('hidden');preview.innerHTML=''}
+  }
+}
+function salesReadKefilFormSafe(){
+  try{return salesReadKefilForm()}catch(_){return null}
+}
+function salesAttachSavedKefil(){
+  const cust=salesSelectedCustomer();
+  if(!cust){toast('Önce müşteri seçin');return}
+  const g=salesCustomerSavedGuarantor();
+  if(!g){toast('Bu müşteride kayıtlı kefil yok. Müşteri kartından kefil ekleyin.');return}
+  salesFillKefilForm(g);
+  if(q('#salesKefilAttached'))q('#salesKefilAttached').value='1';
+  salesRefreshKefilUI();
+  toast(`Kefil eklendi: ${g.name}`);
+}
+function salesDetachKefil({silent=false}={}){
+  if(q('#salesKefilAttached'))q('#salesKefilAttached').value='0';
+  salesClearKefilForm();
+  salesRefreshKefilUI();
+  if(!silent)toast('Kefil kaldırıldı');
+}
+q('#salesKefilAddBtn')?.addEventListener('click',salesAttachSavedKefil);
+q('#salesKefilClearBtn')?.addEventListener('click',()=>salesDetachKefil());
+['salesKefilName','salesKefilTckn','salesKefilPhone','salesKefilWorkPhone','salesKefilHomePhone','salesKefilHomeAddress','salesKefilWorkAddress'].forEach(id=>{
+  q('#'+id)?.addEventListener('input',()=>{if(salesKefilAttached())salesRefreshKefilUI()});
+});
 
 
 
@@ -2174,7 +2294,13 @@ function collectSalesDraft(){
   const billingParty=customerHasCorporate(customer||{})
     ?(q('#salesBillingParty')?.value==='corporate'?'corporate':'individual')
     :'individual';
-  const draft={status,customerId,customer,billingParty,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'not_required',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
+  let guarantor=null;
+  if(promissory&&salesKefilAttached()){
+    try{guarantor=salesReadKefilForm()}
+    catch(err){return{error:err.message||'Kefil bilgisi geçersiz.',status,customerId,customer}}
+    if(!guarantor)return{error:'Kefil eklendi ancak ad soyad boş. Doldurun veya kefili kaldırın.',status,customerId,customer};
+  }
+  const draft={status,customerId,customer,billingParty,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,guarantor,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'not_required',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
   if(!customerId)return{error:'Müşteri seçmelisiniz.',...draft};
   if(billingParty==='corporate'&&!customerHasCorporate(customer))return{error:'Kurumsal fatura için müşteri kartına firma / VKN ekleyin.',...draft};
   if(!dealer)return{error:'Satış bayisini seçmelisiniz.',...draft};
@@ -2194,6 +2320,7 @@ function salesPreviewHtml(d){
   const rows=d.items.map(i=>`<tr><td>${i.itemCode||'-'}</td><td>${i.materialCode||i.productName||i.productCode}</td><td>${i.quantity}</td><td>${salesMoney(i.unitPrice)}</td><td>${salesMoney(i.quantity*i.unitPrice)}</td></tr>`).join('');
   const payRows=(d.payments||[]).map(p=>`<div class="sales-total-line"><span>${p.method}${p.accountId?' · hesap seçildi':''}</span><b>${salesMoney(p.amount)}</b></div>`).join('');
   const note=d.promissory?`<div class="preview-note"><b>⚠ Senet düzenlemesi:</b> ${salesMoney(d.promissory.amount)} · ${d.promissory.installments} taksit · İlk vade ${d.promissory.firstDueDate}<br>${(d.promissory.schedule||[]).map(r=>`${r.no}) ${r.dueDate} → ${salesMoney(r.amount)}`).join(' · ')}</div>`:'';
+  const kefilNote=d.guarantor?`<div class="preview-note"><b>Kefil:</b> ${salesEsc(d.guarantor.name||'')}${d.guarantor.tckn?' · TCKN '+salesEsc(d.guarantor.tckn):''}${d.guarantor.phone?' · '+salesEsc(d.guarantor.phone):''}</div>`:'';
   const invLabel=d.invoiceStatus==='issued'
     ?`Manuel kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`
     :(d.invoiceStatus==='queue_qnb'?'QNB Solist ile kesilecek (e-Fatura / e-Arşiv kuyruğu)'
@@ -2201,7 +2328,7 @@ function salesPreviewHtml(d){
   const billLabel=d.billingParty==='corporate'
     ?`Kurumsal · ${d.customer?.companyName||'-'} · VKN ${d.customer?.taxNo||'-'}`
     :`Bireysel · ${d.customer?.name||'-'} · TCKN ${d.customer?.tckn||'—'}`;
-  return `<div class="preview-cards"><div><small>Şahıs / Senet</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}${d.customer?.tckn?' · TCKN '+d.customer.tckn:''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Tahsil: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>${payRows}<div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div>${note}<div class="preview-note"><b>Fatura tarafı:</b> ${billLabel}<br><b>Fatura durumu:</b> ${invLabel}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${d.deductStock?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`:'Stoktan düşülmeyecek'}<small>Fatura kesme durumu stoğu etkilemez.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
+  return `<div class="preview-cards"><div><small>Şahıs / Senet</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}${d.customer?.tckn?' · TCKN '+d.customer.tckn:''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Tahsil: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>${payRows}<div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div>${note}${kefilNote}<div class="preview-note"><b>Fatura tarafı:</b> ${billLabel}<br><b>Fatura durumu:</b> ${invLabel}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${d.deductStock?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`:'Stoktan düşülmeyecek'}<small>Fatura kesme durumu stoğu etkilemez.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
 }
 let activeSalesDraft=null;
 function openSalesPreview(){
@@ -2461,7 +2588,7 @@ async function confirmSalesDraft(){
     const result=await api('/web-api/admin/customer-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       customerId:d.customerId,dealerId:d.dealerId,salespersonId:d.salespersonId,salespersonName:d.salesperson?.name||'',
       discountPct:d.discountPct,warehouseId:d.warehouseId,date:d.date,paymentMethod:d.method,
-      payments:d.payments,promissory:d.promissory,billingParty:d.billingParty||'individual',
+      payments:d.payments,promissory:d.promissory,guarantor:d.guarantor||null,billingParty:d.billingParty||'individual',
       description:d.description,items:d.items,invoiceStatus,invoiceNumber:d.invoiceNumber,invoiceDate:d.invoiceDate,deductStock
     })});
     let noteText='';

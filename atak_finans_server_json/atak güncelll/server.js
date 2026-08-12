@@ -865,8 +865,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.52-tek-senet',
-  build:'fix-v51',
+  version:'6.3.53-kefil',
+  build:'fix-v52',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -1133,7 +1133,9 @@ app.get('/web-api/admin/sales-catalog',requireAdminOrStaff('orders_manage'),(req
   const customers=allCustomers.length<=500?allCustomers.map(c=>({
     id:c.id,name:c.name,phone:c.phone||'',taxNo:c.taxNo||'',tckn:c.tckn||'',
     companyName:c.companyName||'',taxOffice:c.taxOffice||'',city:c.city||'',
-    email:c.email||'',balance:customerBalance(s,c.id),active:true
+    district:c.district||'',address:c.address||'',
+    email:c.email||'',balance:customerBalance(s,c.id),active:true,
+    guarantor:normalizeGuarantor(c.guarantor)
   })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr')):[];
   const accounts=(s.financeAccounts||[]).filter(a=>a.active!==false).map(a=>({
     id:a.id,name:a.name,type:a.type,storeId:a.storeId||'',active:true
@@ -1360,8 +1362,33 @@ function customerSnapshot(c={}){
     deliveryDistrict:c.deliveryDistrict||'',deliveryAddress:c.deliveryAddress||'',
     invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
     companyName:c.companyName||'',taxOffice:c.taxOffice||'',note:c.note||'',
+    guarantor:normalizeGuarantor(c.guarantor),
     active:c.active!==false
   };
+}
+function normalizeGuarantor(g){
+  if(!g||typeof g!=='object')return null;
+  const name=String(g.name||'').trim();
+  if(!name)return null;
+  return {
+    name,
+    tckn:String(g.tckn||g.taxNo||'').trim(),
+    phone:String(g.phone||g.gsm||'').trim(),
+    workPhone:String(g.workPhone||'').trim(),
+    homePhone:String(g.homePhone||'').trim(),
+    homeAddress:String(g.homeAddress||g.address||'').trim(),
+    workAddress:String(g.workAddress||'').trim()
+  };
+}
+function parseGuarantorPayload(x,required=false){
+  const g=normalizeGuarantor(x);
+  if(!g){
+    if(required)throw new Error('Kefil adı zorunludur');
+    return null;
+  }
+  const digits=String(g.tckn||'').replace(/\D/g,'');
+  if(digits&&digits.length!==11)throw new Error('Kefil TCKN 11 hane olmalıdır');
+  return g;
 }
 function customerHasCorporateBilling(c={}){
   const vkn=String(c.taxNo||c.corporateTaxNo||'').replace(/\D/g,'');
@@ -1431,6 +1458,7 @@ function parseCustomerPayload(x={}){
     companyName:invoiceType==='corporate'?companyName:'',
     taxOffice:invoiceType==='corporate'?taxOffice:'',
     note:String(x.note||'').trim(),
+    guarantor:parseGuarantorPayload(x.guarantor),
     active:x.active!==false&&x.active!=='false',
     updatedAt:new Date().toISOString()
   };
@@ -1472,6 +1500,7 @@ function customerSearchHandler(req,res){
       address:c.address||'',companyName:c.companyName||'',taxOffice:c.taxOffice||'',
       invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
       hasCorporate:customerHasCorporateBilling(c),note:c.note||'',
+      guarantor:normalizeGuarantor(c.guarantor),
       balance:customerBalance(s,c.id)
     }));
   res.json({ok:true,total,rows,needQuery:false,limit});
@@ -1955,7 +1984,16 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     audit(s,'Satış senet planı oluşturuldu',customer.name,{planId,total:promissoryAmount,count,ref});
   }
 
-  audit(s,'Müşteriye satış yapıldı',customer.name,{total,grossTotal,discountPct,dealer:dealer.name,salesperson:salesperson.name,commissionAmount,paid,payments:sale.payments,promissoryAmount,ref,items:cleanItems.length});
+  // Senet kefili: satışa yaz (A4 düzeni bozulmaz; boş kutular zaten vardı)
+  try{
+    const g=parseGuarantorPayload(x.guarantor);
+    if(g)sale.guarantor=g;
+    else if(promissoryAmount>0&&customer.guarantor){
+      // İstemci göndermediyse müşteri kartındaki kayıtlı kefili kullanma — yalnızca açık seçimde
+    }
+  }catch(err){return res.status(400).json({error:err.message||'Kefil bilgisi geçersiz'})}
+
+  audit(s,'Müşteriye satış yapıldı',customer.name,{total,grossTotal,discountPct,dealer:dealer.name,salesperson:salesperson.name,commissionAmount,paid,payments:sale.payments,promissoryAmount,ref,items:cleanItems.length,hasGuarantor:Boolean(sale.guarantor)});
   writeStore(s);
   res.json({
     ok:true,sale,collections,collection:collections[0]||null,promissory:promissoryResult,
