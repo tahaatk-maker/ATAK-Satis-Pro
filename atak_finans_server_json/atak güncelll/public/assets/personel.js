@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v48 */
+/* ATAK_PERSONEL_BUILD=fix-v49 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
