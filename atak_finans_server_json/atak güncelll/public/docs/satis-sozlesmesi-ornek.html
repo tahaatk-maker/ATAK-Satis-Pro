@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ATAK — Satış Sözleşmesi A4</title>
+<style>
+  @page{size:A4;margin:8mm}
+  :root{
+    --ink:#1a1a1a;
+    --muted:#4a5568;
+    --line:#1a1a1a;
+    --soft:#eef2f6;
+    --title:#c41230;
+    --navy:#0b2a55;
+    --accent:#1e4d8c;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:#c5ced8;color:var(--ink);
+    font:10.5px/1.35 "Plus Jakarta Sans","Segoe UI",Arial,sans-serif;
+  }
+  .toolbar{
+    position:sticky;top:0;z-index:10;display:flex;gap:10px;align-items:center;justify-content:center;
+    padding:12px;background:var(--navy);color:#fff;font-size:13px;
+  }
+  .toolbar button{
+    border:0;border-radius:8px;padding:10px 16px;font-weight:800;cursor:pointer;background:#fff;color:var(--navy);
+  }
+  .toolbar .primary{background:#dda20c;color:#1a1300}
+  .page{
+    width:210mm;min-height:297mm;margin:14px auto;background:#fff;
+    padding:7mm 8mm 6mm;box-shadow:0 12px 40px #0003;position:relative;overflow:hidden;
+  }
+  .wm{
+    position:absolute;inset:28% 12% 22%;
+    background:url('../assets/atak-pazarlama-mark.png') center/contain no-repeat;
+    opacity:.06;pointer-events:none;filter:grayscale(1);
+  }
+  .head{
+    display:grid;grid-template-columns:1.15fr .95fr 42mm;gap:8px;align-items:stretch;
+    border-bottom:2.5px solid var(--navy);padding-bottom:6px;margin-bottom:6px;
+  }
+  .co{font-size:9px;line-height:1.35;color:var(--muted)}
+  .co strong{display:block;color:var(--navy);font-size:11.5px;letter-spacing:.02em;margin-bottom:2px}
+  .brands{
+    display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:4px;text-align:right;
+  }
+  .brand-row{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+  .pill{
+    border:1px solid #c9d4e2;border-radius:4px;padding:3px 7px;font-weight:800;font-size:9px;
+    letter-spacing:.04em;text-transform:uppercase;color:var(--navy);background:#f7fafc;
+  }
+  .pill.beko{color:#003d6b}
+  .pill.bellona{color:#6b2d1a}
+  .pill.istikbal{color:#1a4d3a}
+  .doc-title{
+    margin:0;color:var(--title);font-size:15px;font-weight:900;letter-spacing:.04em;
+    line-height:1.1;text-align:right;
+  }
+  .photo{
+    border:1.5px dashed #9aa8bc;border-radius:6px;background:#f8fafc;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:42mm;overflow:hidden;position:relative;
+  }
+  .photo img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+  .photo .ph{
+    color:#7a8799;font-size:9px;font-weight:700;text-align:center;padding:6px;z-index:1;
+  }
+  .photo.has-img .ph{display:none}
+  .mid{
+    display:grid;grid-template-columns:1.25fr .72fr .78fr;gap:6px;margin:6px 0;
+  }
+  table.grid{width:100%;border-collapse:collapse;table-layout:fixed}
+  table.grid th,table.grid td{
+    border:1px solid var(--line);padding:3px 4px;vertical-align:middle;height:16px;
+  }
+  table.grid th{
+    background:var(--soft);font-size:8.5px;font-weight:800;letter-spacing:.03em;
+    text-transform:uppercase;text-align:center;
+  }
+  table.grid td.num,.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.grid td.c{text-align:center}
+  table.meta td{font-size:9.5px}
+  table.meta td:first-child{width:42%;background:var(--soft);font-weight:700;white-space:nowrap}
+  table.meta td:last-child{font-weight:600}
+  .party{
+    display:grid;grid-template-columns:1fr 1fr;gap:0;margin:6px 0;
+    border:1px solid var(--line);
+  }
+  .party .col{padding:0}
+  .party .col + .col{border-left:1px solid var(--line)}
+  .party h3{
+    margin:0;padding:4px 6px;background:var(--navy);color:#fff;
+    font-size:10px;letter-spacing:.06em;text-align:center;
+  }
+  .party table{width:100%;border-collapse:collapse}
+  .party td{
+    border-bottom:1px solid #c5ced8;padding:3px 6px;font-size:9.5px;height:15px;
+  }
+  .party tr:last-child td{border-bottom:0}
+  .party td.lbl{width:34%;background:#f3f6fa;font-weight:700;color:var(--muted);font-size:8.5px}
+  .terms{margin-top:6px}
+  .terms h4{
+    margin:0 0 3px;font-size:10px;letter-spacing:.05em;color:var(--navy);
+    border-bottom:1px solid var(--navy);display:inline-block;padding-bottom:1px;
+  }
+  .terms p{
+    margin:0 0 3px;font-size:8px;line-height:1.35;color:#2a3340;text-align:justify;
+  }
+  .signs{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;
+  }
+  .sig{
+    text-align:center;border-top:1px solid #8a96a8;padding-top:5px;min-height:48px;
+  }
+  .sig b{display:block;font-size:10px;margin-bottom:3px;color:var(--navy)}
+  .sig small{display:block;font-size:7.5px;color:var(--muted);line-height:1.3;margin-bottom:18px}
+  .sig .name{font-size:9px;font-weight:700}
+  .foot{
+    margin-top:6px;font-size:7.5px;color:#7a8799;text-align:center;
+  }
+  @media print{
+    body{background:#fff}
+    .toolbar{display:none!important}
+    .page{margin:0;box-shadow:none;width:auto;min-height:auto}
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <b>ATAK Satış Sözleşmesi — A4 önizleme</b>
+  <button class="primary" onclick="window.print()">Yazdır / PDF</button>
+</div>
+
+<section class="page" id="contract">
+  <div class="wm" aria-hidden="true"></div>
+
+  <header class="head">
+    <div class="co">
+      <strong>ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.</strong>
+      Beko · Bellona · İstikbal<br/>
+      Tarabya / Sarıyer · İstanbul<br/>
+      Tel: 0212 223 28 71 · WhatsApp: 0543 358 50 60<br/>
+      E-posta: tarabyabeko@gmail.com<br/>
+      Vergi Dairesi: Sarıyer · Bu belge mali fatura yerine geçmez.
+    </div>
+    <div class="brands">
+      <div class="brand-row">
+        <span class="pill beko">beko</span>
+        <span class="pill bellona">Bellona</span>
+        <span class="pill istikbal">istikbal</span>
+      </div>
+      <h1 class="doc-title">SATIŞ<br/>SÖZLEŞMESİ</h1>
+    </div>
+    <div class="photo" id="photoBox">
+      <!-- Fotoğrafı buraya koy: <img src="..." alt="Ürün"/> -->
+      <div class="ph">ÜRÜN / FOTOĞRAF<br/><span style="font-weight:600;opacity:.8">Ekleyince otomatik yerleştirilir</span></div>
+    </div>
+  </header>
+
+  <div class="mid">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th style="width:28%">Ürün Kodu</th>
+          <th style="width:12%">Adet</th>
+          <th style="width:30%">Birim Fiyatı</th>
+          <th style="width:30%">Tutar</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="c">ÖRN-BEKO-001</td><td class="c">1</td><td class="num">45.000,00 ₺</td><td class="num">45.000,00 ₺</td></tr>
+        <tr><td class="c">ÖRN-IST-014</td><td class="c">1</td><td class="num">28.500,00 ₺</td><td class="num">28.500,00 ₺</td></tr>
+        <tr><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+
+    <table class="grid meta">
+      <tr><td>Satış Tarihi</td><td>12.08.2026</td></tr>
+      <tr><td>Satış No</td><td>SAT-1786523760886</td></tr>
+      <tr><td>Müşteri No</td><td>M-1042</td></tr>
+      <tr><td>Toplam Tutar</td><td>73.500,00 ₺</td></tr>
+      <tr><td>Peşinat</td><td>23.500,00 ₺</td></tr>
+      <tr><td>Bakiye</td><td>50.000,00 ₺</td></tr>
+    </table>
+
+    <table class="grid">
+      <thead>
+        <tr><th>Vade Tarihi</th><th>Taksit Tutarı</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="c">12.09.2026</td><td class="num">10.000,00 ₺</td></tr>
+        <tr><td class="c">12.10.2026</td><td class="num">10.000,00 ₺</td></tr>
+        <tr><td class="c">12.11.2026</td><td class="num">10.000,00 ₺</td></tr>
+        <tr><td class="c">12.12.2026</td><td class="num">10.000,00 ₺</td></tr>
+        <tr><td class="c">12.01.2027</td><td class="num">10.000,00 ₺</td></tr>
+        <tr><td class="c" style="font-weight:800;background:#f3f6fa">TOPLAM</td><td class="num" style="font-weight:800;background:#f3f6fa">50.000,00 ₺</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="party">
+    <div class="col">
+      <h3>KEFİL</h3>
+      <table>
+        <tr><td class="lbl">Adı Soyadı</td><td></td></tr>
+        <tr><td class="lbl">T.C. Kimlik No</td><td></td></tr>
+        <tr><td class="lbl">GSM</td><td></td></tr>
+        <tr><td class="lbl">İş Tel.</td><td></td></tr>
+        <tr><td class="lbl">Ev Tel.</td><td></td></tr>
+        <tr><td class="lbl">Ev Adresi</td><td></td></tr>
+        <tr><td class="lbl">İş Adresi</td><td></td></tr>
+      </table>
+    </div>
+    <div class="col">
+      <h3>BORÇLU</h3>
+      <table>
+        <tr><td class="lbl">Adı Soyadı</td><td>Örnek Müşteri</td></tr>
+        <tr><td class="lbl">T.C. Kimlik No</td><td></td></tr>
+        <tr><td class="lbl">GSM</td><td>05xx xxx xx xx</td></tr>
+        <tr><td class="lbl">İş Tel.</td><td></td></tr>
+        <tr><td class="lbl">Ev Tel.</td><td></td></tr>
+        <tr><td class="lbl">Ev Adresi</td><td>Sarıyer / İstanbul</td></tr>
+        <tr><td class="lbl">İş Adresi</td><td></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="terms">
+    <h4>ANLAŞMA ŞARTLARI</h4>
+    <p>1) Satıcı, yukarıda cinsi, adedi ve bedeli yazılı ürünleri borçluya satmış; borçlu da ürünleri teslim alarak işbu sözleşmeyi kabul etmiştir. Peşinat ve bakiye / taksit tutarları vade tarihlerinde kayıtsız şartsız ödenecektir.</p>
+    <p>2) Vadesinde ödenmeyen taksitlere aylık %4 gecikme faizi uygulanır. Borcun kısmen veya tamamen ödenmemesi halinde kalan bakiyenin tamamı muaccel olur; ayrıca bakiye üzerinden %20 oranında cezai şart talep edilebilir.</p>
+    <p>3) Ürünlerin ayıbı, garanti ve iade koşulları üretici / ithalatçı garanti şartları ile 6502 sayılı Tüketicinin Korunması Hakkında Kanun hükümlerine tabidir. Beyaz eşya ve mobilya teslimat / montaj süreçleri satıcının satış politikasına göre yürütülür.</p>
+    <p>4) İşbu sözleşmeden doğacak uyuşmazlıklarda İstanbul Mahkemeleri ve İcra Daireleri yetkilidir. Kefil, borçlu ile birlikte müteselsil sorumludur; satıcının borçluya başvurmadan kefilden talep hakkı saklıdır.</p>
+  </div>
+
+  <div class="signs">
+    <div class="sig">
+      <b>SATICI</b>
+      <small>Kaşe / İmza</small>
+      <div class="name">ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.</div>
+    </div>
+    <div class="sig">
+      <b>KEFİL</b>
+      <small>İşbu anlaşmadaki yazılı bütün şartları borçlu gibi okudum ve aynen kabul ettim.</small>
+      <div class="name">İmza</div>
+    </div>
+    <div class="sig">
+      <b>BORÇLU</b>
+      <small>İşbu anlaşmadaki yazılı bütün şartları okudum ve aynen kabul ettim.</small>
+      <div class="name">Örnek Müşteri</div>
+    </div>
+  </div>
+
+  <div class="foot">ATAK Home · Satış Sözleşmesi A4 · Bu çıktı örnek tasarımdır. Canlı satıştan yazdırınca gerçek veriler dolar.</div>
+</section>
+</body>
+</html>
