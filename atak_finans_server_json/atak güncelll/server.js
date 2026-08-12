@@ -4496,15 +4496,19 @@ app.post('/web-api/admin/products/zero-purchase-costs',requireAdmin,(req,res)=>{
       const tags=(p.tags||[]).map(t=>String(t).toLocaleLowerCase('tr-TR'));
       const src=String(p.purchasePriceSource||'');
       let match=false;
-      if(scope==='all')match=normalizeNumber(p.purchasePrice)>0;
-      else if(scope==='imported'){
+      if(scope==='all'){
+        match=true; // alışı olan/olmayan tüm ürünler — source temizlensin
+      }else if(scope==='imported'){
         match=tags.includes('alis-faturasi')||tags.includes('auto-created')||src.startsWith('purchase-invoice');
       }else{
-        // istikbal (varsayılan): İstikbal markası veya istikbal/mobilya etiketli alış aktarımı
+        // istikbal (varsayılan)
         match=/istikbal/.test(brand)||tags.includes('istikbal')||(tags.includes('mobilya')&&tags.includes('alis-faturasi'));
       }
       if(!match)continue;
-      if(!(normalizeNumber(p.purchasePrice)>0)&&!p.purchasePriceSource)continue;
+      const had=normalizeNumber(p.purchasePrice)>0||Boolean(p.purchasePriceSource);
+      if(!had&&scope!=='all')continue;
+      // scope=all: alışı >0 olanları mutlaka sıfırla; 0 olanlara dokunma
+      if(scope==='all'&&!(normalizeNumber(p.purchasePrice)>0)&&!p.purchasePriceSource)continue;
       p.purchasePrice=0;
       p.purchasePriceSource='manual-zero';
       p.purchasePriceUpdatedAt=new Date().toISOString();

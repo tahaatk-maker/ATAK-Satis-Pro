@@ -2720,6 +2720,20 @@ q('#purchaseZeroIstikbalCostBtn')?.addEventListener('click',async()=>{
     await loadPurchaseInvoices();
   }catch(e){toast(e.message)}
 });
+q('#purchaseZeroAllCostBtn')?.addEventListener('click',async()=>{
+  if(!confirm('TÜM ürünlerde alış maliyeti sıfırlansın mı?\nBeko + İstikbal dahil. Ürünler silinmez — sadece ALIŞ = 0.\nStok değeri de ₺0 görünür.'))return;
+  if(!confirm('Emin misin? Bu işlem geri alınamaz (eski alışlar silinir).'))return;
+  try{
+    const r=await api('/web-api/admin/products/zero-purchase-costs',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({scope:'all'})
+    });
+    toast(`${r.cleared||0} ürünün alış maliyeti sıfırlandı`);
+    await load();
+    await loadPurchaseInvoices();
+  }catch(e){toast(e.message)}
+});
 q('#purchaseTemplateBtn')?.addEventListener('click',async e=>{
   e.preventDefault();
   try{
