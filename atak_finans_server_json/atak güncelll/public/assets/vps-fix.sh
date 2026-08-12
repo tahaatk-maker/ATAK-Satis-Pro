@@ -213,7 +213,7 @@ PROOF="$APP/public/assets/_deploy-check.txt"
   echo "server_md5=$(md5sum "$APP/server.js" | awk '{print $1}')"
   if [ -n "$FAIL_MSG" ]; then echo "status=FAIL $FAIL_MSG"; else echo "status=OK"; fi
   echo "DONE"
-} | tee "$PROOF"
+} | tee "$PROOF" "$OUT"
 
 for D in /root/atak-v10 /root/atakhome-platform "$APP"; do
   [ -d "$D/public/assets" ] || continue
