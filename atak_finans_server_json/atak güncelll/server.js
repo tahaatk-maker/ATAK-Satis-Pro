@@ -878,15 +878,32 @@ function requireStaff(req,res,next){
   if(denyIfOwnerLocked(req,res))return;
   next();
 }
-app.use('/assets',express.static(path.join(ROOT,'public','assets'),{maxAge:'7d',fallthrough:true}));
-app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{maxAge:'7d',fallthrough:true}));
+app.use('/assets',express.static(path.join(ROOT,'public','assets'),{
+  maxAge:0,etag:true,lastModified:true,fallthrough:true,
+  setHeaders(res,filePath){
+    if(/\.(js|css|html)$/i.test(filePath)){
+      res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma','no-cache');
+    }
+  }
+}));
+app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{
+  maxAge:0,etag:true,lastModified:true,fallthrough:true,
+  setHeaders(res,filePath){
+    if(/\.(js|css|html)$/i.test(filePath)){
+      res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma','no-cache');
+    }
+  }
+}));
 app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fallthrough:true}));
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.57-no-atak-home',
-  build:'fix-v56',
+  version:'6.3.58-unvan-cache',
+  build:'fix-v57',
   ownerOnly:ownerOnlyEnabled(),
+  company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
 }));
 app.get('/web-api/public',(req,res)=>{ const s=readStore(); res.json({settings:s.settings,categories:s.categories.filter(c=>c.active).sort((a,b)=>a.sort-b.sort),products:s.products.filter(p=>p.active).map(p=>({...p,salePrice:calculateSalePrice(p)})),campaigns:s.campaigns.filter(isCampaignLive).sort((a,b)=>a.sort-b.sort),banners:s.banners.filter(b=>b.active).sort((a,b)=>a.sort-b.sort)}); });
@@ -4874,7 +4891,13 @@ app.post('/web-api/admin/beko-sync/start',requireAdmin,async(req,res)=>{const s=
 app.post('/web-api/admin/import-csv',requireAdmin,upload.single('file'),(req,res)=>{if(!req.file)return res.status(400).json({error:'CSV dosyası seçilmedi'});let rows;try{rows=parse(req.file.buffer.toString('utf8'),{columns:true,skip_empty_lines:true,bom:true,trim:true});}catch(e){return res.status(400).json({error:`CSV okunamadı: ${e.message}`});}const s=readStore();let added=0,updated=0,skipped=0;for(const r of rows){const brand=String(r.brand||r.marka||r['Marka']||'Beko').trim(),cat=String(r.category||r.kategori||r['Kategori']||'');if(!(brand.toLowerCase()==='beko'||(brand.toLowerCase()==='grundig'&&/kişisel|kisisel/i.test(cat)))){skipped++;continue;}const code=String(r.code||r.urun_kodu||r['Ürün Kodu']||'').trim(),name=String(r.name||r.urun_adi||r['Ürün Adı']||'').trim();if(!code||!name){skipped++;continue;}const i=s.products.findIndex(p=>p.code.toLowerCase()===code.toLowerCase());const p=sanitizeProduct({...r,code,name},i>=0?s.products[i]:{});if(i>=0){s.products[i]=p;updated++;}else{s.products.push(p);added++;}}s.syncLogs.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),source:'csv',added,updated,skipped});audit(s,'CSV ürün aktarımı','Ürünler',{added,updated,skipped});writeStore(s);res.json({ok:true,added,updated,skipped});});
 app.get('/web-api/admin/export-csv',requireAdmin,(req,res)=>{const s=readStore(),h=['code','barcode','brand','name','category','vatRate','purchasePrice','listPrice','cashPrice','cardPrice','minimumSalePrice','bekoPrice','oldPrice','salePrice','priceMode','priceValue','stock','active','featured','tags','image','description','sourceUrl'];const esc=v=>`"${String(Array.isArray(v)?v.join('|'):(v??'')).replace(/"/g,'""')}"`;const lines=[h.join(',')].concat(s.products.map(p=>h.map(k=>esc(p[k])).join(',')));res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="atakhome-products.csv"');res.send('\ufeff'+lines.join('\n'));});
 
-app.get('/web-admin',(req,res)=>res.sendFile(path.join(ROOT,'public','admin.html')));app.get('/web-admin/*',(req,res)=>res.sendFile(path.join(ROOT,'public','admin.html')));app.get('/web-admin-v5',(req,res)=>res.redirect('/web-admin'));app.get('/web-admin-legacy',(req,res)=>res.sendFile(path.join(ROOT,'public','admin-v5.html')));app.get('/personel',(req,res)=>res.sendFile(path.join(ROOT,'public','personel.html')));app.get('/personel/*',(req,res)=>res.sendFile(path.join(ROOT,'public','personel.html')));app.get('/',(req,res)=>res.redirect('/personel'));
+app.get('/web-admin',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
+app.get('/web-admin/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
+app.get('/web-admin-v5',(req,res)=>res.redirect('/web-admin'));
+app.get('/web-admin-legacy',(req,res)=>res.sendFile(path.join(ROOT,'public','admin-v5.html')));
+app.get('/personel',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','personel.html'))});
+app.get('/personel/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','personel.html'))});
+app.get('/',(req,res)=>res.redirect('/personel'));
 app.get('/assets/*',(req,res)=>res.status(404).type('text').send('Not found'));
 app.get('/web-admin-assets/*',(req,res)=>res.status(404).type('text').send('Not found'));
 app.get('/web-api/*',(req,res)=>res.status(404).json({error:'Bulunamadı'}));
