@@ -1447,6 +1447,11 @@ $('#salesPreviewOfferBtn')?.addEventListener('click',sendSalesOffer);
 $('#salesPreviewPrintBtn')?.addEventListener('click',printSalesOffer);
 $('#salesPreviewDocsBtn')?.addEventListener('click',printSalesContractAndNotes);
 $('#salesInvoiceStatus')?.addEventListener('change',salesRecalcPay);
+$('#salesDeductStock')?.addEventListener('change',()=>{
+  const mode=$('#salesDeductStock')?.value||'no';
+  const wrap=$('#salesWarehouseWrap');
+  if(wrap)wrap.classList.toggle('hidden',!(mode==='yes'||mode==='reserve'));
+});
 ['#promissoryInstallments','#promissoryInterval','#promissoryFirstDue'].forEach(id=>{
   $(id)?.addEventListener('input',renderPromissorySchedule);
   $(id)?.addEventListener('change',renderPromissorySchedule);
