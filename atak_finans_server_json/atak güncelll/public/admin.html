@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v67" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v67" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v68" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v68" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1862,10 +1862,11 @@ Bulunamayan → Diğer.
   </div>
   <div class="table-wrap" id="customerNotesWrap">
     <table>
-      <thead><tr><th></th><th>Senet</th><th>Vade</th><th>Tutar</th><th>Kalan</th><th>Durum</th></tr></thead>
+      <thead><tr><th></th><th>Senet</th><th>Satış</th><th>Vade</th><th>Tutar</th><th>Kalan</th><th>Durum</th><th></th></tr></thead>
       <tbody id="customerNotesList"></tbody>
     </table>
   </div>
+  <div id="customerNotesOrphanWarn" class="customer-pending-banner danger hidden"></div>
   <form id="customerDetailPayForm" class="form-grid" style="margin-top:10px">
     <label>Tutar *<input id="customerPayAmount" type="number" min="0.01" step="0.01" required></label>
     <label>Ödeme şekli
@@ -2169,5 +2170,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v67"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v68"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
