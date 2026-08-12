@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v69 */
+/* ATAK_ADMIN_BUILD=fix-v70 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -90,6 +90,7 @@ function goTab(id,{remember=true}={}){
   if(id==='foundation')setTimeout(()=>loadFoundation().catch(e=>toast(e.message)),20);
   if(id==='stockCenter')setTimeout(()=>loadStockCenter().catch(e=>toast(e.message)),20);
   if(id==='financeCenter')setTimeout(()=>loadFinanceCenter().catch(e=>toast(e.message)),20);
+  if(id==='financeReports')setTimeout(()=>loadFinanceCenter().catch(e=>toast(e.message)),20);
   if(id==='customersPage')setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),20);
   if(id==='salesCenter')setTimeout(()=>loadSalesCenter(),20);
   if(id==='webOrders')setTimeout(()=>loadWebOrders(),20);
@@ -776,6 +777,7 @@ function can(permission,user=window.__currentAdminUser){
 const TAB_PERMISSION_MAP={
   dashboard:'dashboard_view',
   financeCenter:'screen_finance',
+  financeReports:'screen_finance',
   customerPayments:'screen_customer_payments',
   customersPage:'screen_customers',
   salesCenter:'screen_sales_center',
@@ -1018,29 +1020,42 @@ const foundationGoTab=goTab;goTab=function(id){foundationGoTab(id);if(id==='stoc
 
 
 let financeData=null;
+let financeReportView='accounts';
+function setFinanceReportView(name){
+  financeReportView=name||'accounts';
+  qa('#financeReportToggle [data-fin-report]').forEach(b=>b.classList.toggle('active',b.dataset.finReport===financeReportView));
+  qa('[data-fin-report-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.finReportPanel!==financeReportView));
+}
+qa('#financeReportToggle [data-fin-report]').forEach(b=>b.addEventListener('click',()=>setFinanceReportView(b.dataset.finReport)));
+q('#financeReportsRefresh')?.addEventListener('click',()=>loadFinanceCenter().catch(e=>toast(e.message)));
 async function loadFinanceCenter(){
   financeData=await api('/web-api/admin/finance-center');
   renderFinanceCenter();
 }
+function financeSummaryHtml(s){
+  return `<article><b>${money(s.cash)}</b><span>Toplam Kasa</span></article><article><b>${money(s.bank)}</b><span>Toplam Banka</span></article><article><b>${money(s.receivable)}</b><span>Müşteri Alacağı</span></article><article><b>${money(s.todayExpense)}</b><span>Bugünkü Masraf</span></article>`;
+}
 function renderFinanceCenter(){
-  if(!financeData||!q('#financeSummary'))return;
-  const s=financeData.summary;
-  q('#financeSummary').innerHTML=`<article><b>${money(s.cash)}</b><span>Toplam Kasa</span></article><article><b>${money(s.bank)}</b><span>Toplam Banka</span></article><article><b>${money(s.receivable)}</b><span>Müşteri Alacağı</span></article><article><b>${money(s.todayExpense)}</b><span>Bugünkü Masraf</span></article>`;
+  if(!financeData)return;
+  const s=financeData.summary||{};
+  if(q('#financeSummary'))q('#financeSummary').innerHTML=financeSummaryHtml(s);
+  if(q('#financeReportsSummary'))q('#financeReportsSummary').innerHTML=financeSummaryHtml(s);
   if(q('#financeAccountStore')){
-    const storeOpts='<option value="">Merkez / Bağımsız</option>'+financeData.stores.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+    const storeOpts='<option value="">Merkez / Bağımsız</option>'+(financeData.stores||[]).map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
     q('#financeAccountStore').innerHTML=storeOpts;
   }
-  const accountOpts=financeData.accounts.filter(x=>x.active!==false).map(x=>`<option value="${x.id}">${x.name} — ${money(x.balance)}</option>`).join('');
+  const accountOpts=(financeData.accounts||[]).filter(x=>x.active!==false).map(x=>`<option value="${x.id}">${x.name} — ${money(x.balance)}</option>`).join('');
   ['#transferFromAccount','#transferToAccount'].forEach(id=>{if(q(id))q(id).innerHTML=accountOpts});
   if(q('#financeAccountList')){
-    q('#financeAccountList').innerHTML=financeData.accounts.map(x=>`<button type="button" data-fin-account="${x.id}"><b>${x.name}</b><small>${x.type==='bank'?'Banka':'Kasa'} · ${money(x.balance)}</small></button>`).join('');
+    q('#financeAccountList').innerHTML=(financeData.accounts||[]).map(x=>`<button type="button" data-fin-account="${x.id}"><b>${x.name}</b><small>${x.type==='bank'?'Banka':'Kasa'} · ${money(x.balance)}</small></button>`).join('');
   }
-  if(q('#financeAccountCount'))q('#financeAccountCount').textContent=`${financeData.accounts.length} hesap`;
-  if(q('#financeAccountsTable'))q('#financeAccountsTable').innerHTML=`<table><thead><tr><th>Hesap</th><th>Tür</th><th>Mağaza</th><th>Bakiye</th></tr></thead><tbody>${financeData.accounts.map(x=>`<tr><td><b>${x.name}</b></td><td>${x.type==='bank'?'Banka':'Kasa'}</td><td>${financeData.stores.find(s=>s.id===x.storeId)?.name||'Merkez'}</td><td><b>${money(x.balance)}</b></td></tr>`).join('')}</tbody></table>`;
+  if(q('#financeAccountCount'))q('#financeAccountCount').textContent=`${(financeData.accounts||[]).length} hesap`;
+  if(q('#financeAccountsTable'))q('#financeAccountsTable').innerHTML=`<table><thead><tr><th>Hesap</th><th>Tür</th><th>Mağaza</th><th>Bakiye</th></tr></thead><tbody>${(financeData.accounts||[]).map(x=>`<tr><td><b>${x.name}</b></td><td>${x.type==='bank'?'Banka':'Kasa'}</td><td>${(financeData.stores||[]).find(s=>s.id===x.storeId)?.name||'Merkez'}</td><td><b>${money(x.balance)}</b></td></tr>`).join('')}</tbody></table>`;
   renderCustomerTable();
-  if(q('#financeTransactionCount'))q('#financeTransactionCount').textContent=`${financeData.transactions.length} hareket`;
+  if(q('#financeTransactionCount'))q('#financeTransactionCount').textContent=`${(financeData.transactions||[]).length} hareket`;
   if(q('#financeTransactionTable')){
-    q('#financeTransactionTable').innerHTML=financeData.transactions.length?`<table><thead><tr><th>Tarih</th><th>İşlem</th><th>Hesap</th><th>Müşteri</th><th>Tutar</th><th></th></tr></thead><tbody>${financeData.transactions.map(x=>`<tr><td>${x.date}</td><td>${x.kind}</td><td>${x.accountName}${x.counterAccountName?` ← ${x.counterAccountName}`:''}</td><td>${x.customerName||'-'}</td><td class="${x.amount>=0?'stock-plus':'stock-minus'}">${money(x.amount)}</td><td><a class="receipt-link" href="/web-api/admin/receipt/${x.id}" target="_blank">Makbuz</a> ${x.reversedBy?'Ters kayıt oluşturuldu':`<button type="button" data-reverse-finance="${x.id}">Ters Kayıt</button>`}</td></tr>`).join('')}</tbody></table>`:'<p>Henüz finans hareketi yok.</p>';
+    const txs=financeData.transactions||[];
+    q('#financeTransactionTable').innerHTML=txs.length?`<table><thead><tr><th>Tarih</th><th>İşlem</th><th>Hesap</th><th>Müşteri</th><th>Tutar</th><th></th></tr></thead><tbody>${txs.map(x=>`<tr><td>${x.date}</td><td>${x.kind}</td><td>${x.accountName}${x.counterAccountName?` ← ${x.counterAccountName}`:''}</td><td>${x.customerName||'-'}</td><td class="${x.amount>=0?'stock-plus':'stock-minus'}">${money(x.amount)}</td><td><a class="receipt-link" href="/web-api/admin/receipt/${x.id}" target="_blank">Makbuz</a> ${x.reversedBy?'Ters kayıt oluşturuldu':`<button type="button" data-reverse-finance="${x.id}">Ters Kayıt</button>`}</td></tr>`).join('')}</tbody></table>`:'<p>Henüz finans hareketi yok.</p>';
   }
   qa('[data-fin-account]').forEach(b=>b.onclick=()=>{
     const x=financeData.accounts.find(v=>v.id===b.dataset.finAccount);if(!x)return;
@@ -1052,6 +1067,7 @@ function renderFinanceCenter(){
     if(q('#financeAccountActive'))q('#financeAccountActive').checked=x.active!==false;
   });
   qa('[data-reverse-finance]').forEach(b=>b.onclick=async()=>{if(!confirm('Bu hareket için ters kayıt oluşturulsun mu?'))return;await api('/web-api/admin/finance-reverse/'+b.dataset.reverseFinance,{method:'POST'});await loadFinanceCenter();toast('Ters kayıt oluşturuldu')});
+  setFinanceReportView(financeReportView);
 }
 function renderCustomerTable(){
   if(!financeData||!q('#customerTable'))return;
@@ -1076,7 +1092,7 @@ q('#financeTransferOpenBtn')?.addEventListener('click',openFinanceTransfer);
 q('#financeTransferClose')?.addEventListener('click',closeFinanceTransfer);
 q('#financeTransferModal')?.addEventListener('click',e=>{if(e.target===q('#financeTransferModal'))closeFinanceTransfer()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeFinanceTransfer()});
-const stockGoTab=goTab;goTab=function(id){stockGoTab(id);if(id==='financeCenter'||id==='settings')loadFinanceCenter().catch(e=>toast(e.message))};
+const stockGoTab=goTab;goTab=function(id){stockGoTab(id);if(id==='financeCenter'||id==='financeReports'||id==='settings')loadFinanceCenter().catch(e=>toast(e.message))};
 
 
 
