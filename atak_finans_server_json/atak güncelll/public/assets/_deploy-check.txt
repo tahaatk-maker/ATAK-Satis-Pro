@@ -1,3 +1,3 @@
-fix-v48
-expect-health=6.3.49-logo-sol
+fix-v49
+expect-health=6.3.50-vergi-no
 tum-alis-sifir
