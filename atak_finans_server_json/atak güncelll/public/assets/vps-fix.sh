@@ -1,11 +1,10 @@
-# ATAK VPS kesin deploy (fix-v70) — health 6.3.71-finans-raporlari olmadan DONE yazmaz
+# ATAK VPS kesin deploy (fix-v71) — health 6.3.71-finans-raporlari olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/satis-merkezi-iskonto-prim-bd99}"
 EXPECT_HEALTH=6.3.71-finans-raporlari
 EXPECT_BUILD=fix-v70
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
-exec > >(tee "$OUT") 2>&1
 
 STEP="baslangic"
 trap 'code=$?; echo ""; echo "HATA: islem durdu (exit=$code)"; echo "Son adim: $STEP"; echo "Log: $OUT"; exit $code' ERR
@@ -14,6 +13,7 @@ step(){ STEP="$1"; echo "-- $1"; }
 echo "START $(date -Is)"
 echo "EXPECT $EXPECT_HEALTH / $EXPECT_BUILD"
 echo "BRANCH $BRANCH"
+echo "BASH=${BASH_VERSION:-unknown}"
 
 step "gerekli araclar kontrol ediliyor"
 install_pkg(){
