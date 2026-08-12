@@ -865,8 +865,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.54-musteri-sil',
-  build:'fix-v53',
+  version:'6.3.55-kefil-sec',
+  build:'fix-v54',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -1444,7 +1444,7 @@ function parseCustomerPayload(x={}){
     if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
   }
   if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
-  return {
+  const out={
     name,phone,
     email:String(x.email||'').trim(),
     taxNo:invoiceType==='corporate'?taxNo:'',
@@ -1458,10 +1458,11 @@ function parseCustomerPayload(x={}){
     companyName:invoiceType==='corporate'?companyName:'',
     taxOffice:invoiceType==='corporate'?taxOffice:'',
     note:String(x.note||'').trim(),
-    guarantor:parseGuarantorPayload(x.guarantor),
     active:x.active!==false&&x.active!=='false',
     updatedAt:new Date().toISOString()
   };
+  if(Object.prototype.hasOwnProperty.call(x,'guarantor'))out.guarantor=parseGuarantorPayload(x.guarantor);
+  return out;
 }
 function applyCustomerData(row,data){Object.assign(row,data);return row}
 function customerSearchHandler(req,res){
@@ -2028,13 +2029,10 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     audit(s,'Satış senet planı oluşturuldu',customer.name,{planId,total:promissoryAmount,count,ref});
   }
 
-  // Senet kefili: satışa yaz (A4 düzeni bozulmaz; boş kutular zaten vardı)
+  // Senet kefili: yalnızca istemci açıkça gönderdiyse satışa yaz (müşteri kartından otomatik doldurulmaz)
   try{
     const g=parseGuarantorPayload(x.guarantor);
     if(g)sale.guarantor=g;
-    else if(promissoryAmount>0&&customer.guarantor){
-      // İstemci göndermediyse müşteri kartındaki kayıtlı kefili kullanma — yalnızca açık seçimde
-    }
   }catch(err){return res.status(400).json({error:err.message||'Kefil bilgisi geçersiz'})}
 
   audit(s,'Müşteriye satış yapıldı',customer.name,{total,grossTotal,discountPct,dealer:dealer.name,salesperson:salesperson.name,commissionAmount,paid,payments:sale.payments,promissoryAmount,ref,items:cleanItems.length,hasGuarantor:Boolean(sale.guarantor)});

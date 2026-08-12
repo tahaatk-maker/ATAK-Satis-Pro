@@ -329,6 +329,11 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .sales-kefil-preview{padding:8px 10px;border-radius:8px;background:#f7f3e6;border:1px solid #ead9a8;display:grid;gap:2px}
 .sales-kefil-preview b{color:#5c3d00}.sales-kefil-preview span{font-size:11px;color:var(--muted)}
 .sales-kefil-edit{display:grid;gap:6px;padding-top:2px}
+.sales-kefil-picker-list{display:grid;gap:8px;max-height:min(52vh,420px);overflow:auto;margin-top:10px}
+.sales-kefil-pick-row{display:grid;gap:2px;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;cursor:pointer;font:inherit}
+.sales-kefil-pick-row:hover{border-color:#0a5ca8;background:#eef6ff}
+.sales-kefil-pick-row b{color:var(--navy)}.sales-kefil-pick-row span{font-size:12px;color:var(--muted)}
+#salesKefilName[readonly],#salesKefilTckn[readonly],#salesKefilPhone[readonly]{background:#f3f6fa;color:#334}
 @media(max-width:600px){.sales-customer-select-row{grid-template-columns:1fr}.sales-customer-count{text-align:center}}
 
 /* V6.2.4 Depo sil + satış önizleme + teklif */

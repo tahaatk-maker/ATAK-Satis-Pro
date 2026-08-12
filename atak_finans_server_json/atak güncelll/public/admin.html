@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v53" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v53" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v54" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v54" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -758,16 +758,6 @@ body.inv-full #pageTitle{font-size:18px}
         </div>
       </div>
       <label>Müşteri Notu<textarea id="salesQuickCustomerNote" rows="2"></textarea></label>
-      <div class="cust-form-sec">
-        <div class="cust-form-sec-title">Kefil (Senet)</div>
-        <p class="field-hint" style="margin:0">İsteğe bağlı — senetli satışta “Kayıtlı kefili ekle” ile kullanılır.</p>
-        <label>Ad Soyad<input id="salesQuickCustomerGuarantorName" placeholder="Kefil adı soyadı" autocomplete="off"/></label>
-        <div class="two-col">
-          <label>TCKN<input id="salesQuickCustomerGuarantorTckn" placeholder="11 hane" inputmode="numeric" autocomplete="off"/></label>
-          <label>GSM<input id="salesQuickCustomerGuarantorPhone" placeholder="05xx" autocomplete="off"/></label>
-        </div>
-        <label>Ev Adresi<textarea id="salesQuickCustomerGuarantorHomeAddress" rows="2"></textarea></label>
-      </div>
       <button class="primary" type="submit">Kaydet ve Satışa Seç</button>
       <div id="salesQuickCustomerStatus" class="form-status"></div>
     </form>
@@ -943,20 +933,20 @@ body.inv-full #pageTitle{font-size:18px}
         <div class="sales-kefil-box" id="salesKefilBox">
           <div class="sales-kefil-head">
             <b>Kefil</b>
-            <small id="salesKefilStatusHint">Müşteri kartındaki kayıtlı kefili senete ekleyin</small>
+            <small id="salesKefilStatusHint">Senet için kefil olarak kayıtlı müşterilerden birini seçin</small>
           </div>
           <div class="sales-kefil-actions">
-            <button type="button" class="secondary-btn" id="salesKefilAddBtn">Kayıtlı kefili ekle</button>
+            <button type="button" class="secondary-btn" id="salesKefilAddBtn">Kefil ekle</button>
             <button type="button" class="secondary-btn hidden" id="salesKefilClearBtn">Kefili kaldır</button>
           </div>
           <div id="salesKefilPreview" class="sales-kefil-preview hidden"></div>
           <div id="salesKefilEdit" class="sales-kefil-edit hidden">
             <div class="sales-discount-row">
-              <label>Ad Soyad<input id="salesKefilName" autocomplete="off" placeholder="Kefil adı"/></label>
-              <label>TCKN<input id="salesKefilTckn" inputmode="numeric" autocomplete="off" placeholder="11 hane"/></label>
+              <label>Ad Soyad<input id="salesKefilName" autocomplete="off" placeholder="Kefil adı" readonly/></label>
+              <label>TCKN<input id="salesKefilTckn" inputmode="numeric" autocomplete="off" placeholder="11 hane" readonly/></label>
             </div>
             <div class="sales-discount-row">
-              <label>GSM<input id="salesKefilPhone" autocomplete="off"/></label>
+              <label>GSM<input id="salesKefilPhone" autocomplete="off" readonly/></label>
               <label>İş Tel.<input id="salesKefilWorkPhone" autocomplete="off"/></label>
             </div>
             <label style="margin-top:6px">Ev Tel.<input id="salesKefilHomePhone" autocomplete="off"/></label>
@@ -964,6 +954,7 @@ body.inv-full #pageTitle{font-size:18px}
             <label style="margin-top:6px">İş Adresi<textarea id="salesKefilWorkAddress" rows="2"></textarea></label>
           </div>
           <input type="hidden" id="salesKefilAttached" value="0"/>
+          <input type="hidden" id="salesKefilCustomerId" value=""/>
         </div>
         <div class="senet-print-tip">Sözleşme + Senet <b>tek A4</b> sayfada basılır. Aşağıda “Senet + Sözleşme Bas” veya satış sonrası otomatik açılır.</div>
       </div>
@@ -1884,21 +1875,6 @@ Bulunamayan → Diğer.
 </div>
 </div>
 <label>Not<textarea id="customerPageNote" rows="2"></textarea></label>
-<div class="cust-form-sec">
-<div class="cust-form-sec-title">Kefil (Senet)</div>
-<p class="field-hint" style="margin:0">Senetli satışta “Kayıtlı kefili ekle” ile sözleşmeye yazılır. Zorunlu değildir.</p>
-<label>Ad Soyad<input id="customerPageGuarantorName" placeholder="Kefil adı soyadı" autocomplete="off"/></label>
-<div class="two-col">
-<label>TCKN<input id="customerPageGuarantorTckn" placeholder="11 hane" inputmode="numeric" autocomplete="off"/></label>
-<label>GSM<input id="customerPageGuarantorPhone" placeholder="05xx xxx xx xx" autocomplete="off"/></label>
-</div>
-<div class="two-col">
-<label>İş Tel.<input id="customerPageGuarantorWorkPhone" autocomplete="off"/></label>
-<label>Ev Tel.<input id="customerPageGuarantorHomePhone" autocomplete="off"/></label>
-</div>
-<label>Ev Adresi<textarea id="customerPageGuarantorHomeAddress" rows="2" placeholder="Ev adresi"></textarea></label>
-<label>İş Adresi<textarea id="customerPageGuarantorWorkAddress" rows="2" placeholder="İş adresi"></textarea></label>
-</div>
 <button class="primary" id="customerPageSaveBtn" type="button">Müşteriyi Kaydet</button>
 <div class="form-status" id="customerPageStatus"></div>
 </form>
@@ -2109,5 +2085,20 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v53"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div>
+<div id="salesKefilPickerModal" class="sales-preview-modal hidden" aria-hidden="true">
+  <div class="sales-preview-dialog" style="width:min(640px,96vw)">
+    <div class="sales-preview-head">
+      <div><small>SENET KEFİLİ</small><h2>Müşteri seç</h2></div>
+      <button id="salesKefilPickerClose" type="button">×</button>
+    </div>
+    <p class="note" style="margin-top:0">Kayıtlı müşterilerden kefil seçin. Borçlu (satış müşterisi) listede gösterilmez.</p>
+    <label>Ara
+      <input id="salesKefilPickerSearch" type="search" placeholder="Ad, telefon, TCKN..." autocomplete="off"/>
+    </label>
+    <div id="salesKefilPickerStatus" class="form-status" style="margin:8px 0"></div>
+    <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
+  </div>
+</div>
+<script src="/web-admin-assets/admin.js?v=fix-v54"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

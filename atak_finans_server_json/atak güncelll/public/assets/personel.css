@@ -174,6 +174,10 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .sales-kefil-preview{padding:8px 10px;border-radius:8px;background:#ffe4e9;border:1px solid #f5c2cc;display:grid;gap:2px}
 .sales-kefil-preview b{color:#9f1239}.sales-kefil-preview span{font-size:11px;color:#7a879a}
 .sales-kefil-edit{display:grid;gap:6px}
+.sales-kefil-picker-list{display:grid;gap:8px;max-height:min(52vh,420px);overflow:auto;margin-top:10px}
+.sales-kefil-pick-row{display:grid;gap:2px;text-align:left;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;cursor:pointer;font:inherit;width:100%}
+.sales-kefil-pick-row:hover{border-color:#9f1239;background:#fff1f2}
+.sales-kefil-pick-row b{color:#0b2a4a}.sales-kefil-pick-row span{font-size:12px;color:#7a879a}
 .pay-screen-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .senet-btn{border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#e11d48,#9f1239);color:#fff}
 @media(max-width:700px){
