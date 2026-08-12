@@ -144,9 +144,8 @@ function ensureStore(store) {
   store.receivables = Array.isArray(store.receivables) ? store.receivables : [];
   store.promissoryNotes = Array.isArray(store.promissoryNotes) ? store.promissoryNotes : [];
   store.promissorySettings ||= {creditorName:ATAK_COMPANY.legalName,paymentPlace:'İstanbul',issuePlace:'İstanbul',prefix:'ATAK',defaultInstallments:1,firstDueDays:30,intervalMonths:1,copies:1,footer:''};
-  if(!String(store.promissorySettings.creditorName||'').trim() || /Atak (Home|Pazarlama)/i.test(String(store.promissorySettings.creditorName||''))){
-    store.promissorySettings.creditorName = ATAK_COMPANY.legalName;
-  }
+  // Senet/sözleşmede "Atak Home" yasak — her zaman resmi ünvan
+  store.promissorySettings.creditorName = ATAK_COMPANY.legalName;
   store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:ATAK_COMPANY.taxNo,companyTitle:ATAK_COMPANY.legalName,senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:'',efaturaSeries:'ATK',earsivSeries:'ATA',efaturaNext:1,earsivNext:1};
   if(store.invoiceIntegration && !store.invoiceIntegration.provider)store.invoiceIntegration.provider='qnb-solist';
   if(!String(store.invoiceIntegration.companyVkn||'').trim())store.invoiceIntegration.companyVkn=ATAK_COMPANY.taxNo;
@@ -885,8 +884,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.56-firma-bilgi',
-  build:'fix-v55',
+  version:'6.3.57-no-atak-home',
+  build:'fix-v56',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3569,7 +3568,24 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 }
 
 app.get('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=readStore();res.json({settings:s.promissorySettings||{}})});
-app.post('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=readStore(),x=req.body||{};s.promissorySettings={creditorName:String(x.creditorName||ATAK_COMPANY.legalName),paymentPlace:String(x.paymentPlace||'İstanbul'),issuePlace:String(x.issuePlace||'İstanbul'),prefix:String(x.prefix||'ATAK').replace(/[^A-Za-z0-9_-]/g,'').slice(0,12)||'ATAK',defaultInstallments:Math.min(36,Math.max(1,Math.round(Number(x.defaultInstallments)||1))),firstDueDays:Math.min(365,Math.max(0,Math.round(Number(x.firstDueDays)||30))),intervalMonths:Math.min(12,Math.max(1,Math.round(Number(x.intervalMonths)||1))),copies:Math.min(3,Math.max(1,Math.round(Number(x.copies)||1))),footer:String(x.footer||'')};audit(s,'Senet ayarları güncellendi','Ayarlar');writeStore(s);res.json({ok:true,settings:s.promissorySettings})});
+app.post('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{
+  const s=readStore(),x=req.body||{};
+  // Alacaklı adı sabit resmi ünvan — "Atak Home" vb. kabul edilmez
+  s.promissorySettings={
+    creditorName:ATAK_COMPANY.legalName,
+    paymentPlace:String(x.paymentPlace||'İstanbul'),
+    issuePlace:String(x.issuePlace||'İstanbul'),
+    prefix:String(x.prefix||'ATAK').replace(/[^A-Za-z0-9_-]/g,'').slice(0,12)||'ATAK',
+    defaultInstallments:Math.min(36,Math.max(1,Math.round(Number(x.defaultInstallments)||1))),
+    firstDueDays:Math.min(365,Math.max(0,Math.round(Number(x.firstDueDays)||30))),
+    intervalMonths:Math.min(12,Math.max(1,Math.round(Number(x.intervalMonths)||1))),
+    copies:Math.min(3,Math.max(1,Math.round(Number(x.copies)||1))),
+    footer:String(x.footer||'')
+  };
+  audit(s,'Senet ayarları güncellendi','Ayarlar');
+  writeStore(s);
+  res.json({ok:true,settings:s.promissorySettings});
+});
 app.post('/web-api/admin/promissory-plan',requireAdminOrStaff('orders_manage'),(req,res)=>{
  const s=readStore(),x=req.body||{},customer=s.customers.find(c=>c.id===x.customerId);if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
  const total=cleanMoney(x.totalAmount),count=Math.min(36,Math.max(1,Math.round(Number(x.installments)||1)));if(total<=0)return res.status(400).json({error:'Senet toplamı sıfırdan büyük olmalıdır'});
