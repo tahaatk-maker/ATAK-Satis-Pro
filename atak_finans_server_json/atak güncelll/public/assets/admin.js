@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v63 */
+/* ATAK_ADMIN_BUILD=fix-v64 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -887,13 +887,52 @@ function renderFoundation(){
   if(q('#fndCountStaff'))q('#fndCountStaff').textContent=`${f.staff.filter(x=>x.active).length} aktif`;
   if(q('#fndCountAnnounce'))q('#fndCountAnnounce').textContent=`${f.announcements.filter(x=>x.active).length} yayında`;
   if(q('#fndCountTurnover'))q('#fndCountTurnover').textContent=`otomatik · ${f.turnovers.length} satır`;
+  renderFoundationWarehouses();
 }
-/* Foundation alt sekmeleri: Mağaza / Personel / Duyuru / Ciro */
+async function ensureStockDataForWarehouses(){
+  if(stockData?.warehouses)return stockData;
+  stockData=await api('/web-api/admin/stock-center');
+  return stockData;
+}
+function renderFoundationWarehouses(){
+  if(!q('#warehouseList')||!q('#warehouseForm'))return;
+  const stores=foundationData?.stores||[];
+  if(q('#warehouseStore')){
+    q('#warehouseStore').innerHTML='<option value="">Mağazaya bağlı değil</option>'+stores.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+  }
+  const list=stockData?.warehouses||[];
+  const rows=list.filter(x=>!x.deletedAt);
+  q('#warehouseList').innerHTML=rows.length
+    ?rows.map(x=>{
+      const storeName=stores.find(s=>String(s.id)===String(x.storeId||''))?.name||'Bağlı değil';
+      return `<div class="warehouse-list-row">
+        <button type="button" class="warehouse-edit-main" data-warehouse-edit="${x.id}"><b>${x.name}</b><small>${x.code||'—'} · ${storeName} · ${x.active!==false?'Aktif':'Pasif'}</small></button>
+        <button type="button" class="warehouse-delete-btn" data-warehouse-delete="${x.id}" title="Depoyu sil">Sil</button>
+      </div>`;
+    }).join('')
+    :'<p class="note">Henüz depo yok. Soldan ekleyin.</p>';
+  if(q('#fndCountWarehouse'))q('#fndCountWarehouse').textContent=`${rows.filter(x=>x.active!==false).length} aktif`;
+  qa('[data-warehouse-edit]').forEach(b=>b.onclick=()=>{
+    const x=(stockData?.warehouses||[]).find(v=>v.id===b.dataset.warehouseEdit);if(!x)return;
+    q('#warehouseId').value=x.id;q('#warehouseName').value=x.name;q('#warehouseCode').value=x.code||'';
+    q('#warehouseStore').value=x.storeId||'';q('#warehouseActive').checked=x.active!==false;
+    setFoundationTab('warehouse');
+  });
+  qa('[data-warehouse-delete]').forEach(b=>b.onclick=async()=>{
+    const x=(stockData?.warehouses||[]).find(v=>v.id===b.dataset.warehouseDelete);if(!x)return;
+    if(!confirm(`${x.name} deposu silinsin mi? Depoda stok varsa sistem silmeye izin vermeyecek.`))return;
+    try{await api('/web-api/admin/warehouse/'+encodeURIComponent(x.id),{method:'DELETE'});toast('Depo silindi');await loadStockCenter();renderFoundationWarehouses()}catch(e){toast(e.message)}
+  });
+}
+/* Foundation alt sekmeleri: Mağaza / Depo / Personel / Duyuru / Ciro */
 function setFoundationTab(name){
   const target=name||'store';
   qa('.fnd-tab').forEach(b=>b.classList.toggle('active',b.dataset.fndTab===target));
   qa('.fnd-pane').forEach(p=>p.classList.toggle('active',p.dataset.fndPane===target));
   try{sessionStorage.setItem('atakFoundationTab',target)}catch(e){}
+  if(target==='warehouse'){
+    ensureStockDataForWarehouses().then(()=>renderFoundationWarehouses()).catch(e=>toast(e.message));
+  }
 }
 qa('.fnd-tab').forEach(b=>b.addEventListener('click',()=>setFoundationTab(b.dataset.fndTab)));
 function resetFoundationForm(kind){
@@ -907,6 +946,10 @@ function resetFoundationForm(kind){
     if(q('#fStaffActive'))q('#fStaffActive').checked=true;
   }else if(kind==='announce'){
     q('#announcementFoundationForm')?.reset();
+  }else if(kind==='warehouse'){
+    q('#warehouseForm')?.reset();
+    if(q('#warehouseId'))q('#warehouseId').value='';
+    if(q('#warehouseActive'))q('#warehouseActive').checked=true;
   }
   renderFoundation();
 }
@@ -934,15 +977,11 @@ function renderStockCenter(){
   const reserved=stockData.stocks.reduce((a,x)=>a+Number(x.reserved||0),0);
   const critical=stockData.stocks.filter(x=>Number(x.available||0)<=2).length;
   q('#stockSummary').innerHTML=`<article><b>${total}</b><span>Toplam Fiziksel Stok</span></article><article><b>${reserved}</b><span>Rezerve Stok</span></article><article><b>${activeWarehouses.length}</b><span>Aktif Depo</span></article><article><b>${critical}</b><span>Kritik Stok Satırı</span></article>`;
-  const stores=foundationData?.stores||[];
-  q('#warehouseStore').innerHTML='<option value="">Mağazaya bağlı değil</option>'+stores.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
   const whOpts=activeWarehouses.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-  ['#stockWarehouse','#transferFrom','#transferTo','#importWarehouse'].forEach(id=>q(id).innerHTML=whOpts);
+  ['#stockWarehouse','#transferFrom','#transferTo','#importWarehouse'].forEach(id=>{if(q(id))q(id).innerHTML=whOpts});
   const productOpts=stockData.products.filter(x=>x.active).map(x=>`<option value="${x.code}">${x.code} — ${x.name}</option>`).join('');
-  ['#stockProduct','#transferProduct'].forEach(id=>q(id).innerHTML=productOpts);
-  q('#warehouseList').innerHTML=stockData.warehouses.filter(x=>!x.deletedAt).map(x=>`<div class="warehouse-list-row"><button type="button" class="warehouse-edit-main" data-warehouse-edit="${x.id}"><b>${x.name}</b><small>${x.code||''} · ${x.active?'Aktif':'Pasif'}</small></button><button type="button" class="warehouse-delete-btn" data-warehouse-delete="${x.id}" title="Depoyu sil">Sil</button></div>`).join('');
-  qa('[data-warehouse-edit]').forEach(b=>b.onclick=()=>{const x=stockData.warehouses.find(v=>v.id===b.dataset.warehouseEdit);q('#warehouseId').value=x.id;q('#warehouseName').value=x.name;q('#warehouseCode').value=x.code||'';q('#warehouseStore').value=x.storeId||'';q('#warehouseActive').checked=x.active!==false});
-  qa('[data-warehouse-delete]').forEach(b=>b.onclick=async()=>{const x=stockData.warehouses.find(v=>v.id===b.dataset.warehouseDelete);if(!x)return;if(!confirm(`${x.name} deposu silinsin mi? Depoda stok varsa sistem silmeye izin vermeyecek.`))return;try{await api('/web-api/admin/warehouse/'+encodeURIComponent(x.id),{method:'DELETE'});toast('Depo silindi');await loadStockCenter()}catch(e){toast(e.message)}});
+  ['#stockProduct','#transferProduct'].forEach(id=>{if(q(id))q(id).innerHTML=productOpts});
+  renderFoundationWarehouses();
   renderStockTable();
   q('#movementCount').textContent=`${stockData.movements.length} hareket`;
   q('#movementTable').innerHTML=stockData.movements.length?`<table><thead><tr><th>Tarih</th><th>Ürün</th><th>Depo</th><th>İşlem</th><th>Değişim</th><th>Sonuç</th></tr></thead><tbody>${stockData.movements.map(x=>`<tr><td>${new Date(x.createdAt).toLocaleString('tr-TR')}</td><td>${x.productCode}</td><td>${stockData.warehouses.find(w=>w.id===x.warehouseId)?.name||x.warehouseId}</td><td>${x.type}</td><td class="${x.quantity>=0?'stock-plus':'stock-minus'}">${x.quantity>=0?'+':''}${x.quantity}</td><td>${x.after}</td></tr>`).join('')}</tbody></table>`:'<p>Henüz stok hareketi yok.</p>';
@@ -952,11 +991,29 @@ function renderStockTable(){
   const rows=stockData.stocks.filter(x=>`${x.productCode} ${x.productName} ${x.warehouseName}`.toLocaleLowerCase('tr-TR').includes(term));
   q('#stockTable').innerHTML=rows.length?`<table><thead><tr><th>Ürün</th><th>Depo</th><th>Fiziksel</th><th>Rezerve</th><th>Satılabilir</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.productCode}</b><small>${x.productName}</small></td><td>${x.warehouseName}</td><td>${x.quantity}</td><td>${x.reserved||0}</td><td><b>${x.available}</b></td></tr>`).join('')}</tbody></table>`:'<p>Stok kaydı bulunamadı.</p>';
 }
-q('#stockSearch').oninput=renderStockTable;
-q('#warehouseForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/warehouse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#warehouseId').value,name:q('#warehouseName').value,code:q('#warehouseCode').value,storeId:q('#warehouseStore').value,active:q('#warehouseActive').checked})});e.target.reset();q('#warehouseId').value='';q('#warehouseActive').checked=true;await loadStockCenter();toast('Depo kaydedildi')};
-q('#stockAdjustForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/stock-adjust',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productCode:q('#stockProduct').value,warehouseId:q('#stockWarehouse').value,quantity:q('#stockQuantity').value,note:q('#stockNote').value})});e.target.reset();await loadStockCenter();toast('Stok güncellendi')};
-q('#stockTransferForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/stock-transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productCode:q('#transferProduct').value,fromWarehouseId:q('#transferFrom').value,toWarehouseId:q('#transferTo').value,quantity:q('#transferQuantity').value,note:q('#transferNote').value})});e.target.reset();q('#transferQuantity').value=1;await loadStockCenter();toast('Transfer tamamlandı')};
-q('#stockImportForm').onsubmit=async e=>{e.preventDefault();const fd=new FormData();fd.append('file',q('#stockImportFile').files[0]);fd.append('warehouseId',q('#importWarehouse').value);const r=await api('/web-api/admin/stock-import',{method:'POST',body:fd});e.target.reset();await loadStockCenter();toast(`${r.imported} stok satırı aktarıldı`)};
+q('#stockSearch')?.addEventListener('input',renderStockTable);
+q('#warehouseForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  await api('/web-api/admin/warehouse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#warehouseId').value,name:q('#warehouseName').value,code:q('#warehouseCode').value,storeId:q('#warehouseStore').value,active:q('#warehouseActive').checked})});
+  e.target.reset();q('#warehouseId').value='';q('#warehouseActive').checked=true;
+  await loadStockCenter();renderFoundationWarehouses();toast('Depo kaydedildi');
+});
+q('#stockAdjustForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/stock-adjust',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productCode:q('#stockProduct').value,warehouseId:q('#stockWarehouse').value,quantity:q('#stockQuantity').value,note:q('#stockNote').value})});e.target.reset();await loadStockCenter();toast('Stok güncellendi')});
+q('#stockTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/stock-transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productCode:q('#transferProduct').value,fromWarehouseId:q('#transferFrom').value,toWarehouseId:q('#transferTo').value,quantity:q('#transferQuantity').value,note:q('#transferNote').value})});e.target.reset();q('#transferQuantity').value=1;await loadStockCenter();toast('Transfer tamamlandı')});
+q('#stockImportForm')?.addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData();fd.append('file',q('#stockImportFile').files[0]);fd.append('warehouseId',q('#importWarehouse').value);const r=await api('/web-api/admin/stock-import',{method:'POST',body:fd});e.target.reset();await loadStockCenter();toast(`${r.imported} stok satırı aktarıldı`)});
+q('#stockZeroAllBtn')?.addEventListener('click',async()=>{
+  if(!confirm('TÜM depolardaki fiziksel stoklar 0 yapılsın mı?\nRezerveler de temizlenir. Hareket kaydı tutulur.'))return;
+  if(!confirm('Emin misin? Bu işlem stok bakiyelerini sıfırlar.'))return;
+  try{
+    const r=await api('/web-api/admin/stock-zero',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:'ZERO'})});
+    toast(`Stok sıfırlandı · ${r.cleared||0} satır · ${r.units||0} adet`);
+    await loadStockCenter();
+  }catch(e){toast(e.message)}
+});
+q('#stockGoWarehouseBtn')?.addEventListener('click',()=>{
+  goTab('foundation');
+  setFoundationTab('warehouse');
+});
 const foundationGoTab=goTab;goTab=function(id){foundationGoTab(id);if(id==='stockCenter'){if(!foundationData)loadFoundation().then(loadStockCenter);else loadStockCenter().catch(e=>toast(e.message))}};
 
 
@@ -1550,8 +1607,8 @@ function salesProductOptions(selected=''){
 }
 
 function salesAvailableStock(productCode){
-  const deduct=q('#salesDeductStock')?.value==='yes';
-  if(!deduct)return undefined;
+  const mode=q('#salesDeductStock')?.value||'no';
+  if(mode!=='yes'&&mode!=='reserve')return undefined;
   const warehouseId=q('#salesWarehouse')?.value||'';
   if(!warehouseId)return null;
   const row=(salesCenterData.stocks||[]).find(s=>String(s.productCode)===String(productCode)&&String(s.warehouseId)===String(warehouseId));
@@ -2262,7 +2319,13 @@ q('#salesProductSearchClear')?.addEventListener('click',()=>{
   refreshSalesProductSelects();
 });
 
-function salesDeductStockChanged(){const enabled=q('#salesDeductStock')?.value==='yes';q('#salesWarehouseWrap')?.classList.toggle('hidden',!enabled);if(!enabled&&q('#salesWarehouse'))q('#salesWarehouse').value='';salesRefreshRowStocks()}
+function salesDeductStockChanged(){
+  const mode=q('#salesDeductStock')?.value||'no';
+  const needWh=mode==='yes'||mode==='reserve';
+  q('#salesWarehouseWrap')?.classList.toggle('hidden',!needWh);
+  if(!needWh&&q('#salesWarehouse'))q('#salesWarehouse').value='';
+  salesRefreshRowStocks();
+}
 q('#salesDeductStock')?.addEventListener('change',salesDeductStockChanged);
 q('#salesWarehouse')?.addEventListener('change',salesRefreshRowStocks);
 q('#salesAddRowBtn')?.addEventListener('click',()=>salesAddRow());q('#salesResetBtn')?.addEventListener('click',salesReset);
@@ -2413,7 +2476,10 @@ function collectSalesDraft(){
     schedule:salesBuildPromissorySchedule(splits.note,q('#salesPromissoryInstallments')?.value,q('#salesPromissoryFirstDue')?.value,q('#salesPromissoryInterval')?.value)
   }:null;
   const dealerId=q('#salesDealer')?.value||'',dealer=calc.dealer,discountPct=calc.discountPct,grossTotal=calc.gross,total=calc.net;
-  const deductStock=q('#salesDeductStock')?.value==='yes';
+  const stockModeRaw=q('#salesDeductStock')?.value||'no';
+  const stockMode=stockModeRaw==='yes'?'deduct':(stockModeRaw==='reserve'?'reserve':'none');
+  const deductStock=stockMode==='deduct';
+  const reserveStock=stockMode==='reserve';
   const salespersonId=q('#salesSalesperson')?.value||'',salesperson=salesCenterData.salespeople.find(p=>String(p.id)===String(salespersonId));
   const billingParty=customerHasCorporate(customer||{})
     ?(q('#salesBillingParty')?.value==='corporate'?'corporate':'individual')
@@ -2424,13 +2490,13 @@ function collectSalesDraft(){
     catch(err){return{error:err.message||'Kefil bilgisi geçersiz.',status,customerId,customer}}
     if(!guarantor)return{error:'Kefil eklendi ancak ad soyad boş. Doldurun veya kefili kaldırın.',status,customerId,customer};
   }
-  const draft={status,customerId,customer,billingParty,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,guarantor,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'not_required',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
+  const draft={status,customerId,customer,billingParty,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,reserveStock,stockMode,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,guarantor,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'not_required',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
   if(!customerId)return{error:'Müşteri seçmelisiniz.',...draft};
   if(billingParty==='corporate'&&!customerHasCorporate(customer))return{error:'Kurumsal fatura için müşteri kartına firma / VKN ekleyin.',...draft};
   if(!dealer)return{error:'Satış bayisini seçmelisiniz.',...draft};
   if(!salesperson)return{error:'Satış personelini seçmelisiniz.',...draft};
   if(!items.length)return{error:'En az bir ürün eklemelisiniz.',...draft};
-  if(deductStock&&!warehouseId)return{error:'Stoktan düşmek için satış deposu seçmelisiniz.',...draft};
+  if((deductStock||reserveStock)&&!warehouseId)return{error:reserveStock?'Rezerve etmek için satış deposu seçmelisiniz.':'Stoktan düşmek için satış deposu seçmelisiniz.',...draft};
   if(total>0&&Math.abs(calc.remaining)>0.009)return{error:`Ödeme dağılımı net tutara eşit olmalı. Kalan: ${salesMoney(calc.remaining)}`,...draft};
   if(draft.payments.some(p=>['Nakit','Kredi Kartı','Havale'].includes(p.method)&&p.amount>0&&!p.accountId))return{error:'Nakit / kart / havale için hesap seçmelisiniz.',...draft};
   if(promissory){
@@ -2452,7 +2518,12 @@ function salesPreviewHtml(d){
   const billLabel=d.billingParty==='corporate'
     ?`Kurumsal · ${d.customer?.companyName||'-'} · VKN ${d.customer?.taxNo||'-'}`
     :`Bireysel · ${d.customer?.name||'-'} · TCKN ${d.customer?.tckn||'—'}`;
-  return `<div class="preview-cards"><div><small>Şahıs / Senet</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}${d.customer?.tckn?' · TCKN '+d.customer.tckn:''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Tahsil: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>${payRows}<div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div>${note}${kefilNote}<div class="preview-note"><b>Fatura tarafı:</b> ${billLabel}<br><b>Fatura durumu:</b> ${invLabel}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${d.deductStock?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`:'Stoktan düşülmeyecek'}<small>Fatura kesme durumu stoğu etkilemez.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
+  const stockLabel=d.deductStock
+    ?`Stoktan düşülecek · ${d.warehouse?.name||'-'}`
+    :(d.reserveStock
+      ?`Rezerve edilecek · ${d.warehouse?.name||'-'} (teslimde düşülür)`
+      :'Stok değişmeyecek');
+  return `<div class="preview-cards"><div><small>Şahıs / Senet</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}${d.customer?.tckn?' · TCKN '+d.customer.tckn:''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Tahsil: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>${payRows}<div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div>${note}${kefilNote}<div class="preview-note"><b>Fatura tarafı:</b> ${billLabel}<br><b>Fatura durumu:</b> ${invLabel}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${stockLabel}<small>Rezerve: satışta tutulur, teslim edilince fiziksel düşülür.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
 }
 let activeSalesDraft=null;
 function openSalesPreview(){
@@ -2709,14 +2780,18 @@ async function salesIssueInvoiceNow(){
   if(hint){hint.textContent='Fatura Kes seçildi → satışı onaylayınca QNB kuyruğa düşer (e-Fatura / e-Arşiv).';hint.className='form-status success'}
 }
 async function confirmSalesDraft(){
-  const d=activeSalesDraft||collectSalesDraft();if(d.error){toast(d.error);return}const deductStock=Boolean(d.deductStock);if(deductStock&&!d.warehouseId){toast('Stoktan düşmek için satış deposu seçmelisiniz.');return}const status=d.status,btn=q('#salesPreviewConfirmBtn');btn.disabled=true;btn.textContent='Satış Yapılıyor...';status.textContent='';
+  const d=activeSalesDraft||collectSalesDraft();if(d.error){toast(d.error);return}
+  const stockMode=d.stockMode||(d.deductStock?'deduct':(d.reserveStock?'reserve':'none'));
+  if((stockMode==='deduct'||stockMode==='reserve')&&!d.warehouseId){toast(stockMode==='reserve'?'Rezerve için depo seçin':'Stoktan düşmek için depo seçin');return}
+  const status=d.status,btn=q('#salesPreviewConfirmBtn');btn.disabled=true;btn.textContent='Satış Yapılıyor...';status.textContent='';
   try{
     const invoiceStatus=d.invoiceStatus==='queue_qnb'?'pending':d.invoiceStatus;
     const result=await api('/web-api/admin/customer-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       customerId:d.customerId,dealerId:d.dealerId,salespersonId:d.salespersonId,salespersonName:d.salesperson?.name||'',
       discountPct:d.discountPct,warehouseId:d.warehouseId,date:d.date,paymentMethod:d.method,
       payments:d.payments,promissory:d.promissory,guarantor:d.guarantor||null,billingParty:d.billingParty||'individual',
-      description:d.description,items:d.items,invoiceStatus,invoiceNumber:d.invoiceNumber,invoiceDate:d.invoiceDate,deductStock
+      description:d.description,items:d.items,invoiceStatus,invoiceNumber:d.invoiceNumber,invoiceDate:d.invoiceDate,
+      stockMode,deductStock:stockMode==='deduct',reserveStock:stockMode==='reserve'
     })});
     let noteText='';
     (result.collections||[]).forEach(c=>{if(c?.id)window.open('/web-api/admin/receipt/'+c.id,'_blank')});
