@@ -586,6 +586,7 @@ body.inv-full #pageTitle{font-size:18px}
 <button class="active" data-tab="dashboard" type="button">⌂ Dashboard</button>
 <button data-tab="foundation" type="button">◆ Foundation Yönetimi</button>
 <button data-tab="financeCenter" type="button">₺ Finans &amp; Cari</button>
+<button data-tab="financeReports" type="button">📑 Finans Raporları</button>
 <button data-tab="customerPayments" type="button">💳 Müşteri Ödemeleri</button>
 <button data-tab="customersPage" type="button">👥 Müşteriler</button>
 <button data-tab="salesCenter" type="button">🛒 Satış Merkezi</button>
@@ -623,7 +624,7 @@ body.inv-full #pageTitle{font-size:18px}
 <div class="ck-actions" id="ckActions">
   <button class="ck-act sale" data-go="salesCenter" type="button"><span class="ck-act-ico">₺</span><b>SATIŞ YAP</b><small>Müşteri → ürün → ödeme</small></button>
   <button class="ck-act customer" data-go="customersPage" type="button"><span class="ck-act-ico">+</span><b>YENİ MÜŞTERİ</b><small>Müşteri kartı aç</small></button>
-  <button class="ck-act collect" data-go="financeCenter" type="button"><span class="ck-act-ico">◎</span><b>TAHSİLAT AL</b><small>Cari borcu düş</small></button>
+  <button class="ck-act collect" data-go="customerPayments" type="button"><span class="ck-act-ico">◎</span><b>TAHSİLAT AL</b><small>Cari borcu düş</small></button>
   <button class="ck-act invoice" data-go="invoiceCenter" type="button"><span class="ck-act-ico">▤</span><b>E-FATURA</b><small>QNB merkezi</small></button>
   <button class="ck-act stock" data-go="stockCenter" type="button"><span class="ck-act-ico">▣</span><b>STOK</b><small>Sayım ve transfer</small></button>
 </div>
@@ -1706,32 +1707,30 @@ Bulunamayan → Diğer.
 </div>
 </section>
 <section class="tab" id="financeCenter">
-<div class="foundation-head panel"><div><small class="eyebrow">V3.2 FİNANS &amp; CARİ</small><h2>Finans ve Cari Merkezi</h2><p class="note">Kasa / banka bakiyeleri, müşteri carileri ve hareket özeti. Tahsilat için <b>Müşteri Ödemeleri</b> veya müşteri kartı; para aktarımı için <b>Transfer</b>. Hesap tanımları <b>Ayarlar</b>’dadır.</p></div>
-<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="secondary-btn" data-go="customerPayments" type="button">Müşteri Ödemeleri →</button><button class="secondary-btn" data-go="settings" type="button">Hesap Ayarları →</button></div></div>
+<div class="foundation-head panel"><div><small class="eyebrow">V3.2 FİNANS &amp; CARİ</small><h2>Finans ve Cari Merkezi</h2><p class="note">Operasyon merkezi: tahsilat, müşteri kartı ve kasa transferi. Hesap bakiyesi / cari / hareket listeleri <b>Finans Raporları</b> sekmesindedir. Manuel finans hareketi yoktur.</p></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="secondary-btn" data-go="financeReports" type="button">Finans Raporları →</button><button class="secondary-btn" data-go="settings" type="button">Hesap Ayarları →</button></div></div>
 <div class="foundation-summary" id="financeSummary"></div>
 <div class="finance-grid">
 <section class="panel customer-shortcut">
 <div><small class="eyebrow">TAHSİLAT</small><h2>💳 Müşteri ödemeleri</h2>
-<p class="note">Senet / taksit tahsilatı ve makbuz için Müşteri Ödemeleri ekranını kullanın. Manuel “Finans Hareketi” kaldırıldı.</p></div>
+<p class="note">Senet / taksit tahsilatı ve makbuz.</p></div>
 <button class="primary" data-go="customerPayments" type="button">Ödeme Al</button>
 </section>
 <section class="panel customer-shortcut">
-<div><small class="eyebrow">MÜŞTERİ YÖNETİMİ</small><h2>👥 Müşteri kartları</h2>
-<p class="note">Yeni müşteri, cari kart, alışveriş geçmişi ve senet iptali için Müşteriler sayfası.</p></div>
-<button class="primary" id="openCustomersPage" type="button">Müşteriler Sayfasını Aç</button>
+<div><small class="eyebrow">MÜŞTERİ</small><h2>👥 Müşteri kartları</h2>
+<p class="note">Cari kart, alışveriş, senet iptali.</p></div>
+<button class="primary" id="openCustomersPage" type="button">Müşteriler</button>
 </section>
-</div>
-<div class="panel">
-<div class="panel-head"><div><h2>Hesap Bakiyeleri</h2><p class="note">Yeni hesap eklemek / düzenlemek için Ayarlar → Kasa ve Banka Hesapları.</p></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span id="financeAccountCount"></span><button class="secondary-btn" id="financeTransferOpenBtn" type="button">🔄 Para Transferi</button></div></div>
-<div class="turnover-table" id="financeAccountsTable"></div>
-</div>
-<div class="panel">
-<div class="panel-head"><h2>Müşteri Carileri</h2><input id="customerSearch" placeholder="Müşteri ara"/></div>
-<div class="turnover-table" id="customerTable"></div>
-</div>
-<div class="panel">
-<div class="panel-head"><h2>Son Finans Hareketleri</h2><span id="financeTransactionCount"></span></div>
-<div class="turnover-table" id="financeTransactionTable"></div>
+<section class="panel customer-shortcut">
+<div><small class="eyebrow">KASA</small><h2>🔄 Para transferi</h2>
+<p class="note">Kasa ↔ banka aktarımı.</p></div>
+<button class="primary" id="financeTransferOpenBtn" type="button">Transfer Yap</button>
+</section>
+<section class="panel customer-shortcut">
+<div><small class="eyebrow">RAPOR</small><h2>📑 Finans raporları</h2>
+<p class="note">Bakiyeler, müşteri cari, son hareketler.</p></div>
+<button class="primary" data-go="financeReports" type="button">Raporları Aç</button>
+</section>
 </div>
 <div class="modal hidden" id="financeTransferModal">
 <form class="modal-card fin-transfer-card" id="financeTransferForm">
@@ -1749,6 +1748,39 @@ Bulunamayan → Diğer.
 <label>Açıklama<input id="transferFinanceDescription"/></label>
 <button class="primary" type="submit">Transfer Et</button>
 </form>
+</div>
+</section>
+<section class="tab" id="financeReports">
+<div class="foundation-head panel">
+  <div>
+    <small class="eyebrow">FİNANS RAPORLAMA</small>
+    <h2>Finans Raporları</h2>
+    <p class="note">Hesap bakiyeleri, müşteri carileri ve son finans hareketlerini ayrı ayrı görüntüle. Tahsilat / transfer için Finans &amp; Cari’ye dön.</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button class="secondary-btn" id="financeReportsRefresh" type="button">Yenile</button>
+    <button class="secondary-btn" data-go="financeCenter" type="button">Finans &amp; Cari →</button>
+  </div>
+</div>
+<div class="foundation-summary" id="financeReportsSummary"></div>
+<div class="panel">
+  <div class="period-toggle" id="financeReportToggle" role="tablist" aria-label="Finans rapor seçimi">
+    <button type="button" class="period-btn active" data-fin-report="accounts">Hesap Bakiyeleri</button>
+    <button type="button" class="period-btn" data-fin-report="customers">Müşteri Cari</button>
+    <button type="button" class="period-btn" data-fin-report="transactions">Son Finans Hareketleri</button>
+  </div>
+</div>
+<div class="panel finance-report-panel" id="financeReportAccounts" data-fin-report-panel="accounts">
+  <div class="panel-head"><div><h2>Hesap Bakiyeleri</h2><p class="note">Hesap tanımı için Ayarlar → Kasa ve Banka.</p></div><span id="financeAccountCount"></span></div>
+  <div class="turnover-table" id="financeAccountsTable"></div>
+</div>
+<div class="panel finance-report-panel hidden" id="financeReportCustomers" data-fin-report-panel="customers">
+  <div class="panel-head"><h2>Müşteri Carileri</h2><input id="customerSearch" placeholder="Müşteri ara"/></div>
+  <div class="turnover-table" id="customerTable"></div>
+</div>
+<div class="panel finance-report-panel hidden" id="financeReportTransactions" data-fin-report-panel="transactions">
+  <div class="panel-head"><h2>Son Finans Hareketleri</h2><span id="financeTransactionCount"></span></div>
+  <div class="turnover-table" id="financeTransactionTable"></div>
 </div>
 </section>
 <section class="tab" id="customerPayments">
@@ -2041,6 +2073,11 @@ Bulunamayan → Diğer.
   <div class="panel">
     <div class="panel-head"><div><small class="v4-kicker">KISAYOLLAR</small><h2>Detaylı Raporlar</h2></div></div>
     <div class="reports-links" id="reportsLinks"></div>
+    <div class="reports-links" style="margin-top:10px">
+      <button type="button" class="v4-link-btn" data-go="financeReports">📑 Finans Raporları →</button>
+      <button type="button" class="v4-link-btn" data-go="customerPayments">💳 Müşteri Ödemeleri →</button>
+      <button type="button" class="v4-link-btn" data-go="profitCenter">📊 Kâr &amp; Maliyet →</button>
+    </div>
   </div>
   <div class="form-status" id="reportsStatus"></div>
 </section>
@@ -2049,7 +2086,7 @@ Bulunamayan → Diğer.
 <div class="foundation-head panel"><div><small class="eyebrow">SİSTEM AYARLARI</small><h2>Ayarlar</h2><p class="note">Kasa/banka hesapları, senet ve bayi/prim ayarları burada. QNB e-Fatura ayarları <b>e-Fatura Merkezi → Kurulum</b> altındadır.</p></div></div>
 <div class="settings-grid">
 <form class="panel form-stack" id="financeAccountForm">
-<div class="panel-head"><div><h2>💵 Kasa ve Banka Hesapları</h2><p class="note">Hesap tanımı bir kurulum işidir. Günlük tahsilat / masraf <b>Finans &amp; Cari</b> ekranındadır.</p></div></div>
+<div class="panel-head"><div><h2>💵 Kasa ve Banka Hesapları</h2><p class="note">Hesap tanımı bir kurulum işidir. Tahsilat <b>Müşteri Ödemeleri</b>’nde; bakiyeler <b>Finans Raporları</b>’nda.</p></div></div>
 <input id="financeAccountId" type="hidden"/>
 <label>Hesap adı<input id="financeAccountName" required=""/></label>
 <div class="two-cols">
