@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v61 */
+/* ATAK_ADMIN_BUILD=fix-v62 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2923,6 +2923,53 @@ function purchaseSuggestCategory(){
     if(mob){el.value=mob.value;return}
   }
 }
+function purchaseRefreshCategorySelects(preferId=''){
+  const cats=purchaseCategoryList.slice();
+  const def=q('#purchaseExcelCategory');
+  if(def){
+    const keep=preferId||def.value;
+    def.innerHTML='<option value="">Satır satır seç…</option>'+cats.map(c=>`<option value="${purchaseEsc(c.id)}">${purchaseEsc(c.name)}</option>`).join('');
+    if(keep&&cats.some(c=>String(c.id)===String(keep)))def.value=keep;
+  }
+  qa('#purchasePreviewTable select[data-purchase-row-cat]').forEach(sel=>{
+    const keep=preferId&&!sel.value?preferId:sel.value;
+    sel.innerHTML=purchaseCategoryOptionsHtml(keep);
+    if(keep)sel.value=keep;
+  });
+}
+async function purchaseCreateCategory(){
+  const input=q('#purchaseNewCategoryName');
+  const name=String(input?.value||'').trim();
+  if(!name){toast('Kategori adını yazın');input?.focus();return}
+  const btn=q('#purchaseNewCategoryBtn');
+  if(btn)btn.disabled=true;
+  try{
+    const result=await api('/web-api/admin/category',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,active:true,sort:purchaseCategoryList.length})
+    });
+    const cat=result.category;
+    if(cat?.id){
+      if(!purchaseCategoryList.some(c=>String(c.id)===String(cat.id))){
+        purchaseCategoryList.push({id:cat.id,name:cat.name,active:true});
+        purchaseCategoryList.sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+      }
+      if(Array.isArray(store?.categories)&&!store.categories.some(c=>String(c.id)===String(cat.id))){
+        store.categories.push(cat);
+      }
+      try{renderCategoryOptions?.()}catch{}
+      purchaseRefreshCategorySelects(cat.id);
+      if(q('#purchaseExcelCategory'))q('#purchaseExcelCategory').value=cat.id;
+    }
+    if(input)input.value='';
+    toast(`Kategori eklendi: ${cat?.name||name}`);
+  }catch(e){
+    toast('Kategori eklenemedi: '+e.message);
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
 function purchaseApplyDefaultCategoryToRows(){
   const def=String(q('#purchaseExcelCategory')?.value||'').trim();
   if(!def){toast('Önce üstten varsayılan kategori seçin');return}
@@ -3132,6 +3179,10 @@ q('#purchaseCostBtn')?.addEventListener('click',()=>runPurchaseImport('cost'));
 q('#purchaseStockBtn')?.addEventListener('click',()=>runPurchaseImport('stock'));
 q('#purchaseExcelSupplier')?.addEventListener('change',()=>purchaseSuggestCategory());
 q('#purchaseApplyCategoryBtn')?.addEventListener('click',()=>purchaseApplyDefaultCategoryToRows());
+q('#purchaseNewCategoryBtn')?.addEventListener('click',()=>purchaseCreateCategory());
+q('#purchaseNewCategoryName')?.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();purchaseCreateCategory()}
+});
 q('#purchaseRefreshListBtn')?.addEventListener('click',()=>loadPurchaseInvoices());
 q('#purchaseZeroIstikbalCostBtn')?.addEventListener('click',async()=>{
   if(!confirm('İstikbal / alış aktarımından gelen ürünlerde ALIŞ MALİYETİ sıfırlansın mı?\nÜrün kartları silinmez — sadece purchasePrice = 0 olur.'))return;
