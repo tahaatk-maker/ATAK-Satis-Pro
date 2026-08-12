@@ -903,8 +903,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.63-kategori-ekle',
-  build:'fix-v62',
+  version:'6.3.64-depo-sec',
+  build:'fix-v63',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -4565,7 +4565,10 @@ app.get('/web-api/admin/purchase-invoices',requireAdmin,(req,res)=>{
     ok:true,
     invoices:list,
     suppliers:(s.suppliers||[]).filter(x=>x.active!==false),
-    warehouses:(s.warehouses||[]).filter(w=>w.active!==false).map(w=>({id:w.id,name:w.name})),
+    warehouses:(s.warehouses||[]).filter(w=>w&&w.active!==false&&!w.deletedAt).map(w=>{
+      const storeName=(s.stores||[]).find(st=>String(st.id)===String(w.storeId||''))?.name||'';
+      return{id:w.id,name:w.name,code:w.code||'',storeId:w.storeId||'',storeName};
+    }),
     categories:(s.categories||[]).filter(c=>c&&c.active!==false).map(c=>({id:c.id,name:c.name})).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'))
   });
 });

@@ -351,7 +351,20 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .dynamics-preview-row.existing{opacity:.72}
 .dynamics-preview-row.invalid{opacity:.6}
 .purchase-row-cat{min-width:148px;max-width:240px;width:100%;min-height:34px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 8px;font-size:12px}
-@media(max-width:700px){.dynamics-bulk-category{grid-template-columns:1fr}}
+.purchase-warehouse-box{display:grid;gap:8px;padding:11px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}
+.purchase-warehouse-head{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;justify-content:space-between}
+.purchase-warehouse-head b{font-size:13px}
+.purchase-warehouse-head small{font-size:11px;color:var(--muted);line-height:1.35}
+.purchase-warehouse-chips{display:flex;flex-wrap:wrap;gap:8px}
+.purchase-warehouse-chip{appearance:none;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 12px;min-height:54px;min-width:140px;text-align:left;cursor:pointer;display:grid;gap:2px;transition:border-color .15s,background .15s,box-shadow .15s}
+.purchase-warehouse-chip:hover{border-color:#0b4d8a;background:#f5f9ff}
+.purchase-warehouse-chip.active{border-color:#0f766e;background:#ecfdf8;box-shadow:0 0 0 2px rgba(15,118,110,.18)}
+.purchase-warehouse-chip strong{font-size:13px;color:var(--navy)}
+.purchase-warehouse-chip small{font-size:11px;color:var(--muted)}
+.purchase-warehouse-chip .purchase-wh-tag{font-size:10px;font-weight:800;letter-spacing:.02em;color:#0f766e;text-transform:uppercase}
+.purchase-warehouse-empty{font-size:12px;color:#b45309;padding:6px 0}
+.purchase-warehouse-box.need-stock{border-color:#0f766e;background:#f0fdfa}
+@media(max-width:700px){.dynamics-bulk-category{grid-template-columns:1fr}.purchase-warehouse-chip{min-width:calc(50% - 4px);flex:1 1 calc(50% - 4px)}}
 
 /* V6.2.5.9 Dynamics hızlı kategori ekleme */
 .dynamics-category-create{display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:8px;align-items:end;padding:10px;border:1px dashed var(--line);border-radius:9px;background:#fff}
