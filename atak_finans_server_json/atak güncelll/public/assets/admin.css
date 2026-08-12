@@ -127,12 +127,24 @@
 .customer-balance-box{text-align:right;padding:14px 18px;border-radius:14px;background:#eef6ff}
 .customer-balance-box small,.customer-balance-box strong{display:block}
 .customer-balance-box strong{font-size:26px;color:#075da8;margin-top:4px}
-.customer-action-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:16px 0}
+.customer-action-buttons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
 .customer-action-buttons button{height:48px;border:0;border-radius:11px;background:#0a5ca8;color:#fff;font-weight:900;cursor:pointer}
+.customer-action-buttons button.customer-pay-btn{background:#0f766e}
+.customer-action-buttons button.customer-sale-btn{background:#5d6b7f}
 .customer-action-buttons button.customer-delete-btn{background:#b42318}
 .customer-action-buttons button.customer-delete-btn:hover{background:#912018}
-.customer-action-buttons button:nth-child(2):not(.customer-delete-btn){background:#087c47}
-.customer-action-buttons button:nth-child(3){background:#5d6b7f}
+.customer-debt-box{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.customer-debt-box article{padding:12px 14px;border:1px solid #e3e9f0;border-radius:12px;background:#fff}
+.customer-debt-box small{display:block;font-size:11px;color:#6b788d;font-weight:800}
+.customer-debt-box b{display:block;margin-top:4px;font-size:18px;color:#123d70}
+.customer-debt-box article.warn{background:#fff8e8;border-color:#efd28a}
+.customer-debt-box article.bad{background:#fff1f1;border-color:#f0baba}
+.customer-action-form{display:grid;gap:12px;padding:16px;border:1px solid #dfe7f0;border-radius:13px;background:#f9fbfd;margin-bottom:18px}
+.customer-action-form h3{margin:0}
+.customer-action-form .table-wrap{max-height:220px;overflow:auto;border:1px solid #e3e9f0;border-radius:10px;background:#fff}
+.customer-tx .tx-receipt-btn{margin-top:6px;min-height:32px;padding:0 10px;border:0;border-radius:8px;background:#e8f3ff;color:#0a5ca8;font-weight:800;cursor:pointer}
+@media(max-width:1000px){.customer-hub{grid-template-columns:1fr}.customer-list-panel{position:static}.customer-action-buttons{grid-template-columns:1fr 1fr}.customer-debt-box{grid-template-columns:1fr}}
+@media(max-width:700px){.customer-detail-head{align-items:stretch;flex-direction:column}.customer-balance-box{text-align:left}.customer-info-grid,.customer-action-form .two-col{grid-template-columns:1fr}.customer-action-buttons{grid-template-columns:1fr}.sale-row{grid-template-columns:1fr 70px 110px}.sale-row button{grid-column:1/-1;height:36px}}
 .customer-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 18px}
 .customer-info-grid>div{padding:13px;border:1px solid #e0e7ef;border-radius:10px}
 .customer-info-grid small,.customer-info-grid b{display:block}

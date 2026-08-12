@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v64 */
+/* ATAK_ADMIN_BUILD=fix-v65 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1329,7 +1329,74 @@ function renderCustomerTransaction(t){
   const amt=Number(t.displayAmount!=null?t.displayAmount:t.amount||0);
   const cls=amt<0||kind==='collection'||kind==='collection_cancel'?(amt<=0&&kind==='collection'?'credit':(amt<0?'credit':'debt')):(Number(t.customerDelta||0)<0?'credit':'debt');
   const showAmt=kind==='collection'?Math.abs(amt):amt;
-  return `<div class="customer-tx${cancelled?' is-cancelled':''}"><div><b>${t.date||'-'} · ${label}</b><small>${[t.reference,t.description,t.accountName,t.category].filter(Boolean).join(' · ')||'-'}</small></div><strong class="${cls}">${money2(showAmt)}</strong></div>`;
+  const receipt=kind==='collection'&&t.receiptUrl
+    ?`<button type="button" class="tx-receipt-btn" data-receipt-url="${String(t.receiptUrl).replace(/"/g,'&quot;')}">Makbuz Yazdır</button>`
+    :'';
+  return `<div class="customer-tx${cancelled?' is-cancelled':''}"><div><b>${t.date||'-'} · ${label}</b><small>${[t.reference,t.description,t.accountName,t.category].filter(Boolean).join(' · ')||'-'}</small>${receipt}</div><strong class="${cls}">${money2(showAmt)}</strong></div>`;
+}
+function customerNoteRemain(n){
+  const amt=Number(n.amount||0),paid=Number(n.paidAmount||0);
+  return Math.max(0,Math.round((amt-paid)*100)/100);
+}
+function renderCustomerDebtAndPay(d){
+  const c=d.customer||{};
+  const notes=(d.promissoryNotes||[]).map(n=>{
+    const remain=customerNoteRemain(n);
+    const status=remain<=0.009?'paid':(String(n.status||'open'));
+    const overdue=remain>0.009&&String(n.dueDate||'')<localDate();
+    return{...n,remain,status,overdue};
+  });
+  const openNotes=notes.filter(n=>!['paid','cancelled'].includes(String(n.status)));
+  const overdueAmount=openNotes.filter(n=>n.overdue).reduce((a,n)=>a+n.remain,0);
+  const month=localDate().slice(0,7);
+  const dueMonth=openNotes.filter(n=>String(n.dueDate||'').startsWith(month)).reduce((a,n)=>a+n.remain,0);
+  const balance=Number(c.balance||0);
+  const debtBox=q('#customerDebtBox');
+  if(debtBox){
+    debtBox.innerHTML=`
+      <article class="${balance>0.009?'bad':''}"><small>Cari borç</small><b>${money2(Math.max(balance,0))}</b></article>
+      <article class="${overdueAmount>0.009?'bad':''}"><small>Geciken senet</small><b>${money2(overdueAmount)}</b></article>
+      <article class="${dueMonth>0.009?'warn':''}"><small>Bu ay vade</small><b>${money2(dueMonth)}</b></article>`;
+  }
+  const tbody=q('#customerNotesList');
+  if(tbody){
+    tbody.innerHTML=notes.length
+      ?notes.map(n=>{
+        const open=!['paid','cancelled'].includes(String(n.status));
+        return `<tr class="${n.overdue?'pay-note-overdue':''} ${n.status==='paid'?'pay-note-paid':''}">
+          <td>${open?`<input type="checkbox" class="customer-pay-note" value="${n.id}">`:''}</td>
+          <td>${n.serial||String(n.id||'').slice(0,8)}</td>
+          <td>${n.dueDate||'—'}</td>
+          <td>${money2(n.amount)}</td>
+          <td>${money2(n.remain)}</td>
+          <td>${n.status==='paid'?'Ödendi':(n.overdue?'Gecikmiş':(n.status==='partial'?'Kısmi':'Açık'))}</td>
+        </tr>`;
+      }).join('')
+      :'<tr><td colspan="6">Senet / taksit yok. Tahsilat cari bakiyeden düşer.</td></tr>';
+  }
+  const acc=q('#customerPayAccount');
+  if(acc){
+    const cur=acc.value;
+    acc.innerHTML=(d.accounts||[]).map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Kasa yok</option>';
+    if(cur&&[...acc.options].some(o=>o.value===cur))acc.value=cur;
+  }
+  const suggest=overdueAmount>0.009?overdueAmount:(dueMonth>0.009?dueMonth:Math.max(balance,0));
+  if(q('#customerPayAmount'))q('#customerPayAmount').value=suggest>0?suggest.toFixed(2):'';
+  if(q('#customerPayDate')&&!q('#customerPayDate').value)q('#customerPayDate').value=localDate();
+  if(q('#customerPayDesc'))q('#customerPayDesc').value='';
+  if(q('#customerPayStatus')){q('#customerPayStatus').textContent='';q('#customerPayStatus').className='form-status'}
+  if(q('#customerPayReceiptBtn'))q('#customerPayReceiptBtn').classList.add('hidden');
+  customersPageData._notes=notes;
+  customersPageData._accounts=d.accounts||[];
+  customersPageData._lastReceiptUrl='';
+  qa('.customer-pay-note').forEach(cb=>{
+    cb.onchange=()=>{
+      const ids=[...qa('.customer-pay-note:checked')].map(x=>x.value);
+      if(!ids.length)return;
+      const total=(customersPageData._notes||[]).filter(n=>ids.includes(String(n.id))).reduce((a,n)=>a+Number(n.remain||0),0);
+      if(q('#customerPayAmount'))q('#customerPayAmount').value=total.toFixed(2);
+    };
+  });
 }
 function renderCustomerBillingCards(c={}){
   const box=q('#customerBillingCards');if(!box)return;
@@ -1377,6 +1444,7 @@ async function selectCustomerPage(id){
     }
     if(q('#customerDetailBalance'))q('#customerDetailBalance').textContent=money2(c.balance);
     renderCustomerBillingCards(c);
+    renderCustomerDebtAndPay(d);
     const tx=d.transactions||[];
     const saleCount=tx.filter(t=>t.kind==='sale'&&!t.cancelled).length;
     if(q('#customerTransactionCount'))q('#customerTransactionCount').textContent=`${tx.length} hareket · ${saleCount} satış`;
@@ -1386,6 +1454,12 @@ async function selectCustomerPage(id){
       if(d.pendingDelete)banners.push(`<div class="customer-pending-banner danger">Bekleyen silme onayı var · ${salesEsc(d.pendingDelete.requestedByName||'Personel')} · ${String(d.pendingDelete.requestedAt||'').replace('T',' ').slice(0,16)} · ${salesEsc(d.pendingDelete.reason||'')}</div>`);
       if(d.pendingEdit)banners.push(`<div class="customer-pending-banner">Bekleyen düzenleme onayı var · ${salesEsc(d.pendingEdit.requestedByName||'Personel')} · ${String(d.pendingEdit.requestedAt||'').replace('T',' ').slice(0,16)}</div>`);
       list.innerHTML=banners.join('')+(tx.length?tx.slice(0,80).map(renderCustomerTransaction).join(''):'<div class="note">Henüz cari hareket yok.</div>');
+      list.querySelectorAll('[data-receipt-url]').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          const url=btn.dataset.receiptUrl;
+          if(url)window.open(url+(url.includes('?')?'&':'?')+'size=a5&autoprint=1','_blank');
+        });
+      });
     }
     customersPageData._selected=c;
     customersPageData._canManage=Boolean(d.canManage);
@@ -1405,6 +1479,33 @@ document.querySelectorAll('input[name="customerPageInvoiceType"]').forEach(r=>r.
 document.addEventListener('click',e=>{
   const edit=e.target.closest('[data-customer-action="edit"]');
   if(edit){e.preventDefault();if(customersPageData._selected)openCustomerModal(customersPageData._selected)}
+  const pay=e.target.closest('[data-customer-action="pay"]');
+  if(pay){
+    e.preventDefault();
+    q('#customerPayPanel')?.scrollIntoView({behavior:'smooth',block:'start'});
+    q('#customerPayAmount')?.focus();
+  }
+  const sale=e.target.closest('[data-customer-action="sale"]');
+  if(sale){
+    e.preventDefault();
+    const c=customersPageData._selected;
+    goTab('salesCenter');
+    if(c?.id){
+      setTimeout(()=>{
+        if(q('#salesCustomerSelect')){
+          // satış merkezi müşteri listesine ekle/seç
+          const opt=[...q('#salesCustomerSelect').options].find(o=>String(o.value)===String(c.id));
+          if(!opt){
+            const o=document.createElement('option');
+            o.value=c.id;o.textContent=c.name||c.id;
+            q('#salesCustomerSelect').appendChild(o);
+          }
+          q('#salesCustomerSelect').value=c.id;
+          q('#salesCustomerSelect').dispatchEvent(new Event('change'));
+        }
+      },80);
+    }
+  }
   const del=e.target.closest('[data-customer-action="delete"]');
   if(del){
     e.preventDefault();
@@ -1412,6 +1513,50 @@ document.addEventListener('click',e=>{
   }
   const goCust=e.target.closest('#openCustomersPage');
   if(goCust){e.preventDefault();goTab('customersPage')}
+});
+q('#customerDetailPayForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#customerPayStatus');
+  const customerId=customersPageData.selectedId||customersPageData._selected?.id;
+  if(!customerId){st.textContent='Önce müşteri seçin';st.className='form-status error';return}
+  const amount=Number(q('#customerPayAmount')?.value||0);
+  const accountId=q('#customerPayAccount')?.value||'';
+  if(!(amount>0)||!accountId){st.textContent='Tutar ve kasa zorunlu';st.className='form-status error';return}
+  const noteIds=[...qa('.customer-pay-note:checked')].map(x=>x.value);
+  st.textContent='Kaydediliyor…';st.className='form-status';
+  try{
+    const d=await api('/web-api/admin/customer-collection',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        customerId,
+        amount,
+        accountId,
+        paymentMethod:q('#customerPayMethod')?.value||'Nakit',
+        date:q('#customerPayDate')?.value||localDate(),
+        description:q('#customerPayDesc')?.value?.trim()||'Müşteri kartı tahsilatı',
+        noteIds
+      })
+    });
+    st.textContent=`Tahsilat alındı · kalan cari ${money2(d.balance)}`;
+    st.className='form-status success';
+    toast('Tahsilat kaydedildi');
+    customersPageData._lastReceiptUrl=d.receiptUrl||'';
+    const rb=q('#customerPayReceiptBtn');
+    if(rb&&d.receiptUrl){
+      rb.classList.remove('hidden');
+      rb.onclick=()=>window.open(d.receiptUrl+(d.receiptUrl.includes('?')?'&':'?')+'autoprint=1','_blank');
+    }
+    if(d.receiptUrl)window.open(d.receiptUrl+(d.receiptUrl.includes('?')?'&':'?')+'autoprint=1','_blank');
+    await loadCustomersPage().catch(()=>{});
+    await selectCustomerPage(customerId);
+  }catch(err){
+    st.textContent=err.message;st.className='form-status error';
+  }
+});
+q('#customerPayReceiptBtn')?.addEventListener('click',()=>{
+  const url=customersPageData._lastReceiptUrl;
+  if(url)window.open(url+(url.includes('?')?'&':'?')+'autoprint=1','_blank');
+  else toast('Önce tahsilat yapın');
 });
 async function requestCustomerDelete(){
   const c=customersPageData._selected;
