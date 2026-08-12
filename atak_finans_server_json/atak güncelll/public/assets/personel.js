@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v51 */
+/* ATAK_PERSONEL_BUILD=fix-v52 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -624,6 +624,7 @@ function salesCustomerChanged(){
   const c=salesCustomers.find(x=>String(x.id)===String($('#salesCustomerSelect')?.value||''));
   const box=$('#salesCustomerInfo');
   const hint=$('#salesBillingAutoHint');
+  salesDetachKefil({silent:true});
   if(!c){
     box?.classList.add('hidden');box&&(box.innerHTML='');
     if($('#salesBillingParty'))$('#salesBillingParty').value='individual';
@@ -645,6 +646,7 @@ function salesCustomerChanged(){
     <div><small>Telefon</small><b>${c.phone||'—'}</b></div>
     <div><small>Cari</small><b>${money(c.balance)}</b></div>
     ${hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">VKN ${c.taxNo||'—'} · ${c.taxOffice||''}</span></div>`:''}`;
+  salesRefreshKefilUI();
   setSalesStep(salesStep);
 }
 function renderProducts(){
@@ -861,6 +863,8 @@ function salesRecalcPay(){
   if(preview)preview.textContent=parts.length?`Seçili ödeme: ${parts.join(' + ')}`:'Ödeme seçilmedi — ÖDEME PLANI butonundan dağıtın';
   $('#promissoryWrap')?.classList.toggle('hidden',s.note<=0);
   if(s.note>0)renderPromissorySchedule();
+  else salesDetachKefil({silent:true});
+  salesRefreshKefilUI();
   const onMap={payCash:s.cash>0,payCard:s.card>0,payTransfer:s.transfer>0,payCredit:s.credit>0,payNote:s.note>0};
   document.querySelectorAll('.pos-pay-tile[data-pay-fill]').forEach(btn=>{
     btn.classList.toggle('on',Boolean(onMap[btn.getAttribute('data-pay-fill')]));
@@ -874,6 +878,94 @@ function openPayScreen(){
   salesRecalcPay();
   document.querySelector('#salesPayPlanToggleBtn')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
+function normalizeSalesGuarantor(g){
+  if(!g||typeof g!=='object')return null;
+  const name=String(g.name||'').trim();
+  if(!name)return null;
+  return {
+    name,
+    tckn:String(g.tckn||g.taxNo||'').trim(),
+    phone:String(g.phone||g.gsm||'').trim(),
+    workPhone:String(g.workPhone||'').trim(),
+    homePhone:String(g.homePhone||'').trim(),
+    homeAddress:String(g.homeAddress||g.address||'').trim(),
+    workAddress:String(g.workAddress||'').trim()
+  };
+}
+function salesSelectedCustomer(){
+  return salesCustomers.find(x=>String(x.id)===String($('#salesCustomerSelect')?.value||''))||null;
+}
+function salesCustomerSavedGuarantor(){return normalizeSalesGuarantor(salesSelectedCustomer()?.guarantor)}
+function salesKefilAttached(){return $('#salesKefilAttached')?.value==='1'}
+function salesReadKefilForm(){
+  const name=($('#salesKefilName')?.value||'').trim();
+  if(!name)return null;
+  const tckn=($('#salesKefilTckn')?.value||'').trim();
+  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('Kefil TCKN 11 hane olmalıdır');
+  return {
+    name,tckn,
+    phone:($('#salesKefilPhone')?.value||'').trim(),
+    workPhone:($('#salesKefilWorkPhone')?.value||'').trim(),
+    homePhone:($('#salesKefilHomePhone')?.value||'').trim(),
+    homeAddress:($('#salesKefilHomeAddress')?.value||'').trim(),
+    workAddress:($('#salesKefilWorkAddress')?.value||'').trim()
+  };
+}
+function salesFillKefilForm(g={}){
+  if($('#salesKefilName'))$('#salesKefilName').value=g.name||'';
+  if($('#salesKefilTckn'))$('#salesKefilTckn').value=g.tckn||'';
+  if($('#salesKefilPhone'))$('#salesKefilPhone').value=g.phone||'';
+  if($('#salesKefilWorkPhone'))$('#salesKefilWorkPhone').value=g.workPhone||'';
+  if($('#salesKefilHomePhone'))$('#salesKefilHomePhone').value=g.homePhone||'';
+  if($('#salesKefilHomeAddress'))$('#salesKefilHomeAddress').value=g.homeAddress||'';
+  if($('#salesKefilWorkAddress'))$('#salesKefilWorkAddress').value=g.workAddress||'';
+}
+function salesClearKefilForm(){salesFillKefilForm({})}
+function salesRefreshKefilUI(){
+  const noteAmt=Math.max(0,num($('#payNote')?.value));
+  const saved=salesCustomerSavedGuarantor();
+  const attached=salesKefilAttached();
+  const hint=$('#salesKefilStatusHint');
+  const preview=$('#salesKefilPreview');
+  if(hint){
+    if(noteAmt<=0)hint.textContent='Senet tutarı girilince kefil eklenebilir';
+    else if(attached)hint.textContent='Kefil bu satışın senetine eklendi — A4 düzeni aynı kalır';
+    else if(saved)hint.textContent=`Kayıtlı kefil: ${saved.name}${saved.phone?' · '+saved.phone:''}`;
+    else hint.textContent='Müşteri kartında kefil yok — müşteriyi düzenleyip kefil kaydedin';
+  }
+  $('#salesKefilAddBtn')?.classList.toggle('hidden',noteAmt<=0||attached);
+  $('#salesKefilClearBtn')?.classList.toggle('hidden',!attached);
+  $('#salesKefilEdit')?.classList.toggle('hidden',!attached);
+  if(preview){
+    if(attached){
+      let g=null;try{g=salesReadKefilForm()}catch(_){g=null}
+      g=normalizeSalesGuarantor(g)||saved||{};
+      preview.classList.remove('hidden');
+      preview.innerHTML=`<b>${esc(g.name||'-')}</b><span>TCKN ${esc(g.tckn||'—')} · GSM ${esc(g.phone||'—')}</span>`;
+    }else{preview.classList.add('hidden');preview.innerHTML=''}
+  }
+}
+function salesAttachSavedKefil(){
+  const cust=salesSelectedCustomer();
+  if(!cust){stToast('Önce müşteri seçin');return}
+  const g=salesCustomerSavedGuarantor();
+  if(!g){stToast('Bu müşteride kayıtlı kefil yok. Müşteri kartından kefil ekleyin.');return}
+  salesFillKefilForm(g);
+  if($('#salesKefilAttached'))$('#salesKefilAttached').value='1';
+  salesRefreshKefilUI();
+  stToast(`Kefil eklendi: ${g.name}`);
+}
+function salesDetachKefil({silent=false}={}){
+  if($('#salesKefilAttached'))$('#salesKefilAttached').value='0';
+  salesClearKefilForm();
+  salesRefreshKefilUI();
+  if(!silent)stToast('Kefil kaldırıldı');
+}
+$('#salesKefilAddBtn')?.addEventListener('click',salesAttachSavedKefil);
+$('#salesKefilClearBtn')?.addEventListener('click',()=>salesDetachKefil());
+['salesKefilName','salesKefilTckn','salesKefilPhone','salesKefilWorkPhone','salesKefilHomePhone','salesKefilHomeAddress','salesKefilWorkAddress'].forEach(id=>{
+  $('#'+id)?.addEventListener('input',()=>{if(salesKefilAttached())salesRefreshKefilUI()});
+});
 function closePayScreen(){ /* inline ödeme — modal yok */ }
 function printSaleDocs(url){
   if(!url)return;
@@ -920,6 +1012,12 @@ function collectSalesDraft(){
   const discountAmount=Math.round((gross-net)*100)/100;
   const commissionPct=Number(dealer?.commissionPct||0);
   const schedule=s.note>0?buildPromissorySchedule(s.note,$('#promissoryInstallments')?.value,$('#promissoryFirstDue')?.value,$('#promissoryInterval')?.value):[];
+  let guarantor=null;
+  if(s.note>0&&salesKefilAttached()){
+    try{guarantor=salesReadKefilForm()}
+    catch(err){return{error:err.message||'Kefil bilgisi geçersiz',status}}
+    if(!guarantor)return{error:'Kefil eklendi ancak ad soyad boş',status};
+  }
   const methods=[];
   if(s.cash>0)methods.push('Nakit');
   if(s.card>0)methods.push('Kredi Kartı');
@@ -936,6 +1034,7 @@ function collectSalesDraft(){
     method:methods.join(' + ')||'Karma',
     payments,items:salesCart.map(r=>({productCode:r.code,itemCode:r.itemCode,materialCode:r.materialCode,productName:r.name,quantity:r.qty,unitPrice:num(r.unitPrice)})),
     promissory:s.note>0?{amount:s.note,installments:num($('#promissoryInstallments')?.value)||1,firstDueDate:$('#promissoryFirstDue')?.value,intervalMonths:num($('#promissoryInterval')?.value)||1,schedule}:null,
+    guarantor,
     billingParty:customerHasCorp(cust)?'corporate':($('#salesBillingParty')?.value||'individual'),
     invoiceStatus,invoiceNumber:$('#salesInvoiceNumber')?.value||'',invoiceDate:$('#salesInvoiceDate')?.value||'',
     description:$('#salesDescription')?.value||'Mağaza satışı',
@@ -1025,7 +1124,7 @@ function salesCombinedContractSenetA4Html(d){
   const personName=d.customer?.name||'';
   const personTax=d.customer?.tckn||d.customer?.taxNo||'';
   const addr=[d.customer?.address,d.customer?.district,d.customer?.city].filter(Boolean).join(', ');
-  const guarantor=(d.customer?.guarantor&&typeof d.customer.guarantor==='object')?d.customer.guarantor:{};
+  const guarantor=(d.guarantor&&typeof d.guarantor==='object')?d.guarantor:(d.customer?.guarantor&&typeof d.customer.guarantor==='object'?d.customer.guarantor:{});
   const cashPaid=Math.round(((d.payments||[]).filter(p=>['Nakit','Kredi Kartı','Havale'].includes(String(p.method||''))).reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
   const sumSchedule=noteList.reduce((a,n)=>a+Number(n.amount||0),0);
   const senetTotal=Math.round((Number(d.promissory?.amount||0)||sumSchedule||0)*100)/100;
@@ -1158,7 +1257,7 @@ async function confirmSalesDraft(){
     const body={
       customerId:d.customerId,dealerId:d.dealerId,salespersonId:d.salespersonId,salespersonName:d.salesperson?.name||'',
       discountPct:d.discountPct,warehouseId:d.warehouseId,date:d.date,paymentMethod:d.method,
-      payments:d.payments,promissory:d.promissory,billingParty:d.billingParty||'individual',
+      payments:d.payments,promissory:d.promissory,guarantor:d.guarantor||null,billingParty:d.billingParty||'individual',
       description:d.description,items:d.items,invoiceStatus,invoiceNumber:d.invoiceNumber,invoiceDate:d.invoiceDate,
       deductStock:Boolean(d.deductStock)
     };
@@ -1313,6 +1412,14 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
       if(taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için 10 haneli VKN zorunludur');
     }
     if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
+    const gName=($('#qcGuarantorName')?.value||'').trim();
+    const gTckn=($('#qcGuarantorTckn')?.value||'').trim();
+    if(gTckn&&gTckn.replace(/\D/g,'').length!==11)throw new Error('Kefil TCKN 11 hane olmalıdır');
+    const guarantor=gName?{
+      name:gName,tckn:gTckn,
+      phone:($('#qcGuarantorPhone')?.value||'').trim(),
+      homeAddress:($('#qcGuarantorHomeAddress')?.value||'').trim()
+    }:null;
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -1322,7 +1429,8 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
         tckn:tckn||'',
         companyName:invoiceType==='corporate'?companyName:'',
         taxOffice:invoiceType==='corporate'?taxOffice:'',
-        taxNo:invoiceType==='corporate'?taxNo:''
+        taxNo:invoiceType==='corporate'?taxNo:'',
+        guarantor
       })
     });
     const row=r.row||{};

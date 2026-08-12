@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v51">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v51">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v52">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v52">
 </head>
 <body>
 
@@ -445,6 +445,29 @@
       <label class="field">Aralık (ay)<input id="promissoryInterval" type="number" min="1" max="12" value="1"></label>
       <label class="field">İlk vade<input id="promissoryFirstDue" type="date"></label>
       <div id="salesPromissorySchedule" class="sales-promissory-schedule" style="grid-column:1/-1"></div>
+      <div class="sales-kefil-box" id="salesKefilBox" style="grid-column:1/-1">
+        <div class="sales-kefil-head">
+          <b>Kefil</b>
+          <small id="salesKefilStatusHint">Müşteri kartındaki kayıtlı kefili senete ekleyin</small>
+        </div>
+        <div class="sales-kefil-actions">
+          <button type="button" class="secondary-btn" id="salesKefilAddBtn">Kayıtlı kefili ekle</button>
+          <button type="button" class="secondary-btn hidden" id="salesKefilClearBtn">Kefili kaldır</button>
+        </div>
+        <div id="salesKefilPreview" class="sales-kefil-preview hidden"></div>
+        <div id="salesKefilEdit" class="sales-kefil-edit hidden">
+          <div class="pay-grid" style="grid-template-columns:1fr 1fr;gap:8px">
+            <label class="field">Ad Soyad<input id="salesKefilName" autocomplete="off"/></label>
+            <label class="field">TCKN<input id="salesKefilTckn" inputmode="numeric" autocomplete="off"/></label>
+            <label class="field">GSM<input id="salesKefilPhone" autocomplete="off"/></label>
+            <label class="field">İş Tel.<input id="salesKefilWorkPhone" autocomplete="off"/></label>
+            <label class="field" style="grid-column:1/-1">Ev Tel.<input id="salesKefilHomePhone" autocomplete="off"/></label>
+            <label class="field" style="grid-column:1/-1">Ev Adresi<textarea id="salesKefilHomeAddress" rows="2"></textarea></label>
+            <label class="field" style="grid-column:1/-1">İş Adresi<textarea id="salesKefilWorkAddress" rows="2"></textarea></label>
+          </div>
+        </div>
+        <input type="hidden" id="salesKefilAttached" value="0"/>
+      </div>
     </div>
   </div>
 
@@ -555,6 +578,15 @@
       <label class="field hidden" id="qcTaxOfficeWrap">Vergi dairesi *<input id="qcTaxOffice"></label>
       <label class="field hidden" id="qcTaxNoWrap">VKN *<input id="qcTaxNo" placeholder="10 hane" inputmode="numeric"></label>
       <input type="hidden" id="qcInvoiceType" value="individual"/>
+      <div class="field wide" style="display:grid;gap:8px;padding-top:4px;border-top:1px dashed #e5e7eb">
+        <small style="font-weight:800;color:#0b2a4a">Kefil (Senet) — isteğe bağlı</small>
+        <label class="field" style="margin:0">Ad Soyad<input id="qcGuarantorName" placeholder="Kefil adı soyadı" autocomplete="off"></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <label class="field" style="margin:0">TCKN<input id="qcGuarantorTckn" inputmode="numeric" autocomplete="off"></label>
+          <label class="field" style="margin:0">GSM<input id="qcGuarantorPhone" autocomplete="off"></label>
+        </div>
+        <label class="field" style="margin:0">Ev Adresi<textarea id="qcGuarantorHomeAddress" rows="2"></textarea></label>
+      </div>
       <button class="primary-btn wide" type="submit">Kaydet ve Seç</button>
       <div id="qcStatus" class="status"></div>
     </form>
@@ -590,6 +622,6 @@
 </main>
 </div>
 
-<script src="/assets/personel.js?v=fix-v51"></script>
+<script src="/assets/personel.js?v=fix-v52"></script>
 </body>
 </html>

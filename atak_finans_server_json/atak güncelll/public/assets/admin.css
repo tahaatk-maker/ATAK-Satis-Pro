@@ -319,6 +319,13 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .sales-promissory-options{display:grid;gap:9px;padding:13px;border:1px solid #e3bd55;border-radius:11px;background:#fff9e8}
 .sales-promissory-options label{display:grid;gap:5px}
 .sales-promissory-title{display:grid;gap:3px}.sales-promissory-title b{color:#8b6200}.sales-promissory-title small{color:var(--muted);line-height:1.4}
+.sales-kefil-box{margin-top:4px;padding:10px 12px;border:1px dashed #c9a227;border-radius:10px;background:#fffdf5;display:grid;gap:8px}
+.sales-kefil-head{display:grid;gap:2px}.sales-kefil-head b{color:#7a5200;font-size:13px}.sales-kefil-head small{color:var(--muted);font-size:11px;line-height:1.35}
+.sales-kefil-actions{display:flex;flex-wrap:wrap;gap:8px}
+.sales-kefil-actions .secondary-btn{min-height:36px;padding:0 12px;font-size:12px}
+.sales-kefil-preview{padding:8px 10px;border-radius:8px;background:#f7f3e6;border:1px solid #ead9a8;display:grid;gap:2px}
+.sales-kefil-preview b{color:#5c3d00}.sales-kefil-preview span{font-size:11px;color:var(--muted)}
+.sales-kefil-edit{display:grid;gap:6px;padding-top:2px}
 @media(max-width:600px){.sales-customer-select-row{grid-template-columns:1fr}.sales-customer-count{text-align:center}}
 
 /* V6.2.4 Depo sil + satış önizleme + teklif */
