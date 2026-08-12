@@ -1706,24 +1706,18 @@ Bulunamayan → Diğer.
 </div>
 </section>
 <section class="tab" id="financeCenter">
-<div class="foundation-head panel"><div><small class="eyebrow">V3.2 FİNANS &amp; CARİ</small><h2>Finans ve Cari Merkezi</h2><p class="note">Günlük para işlemleri: tahsilat, masraf ve transfer. Kasa / banka <b>hesap tanımları Ayarlar</b>’dadır; kesilmeyen faturalar <b>e-Fatura Merkezi</b>’ndedir.</p></div>
-<button class="secondary-btn" data-go="settings" type="button">Hesap Ayarları →</button></div>
+<div class="foundation-head panel"><div><small class="eyebrow">V3.2 FİNANS &amp; CARİ</small><h2>Finans ve Cari Merkezi</h2><p class="note">Kasa / banka bakiyeleri, müşteri carileri ve hareket özeti. Tahsilat için <b>Müşteri Ödemeleri</b> veya müşteri kartı; para aktarımı için <b>Transfer</b>. Hesap tanımları <b>Ayarlar</b>’dadır.</p></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="secondary-btn" data-go="customerPayments" type="button">Müşteri Ödemeleri →</button><button class="secondary-btn" data-go="settings" type="button">Hesap Ayarları →</button></div></div>
 <div class="foundation-summary" id="financeSummary"></div>
 <div class="finance-grid">
-<form class="panel form-stack" id="financeMovementForm">
-<h2>🧾 Finans Hareketi</h2>
-<label>İşlem<select id="financeKind"><option value="collection">Tahsilat</option><option value="sale">Vadeli Satış / Borçlandırma</option><option value="income">Diğer Gelir</option><option value="expense">Masraf</option><option value="payment">Ödeme</option></select></label>
-<label>Tarih<input id="financeDate" required="" type="date"/></label>
-<label>Kasa / Banka<select id="financeMovementAccount" required=""></select></label>
-<label>Müşteri<select id="financeCustomer"></select></label>
-<label>Tutar<input id="financeAmount" min="0" required="" step="0.01" type="number"/></label>
-<label>Kategori<input id="financeCategory" placeholder="Elektrik, satış, tahsilat..."/></label>
-<label>Açıklama<textarea id="financeDescription"></textarea></label>
-<button type="submit">Hareketi Kaydet</button>
-</form>
 <section class="panel customer-shortcut">
-<div><small class="eyebrow">MÜŞTERİ YÖNETİMİ</small><h2>👥 Müşteriler ayrı sayfada</h2>
-<p class="note">Yeni müşteri eklemek, cari kartını görmek ve düzenlemek için Müşteriler sayfasını kullanın.</p></div>
+<div><small class="eyebrow">TAHSİLAT</small><h2>💳 Müşteri ödemeleri</h2>
+<p class="note">Senet / taksit tahsilatı ve makbuz için Müşteri Ödemeleri ekranını kullanın. Manuel “Finans Hareketi” kaldırıldı.</p></div>
+<button class="primary" data-go="customerPayments" type="button">Ödeme Al</button>
+</section>
+<section class="panel customer-shortcut">
+<div><small class="eyebrow">MÜŞTERİ YÖNETİMİ</small><h2>👥 Müşteri kartları</h2>
+<p class="note">Yeni müşteri, cari kart, alışveriş geçmişi ve senet iptali için Müşteriler sayfası.</p></div>
 <button class="primary" id="openCustomersPage" type="button">Müşteriler Sayfasını Aç</button>
 </section>
 </div>

@@ -943,8 +943,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.69-senet-orphan-fix',
-  build:'fix-v68',
+  version:'6.3.70-finans-hareket-kaldir',
+  build:'fix-v69',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()

@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v68 */
+/* ATAK_ADMIN_BUILD=fix-v69 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1026,32 +1026,44 @@ function renderFinanceCenter(){
   if(!financeData||!q('#financeSummary'))return;
   const s=financeData.summary;
   q('#financeSummary').innerHTML=`<article><b>${money(s.cash)}</b><span>Toplam Kasa</span></article><article><b>${money(s.bank)}</b><span>Toplam Banka</span></article><article><b>${money(s.receivable)}</b><span>Müşteri Alacağı</span></article><article><b>${money(s.todayExpense)}</b><span>Bugünkü Masraf</span></article>`;
-  const storeOpts='<option value="">Merkez / Bağımsız</option>'+financeData.stores.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-  q('#financeAccountStore').innerHTML=storeOpts;
+  if(q('#financeAccountStore')){
+    const storeOpts='<option value="">Merkez / Bağımsız</option>'+financeData.stores.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+    q('#financeAccountStore').innerHTML=storeOpts;
+  }
   const accountOpts=financeData.accounts.filter(x=>x.active!==false).map(x=>`<option value="${x.id}">${x.name} — ${money(x.balance)}</option>`).join('');
-  ['#financeMovementAccount','#transferFromAccount','#transferToAccount'].forEach(id=>q(id).innerHTML=accountOpts);
-  const customerOpts='<option value="">Müşteri seçilmedi</option>'+financeData.customers.filter(x=>x.active!==false).map(x=>`<option value="${x.id}">${x.name} — Bakiye ${money(x.balance)}</option>`).join('');
-  q('#financeCustomer').innerHTML=customerOpts;
-  q('#financeAccountList').innerHTML=financeData.accounts.map(x=>`<button type="button" data-fin-account="${x.id}"><b>${x.name}</b><small>${x.type==='bank'?'Banka':'Kasa'} · ${money(x.balance)}</small></button>`).join('');
-    q('#financeAccountCount').textContent=`${financeData.accounts.length} hesap`;
-  q('#financeAccountsTable').innerHTML=`<table><thead><tr><th>Hesap</th><th>Tür</th><th>Mağaza</th><th>Bakiye</th></tr></thead><tbody>${financeData.accounts.map(x=>`<tr><td><b>${x.name}</b></td><td>${x.type==='bank'?'Banka':'Kasa'}</td><td>${financeData.stores.find(s=>s.id===x.storeId)?.name||'Merkez'}</td><td><b>${money(x.balance)}</b></td></tr>`).join('')}</tbody></table>`;
+  ['#transferFromAccount','#transferToAccount'].forEach(id=>{if(q(id))q(id).innerHTML=accountOpts});
+  if(q('#financeAccountList')){
+    q('#financeAccountList').innerHTML=financeData.accounts.map(x=>`<button type="button" data-fin-account="${x.id}"><b>${x.name}</b><small>${x.type==='bank'?'Banka':'Kasa'} · ${money(x.balance)}</small></button>`).join('');
+  }
+  if(q('#financeAccountCount'))q('#financeAccountCount').textContent=`${financeData.accounts.length} hesap`;
+  if(q('#financeAccountsTable'))q('#financeAccountsTable').innerHTML=`<table><thead><tr><th>Hesap</th><th>Tür</th><th>Mağaza</th><th>Bakiye</th></tr></thead><tbody>${financeData.accounts.map(x=>`<tr><td><b>${x.name}</b></td><td>${x.type==='bank'?'Banka':'Kasa'}</td><td>${financeData.stores.find(s=>s.id===x.storeId)?.name||'Merkez'}</td><td><b>${money(x.balance)}</b></td></tr>`).join('')}</tbody></table>`;
   renderCustomerTable();
-  q('#financeTransactionCount').textContent=`${financeData.transactions.length} hareket`;
-  q('#financeTransactionTable').innerHTML=financeData.transactions.length?`<table><thead><tr><th>Tarih</th><th>İşlem</th><th>Hesap</th><th>Müşteri</th><th>Tutar</th><th></th></tr></thead><tbody>${financeData.transactions.map(x=>`<tr><td>${x.date}</td><td>${x.kind}</td><td>${x.accountName}${x.counterAccountName?` ← ${x.counterAccountName}`:''}</td><td>${x.customerName||'-'}</td><td class="${x.amount>=0?'stock-plus':'stock-minus'}">${money(x.amount)}</td><td><a class="receipt-link" href="/web-api/admin/receipt/${x.id}" target="_blank">Makbuz</a> ${x.reversedBy?'Ters kayıt oluşturuldu':`<button type="button" data-reverse-finance="${x.id}">Ters Kayıt</button>`}</td></tr>`).join('')}</tbody></table>`:'<p>Henüz finans hareketi yok.</p>';
-  qa('[data-fin-account]').forEach(b=>b.onclick=()=>{const x=financeData.accounts.find(v=>v.id===b.dataset.finAccount);q('#financeAccountId').value=x.id;q('#financeAccountName').value=x.name;q('#financeAccountType').value=x.type;q('#financeAccountStore').value=x.storeId||'';q('#financeOpeningBalance').value=x.openingBalance||0;q('#financeAccountActive').checked=x.active!==false});
-    qa('[data-reverse-finance]').forEach(b=>b.onclick=async()=>{if(!confirm('Bu hareket için ters kayıt oluşturulsun mu?'))return;await api('/web-api/admin/finance-reverse/'+b.dataset.reverseFinance,{method:'POST'});await loadFinanceCenter();toast('Ters kayıt oluşturuldu')});
+  if(q('#financeTransactionCount'))q('#financeTransactionCount').textContent=`${financeData.transactions.length} hareket`;
+  if(q('#financeTransactionTable')){
+    q('#financeTransactionTable').innerHTML=financeData.transactions.length?`<table><thead><tr><th>Tarih</th><th>İşlem</th><th>Hesap</th><th>Müşteri</th><th>Tutar</th><th></th></tr></thead><tbody>${financeData.transactions.map(x=>`<tr><td>${x.date}</td><td>${x.kind}</td><td>${x.accountName}${x.counterAccountName?` ← ${x.counterAccountName}`:''}</td><td>${x.customerName||'-'}</td><td class="${x.amount>=0?'stock-plus':'stock-minus'}">${money(x.amount)}</td><td><a class="receipt-link" href="/web-api/admin/receipt/${x.id}" target="_blank">Makbuz</a> ${x.reversedBy?'Ters kayıt oluşturuldu':`<button type="button" data-reverse-finance="${x.id}">Ters Kayıt</button>`}</td></tr>`).join('')}</tbody></table>`:'<p>Henüz finans hareketi yok.</p>';
+  }
+  qa('[data-fin-account]').forEach(b=>b.onclick=()=>{
+    const x=financeData.accounts.find(v=>v.id===b.dataset.finAccount);if(!x)return;
+    if(q('#financeAccountId'))q('#financeAccountId').value=x.id;
+    if(q('#financeAccountName'))q('#financeAccountName').value=x.name;
+    if(q('#financeAccountType'))q('#financeAccountType').value=x.type;
+    if(q('#financeAccountStore'))q('#financeAccountStore').value=x.storeId||'';
+    if(q('#financeOpeningBalance'))q('#financeOpeningBalance').value=x.openingBalance||0;
+    if(q('#financeAccountActive'))q('#financeAccountActive').checked=x.active!==false;
+  });
+  qa('[data-reverse-finance]').forEach(b=>b.onclick=async()=>{if(!confirm('Bu hareket için ters kayıt oluşturulsun mu?'))return;await api('/web-api/admin/finance-reverse/'+b.dataset.reverseFinance,{method:'POST'});await loadFinanceCenter();toast('Ters kayıt oluşturuldu')});
 }
 function renderCustomerTable(){
+  if(!financeData||!q('#customerTable'))return;
   const term=(q('#customerSearch')?.value||'').toLocaleLowerCase('tr-TR');
   const rows=financeData.customers.filter(x=>`${x.name} ${x.phone} ${x.taxNo}`.toLocaleLowerCase('tr-TR').includes(term));
   q('#customerTable').innerHTML=rows.length?`<table><thead><tr><th>Müşteri</th><th>Telefon</th><th>VKN/TCKN</th><th>Bakiye</th><th>Durum</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.name}</b></td><td>${x.phone||'-'}</td><td>${x.taxNo||'-'}</td><td><b>${money(x.balance)}</b></td><td>${x.balance>0?'Borçlu':x.balance<0?'Alacaklı':'Kapalı'}</td></tr>`).join('')}</tbody></table>`:'<p>Müşteri bulunamadı.</p>';
 }
-q('#customerSearch').oninput=renderCustomerTable;
-q('#financeDate').value=q('#transferDate').value=new Date().toISOString().slice(0,10);
-q('#financeAccountForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/finance-account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#financeAccountId').value,name:q('#financeAccountName').value,type:q('#financeAccountType').value,storeId:q('#financeAccountStore').value,openingBalance:q('#financeOpeningBalance').value,active:q('#financeAccountActive').checked})});e.target.reset();q('#financeAccountId').value='';q('#financeOpeningBalance').value=0;q('#financeAccountActive').checked=true;await loadFinanceCenter();toast('Hesap kaydedildi')};
+q('#customerSearch')?.addEventListener('input',renderCustomerTable);
+if(q('#transferDate'))q('#transferDate').value=new Date().toISOString().slice(0,10);
+q('#financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/finance-account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#financeAccountId').value,name:q('#financeAccountName').value,type:q('#financeAccountType').value,storeId:q('#financeAccountStore').value,openingBalance:q('#financeOpeningBalance').value,active:q('#financeAccountActive').checked})});e.target.reset();q('#financeAccountId').value='';q('#financeOpeningBalance').value=0;q('#financeAccountActive').checked=true;await loadFinanceCenter();toast('Hesap kaydedildi')});
 
-q('#financeMovementForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/finance-transaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:q('#financeKind').value,date:q('#financeDate').value,accountId:q('#financeMovementAccount').value,customerId:q('#financeCustomer').value,amount:q('#financeAmount').value,category:q('#financeCategory').value,description:q('#financeDescription').value})});e.target.reset();q('#financeDate').value=new Date().toISOString().slice(0,10);await loadFinanceCenter();toast('Finans hareketi kaydedildi')};
-q('#financeTransferForm').onsubmit=async e=>{e.preventDefault();await api('/web-api/admin/finance-transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:q('#transferDate').value,fromAccountId:q('#transferFromAccount').value,toAccountId:q('#transferToAccount').value,amount:q('#transferFinanceAmount').value,description:q('#transferFinanceDescription').value})});e.target.reset();q('#transferDate').value=new Date().toISOString().slice(0,10);closeFinanceTransfer();await loadFinanceCenter();toast('Transfer tamamlandı')};
+q('#financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/finance-transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:q('#transferDate').value,fromAccountId:q('#transferFromAccount').value,toAccountId:q('#transferToAccount').value,amount:q('#transferFinanceAmount').value,description:q('#transferFinanceDescription').value})});e.target.reset();q('#transferDate').value=new Date().toISOString().slice(0,10);closeFinanceTransfer();await loadFinanceCenter();toast('Transfer tamamlandı')});
 function openFinanceTransfer(){
   const m=q('#financeTransferModal');
   if(!m)return;
