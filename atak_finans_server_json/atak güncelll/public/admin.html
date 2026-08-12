@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v38" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v38" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v39" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v39" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1446,8 +1446,12 @@ Bulunamayan → Diğer.
 
 <div class="panel" style="margin-top:16px">
   <div class="panel-head"><div><small class="v4-kicker">GEÇMİŞ</small><h2>Yüklenen Alış Faturaları</h2></div>
-    <button type="button" class="mini-btn" id="purchaseRefreshListBtn">Yenile</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="mini-btn" id="purchaseZeroIstikbalCostBtn" title="Ürünler kalır, sadece alış fiyatı 0 olur">İstikbal maliyetlerini sıfırla</button>
+      <button type="button" class="mini-btn" id="purchaseRefreshListBtn">Yenile</button>
+    </div>
   </div>
+  <p class="note" style="margin:0 0 10px">“Geri Al / Sil” ürünleri de silebilir. Sadece maliyeti temizlemek için <b>İstikbal maliyetlerini sıfırla</b> kullan.</p>
   <div class="turnover-table" id="purchaseInvoiceList"></div>
 </div>
 </section>
@@ -2051,5 +2055,5 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v38"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="toast hidden" id="toast"></div><script src="/web-admin-assets/admin.js?v=fix-v39"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

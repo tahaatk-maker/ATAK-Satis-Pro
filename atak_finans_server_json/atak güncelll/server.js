@@ -864,8 +864,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.39-raporlar-merkezi',
-  build:'fix-v38',
+  version:'6.3.40-maliyet-sifirla',
+  build:'fix-v39',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -4482,6 +4482,40 @@ app.post('/web-api/admin/purchase-invoice/:id/revert',requireAdmin,(req,res)=>{
     res.json({ok:true,...result});
   }catch(e){
     res.status(400).json({error:e.message||'Geri alınamadı'});
+  }
+});
+
+/** Yüklenen ürünlerde sadece alış maliyetini sıfırla — ürün kartı silinmez */
+app.post('/web-api/admin/products/zero-purchase-costs',requireAdmin,(req,res)=>{
+  try{
+    const s=readStore();
+    const scope=String(req.body?.scope||'istikbal').toLocaleLowerCase('tr-TR'); // istikbal | imported | all
+    let cleared=0;
+    for(const p of (s.products||[])){
+      const brand=String(p.brand||'').toLocaleLowerCase('tr-TR');
+      const tags=(p.tags||[]).map(t=>String(t).toLocaleLowerCase('tr-TR'));
+      const src=String(p.purchasePriceSource||'');
+      let match=false;
+      if(scope==='all')match=normalizeNumber(p.purchasePrice)>0;
+      else if(scope==='imported'){
+        match=tags.includes('alis-faturasi')||tags.includes('auto-created')||src.startsWith('purchase-invoice');
+      }else{
+        // istikbal (varsayılan): İstikbal markası veya istikbal/mobilya etiketli alış aktarımı
+        match=/istikbal/.test(brand)||tags.includes('istikbal')||(tags.includes('mobilya')&&tags.includes('alis-faturasi'));
+      }
+      if(!match)continue;
+      if(!(normalizeNumber(p.purchasePrice)>0)&&!p.purchasePriceSource)continue;
+      p.purchasePrice=0;
+      p.purchasePriceSource='manual-zero';
+      p.purchasePriceUpdatedAt=new Date().toISOString();
+      p.updatedAt=new Date().toISOString();
+      cleared++;
+    }
+    audit(s,'Alış maliyetleri sıfırlandı','Ürünler',{scope,cleared});
+    writeStore(s);
+    res.json({ok:true,cleared,scope});
+  }catch(e){
+    res.status(400).json({error:e.message||'Maliyetler sıfırlanamadı'});
   }
 });
 

@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v38 */
+/* ATAK_ADMIN_BUILD=fix-v39 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2707,6 +2707,19 @@ async function runPurchaseImport(mode){
 q('#purchaseCostBtn')?.addEventListener('click',()=>runPurchaseImport('cost'));
 q('#purchaseStockBtn')?.addEventListener('click',()=>runPurchaseImport('stock'));
 q('#purchaseRefreshListBtn')?.addEventListener('click',()=>loadPurchaseInvoices());
+q('#purchaseZeroIstikbalCostBtn')?.addEventListener('click',async()=>{
+  if(!confirm('İstikbal / alış aktarımından gelen ürünlerde ALIŞ MALİYETİ sıfırlansın mı?\nÜrün kartları silinmez — sadece purchasePrice = 0 olur.'))return;
+  try{
+    const r=await api('/web-api/admin/products/zero-purchase-costs',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({scope:'istikbal'})
+    });
+    toast(`${r.cleared||0} ürünün alış maliyeti sıfırlandı`);
+    await load();
+    await loadPurchaseInvoices();
+  }catch(e){toast(e.message)}
+});
 q('#purchaseTemplateBtn')?.addEventListener('click',async e=>{
   e.preventDefault();
   try{
