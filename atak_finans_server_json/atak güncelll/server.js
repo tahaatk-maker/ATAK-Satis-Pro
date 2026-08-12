@@ -865,8 +865,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.46-sozlesme-maddeler',
-  build:'fix-v45',
+  version:'6.3.47-sozlesme-sade',
+  build:'fix-v46',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3340,8 +3340,6 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
     ['Ev Adresi',who.homeAddress||who.address||''],
     ['İş Adresi',who.workAddress||'']
   ].map(([l,v])=>`<tr><td class="lbl">${l}</td><td>${htmlEsc(v)}</td></tr>`).join('');
-  const photoUrl=String(sale.photoUrl||sale.productPhoto||customer?.photoUrl||items.find(i=>i.image||i.photo)?.image||items.find(i=>i.image||i.photo)?.photo||'').trim();
-  const photoHtml=photoUrl?`<div class="photo has-img"><img src="${htmlEsc(photoUrl)}" alt="Ürün"/></div>`:`<div class="photo"><div class="ph">ÜRÜN<br/>FOTO</div></div>`;
   const corpLine=customerHasCorporateBilling(customer)?`<div class="pay">Fatura firması: <b>${htmlEsc(customer.companyName||'')}</b> · VKN ${htmlEsc(customer.taxNo||'')} · ${htmlEsc(customer.taxOffice||'')}</div>`:'';
   const primary=noteList[0]||null;
   const senetAmount=primary?Number(primary.amount||0):(senetTotal||balance||0);
@@ -3352,16 +3350,16 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const css=`<style>
 .a4c{padding:7mm 8mm 6mm!important;font:8.6px/1.3 "Segoe UI",Arial,sans-serif;color:#142033;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:277mm}
 .a4c *{box-sizing:border-box}
-.a4c .top{display:grid;grid-template-columns:1.15fr auto 34mm;gap:8px;align-items:start}
+.a4c .top{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
 .a4c .name{font-size:10.5px;font-weight:800;color:#0a2748}
 .a4c .meta{margin-top:3px;color:#5a6a7b;font-size:7.5px;line-height:1.4}
-.a4c .mid-head{text-align:right}
+.a4c .mid-head{text-align:right;padding-top:4px;align-self:center}
 .a4c .pills{display:flex;gap:4px;justify-content:flex-end;margin-bottom:5px;flex-wrap:wrap}
 .a4c .pill{font-size:7px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#0a2748;border:1px solid #c5d0dd;border-radius:999px;padding:2.5px 7px;background:#f3f6fa}
 .a4c .title{font-size:15px;line-height:1;font-weight:900;color:#b91c1c;letter-spacing:.1em}
-.a4c .photo{width:34mm;height:30mm;border:1px solid #c5d0dd;border-radius:5px;background:#f3f6fa;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
-.a4c .photo img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
-.a4c .photo .ph{color:#8a97a8;font-size:7.5px;font-weight:700;text-align:center}
+
+
+
 .a4c .rule{height:2px;background:linear-gradient(90deg,#0a2748,#b91c1c 52%,#d4a017);margin:6px 0 7px}
 .a4c .grid3{display:grid;grid-template-columns:1.3fr .68fr .74fr;gap:6px}
 .a4c table{width:100%;border-collapse:collapse;table-layout:fixed}
@@ -3417,8 +3415,8 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 </style>`;
   const extra=noteList.slice(1).map((n,idx)=>{const amt=Number(n.amount||0);return `<section class="sheet a4c senet-only">${css}<div class="senet"><div class="senet-side"><strong>${htmlEsc(companyLegal)}</strong><div class="pills" style="justify-content:flex-start"><span class="pill">beko</span><span class="pill">Bellona</span><span class="pill">istikbal</span></div><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}</div></div><div class="senet-main"><div class="senet-bar"><b>SENET</b><span>${idx+2}/${noteList.length} · ${htmlEsc(sale.reference||'')}</span></div><div class="fields"><div><span>Vade</span><b>${dateTR(n.dueDate)}</b></div><div><span>Hululü Vade</span><b>${dateTR(n.dueDate)}</b></div><div><span>Türk Lirası</span><b>${moneyTR(amt)}</b></div><div><span>No.</span><b>${htmlEsc(n.serial||'')}</b></div></div><p class="sbody">İşbu emre muharrer bono mukabilinde <b style="color:#b91c1c">${htmlEsc(companyLegal)}</b> veya emrine <u>${dateTR(n.dueDate)}</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. Vadesinde ödenmemesi halinde müteakip senetlerde muacceliyet kesbedeceğini kabul ederim. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri yetkilidir.</p><div class="words"><span>Yalnız</span><b>${htmlEsc(amountToTrWords(amt))}</b></div><div class="duo"><div><div class="lab">Ödeyecek</div><small>İsim</small><div class="v">${htmlEsc(personName)}</div><small>Adres</small><div class="v">${htmlEsc(addr||'-')}</div></div><div><div class="lab">Müteselsil Borçlu</div><small>İsim</small><div class="v">${htmlEsc(guarantor.name||'')}</div><small>Adres</small><div class="v">${htmlEsc(guarantor.homeAddress||guarantor.address||'')}</div></div></div><div class="signline">Keşideci / Borçlu İmza</div></div></div><div class="foot">${htmlEsc(site)} · Senet ${idx+2}/${noteList.length}</div></section>`;}).join('');
   return `<section class="sheet a4c">${css}
-  <div class="top"><div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">Beko · Bellona · İstikbal · ${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · VD: Sarıyer</div></div>
-  <div class="mid-head"><div class="pills"><span class="pill">beko</span><span class="pill">Bellona</span><span class="pill">istikbal</span></div><div class="title">SATIŞ SÖZLEŞMESİ</div></div>${photoHtml}</div>
+  <div class="top"><div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · VD: Sarıyer</div></div>
+  <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
   <div class="rule"></div>
   <div class="grid3">
     <table><thead><tr><th style="width:30%">Ürün Kodu</th><th style="width:12%">Adet</th><th style="width:29%">Birim</th><th style="width:29%">Tutar</th></tr></thead><tbody>${productRows}</tbody></table>
