@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v63 */
+/* ATAK_PERSONEL_BUILD=fix-v64 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1078,9 +1078,14 @@ function collectSalesDraft(){
   if(s.cash>0 && !$('#payCashAccount')?.value)return{error:'Nakit için kasa seçin',status};
   if(s.card>0 && !$('#payCardAccount')?.value)return{error:'Kart için hesap seçin',status};
   if(s.transfer>0 && !$('#payTransferAccount')?.value)return{error:'Havale için banka seçin',status};
-  const deductStock=canDeductStock() && $('#salesDeductStock')?.value==='yes';
+  const stockSel=$('#salesDeductStock')?.value||'no';
+  const canStock=canDeductStock();
+  const stockMode=stockSel==='yes'&&canStock?'deduct':(stockSel==='reserve'?'reserve':'none');
+  const deductStock=stockMode==='deduct';
+  const reserveStock=stockMode==='reserve';
   const warehouseId=$('#salesWarehouse')?.value||'';
-  if(deductStock && !warehouseId)return{error:'Stoktan düşmek için depo seçin',status};
+  if((deductStock||reserveStock) && !warehouseId)return{error:reserveStock?'Rezerve için depo seçin':'Stoktan düşmek için depo seçin',status};
+  if(stockSel==='yes' && !canStock)return{error:'Stok düşme yetkiniz yok — Rezerve et kullanabilirsiniz',status};
   let invoiceStatus=$('#salesInvoiceStatus')?.value||'not_required';
   if((invoiceStatus==='queue_qnb'||invoiceStatus==='issued') && !canSaleInvoice()){
     return{error:'Fatura kesme yetkiniz yok',status};
@@ -1123,7 +1128,7 @@ function collectSalesDraft(){
     invoiceStatus,invoiceNumber:$('#salesInvoiceNumber')?.value||'',invoiceDate:$('#salesInvoiceDate')?.value||'',
     description:$('#salesDescription')?.value||'Mağaza satışı',
     date:$('#salesDate')?.value||new Date().toISOString().slice(0,10),
-    deductStock,warehouseId,
+    deductStock,reserveStock,stockMode,warehouseId,
     warehouse:(salesData?.warehouses||[]).find(w=>String(w.id)===String(warehouseId))
   };
 }
@@ -1132,7 +1137,8 @@ function salesPreviewHtml(d){
   const payRows=(d.payments||[]).map(p=>`<div class="sales-total-line"><span>${esc(p.method)}</span><b>${money(p.amount)}</b></div>`).join('');
   const note=d.promissory?`<div class="preview-note"><b>Senet:</b> ${money(d.promissory.amount)} · ${d.promissory.installments} taksit · İlk vade ${esc(d.promissory.firstDueDate)}</div>`:'';
   const inv=d.invoiceStatus==='queue_qnb'?'QNB Solist kuyruğu':(d.invoiceStatus==='pending'?'Daha sonra kesilecek':(d.invoiceStatus==='issued'?`Manuel · ${esc(d.invoiceNumber)}`:'Fatura gerekmiyor'));
-  return `<div class="preview-cards"><div><small>Müşteri</small><b>${esc(d.customer?.name||'-')}</b><span>${esc(d.customer?.phone||'')}</span></div><div><small>Bayi / Satıcı</small><b>${esc(d.dealer?.name||'-')}</b><span>${esc(d.salesperson?.name||'')}</span></div><div><small>Ödeme</small><b>${esc(d.method)}</b><span>Tahsil: ${money(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt</span><b>${money(d.grossTotal)}</b></div><div><span>İskonto</span><b>-${money(d.discountAmount||0)}</b></div><div><span>Net</span><b>${money(d.total)}</b></div>${payRows}<div><span>Prim</span><b>${money(d.commissionAmount||0)}</b></div></div>${note}<div class="preview-note"><b>Fatura:</b> ${inv}<br><b>Stok:</b> ${d.deductStock?`Düşülecek · ${esc(d.warehouse?.name||'')}`:'Değişmeyecek'}<br><b>Açıklama:</b> ${esc(d.description||'-')}</div>`;
+  const stockTxt=d.deductStock?`Düşülecek · ${esc(d.warehouse?.name||'')}`:(d.reserveStock?`Rezerve · ${esc(d.warehouse?.name||'')} (teslimde düşülür)`:'Değişmeyecek');
+  return `<div class="preview-cards"><div><small>Müşteri</small><b>${esc(d.customer?.name||'-')}</b><span>${esc(d.customer?.phone||'')}</span></div><div><small>Bayi / Satıcı</small><b>${esc(d.dealer?.name||'-')}</b><span>${esc(d.salesperson?.name||'')}</span></div><div><small>Ödeme</small><b>${esc(d.method)}</b><span>Tahsil: ${money(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt</span><b>${money(d.grossTotal)}</b></div><div><span>İskonto</span><b>-${money(d.discountAmount||0)}</b></div><div><span>Net</span><b>${money(d.total)}</b></div>${payRows}<div><span>Prim</span><b>${money(d.commissionAmount||0)}</b></div></div>${note}<div class="preview-note"><b>Fatura:</b> ${inv}<br><b>Stok:</b> ${stockTxt}<br><b>Açıklama:</b> ${esc(d.description||'-')}</div>`;
 }
 function openSalesPreview(){
   const d=collectSalesDraft();
@@ -1347,7 +1353,8 @@ async function confirmSalesDraft(){
       discountPct:d.discountPct,warehouseId:d.warehouseId,date:d.date,paymentMethod:d.method,
       payments:d.payments,promissory:d.promissory,guarantor:d.guarantor||null,billingParty:d.billingParty||'individual',
       description:d.description,items:d.items,invoiceStatus,invoiceNumber:d.invoiceNumber,invoiceDate:d.invoiceDate,
-      deductStock:Boolean(d.deductStock)
+      stockMode:d.stockMode||(d.deductStock?'deduct':(d.reserveStock?'reserve':'none')),
+      deductStock:Boolean(d.deductStock),reserveStock:Boolean(d.reserveStock)
     };
     const r=await api('/web-api/admin/customer-sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     let noteText='';

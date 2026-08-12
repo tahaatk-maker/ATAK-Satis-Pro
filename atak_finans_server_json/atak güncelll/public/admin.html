@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v63" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v63" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v64" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v64" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -840,6 +840,7 @@ body.inv-full #pageTitle{font-size:18px}
         <label>Stok
           <select id="salesDeductStock">
             <option value="no">Değişmesin</option>
+            <option value="reserve">Rezerve et</option>
             <option value="yes">Stoktan düş</option>
           </select>
         </label>
@@ -1263,13 +1264,14 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 </section>
 <section class="tab" id="foundation">
-<div class="foundation-head panel"><div><small class="eyebrow">V3.0 FOUNDATION</small><h2>Mağaza Operasyon Merkezi</h2><p class="note">Mağaza, personel, ciro, duyuru ve yönetici yedeği tek ekranda.</p></div><a class="backup-btn" href="/web-api/admin/backup">💾 Günlük Yedeği İndir</a></div>
+<div class="foundation-head panel"><div><small class="eyebrow">V3.0 FOUNDATION</small><h2>Mağaza Operasyon Merkezi</h2><p class="note">Mağaza, depo, personel, ciro, duyuru ve yönetici yedeği tek ekranda.</p></div><a class="backup-btn" href="/web-api/admin/backup">💾 Günlük Yedeği İndir</a></div>
 <div class="foundation-summary" id="foundationSummary"></div>
 
 <nav class="fnd-tabs" id="foundationTabs" aria-label="Foundation bölümleri">
   <button type="button" class="fnd-tab active" data-fnd-tab="store"><span class="fnd-tab-ico">M</span><span>Mağaza<small id="fndCountStore">—</small></span></button>
+  <button type="button" class="fnd-tab" data-fnd-tab="warehouse"><span class="fnd-tab-ico">D</span><span>Depo<small id="fndCountWarehouse">—</small></span></button>
   <button type="button" class="fnd-tab" data-fnd-tab="staff"><span class="fnd-tab-ico">P</span><span>Personel<small id="fndCountStaff">—</small></span></button>
-  <button type="button" class="fnd-tab" data-fnd-tab="announce"><span class="fnd-tab-ico">D</span><span>Duyuru<small id="fndCountAnnounce">—</small></span></button>
+  <button type="button" class="fnd-tab" data-fnd-tab="announce"><span class="fnd-tab-ico">U</span><span>Duyuru<small id="fndCountAnnounce">—</small></span></button>
   <button type="button" class="fnd-tab" data-fnd-tab="turnover"><span class="fnd-tab-ico">C</span><span>Ciro Özeti<small id="fndCountTurnover">—</small></span></button>
 </nav>
 
@@ -1288,6 +1290,24 @@ body.inv-full #pageTitle{font-size:18px}
     <div class="panel">
       <div class="panel-head"><h2>Mağazalar</h2></div>
       <div class="mini-list" id="fStoreList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="fnd-pane" data-fnd-pane="warehouse">
+  <div class="fnd-split">
+    <form class="panel form-stack" id="warehouseForm">
+      <div class="panel-head"><div><h2>Depo Yönetimi</h2><p class="note">Depoları burada tanımla; stok işlemleri Stok Merkezi’nde.</p></div></div>
+      <input id="warehouseId" type="hidden"/>
+      <label>Depo adı<input id="warehouseName" required=""/></label>
+      <label>Kod<input id="warehouseCode"/></label>
+      <label>Mağaza<select id="warehouseStore"></select></label>
+      <label class="check"><input checked="" id="warehouseActive" type="checkbox"/> Aktif</label>
+      <div class="button-row"><button class="primary" type="submit">Depoyu Kaydet</button><button class="secondary-btn" type="button" data-fnd-reset="warehouse">Formu Temizle</button></div>
+    </form>
+    <div class="panel">
+      <div class="panel-head"><h2>Depolar</h2><button class="secondary-btn" type="button" data-go="stockCenter">Stok Merkezi →</button></div>
+      <div class="warehouse-list" id="warehouseList"></div>
     </div>
   </div>
 </div>
@@ -1646,20 +1666,16 @@ Bulunamayan → Diğer.
 
 <section class="tab" id="stockCenter">
 <div class="foundation-head panel">
-<div><small class="eyebrow">V3.1 STOK &amp; DEPO</small><h2>Stok ve Depo Merkezi</h2><p class="note">Depo oluşturun, ürün stoklarını yönetin, transfer ve CSV aktarımı yapın.</p></div>
+<div><small class="eyebrow">V3.1 STOK</small><h2>Stok Merkezi</h2><p class="note">Stok düzelt, transfer et, CSV aktar. Depo tanımları <b>Mağaza Operasyon Merkezi → Depo</b> sekmesindedir.</p></div>
+<div class="stock-head-actions">
+  <button class="secondary-btn" type="button" data-go="foundation" id="stockGoWarehouseBtn">Depo Ayarları →</button>
+  <button class="danger-btn" type="button" id="stockZeroAllBtn">Tüm Stokları Sıfırla</button>
+</div>
 </div>
 <div class="foundation-summary" id="stockSummary"></div>
-<div class="stock-grid">
-<form class="panel form-stack" id="warehouseForm">
-<h2>🏬 Depo Yönetimi</h2><input id="warehouseId" type="hidden"/>
-<label>Depo adı<input id="warehouseName" required=""/></label>
-<label>Kod<input id="warehouseCode"/></label>
-<label>Mağaza<select id="warehouseStore"></select></label>
-<label class="check"><input checked="" id="warehouseActive" type="checkbox"/> Aktif</label>
-<button type="submit">Depoyu Kaydet</button><div class="mini-list" id="warehouseList"></div>
-</form>
+<div class="stock-grid stock-grid-2">
 <form class="panel form-stack" id="stockAdjustForm">
-<h2>📦 Stok Düzeltme</h2>
+<h2>Stok Düzeltme</h2>
 <label>Ürün<select id="stockProduct" required=""></select></label>
 <label>Depo<select id="stockWarehouse" required=""></select></label>
 <label>Yeni stok adedi<input id="stockQuantity" min="0" required="" type="number"/></label>
@@ -1667,7 +1683,7 @@ Bulunamayan → Diğer.
 <button type="submit">Stoğu Güncelle</button>
 </form>
 <form class="panel form-stack" id="stockTransferForm">
-<h2>↔ Depolar Arası Transfer</h2>
+<h2>Depolar Arası Transfer</h2>
 <label>Ürün<select id="transferProduct" required=""></select></label>
 <label>Kaynak depo<select id="transferFrom" required=""></select></label>
 <label>Hedef depo<select id="transferTo" required=""></select></label>
@@ -1677,7 +1693,7 @@ Bulunamayan → Diğer.
 </form>
 </div>
 <div class="panel stock-import-panel">
-<div><h2>📄 CSV ile Stok Aktar</h2><p class="note">Dosyada “Ürün Kodu” ve “Adet” veya “Stok” sütunları bulunmalıdır.</p></div>
+<div><h2>CSV ile Stok Aktar</h2><p class="note">Dosyada “Ürün Kodu” ve “Adet” veya “Stok” sütunları bulunmalıdır.</p></div>
 <form id="stockImportForm"><select id="importWarehouse" required=""></select><input accept=".csv,text/csv" id="stockImportFile" required="" type="file"/><button type="submit">CSV Aktar</button></form>
 </div>
 <div class="panel">
@@ -2119,5 +2135,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v63"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v64"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

@@ -809,6 +809,46 @@ function setStock(s,productCode,warehouseId,quantity){
   else{row={id:crypto.randomUUID(),key,productCode:code,warehouseId,quantity:Math.max(0,Math.round(Number(quantity)||0)),reserved:0,createdAt:now,updatedAt:now};s.productStocks.push(row)}
   return row;
 }
+function ensureStockRow(s,productCode,warehouseId){
+  return currentStock(s,productCode,warehouseId)||setStock(s,productCode,warehouseId,0);
+}
+function availableStockQty(s,productCode,warehouseId){
+  const row=currentStock(s,productCode,warehouseId);
+  return Math.max(0,Number(row?.quantity||0)-Number(row?.reserved||0));
+}
+function adjustReserved(s,{productCode,warehouseId,quantity,type='reserve',reference='',note='',user='Admin'}){
+  const code=String(productCode||'').trim().toLocaleUpperCase('tr-TR');
+  const delta=Math.round(Number(quantity)||0);
+  if(!delta)return null;
+  const row=ensureStockRow(s,code,warehouseId);
+  const beforeReserved=Number(row.reserved||0);
+  const afterReserved=Math.max(0,beforeReserved+delta);
+  if(delta>0){
+    const available=Number(row.quantity||0)-beforeReserved;
+    if(available<delta)throw new Error(`${code} için seçilen depoda yalnızca ${Math.max(0,available)} adet satılabilir stok var`);
+  }
+  row.reserved=afterReserved;
+  row.updatedAt=new Date().toISOString();
+  const movement={
+    id:crypto.randomUUID(),productCode:code,warehouseId,type,quantity:0,
+    before:Number(row.quantity||0),after:Number(row.quantity||0),
+    reservedBefore:beforeReserved,reservedAfter:afterReserved,reservedDelta:delta,
+    reference:String(reference||''),note:String(note||''),user,createdAt:new Date().toISOString()
+  };
+  s.stockMovements.unshift(movement);
+  return{stock:row,movement};
+}
+function consumeReservedToSale(s,{productCode,warehouseId,quantity,reference='',note='',user='Admin'}){
+  const qty=Math.max(0,Math.round(Number(quantity)||0));
+  if(!qty)return null;
+  const row=ensureStockRow(s,productCode,warehouseId);
+  const reserved=Number(row.reserved||0);
+  const release=Math.min(reserved,qty);
+  if(release>0){
+    adjustReserved(s,{productCode,warehouseId,quantity:-release,type:'reserve_consume',reference,note:note||'Rezerv teslimatta düşüldü',user});
+  }
+  return addStockMovement(s,{productCode,warehouseId,type:'sale',quantity:-qty,reference,note,user});
+}
 function addStockMovement(s,{productCode,warehouseId,type,quantity,reference='',note='',user='Admin'}){
   const code=String(productCode||'').trim().toLocaleUpperCase('tr-TR');
   const current=currentStock(s,code,warehouseId);
@@ -903,8 +943,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.64-depo-sec',
-  build:'fix-v63',
+  version:'6.3.65-stok-rezerv',
+  build:'fix-v64',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -1212,12 +1252,50 @@ app.post('/web-api/admin/stock-adjust',requireAdmin,(req,res)=>{
 app.post('/web-api/admin/stock-transfer',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},productCode=String(x.productCode||'').trim(),from=String(x.fromWarehouseId||''),to=String(x.toWarehouseId||''),qty=Math.max(1,Math.round(normalizeNumber(x.quantity)));
   if(!productCode||!from||!to||from===to)return res.status(400).json({error:'Ürün, kaynak depo ve farklı hedef depo zorunludur'});
-  const source=Number(currentStock(s,productCode,from)?.quantity||0);
-  if(source<qty)return res.status(400).json({error:`Kaynak depoda yalnızca ${source} adet var`});
+  const available=availableStockQty(s,productCode,from);
+  if(available<qty)return res.status(400).json({error:`Kaynak depoda yalnızca ${available} adet satılabilir stok var`});
   const ref=`TR-${Date.now()}`;
   addStockMovement(s,{productCode,warehouseId:from,type:'transfer_out',quantity:-qty,reference:ref,note:String(x.note||''),user:currentActor(req)?.name||'Admin'});
   addStockMovement(s,{productCode,warehouseId:to,type:'transfer_in',quantity:qty,reference:ref,note:String(x.note||''),user:currentActor(req)?.name||'Admin'});
   audit(s,'Depolar arası transfer',productCode,{from,to,qty,ref});writeStore(s);res.json({ok:true,reference:ref});
+});
+/** Tüm (veya bir deponun) fiziksel stoklarını 0 yap — hareket kaydı bırakır */
+app.post('/web-api/admin/stock-zero',requireAdmin,(req,res)=>{
+  try{
+    if(String(req.body?.confirm||'')!=='ZERO'){
+      return res.status(400).json({error:'Onay için confirm=ZERO gönderin'});
+    }
+    const s=readStore();
+    const warehouseId=String(req.body?.warehouseId||'').trim();
+    const actor=currentActor(req)?.name||'Admin';
+    let cleared=0,units=0,reservedCleared=0;
+    for(const row of (s.productStocks||[])){
+      if(warehouseId&&String(row.warehouseId)!==warehouseId)continue;
+      const qty=Number(row.quantity||0);
+      const reserved=Number(row.reserved||0);
+      if(qty>0){
+        addStockMovement(s,{
+          productCode:row.productCode,warehouseId:row.warehouseId,type:'inventory_zero',
+          quantity:-qty,reference:'STOK-SIFIR',note:'Toplu stok sıfırlama',user:actor
+        });
+        cleared++;units+=qty;
+      }
+      if(reserved>0){
+        row.reserved=0;row.updatedAt=new Date().toISOString();
+        reservedCleared+=reserved;
+      }
+    }
+    if(!warehouseId){
+      for(const p of (s.products||[])){
+        if(Number(p.stock||0)!==0){p.stock=0;p.updatedAt=new Date().toISOString()}
+      }
+    }
+    audit(s,'Stoklar sıfırlandı',warehouseId||'Tümü',{cleared,units,reservedCleared});
+    writeStore(s);
+    res.json({ok:true,cleared,units,reservedCleared,warehouseId:warehouseId||null});
+  }catch(e){
+    res.status(400).json({error:e.message||'Stok sıfırlanamadı'});
+  }
 });
 app.post('/web-api/admin/stock-import',requireAdmin,upload.single('file'),(req,res)=>{
   try{
@@ -1950,7 +2028,16 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   const paid=Math.round(normalizedPayments.filter(p=>['Nakit','Kredi Kartı','Havale'].includes(p.method)).reduce((a,p)=>a+p.amount,0)*100)/100;
   const paymentMethod=normalizedPayments.map(p=>p.method).concat(promissoryAmount>0?['Senet']:[]).join(' + ')||String(x.paymentMethod||'Karma');
 
-  let deductStock=x.deductStock===true||String(x.deductStock)==='true';
+  let stockMode=String(x.stockMode||'').toLowerCase().trim();
+  if(!stockMode){
+    if(x.reserveStock===true||String(x.reserveStock)==='true')stockMode='reserve';
+    else if(x.deductStock===true||String(x.deductStock)==='true')stockMode='deduct';
+    else stockMode='none';
+  }
+  if(stockMode==='yes')stockMode='deduct';
+  if(!['none','reserve','deduct'].includes(stockMode))stockMode='none';
+  const deductStock=stockMode==='deduct';
+  const reserveStock=stockMode==='reserve';
   const warehouseId=String(x.warehouseId||'');
   if(isStaffPortalReq(req) && deductStock && !staffCanDeductStock(req)){
     return res.status(403).json({error:'Stok düşme yetkiniz yok — yöneticiden “Satışta stok düş” yetkisini açın'});
@@ -1959,12 +2046,11 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   if(isStaffPortalReq(req) && (invWant==='queue_qnb'||invWant==='issued') && !staffCanInvoice(req)){
     return res.status(403).json({error:'Fatura kesme yetkiniz yok — yöneticiden “Fatura kes (QNB)” yetkisini açın'});
   }
-  if(deductStock){
-    if(!warehouseId)return res.status(400).json({error:'Stoktan düşmek için satış deposu seçilmelidir'});
+  if(deductStock||reserveStock){
+    if(!warehouseId)return res.status(400).json({error:reserveStock?'Rezerve etmek için satış deposu seçilmelidir':'Stoktan düşmek için satış deposu seçilmelidir'});
     if(!s.warehouses.some(w=>w.id===warehouseId&&w.active!==false))return res.status(400).json({error:'Geçerli satış deposu seçilmelidir'});
     for(const item of cleanItems){
-      const stockRow=currentStock(s,item.productCode,warehouseId);
-      const available=Number(stockRow?.quantity||0)-Number(stockRow?.reserved||0);
+      const available=availableStockQty(s,item.productCode,warehouseId);
       if(available<item.quantity)return res.status(400).json({error:`${item.productCode} için seçilen depoda yalnızca ${Math.max(0,available)} adet satılabilir stok var`});
     }
   }
@@ -1993,8 +2079,10 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   sale.deliveryNote=String(x.deliveryNote||'');
   sale.paymentMethod=paymentMethod;
   sale.payments=normalizedPayments.concat(promissoryAmount>0?[{method:'Senet',amount:promissoryAmount,accountId:''}]:[]);
-  sale.warehouseId=deductStock?warehouseId:'';
+  sale.warehouseId=(deductStock||reserveStock)?warehouseId:'';
   sale.deductStock=deductStock;
+  sale.reserveStock=reserveStock;
+  sale.stockMode=stockMode;
   sale.invoiceStatus=normalizeSaleInvoiceStatus(x.invoiceStatus);
   sale.invoiceNumber=sale.invoiceStatus==='issued'?String(x.invoiceNumber||'').trim():'';
   sale.invoiceDate=sale.invoiceStatus==='issued'?String(x.invoiceDate||x.date||''):'';
@@ -2029,6 +2117,13 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   if(deductStock){
     for(const item of cleanItems){
       addStockMovement(s,{productCode:item.productCode,warehouseId,type:'sale',quantity:-item.quantity,reference:ref,note:`${customer.name} satışı`,user:currentActor(req)?.name||'Admin'});
+    }
+  }else if(reserveStock){
+    for(const item of cleanItems){
+      adjustReserved(s,{
+        productCode:item.productCode,warehouseId,quantity:item.quantity,type:'reserve',
+        reference:ref,note:`${customer.name} satışı · rezerv`,user:currentActor(req)?.name||'Admin'
+      });
     }
   }
   const collections=[];
@@ -2193,12 +2288,17 @@ function cancelSaleInStore(s,sale,actor,reason=''){
       productCode:item.productCode,warehouseId:sale.warehouseId,type:'sale_cancel',
       quantity:Number(item.quantity||0),reference:reversal.reference,note:`${sale.reference||''} satış iptali`,user:actor
     }));
+  }else if(sale.reserveStock&&sale.warehouseId){
+    (sale.items||[]).forEach(item=>adjustReserved(s,{
+      productCode:item.productCode,warehouseId:sale.warehouseId,quantity:-Number(item.quantity||0),
+      type:'reserve_release',reference:reversal.reference,note:`${sale.reference||''} rezerv iptal`,user:actor
+    }));
   }
   sale.cancelled=true;sale.cancelledAt=new Date().toISOString();sale.cancelledBy=actor;sale.cancelReason=reason;
   sale.commissionCancelled=true;sale.cancelledCommissionAmount=Number(sale.commissionAmount||0);
   const iq=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id));
   if(iq&&iq.status!=='issued'){iq.status='cancelled';iq.error='Satış iptal edildi';iq.updatedAt=new Date().toISOString()}
-  return {already:false,linkedCollections:related.length,stockRestored:Boolean(sale.deductStock&&sale.warehouseId)};
+  return {already:false,linkedCollections:related.length,stockRestored:Boolean((sale.deductStock||sale.reserveStock)&&sale.warehouseId)};
 }
 function normalizeSaleEditItems(s,items){
   const clean=(Array.isArray(items)?items:[]).filter(i=>String(i.productCode||'').trim()&&Number(i.quantity)>0).map(i=>{
@@ -2370,8 +2470,22 @@ app.post('/web-api/admin/sale/:id/delivery-status',requireAdminOrStaffAny('scree
   const allowed=['order_received','preparing','ready','shipped','delivered'];
   const status=String(req.body?.status||'');
   if(!allowed.includes(status))return res.status(400).json({error:'Geçersiz teslimat durumu'});
+  const prev=sale.deliveryStatus||'order_received';
   sale.deliveryStatus=status;sale.deliveryNote=String(req.body?.note||sale.deliveryNote||'').slice(0,1000);sale.deliveryUpdatedAt=new Date().toISOString();
-  audit(s,'Satış teslimat durumu güncellendi',sale.reference||sale.id,{status,note:sale.deliveryNote});writeStore(s);
+  // Rezerve satış teslim edilince fiziksel stoktan düş
+  if(status==='delivered'&&prev!=='delivered'&&sale.reserveStock&&sale.warehouseId&&!sale.deductStock&&!sale.stockConsumedAt){
+    const actor=currentActor(req)?.name||'Admin';
+    for(const item of (sale.items||[])){
+      consumeReservedToSale(s,{
+        productCode:item.productCode,warehouseId:sale.warehouseId,quantity:Number(item.quantity||0),
+        reference:sale.reference||sale.id,note:`${sale.reference||''} teslim · rezerv düşüldü`,user:actor
+      });
+    }
+    sale.deductStock=true;
+    sale.stockMode='deduct';
+    sale.stockConsumedAt=new Date().toISOString();
+  }
+  audit(s,'Satış teslimat durumu güncellendi',sale.reference||sale.id,{status,note:sale.deliveryNote,prev});writeStore(s);
   res.json({ok:true,sale});
 });
 
