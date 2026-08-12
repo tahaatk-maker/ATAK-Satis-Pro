@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ATAK — Sözleşme + Senet</title>
+<style>
+@page{size:A4;margin:0}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0a2748;
+  --navy2:#143a63;
+  --red:#b91c1c;
+  --line:#c5d0dd;
+  --soft:#f3f6fa;
+  --ink:#142033;
+  --muted:#5a6a7b;
+}
+body{background:#b7c2d0;font:8.6px/1.3 "Segoe UI",system-ui,Arial,sans-serif;color:var(--ink)}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;gap:8px;justify-content:center;align-items:center;padding:10px;background:var(--navy);color:#fff;font-size:12px}
+.toolbar button{border:0;border-radius:7px;padding:8px 14px;font-weight:800;cursor:pointer;background:#d4a017;color:#1a1200}
+.sheet{
+  width:210mm;height:297mm;margin:12px auto;background:#fff;
+  padding:7mm 8mm 6mm;position:relative;overflow:hidden;
+  display:flex;flex-direction:column;
+  box-shadow:0 10px 28px #0003;
+}
+.sheet::before{
+  content:"";position:absolute;left:12%;right:12%;top:22%;bottom:34%;
+  background:radial-gradient(ellipse at center,#0a27480d,#0000 72%);
+  pointer-events:none;
+}
+.logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0 0 2px;position:relative;z-index:1}
+.logo-top img{height:11mm;width:auto;object-fit:contain}
+.logo-bottom{display:flex;justify-content:center;align-items:center;margin-top:3px;padding-top:3px;border-top:1px solid var(--line);position:relative;z-index:1}
+.logo-bottom img{height:9mm;width:auto;object-fit:contain;opacity:.95}
+.top{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start;position:relative;z-index:1}
+.co .name{font-size:10.5px;font-weight:800;color:var(--navy);letter-spacing:.01em}
+.co .meta{margin-top:3px;color:var(--muted);font-size:7.5px;line-height:1.4}
+.mid-head{text-align:right;padding-top:4px;align-self:center}
+.pills{display:flex;gap:4px;justify-content:flex-end;margin-bottom:5px;flex-wrap:wrap}
+.pill{
+  font-size:7px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--navy);border:1px solid var(--line);border-radius:999px;padding:2.5px 7px;background:var(--soft);
+}
+.title{font-size:15px;line-height:1;font-weight:900;color:var(--red);letter-spacing:.1em}
+
+
+
+.rule{height:2px;background:linear-gradient(90deg,var(--navy),var(--red) 52%,#d4a017);margin:6px 0 7px;border:0;flex:0 0 auto}
+.grid3{display:grid;grid-template-columns:1.3fr .68fr .74fr;gap:6px;position:relative;z-index:1}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th,td{border:1px solid var(--line);padding:2.5px 4px;vertical-align:middle}
+th{background:var(--navy);color:#fff;font-size:7px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:center;padding:4px 3px}
+td{height:13px;font-size:8px}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.c{text-align:center}
+.meta td:first-child{width:46%;background:var(--soft);font-weight:700;color:var(--muted);font-size:7.2px}
+.tot td{background:#eef3f9;font-weight:800}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px;position:relative;z-index:1}
+.box{border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.box h3{background:var(--navy);color:#fff;font-size:7.8px;letter-spacing:.1em;text-align:center;padding:4px;font-weight:700}
+.box table{border:0}
+.box td{border-color:#e4ebf3;height:12.5px}
+.box td.lbl{width:34%;background:var(--soft);font-size:7px;font-weight:700;color:var(--muted)}
+.pay{margin:5px 0 3px;font-size:7.5px;color:var(--muted);position:relative;z-index:1}
+.terms{position:relative;z-index:1}
+.terms h4{display:inline-block;font-size:7.8px;letter-spacing:.07em;color:var(--navy);border-bottom:1px solid var(--navy);margin-bottom:3px}
+.terms p{font-size:6.6px;line-height:1.32;color:#3a4656;text-align:justify;margin-bottom:2.5px}
+.signs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:8px;position:relative;z-index:1}
+.sig{border-top:1px solid #9aa8b8;padding-top:3px;text-align:center;min-height:28px}
+.sig b{display:block;font-size:8px;color:var(--navy);margin-bottom:2px}
+.sig small{display:block;font-size:6.2px;color:var(--muted);line-height:1.25;margin-bottom:10px}
+.sig .nm{font-size:7.5px;font-weight:700}
+
+.grow{flex:1 1 auto;display:flex;flex-direction:column;justify-content:flex-end;min-height:0;margin-top:8px}
+.senet{
+  border:1.6px solid var(--navy);border-radius:6px;overflow:hidden;
+  display:grid;grid-template-columns:24mm 1fr;position:relative;z-index:1;
+  min-height:78mm;
+}
+.senet-side{
+  background:linear-gradient(180deg,var(--navy),var(--navy2));
+  color:#fff;padding:7px 5px;font-size:6.6px;line-height:1.35;
+  display:flex;flex-direction:column;gap:7px;
+}
+.senet-side strong{font-size:7.4px;letter-spacing:.01em}
+.senet-side .senet-logo{display:block;width:100%;margin:0 0 6px}
+.senet-side .senet-logo img{width:100%;height:auto;max-height:18mm;object-fit:contain;object-position:left top;}
+.senet-side .pill{background:#fff;color:var(--navy);border-color:#fff;padding:1.5px 5px}
+.senet-main{padding:6px 8px 7px;background:#fff;display:flex;flex-direction:column}
+.senet-bar{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.senet-bar b{font-size:13px;color:var(--red);letter-spacing:.12em}
+.senet-bar span{font-size:7.2px;color:var(--muted)}
+.fields{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:5px}
+.fields > div{border-bottom:1.2px solid #2a3545;padding:2px 0 3px}
+.fields span{display:block;font-size:6.5px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.05em}
+.fields b{display:block;font-size:9.5px;min-height:12px;margin-top:1px}
+.body{font-size:7.2px;line-height:1.4;text-align:justify;margin:2px 0 5px}
+.words{
+  display:flex;gap:6px;align-items:baseline;background:var(--soft);
+  border:1px solid var(--line);border-radius:4px;padding:4px 7px;margin-bottom:5px;
+}
+.words span{font-size:7px;font-weight:800;color:var(--red)}
+.words b{font-size:8px}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:1}
+.duo > div{border:1px solid var(--line);border-radius:4px;padding:5px 6px;min-height:34px}
+.duo .lab{font-size:7px;font-weight:800;color:var(--red);letter-spacing:.05em;margin-bottom:2px}
+.duo small{display:block;font-size:6.2px;color:var(--muted)}
+.duo .v{font-size:7.8px;font-weight:700;min-height:10px;margin-bottom:2px}
+.signline{margin-top:6px;text-align:right;border-top:1px solid var(--line);padding-top:10px;font-size:7px;color:var(--muted)}
+.note{margin-top:3px;font-size:6.2px;color:#7a8799}
+.foot{margin-top:4px;text-align:center;font-size:6.2px;color:#8a97a8;flex:0 0 auto}
+@media print{body{background:#fff}.toolbar{display:none}.sheet{margin:0;box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="toolbar"><b>ATAK Sözleşme + Senet</b><button onclick="window.print()">Yazdır / PDF</button></div>
+<section class="sheet">
+  <div class="top">
+    <div class="co">
+      <div class="logo-top"><img src="../assets/atak-header-logo.png" alt="ATAK Pazarlama"/></div>
+      <div class="name">ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.</div>
+      <div class="meta">
+        Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul<br/>
+        0212 223 28 71 · 0543 358 50 60 · tarabyabeko@gmail.com · VD: Sarıyer · Vergi No: 0940148218
+      </div>
+    </div>
+    <div class="mid-head">
+      <div class="title">SATIŞ SÖZLEŞMESİ</div>
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  <div class="grid3">
+    <table>
+      <thead><tr><th style="width:30%">Ürün Kodu</th><th style="width:12%">Adet</th><th style="width:29%">Birim</th><th style="width:29%">Tutar</th></tr></thead>
+      <tbody>
+        <tr><td class="c">ÖRN-BEKO-001</td><td class="c">1</td><td class="num">45.000,00 ₺</td><td class="num">45.000,00 ₺</td></tr>
+        <tr><td class="c">ÖRN-IST-014</td><td class="c">1</td><td class="num">28.500,00 ₺</td><td class="num">28.500,00 ₺</td></tr>
+        <tr><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+    <table class="meta">
+      <tr><td>Satış Tarihi</td><td>12.08.2026</td></tr>
+      <tr><td>Satış No</td><td>SAT-1786523760886</td></tr>
+      <tr><td>Müşteri No</td><td>M-1042</td></tr>
+      <tr><td>Toplam</td><td>73.500,00 ₺</td></tr>
+      <tr><td>Peşinat</td><td>23.500,00 ₺</td></tr>
+      <tr><td>Bakiye</td><td>50.000,00 ₺</td></tr>
+    </table>
+    <table>
+      <thead><tr><th>Vade</th><th>Taksit</th></tr></thead>
+      <tbody>
+        <tr><td class="c">12.09.2026</td><td class="num">10.000,00 ₺</td></tr>
+        <tr><td class="c">12.10.2026</td><td class="num">10.000,00 ₺</td></tr>
+        <tr><td class="c">12.11.2026</td><td class="num">10.000,00 ₺</td></tr>
+        <tr><td class="c">12.12.2026</td><td class="num">10.000,00 ₺</td></tr>
+        <tr class="tot"><td class="c">TOPLAM</td><td class="num">50.000,00 ₺</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="parties">
+    <div class="box">
+      <h3>KEFİL</h3>
+      <table>
+        <tr><td class="lbl">Adı Soyadı</td><td></td></tr>
+        <tr><td class="lbl">T.C. Kimlik No</td><td></td></tr>
+        <tr><td class="lbl">GSM</td><td></td></tr>
+        <tr><td class="lbl">İş Tel.</td><td></td></tr>
+        <tr><td class="lbl">Ev Tel.</td><td></td></tr>
+        <tr><td class="lbl">Ev Adresi</td><td></td></tr>
+        <tr><td class="lbl">İş Adresi</td><td></td></tr>
+      </table>
+    </div>
+    <div class="box">
+      <h3>BORÇLU</h3>
+      <table>
+        <tr><td class="lbl">Adı Soyadı</td><td>Örnek Müşteri</td></tr>
+        <tr><td class="lbl">T.C. Kimlik No</td><td></td></tr>
+        <tr><td class="lbl">GSM</td><td>05xx xxx xx xx</td></tr>
+        <tr><td class="lbl">İş Tel.</td><td></td></tr>
+        <tr><td class="lbl">Ev Tel.</td><td></td></tr>
+        <tr><td class="lbl">Ev Adresi</td><td>Sarıyer / İstanbul</td></tr>
+        <tr><td class="lbl">İş Adresi</td><td></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="pay"><b>Ödeme:</b> Nakit 23.500,00 ₺ · Senet 50.000,00 ₺ · Satıcı: Sistem Yöneticisi</div>
+    <div class="terms">
+    <h4>ANLAŞMA ŞARTLARI</h4>
+    <p><b>1)</b> Alıcı / borçlu, ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.’nden yukarıda cinsi, adedi, özellikleri ve bedeli yazılı ürünleri görüp beğenerek satın almıştır. Peşinat ve taksit tutarlarını vade tarihlerinde, satıcının yukarıda yazılı şube adreslerine makbuz karşılığı ödemeyi kabul ve taahhüt eder.</p>
+    <p><b>2)</b> Taksitlerden herhangi birinin vadesinde ödenmemesi halinde aylık %4 gecikme faizi uygulanır. Ayrıca bakiye üzerinden %20 oranında cezai şart talep edilebilir. Bir taksitin ödenmemesi halinde kalan tüm taksitler muaccel olur; satıcı yasal takip ve tahsilat masraflarını borçludan / kefilden isteyebilir. 4077 sayılı Tüketicinin Korunması Hakkında Kanun hükümleri saklıdır.</p>
+    <p><b>3)</b> Ürünlerin teslimi, satıcının alıcı hakkında yapacağı olumlu kredi / risk değerlendirmesine bağlıdır. Beyaz eşya, mobilya, mutfak ve benzeri ürünler üretici / ithalatçı garanti şartlarına tabidir. Montaj ve onarım yetkili servislerce yapılır; aksi halde garanti kapsamı dışına çıkılabilir.</p>
+    <p><b>4)</b> Taraflar işbu sözleşmeyi okuyup müzakere ederek imzalamışlardır. Uyuşmazlıklarda İstanbul Mahkemeleri ve İcra Daireleri yetkilidir. Kefil, borçlu ile birlikte müteselsil sorumludur. Bu belge mali fatura yerine geçmez; 4077 sayılı Kanun ve ilgili mevzuat hükümleri uygulanır.</p>
+  </div>
+  <div class="signs">
+    <div class="sig"><b>SATICI</b><small>Kaşe / İmza</small><div class="nm">ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.</div></div>
+    <div class="sig"><b>KEFİL</b><small>İşbu anlaşmadaki yazılı bütün şartları borçlu gibi okudum ve aynen kabul ettim.</small><div class="nm">İmza</div></div>
+    <div class="sig"><b>BORÇLU</b><small>İşbu anlaşmadaki yazılı bütün şartları okudum ve aynen kabul ettim.</small><div class="nm">Örnek Müşteri</div></div>
+  </div>
+
+  <div class="grow">
+    <div class="senet">
+      <div class="senet-side">
+        <div class="senet-logo"><img src="../assets/atak-header-logo-white.png" alt="ATAK Pazarlama"/></div>
+        <div>Ferahevler Mah. Adnan Kahveci Cad. No:109<br/>Sarıyer / İstanbul<br/>0212 223 28 71<br/>tarabyabeko@gmail.com<br/>VD: Sarıyer · Vergi No: 0940148218</div>
+      </div>
+      <div class="senet-main">
+        <div class="senet-bar"><b>SENET</b><span>Emre muharrer bono · SAT-1786523760886</span></div>
+        <div class="fields">
+          <div><span>Vade</span><b>12.09.2026</b></div>
+          <div><span>Hululü Vade</span><b>12.09.2026</b></div>
+          <div><span>Türk Lirası</span><b>10.000,00 ₺</b></div>
+          <div><span>No.</span><b>ATAK-01</b></div>
+        </div>
+        <p class="body">İşbu emre muharrer bono mukabilinde <b style="color:var(--red)">ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.</b> veya emrine <u>12.09.2026</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. Vadesinde ödenmemesi halinde müteakip senetlerde muacceliyet kesbedeceğini kabul ederim. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri yetkilidir.</p>
+        <div class="words"><span>Yalnız</span><b>on bin Türk Lirası</b></div>
+        <div class="duo">
+          <div>
+            <div class="lab">Ödeyecek</div>
+            <small>İsim</small><div class="v">Örnek Müşteri</div>
+            <small>Adres</small><div class="v">Sarıyer / İstanbul</div>
+          </div>
+          <div>
+            <div class="lab">Müteselsil Borçlu</div>
+            <small>İsim</small><div class="v">&nbsp;</div>
+            <small>Adres</small><div class="v">&nbsp;</div>
+          </div>
+        </div>
+        <div class="signline">Keşideci / Borçlu İmza</div>
+        <div class="note">Tek senet tutarı toplam bakiyedir (10.000,00 ₺). 5 taksitin vade planı yukarıdaki tablodadır.</div>
+      </div>
+    </div>
+  </div>
+  <div class="logo-bottom"><img src="../assets/atak-header-logo.png" alt="ATAK Pazarlama"/></div>
+  <div class="foot">ATAK Home · Sözleşme + Senet · tek A4</div>
+</section>
+</body>
+</html>
