@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v58 */
+/* ATAK_PERSONEL_BUILD=fix-v59 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -667,8 +667,8 @@ function renderProducts(){
     const malzeme=materialOf(p)||'-';
     const liste=productPrice(p);
     return `<button type="button" class="product-item product-item-grid" data-code="${p.code}">
-      <strong title="Madde kodu">${madde}</strong>
-      <span title="Malzeme">${malzeme}<small>${p.brand||p.code||''}</small></span>
+      <strong title="Malzeme adı">${malzeme}</strong>
+      <span title="Madde / malzeme kodu">${madde}<small>${p.brand||p.code||''}</small></span>
       <em title="Liste (referans)">${liste?money(liste):'—'}</em>
       <b class="add-chip">EKLE</b>
     </button>`;
@@ -684,7 +684,7 @@ function renderCart(){
   }
   $('#cartRows').innerHTML=salesCart.map((r,i)=>`
     <div class="cart-row" data-idx="${i}">
-      <div><strong>${r.itemCode||'-'}</strong><small>${r.name||r.materialCode||r.code}</small></div>
+      <div><strong>${esc(r.name||r.materialCode||r.code||'-')}</strong><small>${esc(r.itemCode||r.code||'')}</small></div>
       <input data-qty type="number" min="1" step="1" value="${r.qty}">
       <input data-price type="text" inputmode="decimal" value="${r.unitPrice?String(r.unitPrice):''}" placeholder="Elle tutar" autocomplete="off">
       <button type="button" data-del title="Sil">✕</button>

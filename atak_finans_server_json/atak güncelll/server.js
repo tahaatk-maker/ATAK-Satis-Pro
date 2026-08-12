@@ -903,8 +903,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.59-musteri-liste',
-  build:'fix-v58',
+  version:'6.3.60-malzeme-ad',
+  build:'fix-v59',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -4329,11 +4329,16 @@ function isIstikbalSupplier(supplierName=''){
   return /ISTIKBAL|İSTİKBAL|DO[GĞ]TA[SŞ]/i.test(String(supplierName||''));
 }
 function ensureProductFromPurchase(s,{productCode,productName,itemCode,searchName,unitCost,vatRate,supplierName,importBatchId}){
-  const code=String(productCode||searchName||itemCode||productName||'').trim();
+  const code=String(productCode||itemCode||searchName||productName||'').trim();
   if(!code)return null;
-  const name=String(productName||searchName||productCode||code).trim()||code;
-  const ids=ensureDynamicsCoreCategories(s);
   const furniture=isIstikbalSupplier(supplierName);
+  // İstikbal: Malzeme1 = kod, Malzeme Uzun Metni = ad (satışta malzeme adı üstte)
+  const niceName=String(productName||searchName||'').trim();
+  const name=(furniture?(niceName||code):(niceName||searchName||productCode||code)).trim()||code;
+  const materialLabel=furniture
+    ? String(niceName||name).trim()||code
+    : String(searchName||niceName||code).trim()||code;
+  const ids=ensureDynamicsCoreCategories(s);
   // İstikbal → her zaman Mobilya + İstikbal marka (%10 KDV)
   const category=furniture
     ? ids.mobilya
@@ -4343,7 +4348,7 @@ function ensureProductFromPurchase(s,{productCode,productName,itemCode,searchNam
   const product=sanitizeProduct({
     code,
     name,
-    searchName:String(searchName||code).trim(),
+    searchName:materialLabel,
     itemCode:String(itemCode||code).trim(),
     brand,
     category,
@@ -4427,11 +4432,16 @@ function applyPurchaseInvoiceToStore(s,{
     };
     if(!product){unmatched++;cleanItems.push(line);continue}
     if(!createdNow)matched++;
-    // İstikbal eşleşenlerde de Mobilya + marka düzelt
+    // İstikbal eşleşenlerde de Mobilya + marka + malzeme adı düzelt
     if(furniture){
       product.brand='İstikbal';
       product.category=mobilyaId;
       product.vatRate=10;
+      if(productName){
+        product.name=productName;
+        product.searchName=productName; // satışta malzeme adı (üstte)
+      }
+      if(itemCode)product.itemCode=itemCode;
       product.updatedAt=new Date().toISOString();
       const tags=new Set([...(product.tags||[]).map(String),'istikbal','mobilya','alis-faturasi']);
       product.tags=[...tags];

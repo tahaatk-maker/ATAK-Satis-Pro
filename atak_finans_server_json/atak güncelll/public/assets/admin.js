@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v58 */
+/* ATAK_ADMIN_BUILD=fix-v59 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1517,12 +1517,14 @@ async function loadSalesCenter(){
   }catch(e){if(typeof toast==='function')toast(e.message||'Satış merkezi verileri yüklenemedi')}
 }
 function salesMoney(v){return money2(Number(v||0))}
-function salesMaterialCode(p){return String(p?.searchName||p?.code||p?.name||'').trim()}
-function salesItemCode(p){return String(p?.itemCode||'').trim()}
+function salesMaterialCode(p){return String(p?.searchName||p?.name||p?.code||'').trim()}
+function salesItemCode(p){return String(p?.itemCode||p?.code||'').trim()}
 function salesProductLabel(p){
   const madde=salesItemCode(p)||'-';
   const malzeme=salesMaterialCode(p)||'-';
-  return `${madde} · ${malzeme}`;
+  // Satış listesinde malzeme adı önde
+  if(malzeme && malzeme!==madde)return `${malzeme} · ${madde}`;
+  return malzeme||madde;
 }
 function salesProductDisplayName(p){
   // Satışta görünen ürün/malzeme adı (kod değil)
@@ -2952,7 +2954,7 @@ function renderPurchasePreview(d){
     const why=r.reason?`<small class="warn-text">${purchaseEsc(r.reason)}</small>`:'';
     return `<tr class="dynamics-preview-row ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">
     <td><span class="dynamics-status ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">${label[st]||st}</span>${why}</td>
-    <td><b>${purchaseEsc(r.productCode||r.itemCode||r.matchCode||'-')}</b><small>${purchaseEsc(r.productName||r.searchName||'')}${r.matchCode&&r.productCode&&r.matchCode!==r.productCode?` · sistem: ${purchaseEsc(r.matchCode)}`:''}</small></td>
+    <td><b>${purchaseEsc(r.productName||r.searchName||r.productCode||r.itemCode||'-')}</b><small>${purchaseEsc([r.itemCode||r.productCode||r.matchCode,r.matchCode&&r.productCode&&r.matchCode!==r.productCode?`sistem: ${r.matchCode}`:''].filter(Boolean).join(' · ')||'')}</small></td>
     <td>${Number(r.quantity||0)}</td>
     <td><b>${money(r.unitCost)}</b></td>
     <td>${st==='matched'?money(r.currentPurchasePrice):'—'}</td>
