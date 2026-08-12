@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v57 */
+/* ATAK_ADMIN_BUILD=fix-v58 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1076,7 +1076,7 @@ q('#dealerSettingsForm')?.addEventListener('submit',async e=>{
 });
 
 /* ===== Müşteriler sayfası ===== */
-let customersPageData={customers:[],selectedId:''};
+let customersPageData={customers:[],selectedId:'',total:0};
 function customerInvoiceType(prefix){
   const checked=document.querySelector(`input[name="${prefix}InvoiceType"]:checked`);
   return checked?.value==='corporate'?'corporate':'individual';
@@ -1180,15 +1180,10 @@ function openCustomerModal(c=null){
   q('#customerPageName')?.focus();
 }
 function renderCustomerPageList(){
-  const term=(q('#customerPageSearch')?.value||'').toLocaleLowerCase('tr-TR');
-  const rows=customersPageData.customers.filter(c=>{
-    if(c.active===false||c.deletedAt)return false;
-    const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.city||''} ${c.district||''}`.toLocaleLowerCase('tr-TR');
-    return !term||hay.includes(term);
-  });
-  if(q('#customerPageCount'))q('#customerPageCount').textContent=String(rows.length);
+  const rows=(customersPageData.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
+  if(q('#customerPageCount'))q('#customerPageCount').textContent=String(customersPageData.total!=null?customersPageData.total:rows.length);
   const box=q('#customerPageList');if(!box)return;
-  if(!rows.length){box.innerHTML='<div class="note" style="padding:16px">Müşteri bulunamadı. + Yeni Müşteri ile ekleyin.</div>';return}
+  if(!rows.length){box.innerHTML='<div class="note" style="padding:16px">Müşteri bulunamadı. + Yeni Müşteri ile ekleyin veya aramayı temizleyin.</div>';return}
   box.innerHTML=rows.map(c=>{
     const bal=Number(c.balance||0);
     const balCls=bal>0?'debt':bal<0?'credit':'closed';
@@ -1198,6 +1193,45 @@ function renderCustomerPageList(){
     return `<button type="button" class="customer-card ${active}" data-customer-id="${c.id}"><div><b>${c.name||'-'}</b><small>${sub||'Adres yok'}${badge}${c.companyName?` · ${c.companyName}`:''}</small></div><div class="customer-card-balance ${balCls}"><small>Cari</small><strong>${money2(bal)}</strong></div></button>`;
   }).join('');
   qa('#customerPageList [data-customer-id]').forEach(btn=>btn.addEventListener('click',()=>selectCustomerPage(btn.dataset.customerId)));
+}
+async function loadCustomersPage(){
+  const term=String(q('#customerPageSearch')?.value||'').trim();
+  try{
+    // Satış Merkezi ile aynı kaynak: customers/search (tüm aktif müşteriler)
+    const url=term
+      ? `/web-api/admin/customers/search?q=${encodeURIComponent(term)}&limit=100`
+      : `/web-api/admin/customers/search?list=1&limit=200`;
+    const d=await api(url);
+    let rows=d.rows||[];
+    // Arama boş / eksik kalırsa finance-center ile tamamla
+    if(!rows.length){
+      const fin=await api('/web-api/admin/finance-center');
+      rows=(fin.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
+      if(term){
+        const t=term.toLocaleLowerCase('tr-TR');
+        rows=rows.filter(c=>{
+          const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''}`.toLocaleLowerCase('tr-TR');
+          return hay.includes(t);
+        });
+      }
+      customersPageData.total=rows.length;
+    }else{
+      customersPageData.total=Number(d.total!=null?d.total:rows.length);
+    }
+    customersPageData.customers=rows;
+  }catch(e){
+    toast(e.message||'Müşteriler yüklenemedi');
+    customersPageData.customers=[];
+    customersPageData.total=0;
+  }
+  renderCustomerPageList();
+  if(customersPageData.selectedId&&customersPageData.customers.some(c=>String(c.id)===String(customersPageData.selectedId))){
+    await selectCustomerPage(customersPageData.selectedId);
+  }else{
+    customersPageData.selectedId='';
+    q('#customerEmptyState')?.classList.remove('hidden');
+    q('#customerDetailContent')?.classList.add('hidden');
+  }
 }
 function customerTxKindLabel(kind=''){
   return({sale:'Mağaza satışı',sale_cancel:'Satış iptali',collection:'Cari tahsilat',collection_cancel:'Tahsilat iptali',payment:'Ödeme',expense:'Gider',reversal:'Ters kayıt'}[kind]||kind||'Hareket');
@@ -1306,21 +1340,9 @@ async function selectCustomerPage(id){
     }
   }catch(e){toast(e.message);empty?.classList.remove('hidden');content?.classList.add('hidden')}
 }
-async function loadCustomersPage(){
-  const fin=await api('/web-api/admin/finance-center');
-  customersPageData.customers=fin.customers||[];
-  renderCustomerPageList();
-  if(customersPageData.selectedId&&customersPageData.customers.some(c=>String(c.id)===String(customersPageData.selectedId))){
-    await selectCustomerPage(customersPageData.selectedId);
-  }else{
-    customersPageData.selectedId='';
-    q('#customerEmptyState')?.classList.remove('hidden');
-    q('#customerDetailContent')?.classList.add('hidden');
-  }
-}
 q('#newCustomerBtn')?.addEventListener('click',()=>openCustomerModal(null));
 q('#customerModalClose')?.addEventListener('click',()=>q('#customerModal')?.classList.add('hidden'));
-q('#customerPageSearch')?.addEventListener('input',()=>{clearTimeout(window.__custSearchT);window.__custSearchT=setTimeout(renderCustomerPageList,160)});
+q('#customerPageSearch')?.addEventListener('input',()=>{clearTimeout(window.__custSearchT);window.__custSearchT=setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),220)});
 q('#customerPageDeliverySame')?.addEventListener('change',()=>syncCustomerFormUI('customerPage'));
 document.querySelectorAll('input[name="customerPageInvoiceType"]').forEach(r=>r.addEventListener('change',()=>syncCustomerFormUI('customerPage')));
 document.addEventListener('click',e=>{

@@ -531,13 +531,16 @@ function actorIsManager(req){
   const a=currentActor(req);
   if(!a)return Boolean(req.session?.systemOwner===true);
   if(req.session?.systemOwner===true)return true;
-  const role=String(a.role||'').toLowerCase();
-  if(['owner','admin','super_admin'].includes(role))return true;
+  const role=String(a.role||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'_');
+  if(['owner','admin','super_admin','superadmin','yonetici','manager'].includes(role))return true;
+  const roleName=String(a.roleName||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if(roleName.includes('owner')||roleName.includes('admin')||roleName.includes('yonetici')||roleName.includes('sahip'))return true;
   const perms=Array.isArray(a.permissions)?a.permissions:[];
   // Yönetici Onayları yetkisi de yönetici sayılır
   return perms.includes('*')
     ||perms.includes('finance_manage')
     ||perms.includes('users_manage')
+    ||perms.includes('customers_manage')
     ||perms.includes('screen_manager_approvals')
     ||perms.includes('cancellations_approve');
 }
@@ -900,8 +903,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.58-unvan-cache',
-  build:'fix-v57',
+  version:'6.3.59-musteri-liste',
+  build:'fix-v58',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -1318,11 +1321,17 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
   // Satış ekranı gibi yerlerde 10k+ müşteri listesini gönderme (customers=0 / light=1)
   const omitCustomers=['0','false','no'].includes(String(req.query.customers||'').toLowerCase())
     || ['1','true','yes'].includes(String(req.query.light||'').toLowerCase());
-  const customers=omitCustomers?[]:((staffPortal && (!canManage || salespersonId || dealerFilter))
+  // Müşteriler ekranı ile Satış Merkezi aynı havuzu görsün:
+  // - Yönetici / customers_manage → tüm aktif müşteriler
+  // - Sadece kendi satışı olan personel → işlem yaptığı müşteriler
+  // - Finans filtreleri (salespersonId/dealerId) açıksa yine kapsamlı liste
+  const financeScoped=Boolean(salespersonId||dealerFilter);
+  const canListAllCustomers=!staffPortal || canManage || actorHasPermission(req,'customers_manage');
+  const customers=omitCustomers?[]:((staffPortal && (!canListAllCustomers || financeScoped))
     ? (s.customers||[]).filter(c=>ownCustomerIds.has(String(c.id)))
     : (s.customers||[])
-  ).map(x=>({...x,balance:customerBalance(s,x.id)}));
-  const customerTotal=(s.customers||[]).filter(c=>c.active!==false).length;
+  ).filter(c=>c.active!==false&&!c.deletedAt).map(x=>({...x,balance:customerBalance(s,x.id)}));
+  const customerTotal=(s.customers||[]).filter(c=>c.active!==false&&!c.deletedAt).length;
 
   const transactions=txs.slice(0,1000).map(x=>({
     ...x,
@@ -1504,9 +1513,10 @@ function applyCustomerData(row,data){Object.assign(row,data);return row}
 function customerSearchHandler(req,res){
   const s=readStore();
   const q=String(req.query.q||req.query.query||'').trim().toLocaleLowerCase('tr-TR');
-  const limit=Math.min(100,Math.max(1,Number(req.query.limit)||40));
+  const limit=Math.min(200,Math.max(1,Number(req.query.limit)||40));
   const id=String(req.query.id||'').trim();
-  const all=(s.customers||[]).filter(c=>c.active!==false);
+  const listAll=['1','true','yes'].includes(String(req.query.list||'').toLowerCase());
+  const all=(s.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
   let rows=all;
   if(id){
     rows=rows.filter(c=>String(c.id)===id);
@@ -1523,7 +1533,7 @@ function customerSearchHandler(req,res){
       }
       return false;
     });
-  }else{
+  }else if(!listAll){
     // Boş aramada tüm listeyi yollama — 10k+ kayıt için güvenli
     return res.json({ok:true,total:all.length,rows:[],needQuery:true});
   }
@@ -1538,7 +1548,8 @@ function customerSearchHandler(req,res){
       invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
       hasCorporate:customerHasCorporateBilling(c),note:c.note||'',
       guarantor:normalizeGuarantor(c.guarantor),
-      balance:customerBalance(s,c.id)
+      balance:customerBalance(s,c.id),
+      active:c.active!==false
     }));
   res.json({ok:true,total,rows,needQuery:false,limit});
 }
