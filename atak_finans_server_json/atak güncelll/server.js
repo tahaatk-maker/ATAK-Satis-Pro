@@ -35,6 +35,14 @@ const STORE_PATH = path.join(ROOT, 'data', 'store.json');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const COMMERCE_SYNC_URL = process.env.COMMERCE_SYNC_URL || 'http://127.0.0.1:3200/api/sync/beko';
+/** Resmi satıcı bilgileri — senet + satış sözleşmesinde sabit */
+const ATAK_COMPANY = {
+  legalName: 'ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.',
+  shortName: 'ATAK EV GEREÇLERİ',
+  taxOffice: 'Sarıyer',
+  taxNo: '0940148218',
+  address: 'Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul'
+};
 /** Varsayılan: sadece sahip erişir. Personeli açmak için .env içinde ATAK_OWNER_ONLY=0 */
 function ownerOnlyEnabled(){ return String(process.env.ATAK_OWNER_ONLY ?? '1').trim() !== '0'; }
 function ownerUsernames(){
@@ -104,7 +112,14 @@ function resolveVatRate(p={}){
 }
 
 function ensureStore(store) {
-  store.settings ||= { siteName:'Atak Home', tagline:'Eviniz için her şey', whatsapp:'905433585060', phone:'02122232871', email:'tarabyabeko@gmail.com', address:'Sarıyer / İstanbul' };
+  store.settings ||= { siteName:'Atak Home', tagline:'Eviniz için her şey', whatsapp:'905433585060', phone:'02122232871', email:'tarabyabeko@gmail.com', address:ATAK_COMPANY.address };
+  // Resmi şirket bilgileri (senet + sözleşme)
+  store.settings.companyLegalName = ATAK_COMPANY.legalName;
+  store.settings.taxOffice = ATAK_COMPANY.taxOffice;
+  store.settings.taxNo = ATAK_COMPANY.taxNo;
+  if(!String(store.settings.address||'').trim() || /Tarabya/i.test(String(store.settings.address||'')) || String(store.settings.address||'').trim()==='Sarıyer / İstanbul'){
+    store.settings.address = ATAK_COMPANY.address;
+  }
   store.categories = Array.isArray(store.categories) ? store.categories : [];
   store.products = Array.isArray(store.products) ? store.products : [];
   store.campaigns = Array.isArray(store.campaigns) ? store.campaigns : [];
@@ -128,9 +143,14 @@ function ensureStore(store) {
   store.financeTransactions = Array.isArray(store.financeTransactions) ? store.financeTransactions : [];
   store.receivables = Array.isArray(store.receivables) ? store.receivables : [];
   store.promissoryNotes = Array.isArray(store.promissoryNotes) ? store.promissoryNotes : [];
-  store.promissorySettings ||= {creditorName:store.settings?.siteName||'Atak Pazarlama',paymentPlace:'İstanbul',issuePlace:'İstanbul',prefix:'ATAK',defaultInstallments:1,firstDueDays:30,intervalMonths:1,copies:1,footer:''};
-  store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:'',companyTitle:'',senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:'',efaturaSeries:'ATK',earsivSeries:'ATA',efaturaNext:1,earsivNext:1};
+  store.promissorySettings ||= {creditorName:ATAK_COMPANY.legalName,paymentPlace:'İstanbul',issuePlace:'İstanbul',prefix:'ATAK',defaultInstallments:1,firstDueDays:30,intervalMonths:1,copies:1,footer:''};
+  if(!String(store.promissorySettings.creditorName||'').trim() || /Atak (Home|Pazarlama)/i.test(String(store.promissorySettings.creditorName||''))){
+    store.promissorySettings.creditorName = ATAK_COMPANY.legalName;
+  }
+  store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:ATAK_COMPANY.taxNo,companyTitle:ATAK_COMPANY.legalName,senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:'',efaturaSeries:'ATK',earsivSeries:'ATA',efaturaNext:1,earsivNext:1};
   if(store.invoiceIntegration && !store.invoiceIntegration.provider)store.invoiceIntegration.provider='qnb-solist';
+  if(!String(store.invoiceIntegration.companyVkn||'').trim())store.invoiceIntegration.companyVkn=ATAK_COMPANY.taxNo;
+  if(!String(store.invoiceIntegration.companyTitle||'').trim())store.invoiceIntegration.companyTitle=ATAK_COMPANY.legalName;
   // Seri: e-Fatura = ATK, e-Arşiv = ATA (GIB 3 harf + yıl + 9 hane)
   if(!String(store.invoiceIntegration.efaturaSeries||'').trim())store.invoiceIntegration.efaturaSeries='ATK';
   if(!String(store.invoiceIntegration.earsivSeries||'').trim())store.invoiceIntegration.earsivSeries='ATA';
@@ -865,8 +885,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.55-kefil-sec',
-  build:'fix-v54',
+  version:'6.3.56-firma-bilgi',
+  build:'fix-v55',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3412,14 +3432,17 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const items=Array.isArray(sale.items)?sale.items:[];
   const noteList=Array.isArray(notes)?notes.slice().sort((a,b)=>String(a.dueDate||'').localeCompare(String(b.dueDate||''))):[];
   const net=Number(sale.total||0);
-  const site=settings?.siteName||cfg.creditorName||'ATAK EV GEREÇLERİ';
-  const companyLegal=cfg.creditorName||'ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';
+  const site=ATAK_COMPANY.shortName;
+  const companyLegal=ATAK_COMPANY.legalName;
+  const companyTaxOffice=ATAK_COMPANY.taxOffice;
+  const companyTaxNo=ATAK_COMPANY.taxNo;
+  const address=ATAK_COMPANY.address;
+  const companyTaxLine=`VD: ${companyTaxOffice} · Vergi No: ${companyTaxNo}`;
   const atakLogoSrc='/web-admin-assets/atak-header-logo.png';
   const atakLogoWhiteSrc='/web-admin-assets/atak-header-logo-white.png';
   const phone=settings?.phone||'0212 223 28 71';
   const wa=settings?.whatsapp?String(settings.whatsapp).replace(/^90/,'0'):'0543 358 50 60';
   const email=settings?.email||'tarabyabeko@gmail.com';
-  const address=settings?.address||'Tarabya / Sarıyer · İstanbul';
   const personName=customer?.name||'';
   const personTax=customer?.tckn||customer?.taxNo||'';
   const addr=[customer?.address,customer?.district,customer?.city].filter(Boolean).join(', ');
@@ -3518,7 +3541,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 @media print{.a4c{page-break-after:avoid!important}.a4c.senet-only{page-break-before:always}}
 </style>`;
   return `<section class="sheet a4c">${css}
-  <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · VD: Sarıyer · Vergi No: 0940148218</div></div>
+  <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · ${htmlEsc(companyTaxLine)}</div></div>
   <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
   <div class="rule"></div>
   <div class="grid3">
@@ -3529,12 +3552,12 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   <div class="parties"><div class="box"><h3>KEFİL</h3><table>${partyRows(guarantor)}</table></div><div class="box"><h3>BORÇLU</h3><table>${partyRows({name:personName,tckn:personTax,phone:customer?.phone||'',workPhone:customer?.workPhone||'',homePhone:customer?.homePhone||'',address:addr,workAddress:customer?.workAddress||''})}</table></div></div>
   <div class="pay"><b>Ödeme:</b> ${htmlEsc(sale.paymentMethod||'-')}${(sale.payments||[]).length?` · ${(sale.payments||[]).map(p=>`${htmlEsc(p.method||'')}: ${moneyTR(p.amount)}`).join(' · ')}`:''}${sale.salespersonName?` · Satıcı: ${htmlEsc(sale.salespersonName)}`:''}</div>
   <div class="terms"><h4>ANLAŞMA ŞARTLARI</h4>
-  <p><b>1)</b> Alıcı / borçlu, ATAK EV GEREÇLERİ PAZARLAMA TİC. LTD. ŞTİ.’nden yukarıda cinsi, adedi, özellikleri ve bedeli yazılı ürünleri görüp beğenerek satın almıştır. Peşinat ve taksit tutarlarını vade tarihlerinde, satıcının şube adreslerine makbuz karşılığı ödemeyi kabul ve taahhüt eder. Senetler bu sözleşmenin eki ve ayrılmaz parçasıdır.</p>
+  <p><b>1)</b> Alıcı / borçlu, ${htmlEsc(companyLegal)}’nden yukarıda cinsi, adedi, özellikleri ve bedeli yazılı ürünleri görüp beğenerek satın almıştır. Peşinat ve taksit tutarlarını vade tarihlerinde, satıcının şube adreslerine makbuz karşılığı ödemeyi kabul ve taahhüt eder. Senetler bu sözleşmenin eki ve ayrılmaz parçasıdır.</p>
   <p><b>2)</b> Taksitlerden herhangi birinin vadesinde ödenmemesi halinde aylık %4 gecikme faizi uygulanır. Ayrıca bakiye üzerinden %20 oranında cezai şart talep edilebilir. Bir taksitin ödenmemesi halinde kalan tüm taksitler muaccel olur; satıcı yasal takip ve tahsilat masraflarını borçludan / kefilden isteyebilir. 4077 sayılı Tüketicinin Korunması Hakkında Kanun hükümleri saklıdır.</p>
   <p><b>3)</b> Ürünlerin teslimi, satıcının alıcı hakkında yapacağı olumlu kredi / risk değerlendirmesine bağlıdır. Beyaz eşya, mobilya, mutfak ve benzeri ürünler üretici / ithalatçı garanti şartlarına tabidir. Montaj ve onarım yetkili servislerce yapılır; aksi halde garanti kapsamı dışına çıkılabilir.</p>
   <p><b>4)</b> Taraflar işbu sözleşmeyi okuyup müzakere ederek imzalamışlardır. Uyuşmazlıklarda İstanbul Mahkemeleri ve İcra Daireleri yetkilidir. Kefil, borçlu ile birlikte müteselsil sorumludur. Bu belge mali fatura yerine geçmez; 4077 sayılı Kanun ve ilgili mevzuat hükümleri uygulanır.</p></div>
   <div class="signs"><div class="sig"><b>SATICI</b><small>Kaşe / İmza</small><div class="nm">${htmlEsc(companyLegal)}</div></div><div class="sig"><b>KEFİL</b><small>İşbu anlaşmadaki yazılı bütün şartları borçlu gibi okudum ve aynen kabul ettim.</small><div class="nm">${htmlEsc(guarantor.name||'İmza')}</div></div><div class="sig"><b>BORÇLU</b><small>İşbu anlaşmadaki yazılı bütün şartları okudum ve aynen kabul ettim.</small><div class="nm">${htmlEsc(personName||'İmza')}</div></div></div>
-  <div class="grow"><div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}<br/>VD: Sarıyer · Vergi No: 0940148218</div></div>
+  <div class="grow"><div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}<br/>${htmlEsc(companyTaxLine)}</div></div>
   <div class="senet-main"><div class="senet-bar"><b>SENET</b><span>Emre muharrer bono · ${htmlEsc(sale.reference||'')}</span></div>
   <div class="fields"><div><span>Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Hululü Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Türk Lirası</span><b>${senetAmount>0?moneyTR(senetAmount):''}</b></div><div><span>No.</span><b>${htmlEsc(senetNo)}</b></div></div>
   <p class="sbody">İşbu emre muharrer bono mukabilinde <b style="color:#b91c1c">${htmlEsc(companyLegal)}</b> veya emrine <u>${dateTR(senetDue)||'........'}</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. Taksitler satış sözleşmesindeki vade tablosuna göredir; bir taksitin ödenmemesi halinde kalan tutar muaccel olur. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri yetkilidir.</p>
@@ -3546,7 +3569,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 }
 
 app.get('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=readStore();res.json({settings:s.promissorySettings||{}})});
-app.post('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=readStore(),x=req.body||{};s.promissorySettings={creditorName:String(x.creditorName||s.settings?.siteName||'Atak Pazarlama'),paymentPlace:String(x.paymentPlace||'İstanbul'),issuePlace:String(x.issuePlace||'İstanbul'),prefix:String(x.prefix||'ATAK').replace(/[^A-Za-z0-9_-]/g,'').slice(0,12)||'ATAK',defaultInstallments:Math.min(36,Math.max(1,Math.round(Number(x.defaultInstallments)||1))),firstDueDays:Math.min(365,Math.max(0,Math.round(Number(x.firstDueDays)||30))),intervalMonths:Math.min(12,Math.max(1,Math.round(Number(x.intervalMonths)||1))),copies:Math.min(3,Math.max(1,Math.round(Number(x.copies)||1))),footer:String(x.footer||'')};audit(s,'Senet ayarları güncellendi','Ayarlar');writeStore(s);res.json({ok:true,settings:s.promissorySettings})});
+app.post('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=readStore(),x=req.body||{};s.promissorySettings={creditorName:String(x.creditorName||ATAK_COMPANY.legalName),paymentPlace:String(x.paymentPlace||'İstanbul'),issuePlace:String(x.issuePlace||'İstanbul'),prefix:String(x.prefix||'ATAK').replace(/[^A-Za-z0-9_-]/g,'').slice(0,12)||'ATAK',defaultInstallments:Math.min(36,Math.max(1,Math.round(Number(x.defaultInstallments)||1))),firstDueDays:Math.min(365,Math.max(0,Math.round(Number(x.firstDueDays)||30))),intervalMonths:Math.min(12,Math.max(1,Math.round(Number(x.intervalMonths)||1))),copies:Math.min(3,Math.max(1,Math.round(Number(x.copies)||1))),footer:String(x.footer||'')};audit(s,'Senet ayarları güncellendi','Ayarlar');writeStore(s);res.json({ok:true,settings:s.promissorySettings})});
 app.post('/web-api/admin/promissory-plan',requireAdminOrStaff('orders_manage'),(req,res)=>{
  const s=readStore(),x=req.body||{},customer=s.customers.find(c=>c.id===x.customerId);if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
  const total=cleanMoney(x.totalAmount),count=Math.min(36,Math.max(1,Math.round(Number(x.installments)||1)));if(total<=0)return res.status(400).json({error:'Senet toplamı sıfırdan büyük olmalıdır'});

@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v54 */
+/* ATAK_ADMIN_BUILD=fix-v55 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2523,11 +2523,16 @@ function salesCombinedContractSenetA4Html(d){
   const noteList=Array.isArray(d.promissory?.schedule)?d.promissory.schedule.slice():[];
   const net=Number(d.total||0);
   const cfg=salesPromissorySettings||{};
-  const companyLegal=cfg.creditorName||'ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';
+  const companyLegal='ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';
   const site='ATAK EV GEREÇLERİ';
+  const companyTaxOffice='Sarıyer';
+  const companyTaxNo='0940148218';
+  const address='Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul';
+  const companyTaxLine=`VD: ${companyTaxOffice} · Vergi No: ${companyTaxNo}`;
   const atakLogoSrc='/web-admin-assets/atak-header-logo.png';
   const atakLogoWhiteSrc='/web-admin-assets/atak-header-logo-white.png';
-  const phone='0212 223 28 71',wa='0543 358 50 60',email='tarabyabeko@gmail.com',address='Tarabya / Sarıyer · İstanbul';
+  const phone='0212 223 28 71',wa='0543 358 50 60',email='tarabyabeko@gmail.com';
+  void cfg;
   const personName=d.customer?.name||'';
   const personTax=d.customer?.tckn||d.customer?.taxNo||'';
   const addr=[d.customer?.address,d.customer?.district,d.customer?.city].filter(Boolean).join(', ');
@@ -2613,7 +2618,7 @@ function salesCombinedContractSenetA4Html(d){
 @media print{.a4c{page-break-after:avoid!important;min-height:auto!important}.a4c.senet-only{page-break-before:always}}
 </style>`;
   return `<section class="sheet a4c">${css}
-  <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${salesEsc(companyLegal)}</div><div class="meta">${salesEsc(address)}<br/>${salesEsc(phone)} · ${salesEsc(wa)} · ${salesEsc(email)} · VD: Sarıyer · Vergi No: 0940148218</div></div>
+  <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${salesEsc(companyLegal)}</div><div class="meta">${salesEsc(address)}<br/>${salesEsc(phone)} · ${salesEsc(wa)} · ${salesEsc(email)} · ${salesEsc(companyTaxLine)}</div></div>
   <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
   <div class="rule"></div>
   <div class="grid3">
@@ -2624,12 +2629,12 @@ function salesCombinedContractSenetA4Html(d){
   <div class="parties"><div class="box"><h3>KEFİL</h3><table>${partyRows(guarantor)}</table></div><div class="box"><h3>BORÇLU</h3><table>${partyRows({name:personName,tckn:personTax,phone:d.customer?.phone||'',workPhone:d.customer?.workPhone||'',homePhone:d.customer?.homePhone||'',address:addr,workAddress:d.customer?.workAddress||''})}</table></div></div>
   <div class="pay"><b>Ödeme:</b> ${salesEsc(d.method||'-')}${(d.payments||[]).length?` · ${(d.payments||[]).map(p=>`${salesEsc(p.method||'')}: ${salesMoney(p.amount)}`).join(' · ')}`:''}${d.salesperson?.name?` · Satıcı: ${salesEsc(d.salesperson.name)}`:''}</div>
   <div class="terms"><h4>ANLAŞMA ŞARTLARI</h4>
-  <p><b>1)</b> Alıcı / borçlu, ATAK EV GEREÇLERİ PAZARLAMA TİC. LTD. ŞTİ.’nden yukarıda cinsi, adedi, özellikleri ve bedeli yazılı ürünleri görüp beğenerek satın almıştır. Peşinat ve taksit tutarlarını vade tarihlerinde, satıcının şube adreslerine makbuz karşılığı ödemeyi kabul ve taahhüt eder. Senetler bu sözleşmenin eki ve ayrılmaz parçasıdır.</p>
+  <p><b>1)</b> Alıcı / borçlu, ${salesEsc(companyLegal)}’nden yukarıda cinsi, adedi, özellikleri ve bedeli yazılı ürünleri görüp beğenerek satın almıştır. Peşinat ve taksit tutarlarını vade tarihlerinde, satıcının şube adreslerine makbuz karşılığı ödemeyi kabul ve taahhüt eder. Senetler bu sözleşmenin eki ve ayrılmaz parçasıdır.</p>
   <p><b>2)</b> Taksitlerden herhangi birinin vadesinde ödenmemesi halinde aylık %4 gecikme faizi uygulanır. Ayrıca bakiye üzerinden %20 oranında cezai şart talep edilebilir. Bir taksitin ödenmemesi halinde kalan tüm taksitler muaccel olur; satıcı yasal takip ve tahsilat masraflarını borçludan / kefilden isteyebilir. 4077 sayılı Tüketicinin Korunması Hakkında Kanun hükümleri saklıdır.</p>
   <p><b>3)</b> Ürünlerin teslimi, satıcının alıcı hakkında yapacağı olumlu kredi / risk değerlendirmesine bağlıdır. Beyaz eşya, mobilya, mutfak ve benzeri ürünler üretici / ithalatçı garanti şartlarına tabidir. Montaj ve onarım yetkili servislerce yapılır; aksi halde garanti kapsamı dışına çıkılabilir.</p>
   <p><b>4)</b> Taraflar işbu sözleşmeyi okuyup müzakere ederek imzalamışlardır. Uyuşmazlıklarda İstanbul Mahkemeleri ve İcra Daireleri yetkilidir. Kefil, borçlu ile birlikte müteselsil sorumludur. Bu belge mali fatura yerine geçmez; 4077 sayılı Kanun ve ilgili mevzuat hükümleri uygulanır.</p></div>
   <div class="signs"><div class="sig"><b>SATICI</b><small>Kaşe / İmza</small><div class="nm">${salesEsc(companyLegal)}</div></div><div class="sig"><b>KEFİL</b><small>İşbu anlaşmadaki yazılı bütün şartları borçlu gibi okudum ve aynen kabul ettim.</small><div class="nm">${salesEsc(guarantor.name||'İmza')}</div></div><div class="sig"><b>BORÇLU</b><small>İşbu anlaşmadaki yazılı bütün şartları okudum ve aynen kabul ettim.</small><div class="nm">${salesEsc(personName||'İmza')}</div></div></div>
-  <div class="grow"><div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${salesEsc(address)}<br/>${salesEsc(phone)}<br/>${salesEsc(email)}<br/>VD: Sarıyer · Vergi No: 0940148218</div></div>
+  <div class="grow"><div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${salesEsc(address)}<br/>${salesEsc(phone)}<br/>${salesEsc(email)}<br/>${salesEsc(companyTaxLine)}</div></div>
   <div class="senet-main"><div class="senet-bar"><b>SENET</b><span>Emre muharrer bono · ${salesEsc(saleRef)}</span></div>
   <div class="fields"><div><span>Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Hululü Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Türk Lirası</span><b>${senetAmount>0?salesMoney(senetAmount):''}</b></div><div><span>No.</span><b>${salesEsc(senetNo)}</b></div></div>
   <p class="sbody">İşbu emre muharrer bono mukabilinde <b style="color:#b91c1c">${salesEsc(companyLegal)}</b> veya emrine <u>${dateTR(senetDue)||'........'}</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. Taksitler satış sözleşmesindeki vade tablosuna göredir; bir taksitin ödenmemesi halinde kalan tutar muaccel olur. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri yetkilidir.</p>
