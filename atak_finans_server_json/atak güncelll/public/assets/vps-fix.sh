@@ -67,6 +67,12 @@ check "personel odeme plani" grep -q 'id="salesPayPlanToggleBtn"' "$SRC/public/p
 check "e-fatura kesilmeyen sekmesi" grep -q 'data-inv-module="pending"' "$SRC/public/admin.html"
 check "admin cache $EXPECT_BUILD" grep -q "admin.js?v=$EXPECT_BUILD" "$SRC/public/admin.html"
 check "personel cache $EXPECT_BUILD" grep -q "personel.js?v=$EXPECT_BUILD" "$SRC/public/personel.html"
+check "senet resmi unvan" grep -q "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ." "$SRC/public/assets/admin.js"
+check "senet Ferahevler adres" grep -q "Ferahevler Mah. Adnan Kahveci Cad. No:109" "$SRC/public/assets/admin.js"
+if grep -q "companyLegal=cfg.creditorName" "$SRC/public/assets/admin.js"; then
+  echo "   HATALI: senet hâlâ creditorName/Atak Home kullanıyor"; exit 1
+fi
+echo "   ok: senette Atak Home yok (sabit resmi unvan)"
 check "yeni personel arayuzu" grep -q 'personel-shell.css' "$SRC/public/personel.html"
 check "kokpit css" test -f "$SRC/public/assets/admin-cockpit.css"
 check "kokpit api" grep -q 'dashboard-cockpit' "$SRC/server.js"
