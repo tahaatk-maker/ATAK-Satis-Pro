@@ -865,8 +865,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.50-vergi-no',
-  build:'fix-v49',
+  version:'6.3.51-client-print',
+  build:'fix-v50',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
