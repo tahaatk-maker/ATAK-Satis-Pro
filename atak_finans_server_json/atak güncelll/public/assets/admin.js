@@ -1303,6 +1303,43 @@ function renderCustomerSaleItems(items=[]){
     return `<div class="customer-sale-item"><div><b>${qty}× ${name}</b>${code?`<small>${code}</small>`:''}<small>Birim: ${money2(i.unitPrice||0)}</small></div><strong>${money2(line)}</strong></div>`;
   }).join('')}</div>`;
 }
+function customerSaleActionButtons(t,{compact=false}={}){
+  const kind=String(t.kind||'');
+  if(kind!=='sale'||t.cancelled||!t.id)return '';
+  const id=String(t.id).replace(/"/g,'&quot;');
+  const ref=salesEsc(t.reference||'');
+  if(compact){
+    return `<div class="customer-sale-actions compact">
+      <button type="button" class="secondary-btn" data-sale-edit="${id}">Düzenle</button>
+      <button type="button" class="secondary-btn" data-sale-return="${id}" data-ref="${ref}">İade</button>
+      <button type="button" data-sale-cancel="${id}" data-ref="${ref}">İptal</button>
+    </div>`;
+  }
+  return `<div class="customer-sale-actions">
+    <button type="button" class="secondary-btn" data-sale-edit="${id}">Düzenle / Kısmi İade</button>
+    <button type="button" class="secondary-btn" data-sale-return="${id}" data-ref="${ref}">Tam İade</button>
+    <button type="button" data-sale-cancel="${id}" data-ref="${ref}">İptal</button>
+    <button type="button" class="tx-docs-btn" data-sale-docs="${id}">Belge Yazdır</button>
+  </div>`;
+}
+function bindCustomerSaleActions(root){
+  if(!root)return;
+  root.querySelectorAll('[data-sale-docs]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const id=btn.dataset.saleDocs;
+      if(id)window.open('/web-api/admin/sale/'+encodeURIComponent(id)+'/print-docs','_blank');
+    });
+  });
+  root.querySelectorAll('[data-sale-edit]').forEach(btn=>{
+    btn.addEventListener('click',()=>openSaleEditModal(btn.dataset.saleEdit));
+  });
+  root.querySelectorAll('[data-sale-return]').forEach(btn=>{
+    btn.addEventListener('click',()=>requestCancellation('sale',btn.dataset.saleReturn,btn.dataset.ref||'',{requestKind:'return'}));
+  });
+  root.querySelectorAll('[data-sale-cancel]').forEach(btn=>{
+    btn.addEventListener('click',()=>requestCancellation('sale',btn.dataset.saleCancel,btn.dataset.ref||'',{requestKind:'cancel'}));
+  });
+}
 function renderCustomerSaleCard(t){
   const kind=String(t.kind||'');
   const cancelled=t.cancelled||kind==='sale_cancel';
@@ -1312,9 +1349,6 @@ function renderCustomerSaleCard(t){
   const disc=Number(t.discountAmount!=null?t.discountAmount:Math.max(0,gross-net));
   const meta=[t.reference,t.salespersonName||t.createdBy,t.paymentMethod,t.dealerName].filter(Boolean).join(' · ');
   const itemCount=(t.items||[]).length;
-  const docs=t.id&&kind==='sale'&&!cancelled
-    ?`<button type="button" class="tx-docs-btn" data-sale-docs="${String(t.id).replace(/"/g,'&quot;')}">Belge Yazdır</button>`
-    :'';
   return `<article class="customer-sale-card${cancelled?' is-cancelled':''}">
     <div class="customer-tx-sale-head">
       <div><b>${t.date||'-'} · ${label}</b><small>${meta||t.description||''}</small>${itemCount?`<small>${itemCount} kalem</small>`:''}</div>
@@ -1325,8 +1359,8 @@ function renderCustomerSaleCard(t){
       <span>Brüt ${money2(gross)}</span>
       ${disc>0?`<span>İskonto %${Number(t.discountPct||0)} (−${money2(disc)})</span>`:''}
       <span><b>Net ${money2(net)}</b></span>
-      ${docs}
     </div>
+    ${customerSaleActionButtons(t)}
   </article>`;
 }
 function renderCustomerTransaction(t){
@@ -1338,7 +1372,7 @@ function renderCustomerTransaction(t){
     const net=Number(t.displayAmount!=null?t.displayAmount:(t.total!=null?t.total:Math.abs(Number(t.customerDelta||0))));
     const summary=t.itemSummary||(t.items||[]).map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', ');
     const meta=[t.reference,t.paymentMethod,summary].filter(Boolean).join(' · ');
-    return `<div class="customer-tx customer-tx-sale-compact${cancelled?' is-cancelled':''}"><div><b>${t.date||'-'} · ${label}</b><small>${meta||t.description||'-'}</small></div><strong class="${kind==='sale_cancel'?'credit':'debt'}">${money2(net)}</strong></div>`;
+    return `<div class="customer-tx customer-tx-sale-compact${cancelled?' is-cancelled':''}"><div><b>${t.date||'-'} · ${label}</b><small>${meta||t.description||'-'}</small>${customerSaleActionButtons(t,{compact:true})}</div><strong class="${kind==='sale_cancel'?'credit':'debt'}">${money2(net)}</strong></div>`;
   }
   const amt=Number(t.displayAmount!=null?t.displayAmount:t.amount||0);
   const cls=amt<0||kind==='collection'||kind==='collection_cancel'?(amt<=0&&kind==='collection'?'credit':(amt<0?'credit':'debt')):(Number(t.customerDelta||0)<0?'credit':'debt');
@@ -1469,12 +1503,7 @@ async function selectCustomerPage(id){
       salesList.innerHTML=sales.length
         ?sales.slice(0,50).map(renderCustomerSaleCard).join('')
         :'<div class="note">Bu müşterinin henüz alışverişi yok.</div>';
-      salesList.querySelectorAll('[data-sale-docs]').forEach(btn=>{
-        btn.addEventListener('click',()=>{
-          const id=btn.dataset.saleDocs;
-          if(id)window.open('/web-api/admin/sale/'+encodeURIComponent(id)+'/print-docs','_blank');
-        });
-      });
+      bindCustomerSaleActions(salesList);
     }
     if(q('#customerTransactionCount'))q('#customerTransactionCount').textContent=`${tx.length} hareket · ${activeSales.length} satış`;
     const list=q('#customerTransactionList');
@@ -1483,6 +1512,7 @@ async function selectCustomerPage(id){
       if(d.pendingDelete)banners.push(`<div class="customer-pending-banner danger">Bekleyen silme onayı var · ${salesEsc(d.pendingDelete.requestedByName||'Personel')} · ${String(d.pendingDelete.requestedAt||'').replace('T',' ').slice(0,16)} · ${salesEsc(d.pendingDelete.reason||'')}</div>`);
       if(d.pendingEdit)banners.push(`<div class="customer-pending-banner">Bekleyen düzenleme onayı var · ${salesEsc(d.pendingEdit.requestedByName||'Personel')} · ${String(d.pendingEdit.requestedAt||'').replace('T',' ').slice(0,16)}</div>`);
       list.innerHTML=banners.join('')+(tx.length?tx.slice(0,80).map(renderCustomerTransaction).join(''):'<div class="note">Henüz cari hareket yok.</div>');
+      bindCustomerSaleActions(list);
       list.querySelectorAll('[data-receipt-url]').forEach(btn=>{
         btn.addEventListener('click',()=>{
           const url=btn.dataset.receiptUrl;
@@ -4249,15 +4279,20 @@ q('#reasonModalSubmit')?.addEventListener('click',async()=>{
   closeReasonModal();
   if(cb)await cb(reason);
 });
-async function requestCancellation(targetType,targetId,ref=''){
+async function requestCancellation(targetType,targetId,ref='',opts={}){
+  const requestKind=String(opts.requestKind||'').toLowerCase()==='return'?'return':'cancel';
+  const isReturn=requestKind==='return'&&targetType==='sale';
   openReasonModal({
-    title:targetType==='collection'?'Tahsilat İptal Sebebi':'Satış İptal Sebebi',
-    hint:`${ref||'İşlem'} için iptal sebebi yazın. Talep Yönetici Onayları’na gider; onaylanınca cari, kasa/banka, stok ve prim düzeltilir.`,
+    title:targetType==='collection'?'Tahsilat İptal Sebebi':(isReturn?'Satış İade Sebebi':'Satış İptal Sebebi'),
+    hint:isReturn
+      ?`${ref||'Satış'} için tam iade sebebi yazın. Tüm satış geri alınır; kısmi iade için Düzenle’yi kullanın. Talep Yönetici Onayları’na gider.`
+      :`${ref||'İşlem'} için iptal sebebi yazın. Talep Yönetici Onayları’na gider; onaylanınca cari, kasa/banka, stok ve prim düzeltilir.`,
     onSubmit:async(reason)=>{
       try{
-        await api('/web-api/admin/cancellation-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetType,targetId,reason})});
-        toast('İptal talebi yönetici onayına gönderildi');
+        await api('/web-api/admin/cancellation-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetType,targetId,reason,requestKind})});
+        toast(isReturn?'İade talebi yönetici onayına gönderildi':'İptal talebi yönetici onayına gönderildi');
         await loadMySalesReport();await loadStaffSalesReport();await loadApprovals();
+        if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId).catch(()=>{});
       }catch(e){toast(e.message)}
     }
   });
@@ -4378,12 +4413,13 @@ q('#saleEditSubmit')?.addEventListener('click',async()=>{
     toast('Satış düzenlemesi yönetici onayına gönderildi');
     closeSaleEditModal();
     await loadStaffSalesReport();await loadMySalesReport();await loadApprovals();
+    if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId).catch(()=>{});
   }catch(e){st.textContent=e.message;st.className='form-status error'}
 });
 function reportSaleActions(r){
   if(r.pendingCancel)return `<span class="approval-status pending" title="${salesEsc(r.pendingReason||'')}">İptal onayı bekliyor</span>`;
   if(r.pendingEdit)return `<span class="approval-status pending" title="${salesEsc(r.pendingReason||'')}">Düzenleme onayı bekliyor</span>`;
-  return `<button type="button" class="secondary-btn" data-sale-edit="${r.id}">Düzenle</button> <button type="button" data-report-cancel="${r.id}" data-ref="${salesEsc(r.reference||'')}">İptal</button>`;
+  return `<button type="button" class="secondary-btn" data-sale-edit="${r.id}">Düzenle</button> <button type="button" class="secondary-btn" data-report-return="${r.id}" data-ref="${salesEsc(r.reference||'')}">İade</button> <button type="button" data-report-cancel="${r.id}" data-ref="${salesEsc(r.reference||'')}">İptal</button>`;
 }
 async function loadMySalesReport(){
   const st=q('#mySalesStatus');
@@ -4399,6 +4435,7 @@ async function loadMySalesReport(){
     q('#mySalesRankHint').textContent=`${d.period==='month'?'Aylık':'Günlük'} · ${d.label||''} · çok satan üstte`;
     q('#mySalesTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.date||'-'}</td><td>${r.dealerName||'-'}</td><td>${r.salespersonName||'-'}</td><td><b>${salesMoney(r.total)}</b></td><td>%${Number(r.discountPct||0)}</td><td><b>${salesMoney(r.commissionAmount||0)}</b></td><td>${reportSaleActions(r)}</td></tr>`).join('')||'<tr><td colspan="7">Satış yok.</td></tr>';
     qa('#mySalesTable [data-report-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportCancel,b.dataset.ref));
+    qa('#mySalesTable [data-report-return]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportReturn,b.dataset.ref,{requestKind:'return'}));
     qa('#mySalesTable [data-sale-edit]').forEach(b=>b.onclick=()=>openSaleEditModal(b.dataset.saleEdit));
     st.textContent=`NET ${salesMoney(d.summary?.net||0)} · ${d.ranking?.length||0} personel · ${d.rows?.length||0} satış`;
     st.className='form-status success';
@@ -4431,6 +4468,7 @@ async function loadStaffSalesReport(){
       q('#staffCollectionsTable').innerHTML=cols.map(c=>`<tr><td>${c.date||'-'}</td><td>${c.customerName||'-'}</td><td><b>${salesMoney(c.amount)}</b></td><td>${c.accountName||c.category||'-'}</td><td>${c.reference||'-'}</td><td>${c.pendingCancel?'<span class="approval-status pending">Onay bekliyor</span>':`<button type="button" data-col-cancel="${c.id}" data-ref="${c.reference||''}">İptal</button>`}</td></tr>`).join('')||'<tr><td colspan="6">Tahsilat yok.</td></tr>';
     }catch(_){q('#staffCollectionsTable').innerHTML='<tr><td colspan="6">Tahsilat yüklenemedi.</td></tr>'}
     qa('#staffSalesTable [data-report-cancel]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportCancel,b.dataset.ref));
+    qa('#staffSalesTable [data-report-return]').forEach(b=>b.onclick=()=>requestCancellation('sale',b.dataset.reportReturn,b.dataset.ref,{requestKind:'return'}));
     qa('[data-col-cancel]').forEach(b=>b.onclick=()=>requestCancellation('collection',b.dataset.colCancel,b.dataset.ref));
     qa('#staffSalesTable [data-sale-edit]').forEach(b=>b.onclick=()=>openSaleEditModal(b.dataset.saleEdit));
     if(!d.canManage){q('[data-tab="staffSalesReport"]')?.classList.add('hidden');q('[data-tab="managerApprovals"]')?.classList.add('hidden')}
