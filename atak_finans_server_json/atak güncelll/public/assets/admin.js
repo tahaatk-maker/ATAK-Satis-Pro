@@ -2522,7 +2522,6 @@ function salesCombinedContractSenetA4Html(d){
   const items=d.items||[];
   const noteList=Array.isArray(d.promissory?.schedule)?d.promissory.schedule.slice():[];
   const net=Number(d.total||0);
-  const cfg=salesPromissorySettings||{};
   const companyLegal='ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';
   const site='ATAK EV GEREÇLERİ';
   const companyTaxOffice='Sarıyer';
@@ -2532,7 +2531,6 @@ function salesCombinedContractSenetA4Html(d){
   const atakLogoSrc='/web-admin-assets/atak-header-logo.png';
   const atakLogoWhiteSrc='/web-admin-assets/atak-header-logo-white.png';
   const phone='0212 223 28 71',wa='0543 358 50 60',email='tarabyabeko@gmail.com';
-  void cfg;
   const personName=d.customer?.name||'';
   const personTax=d.customer?.tckn||d.customer?.taxNo||'';
   const addr=[d.customer?.address,d.customer?.district,d.customer?.city].filter(Boolean).join(', ');
