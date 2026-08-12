@@ -69,6 +69,10 @@ check "admin cache $EXPECT_BUILD" grep -q "admin.js?v=$EXPECT_BUILD" "$SRC/publi
 check "personel cache $EXPECT_BUILD" grep -q "personel.js?v=$EXPECT_BUILD" "$SRC/public/personel.html"
 check "senet resmi unvan" grep -q "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ." "$SRC/public/assets/admin.js"
 check "senet Ferahevler adres" grep -q "Ferahevler Mah. Adnan Kahveci Cad. No:109" "$SRC/public/assets/admin.js"
+if grep -n "companyLegal=cfg.creditorName\|companyLegal=.*Atak Home\|address='Tarabya" "$SRC/public/assets/admin.js" "$SRC/public/assets/personel.js" "$SRC/server.js" >/dev/null 2>&1; then
+  echo "   HATALI: senet sablonunda Atak Home / Tarabya / creditorName kalintisi var"; exit 1
+fi
+echo "   ok: senet sablonunda Atak Home yok"
 if grep -q "companyLegal=cfg.creditorName" "$SRC/public/assets/admin.js"; then
   echo "   HATALI: senet hâlâ creditorName/Atak Home kullanıyor"; exit 1
 fi
