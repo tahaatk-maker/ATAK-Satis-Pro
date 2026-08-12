@@ -356,6 +356,7 @@ const PERMISSION_CATALOG=[
   {id:'screen_staff_sales_report',name:'Personel Satış Raporu',group:'Finans & Cari'},
   {id:'screen_manager_approvals',name:'Yönetici Onayları',group:'Finans & Cari'},
   {id:'screen_profit',name:'Kâr & Maliyet',group:'Finans & Cari'},
+  {id:'screen_reports',name:'Raporlar',group:'Finans & Cari'},
   {id:'screen_invoice_center',name:'e-Fatura Merkezi',group:'Finans & Cari'},
   {id:'orders_manage',name:'Satış kaydı yap (POS API)',group:'Satış işlemleri'},
   {id:'sale_docs',name:'Sözleşme / Senet bas',group:'Satış işlemleri'},
@@ -384,7 +385,7 @@ const ROLE_PRESETS={
   admin:{name:'Yönetici',permissions:[
     'dashboard_view','products_manage','marketing_manage','finance_manage','sync_manage','users_manage',
     'orders_manage','sale_docs','sale_offer','sale_invoice_qnb','sale_deduct_stock','customers_manage','invoices_manage',
-    ...STAFF_DEFAULT_SCREENS,'screen_staff_sales_report','screen_manager_approvals','screen_profit','stock_manage','foundation_manage','settings_manage','reports_view'
+    ...STAFF_DEFAULT_SCREENS,'screen_staff_sales_report','screen_manager_approvals','screen_profit','screen_reports','stock_manage','foundation_manage','settings_manage','reports_view'
   ]},
   super_admin:{name:'Süper Admin',permissions:['*']},
   sales:{name:'Satış Personeli',permissions:[
@@ -396,7 +397,7 @@ const ROLE_PRESETS={
   warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','stock_view','orders_view','screen_sales_tracking']},
   accounting:{name:'Muhasebe',permissions:[
     'dashboard_view','finance_manage','finance_view','orders_view','invoices_manage','sale_invoice_qnb',
-    'screen_finance','screen_uninvoiced','screen_customer_payments','screen_customers','screen_invoice_center','screen_my_sales','screen_profit'
+    'screen_finance','screen_uninvoiced','screen_customer_payments','screen_customers','screen_invoice_center','screen_my_sales','screen_profit','screen_reports'
   ]},
   service:{name:'Servis',permissions:['dashboard_view','orders_view','screen_sales_tracking']},
   viewer:{name:'Sadece Görüntüleme',permissions:['dashboard_view','products_view','orders_view']}
@@ -863,8 +864,8 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{ma
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.38-istikbal-mobilya-duzelt',
-  build:'fix-v37',
+  version:'6.3.39-raporlar-merkezi',
+  build:'fix-v38',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -2558,6 +2559,91 @@ app.get('/web-api/admin/profit-report',requireAdmin,(req,res)=>{
     note:'Kâr KDV hariç hesaplanır. Maliyet, ürün kartındaki alış fiyatından satış anında sabitlenir.'
   });
 });
+
+/** Raporlar merkezi — tek ekranda satış / kâr / stok / katalog özeti */
+app.get('/web-api/admin/reports-hub',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  const today=todayISO();
+  const monthStart=`${today.slice(0,7)}-01`;
+  const from=String(req.query.from||monthStart).slice(0,10);
+  const to=String(req.query.to||today).slice(0,10);
+
+  const sales=(s.financeTransactions||[]).filter(t=>{
+    if(t.kind!=='sale'||t.cancelled)return false;
+    const key=txDateKey(t);
+    return key&&key>=from&&key<=to;
+  });
+
+  const blank=()=>({revenue:0,revenueExVat:0,cost:0,grossProfit:0,commission:0,netProfit:0,count:0});
+  const sum={...blank(),missingCostCount:0};
+  const byBrand={beko:blank(),istikbal:blank(),other:blank()};
+  for(const t of sales){
+    const b=saleProfitBreakdown(s,t);
+    sum.count+=1;sum.revenue+=b.revenue;sum.revenueExVat+=b.revenueExVat;
+    sum.cost+=b.cost;sum.grossProfit+=b.grossProfit;sum.commission+=b.commission;sum.netProfit+=b.netProfit;
+    sum.missingCostCount+=b.missingCostCount;
+    const bucket=byBrand[b.brand]||byBrand.other;
+    bucket.count+=1;bucket.revenue+=b.revenue;bucket.revenueExVat+=b.revenueExVat;
+    bucket.cost+=b.cost;bucket.grossProfit+=b.grossProfit;bucket.commission+=b.commission;bucket.netProfit+=b.netProfit;
+  }
+  const finish=o=>({
+    ...o,
+    revenue:round(o.revenue),revenueExVat:round(o.revenueExVat),cost:round(o.cost),
+    grossProfit:round(o.grossProfit),commission:round(o.commission),netProfit:round(o.netProfit),
+    marginPct:o.revenueExVat>0?round(o.grossProfit/o.revenueExVat*100):0
+  });
+
+  const cats=Object.fromEntries((s.categories||[]).map(c=>[c.id,c.name]));
+  const products=s.products||[];
+  const active=products.filter(p=>p.active!==false);
+  const byCatMap=new Map();
+  const brandCount={beko:0,istikbal:0,other:0};
+  let missingPurchase=0;
+  for(const p of active){
+    const catId=p.category||'diger';
+    if(!byCatMap.has(catId))byCatMap.set(catId,{id:catId,name:cats[catId]||catId,count:0,withCost:0});
+    const row=byCatMap.get(catId);row.count+=1;
+    if(normalizeNumber(p.purchasePrice)>0)row.withCost+=1; else missingPurchase+=1;
+    const b=String(p.brand||'').toLocaleLowerCase('tr-TR');
+    if(/istikbal/.test(b))brandCount.istikbal+=1;
+    else if(/beko|grundig/.test(b))brandCount.beko+=1;
+    else brandCount.other+=1;
+  }
+
+  const purchaseInvoices=(s.purchaseInvoices||[]).filter(x=>!x.reverted);
+  const recentPurchases=purchaseInvoices
+    .slice()
+    .sort((a,b)=>String(b.date||b.createdAt||'').localeCompare(String(a.date||a.createdAt||'')))
+    .slice(0,8)
+    .map(x=>({
+      id:x.id,date:x.date,supplierName:x.supplierName,invoiceNo:x.invoiceNo,
+      total:x.total,created:x.created,priceUpdated:x.priceUpdated,itemCount:(x.items||[]).length
+    }));
+
+  res.json({
+    ok:true,from,to,
+    sales:finish(sum),
+    byBrand:{beko:finish(byBrand.beko),istikbal:finish(byBrand.istikbal),other:finish(byBrand.other)},
+    catalog:{
+      total:products.length,
+      active:active.length,
+      missingPurchase,
+      brandCount,
+      byCategory:[...byCatMap.values()].sort((a,b)=>b.count-a.count).slice(0,12)
+    },
+    inventory:inventoryValuation(s),
+    purchases:{count:purchaseInvoices.length,recent:recentPurchases},
+    links:[
+      {tab:'profitCenter',title:'Kâr & Maliyet',desc:'Bayi / ürün / satış kâr dökümü'},
+      {tab:'staffSalesReport',title:'Personel Satış',desc:'Prim ve personel cirosu'},
+      {tab:'revenue',title:'Ciro Kanalları',desc:'Beko / İstikbal / HB manuel + POS'},
+      {tab:'purchaseInvoices',title:'Alış Faturaları',desc:'Maliyet ve stok aktarım geçmişi'},
+      {tab:'stockCenter',title:'Stok & Depo',desc:'Depo bakiyeleri ve hareketler'}
+    ]
+  });
+});
+
 /** Dashboard kokpiti: tek istekte KPI + günlük seri + marka kırılımı + son satışlar */
 app.get('/web-api/admin/dashboard-cockpit',requireAdmin,(req,res)=>{
   const s=readStore();

@@ -166,6 +166,25 @@
   .profit-quick{margin-left:0}
 }
 
+.reports-catalog-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px
+}
+.reports-catalog-grid>div{
+  padding:14px 16px;border:1px solid var(--line,#dce4ef);border-radius:14px;background:#f8fafc
+}
+.reports-catalog-grid small{display:block;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#667890;margin-bottom:6px}
+.reports-catalog-grid b{font-size:22px;color:#0c1a33;font-variant-numeric:tabular-nums}
+.reports-links{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px
+}
+.reports-link-card{
+  display:grid;gap:6px;text-align:left;padding:16px 18px;border:1px solid #dce4ef;
+  border-radius:14px;background:#fff;cursor:pointer;transition:.15s ease
+}
+.reports-link-card:hover{border-color:#1769ff;box-shadow:0 8px 24px rgba(23,105,255,.12)}
+.reports-link-card b{font-size:15px;color:#0c1a33}
+.reports-link-card small{font-size:12px;color:#6d7a90;line-height:1.35}
+
 /* ---- Foundation alt sekmeleri ---- */
 .fnd-tabs{
   display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px

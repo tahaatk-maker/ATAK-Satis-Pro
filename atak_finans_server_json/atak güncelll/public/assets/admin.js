@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v37 */
+/* ATAK_ADMIN_BUILD=fix-v38 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -98,6 +98,7 @@ function goTab(id,{remember=true}={}){
   if(id==='staffSalesReport')setTimeout(loadStaffSalesReport,20);
   if(id==='managerApprovals')setTimeout(loadApprovals,20);
   if(id==='profitCenter')setTimeout(()=>loadProfitReport(),20);
+  if(id==='reportsHub')setTimeout(()=>loadReportsHub(),20);
   if(id==='salesTracking')setTimeout(loadSalesTracking,20);
   if(id==='customerPayments')setTimeout(()=>loadCustomerPayments().catch(e=>toast(e.message)),20);
   if(id==='dynamicsExcelImport')setTimeout(()=>loadDynamicsImport(),20);
@@ -331,6 +332,99 @@ qa('[data-profit-range]').forEach(b=>b.addEventListener('click',()=>{
   const r=profitRangePreset(b.dataset.profitRange);
   q('#profitFrom').value=r.from;q('#profitTo').value=r.to;
   loadProfitReport();
+}));
+
+/* ===== Raporlar Merkezi ===== */
+let reportsHubData=null;
+async function loadReportsHub(){
+  const st=q('#reportsStatus');
+  if(!q('#reportsKpis'))return;
+  if(!q('#reportsFrom').value||!q('#reportsTo').value){
+    const r=profitRangePreset('month');
+    q('#reportsFrom').value=r.from;q('#reportsTo').value=r.to;
+  }
+  try{
+    if(st){st.textContent='Rapor yükleniyor…';st.className='form-status'}
+    const p=new URLSearchParams({from:q('#reportsFrom').value,to:q('#reportsTo').value});
+    const d=await api('/web-api/admin/reports-hub?'+p.toString());
+    reportsHubData=d;
+    renderReportsHub(d);
+    if(st){st.textContent=`${d.from} → ${d.to}`;st.className='form-status success'}
+  }catch(e){
+    if(st){st.textContent=e.message;st.className='form-status error'}
+  }
+}
+function renderReportsHub(d){
+  const s=d.sales||{}, cat=d.catalog||{}, inv=d.inventory||{};
+  const esc=typeof ckEsc==='function'?ckEsc:(t)=>String(t??'').replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  q('#reportsKpis').innerHTML=`
+    <article><small>Satış Adedi</small><b>${s.count||0}</b><span>${d.from} – ${d.to}</span></article>
+    <article><small>Ciro (KDV dah.)</small><b>${money(s.revenue)}</b><span>matrah ${money(s.revenueExVat)}</span></article>
+    <article class="profit-gross"><small>Brüt Kâr</small><b>${money(s.grossProfit)}</b><span>marj ${profitPct(s.marginPct)}</span></article>
+    <article class="profit-net"><small>Net Kâr</small><b>${money(s.netProfit)}</b><span>prim ${money(s.commission)}</span></article>
+    <article><small>Aktif Ürün</small><b>${cat.active||0}</b><span>alışı eksik ${cat.missingPurchase||0}</span></article>`;
+
+  const brandRow=(label,cls,v)=>`<tr>
+    <td><span class="ck-brand-pill ${cls}">${label}</span></td>
+    <td>${v.count||0}</td><td>${money(v.revenue)}</td><td>${money(v.cost)}</td>
+    <td><b>${money(v.grossProfit)}</b></td><td>${profitPct(v.marginPct)}</td></tr>`;
+  const b=d.byBrand||{};
+  q('#reportsBrandTable').innerHTML=`<table><thead><tr><th>Bayi</th><th>Satış</th><th>Ciro</th><th>Maliyet</th><th>Brüt Kâr</th><th>Marj</th></tr></thead><tbody>
+    ${brandRow('Beko','beko',b.beko||{})}
+    ${brandRow('İstikbal','istikbal',b.istikbal||{})}
+    ${Number(b.other?.count||0)>0?brandRow('Diğer','other',b.other):''}
+  </tbody></table>`;
+
+  const bc=cat.brandCount||{};
+  q('#reportsCatalog').innerHTML=`
+    <div class="reports-catalog-grid">
+      <div><small>Beko / Grundig</small><b>${bc.beko||0}</b></div>
+      <div><small>İstikbal</small><b>${bc.istikbal||0}</b></div>
+      <div><small>Diğer marka</small><b>${bc.other||0}</b></div>
+      <div><small>Stok maliyeti</small><b>${money(inv.valueIncVat||inv.totalCost||inv.total||0)}</b></div>
+    </div>`;
+
+  const cats=cat.byCategory||[];
+  q('#reportsCategoryTable').innerHTML=cats.length
+    ?`<table><thead><tr><th>Kategori</th><th>Ürün</th><th>Alışı dolu</th></tr></thead><tbody>${
+      cats.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td>${c.count}</td><td>${c.withCost}</td></tr>`).join('')
+    }</tbody></table>`
+    :'<p class="note">Kategori verisi yok</p>';
+
+  const purchases=d.purchases?.recent||[];
+  q('#reportsPurchaseTable').innerHTML=purchases.length
+    ?`<table><thead><tr><th>Tarih</th><th>Tedarikçi</th><th>Kalem</th><th>Toplam</th></tr></thead><tbody>${
+      purchases.map(x=>`<tr><td>${esc(x.date||'-')}</td><td>${esc(x.supplierName||'-')}<small>${esc(x.invoiceNo||'')}</small></td><td>${x.itemCount||0}</td><td><b>${money(x.total)}</b></td></tr>`).join('')
+    }</tbody></table>`
+    :'<p class="note">Henüz alış aktarımı yok</p>';
+
+  q('#reportsLinks').innerHTML=(d.links||[]).map(l=>`
+    <button type="button" class="reports-link-card" data-go="${esc(l.tab)}">
+      <b>${esc(l.title)}</b><small>${esc(l.desc||'')}</small>
+    </button>`).join('');
+}
+function reportsExportCsv(){
+  if(!reportsHubData){toast('Önce raporu getirin');return}
+  const d=reportsHubData,s=d.sales||{},esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const lines=[];
+  lines.push(['ATAK RAPORLAR',`${d.from} - ${d.to}`].map(esc).join(';'));
+  lines.push(['Satış',s.count,'Ciro',s.revenue,'Brüt Kâr',s.grossProfit,'Net Kâr',s.netProfit].map(esc).join(';'));
+  lines.push(['Bayi','Satış','Ciro','Kâr'].map(esc).join(';'));
+  Object.entries(d.byBrand||{}).forEach(([k,v])=>{
+    lines.push([k,v.count,v.revenue,v.grossProfit].map(esc).join(';'));
+  });
+  const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=`atak-raporlar-${d.from}_${d.to}.csv`;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+q('#reportsRefreshBtn')?.addEventListener('click',()=>loadReportsHub());
+q('#reportsExportBtn')?.addEventListener('click',reportsExportCsv);
+qa('[data-reports-range]').forEach(b=>b.addEventListener('click',()=>{
+  const r=profitRangePreset(b.dataset.reportsRange);
+  q('#reportsFrom').value=r.from;q('#reportsTo').value=r.to;
+  loadReportsHub();
 }));
 
 /* ===== Kokpit: SVG grafikler (harici kütüphane yok) ===== */
@@ -690,6 +784,7 @@ const TAB_PERMISSION_MAP={
   staffSalesReport:'screen_staff_sales_report',
   managerApprovals:'screen_manager_approvals',
   profitCenter:'screen_profit',
+  reportsHub:'screen_profit',
   invoiceCenter:'screen_invoice_center',
   uninvoicedSales:'screen_uninvoiced',
   financeDashboard:'screen_finance',
