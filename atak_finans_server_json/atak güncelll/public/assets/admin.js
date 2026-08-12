@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v59 */
+/* ATAK_ADMIN_BUILD=fix-v60 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2887,8 +2887,28 @@ function purchaseFillWarehouses(selIds=[]){
       const cur=el.value;el.innerHTML=opts||'<option value="">Depo yok</option>';
       if(cur)el.value=cur;
     });
+    purchaseFillCategories(d.categories||[]);
     return d;
   });
+}
+function purchaseFillCategories(list){
+  const el=q('#purchaseExcelCategory');if(!el)return;
+  const cats=(Array.isArray(list)&&list.length?list:(store?.categories||[]))
+    .filter(c=>c&&c.id&&c.name&&c.active!==false)
+    .slice()
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+  const cur=el.value;
+  el.innerHTML='<option value="">Kategori seçin…</option>'+cats.map(c=>`<option value="${purchaseEsc(c.id)}">${purchaseEsc(c.name)}</option>`).join('');
+  if(cur&&cats.some(c=>String(c.id)===String(cur)))el.value=cur;
+  else purchaseSuggestCategory();
+}
+function purchaseSuggestCategory(){
+  const el=q('#purchaseExcelCategory');if(!el)return;
+  const supplier=String(q('#purchaseExcelSupplier')?.value||'');
+  if(/ISTIKBAL|İSTİKBAL|DO[GĞ]TA[SŞ]/i.test(supplier)){
+    const mob=[...el.options].find(o=>/mobilya/i.test(o.textContent||'')||o.value==='mobilya');
+    if(mob){el.value=mob.value;return}
+  }
 }
 function renderPurchaseInvoiceList(d){
   const box=q('#purchaseInvoiceList');if(!box)return;
@@ -2992,8 +3012,11 @@ async function runPurchaseImport(mode){
   if(mode==='cost'&&!withCost){toast('Maliyet okunamadı — Excel’de “Maliyet tutarı” kolonunu kontrol edin');return}
   if(mode==='stock'&&!(matched+will)){toast('Aktarılacak satır yok — önce Önizle');return}
   if(mode==='stock'&&!q('#purchaseExcelWarehouse')?.value){toast('Stok için depo seçin');return}
+  const categoryId=String(q('#purchaseExcelCategory')?.value||'').trim();
+  if(will>0&&!categoryId){toast('Yeni ürün eklenecek — kategori seçin');q('#purchaseExcelCategory')?.focus();return}
+  const catLabel=q('#purchaseExcelCategory')?.selectedOptions?.[0]?.textContent||categoryId;
   const label=mode==='stock'?'Sadece stok':mode==='cost'?'Sadece maliyet':'Aktarım';
-  if(!confirm(`${label} aktarılsın mı?\n${matched} eşleşen · ${will} yeni${mode==='cost'?` · ${withCost} maliyetli`:''}\nSonra Geri Al ile silebilirsin.`))return;
+  if(!confirm(`${label} aktarılsın mı?\n${matched} eşleşen · ${will} yeni${mode==='cost'?` · ${withCost} maliyetli`:''}${will>0?`\nKategori: ${catLabel}`:''}\nSonra Geri Al ile silebilirsin.`))return;
   try{
     status.textContent='Aktarılıyor…';status.className='form-status';
     const fd=new FormData();
@@ -3001,6 +3024,7 @@ async function runPurchaseImport(mode){
     fd.append('mode',mode);
     fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'Arçelik A.Ş.');
     fd.append('warehouseId',q('#purchaseExcelWarehouse')?.value||'');
+    fd.append('categoryId',categoryId);
     fd.append('pricesIncludeVat',q('#purchaseExcelIncVat')?.checked?'1':'0');
     const d=await api('/web-api/admin/purchase-invoice-import',{method:'POST',body:fd});
     status.textContent=mode==='stock'
@@ -3018,6 +3042,7 @@ async function runPurchaseImport(mode){
 }
 q('#purchaseCostBtn')?.addEventListener('click',()=>runPurchaseImport('cost'));
 q('#purchaseStockBtn')?.addEventListener('click',()=>runPurchaseImport('stock'));
+q('#purchaseExcelSupplier')?.addEventListener('change',()=>purchaseSuggestCategory());
 q('#purchaseRefreshListBtn')?.addEventListener('click',()=>loadPurchaseInvoices());
 q('#purchaseZeroIstikbalCostBtn')?.addEventListener('click',async()=>{
   if(!confirm('İstikbal / alış aktarımından gelen ürünlerde ALIŞ MALİYETİ sıfırlansın mı?\nÜrün kartları silinmez — sadece purchasePrice = 0 olur.'))return;
