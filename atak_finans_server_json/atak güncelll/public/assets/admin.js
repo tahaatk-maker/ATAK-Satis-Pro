@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v62 */
+/* ATAK_ADMIN_BUILD=fix-v63 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2879,6 +2879,8 @@ async function loadDynamicsImport(){
 /* ===== Alış Faturaları (Arçelik Excel / manuel) ===== */
 let purchasePreviewData=null;
 let purchaseCategoryList=[];
+let purchaseWarehouseList=[];
+const PURCHASE_WH_LS_KEY='atak_purchase_last_warehouse';
 function purchaseEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function purchaseRowKey(r){
   return String(r?.itemCode||r?.productCode||r?.searchName||r?.matchCode||r?.productName||'').trim();
@@ -2891,14 +2893,102 @@ function purchaseCategoryOptionsHtml(selected=''){
     `<option value="${purchaseEsc(c.id)}" ${String(c.id)===String(selected)?'selected':''}>${purchaseEsc(c.name)}</option>`
   ).join('');
 }
+function purchaseGuessWarehouseId(list,supplier=''){
+  const rows=Array.isArray(list)?list:[];
+  if(!rows.length)return '';
+  if(rows.length===1)return rows[0].id;
+  const last=String(localStorage.getItem(PURCHASE_WH_LS_KEY)||'').trim();
+  if(last&&rows.some(w=>String(w.id)===last))return last;
+  const blob=String(supplier||'').toLocaleUpperCase('tr-TR');
+  const score=w=>{
+    const t=`${w.name||''} ${w.code||''} ${w.storeName||''}`.toLocaleUpperCase('tr-TR');
+    let s=0;
+    if(/AR[CÇ]EL[Iİ]K|BEKO/.test(blob)){
+      if(/BEKO/.test(t))s+=20;
+      if(/MA[GĞ]AZA/.test(t))s+=5;
+    }
+    if(/ISTIKBAL|İSTİKBAL|DO[GĞ]TA[SŞ]/.test(blob)){
+      if(/ISTIKBAL|İSTİKBAL|MOB[Iİ]LYA|DO[GĞ]TA[SŞ]/.test(t))s+=20;
+    }
+    if(/ANA\s*DEPO|^ANA$/.test(t))s-=2;
+    return s;
+  };
+  const ranked=[...rows].sort((a,b)=>score(b)-score(a));
+  return score(ranked[0])>0?ranked[0].id:rows[0].id;
+}
+function purchaseSetWarehouse(id,opts={}){
+  const next=String(id||'');
+  const hidden=q('#purchaseExcelWarehouse');
+  if(hidden)hidden.value=next;
+  qa('#purchaseExcelWarehouseChips .purchase-warehouse-chip').forEach(btn=>{
+    btn.classList.toggle('active',String(btn.dataset.warehouseId)===next);
+  });
+  const man=q('#purchaseManualWarehouse');
+  if(man&&opts.syncManual!==false&&[...man.options].some(o=>o.value===next))man.value=next;
+  const hint=q('#purchaseWarehouseHint');
+  const wh=purchaseWarehouseList.find(w=>String(w.id)===next);
+  if(hint){
+    hint.innerHTML=wh
+      ?`Seçili: <b>${purchaseEsc(wh.name)}</b>${wh.storeName?` · ${purchaseEsc(wh.storeName)}`:''} — stok buraya yazılır`
+      :'Sadece <b>Sadece Stok Aktar</b> için gerekli — bir karta tıkla';
+  }
+  q('#purchaseExcelWarehouseBox')?.classList.toggle('need-stock',Boolean(next));
+}
+function purchaseRenderWarehouseChips(list,preferId=''){
+  purchaseWarehouseList=(Array.isArray(list)?list:[]).filter(w=>w&&w.id&&w.name);
+  const box=q('#purchaseExcelWarehouseChips');
+  const supplier=q('#purchaseExcelSupplier')?.value||'';
+  const pick=preferId&&purchaseWarehouseList.some(w=>String(w.id)===String(preferId))
+    ?preferId
+    :purchaseGuessWarehouseId(purchaseWarehouseList,supplier);
+  if(!box){
+    const hidden=q('#purchaseExcelWarehouse');
+    if(hidden)hidden.value=pick||'';
+    return pick;
+  }
+  if(!purchaseWarehouseList.length){
+    box.innerHTML='<div class="purchase-warehouse-empty">Aktif depo yok — Stok & Depo’dan ekleyin.</div>';
+    purchaseSetWarehouse('');
+    return '';
+  }
+  box.innerHTML=purchaseWarehouseList.map(w=>{
+    const meta=[w.code,w.storeName].filter(Boolean).join(' · ')||'Depo';
+    const tag=/BEKO/i.test(`${w.name} ${w.storeName}`)?`Beko`
+      :(/ISTIKBAL|İSTİKBAL|MOB[Iİ]LYA/i.test(`${w.name} ${w.storeName}`)?`İstikbal`:'');
+    return `<button type="button" class="purchase-warehouse-chip" data-warehouse-id="${purchaseEsc(w.id)}">
+      ${tag?`<span class="purchase-wh-tag">${tag}</span>`:''}
+      <strong>${purchaseEsc(w.name)}</strong>
+      <small>${purchaseEsc(meta)}</small>
+    </button>`;
+  }).join('');
+  box.querySelectorAll('.purchase-warehouse-chip').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      purchaseSetWarehouse(btn.dataset.warehouseId);
+      try{localStorage.setItem(PURCHASE_WH_LS_KEY,btn.dataset.warehouseId||'')}catch{}
+    });
+  });
+  purchaseSetWarehouse(pick);
+  return pick;
+}
+function purchaseSuggestWarehouse(){
+  const id=purchaseGuessWarehouseId(purchaseWarehouseList,q('#purchaseExcelSupplier')?.value||'');
+  if(id)purchaseSetWarehouse(id);
+}
 function purchaseFillWarehouses(selIds=[]){
   return api('/web-api/admin/purchase-invoices').then(d=>{
-    const opts=(d.warehouses||[]).map(w=>`<option value="${purchaseEsc(w.id)}">${purchaseEsc(w.name)}</option>`).join('');
+    const list=d.warehouses||[];
+    const opts=list.map(w=>{
+      const label=[w.name,w.code?`(${w.code})`:'',w.storeName||''].filter(Boolean).join(' ');
+      return `<option value="${purchaseEsc(w.id)}">${purchaseEsc(label||w.name)}</option>`;
+    }).join('');
     selIds.forEach(id=>{
+      if(id==='#purchaseExcelWarehouse')return; // chip picker
       const el=q(id);if(!el)return;
       const cur=el.value;el.innerHTML=opts||'<option value="">Depo yok</option>';
-      if(cur)el.value=cur;
+      if(cur&&list.some(w=>String(w.id)===String(cur)))el.value=cur;
     });
+    const keep=q('#purchaseExcelWarehouse')?.value||'';
+    purchaseRenderWarehouseChips(list,keep);
     purchaseFillCategories(d.categories||[]);
     return d;
   });
@@ -3125,7 +3215,12 @@ async function runPurchaseImport(mode){
   const withCost=Number(purchasePreviewData?.withCost||0);
   if(mode==='cost'&&!withCost){toast('Maliyet okunamadı — Excel’de “Maliyet tutarı” kolonunu kontrol edin');return}
   if(mode==='stock'&&!(matched+will)){toast('Aktarılacak satır yok — önce Önizle');return}
-  if(mode==='stock'&&!q('#purchaseExcelWarehouse')?.value){toast('Stok için depo seçin');return}
+  if(mode==='stock'&&!q('#purchaseExcelWarehouse')?.value){
+    toast('Stok için depo seçin — yukarıdaki depo kartına tıklayın');
+    q('#purchaseExcelWarehouseBox')?.scrollIntoView({behavior:'smooth',block:'center'});
+    q('#purchaseExcelWarehouseBox')?.classList.add('need-stock');
+    return;
+  }
   const categoryId=String(q('#purchaseExcelCategory')?.value||'').trim();
   const categoryMap=purchaseCollectCategoryMap();
   if(will>0){
@@ -3167,6 +3262,10 @@ async function runPurchaseImport(mode){
       :`Maliyet tamam · ${d.invoice.priceUpdated||0} alış güncellendi · ${d.invoice.created||0} yeni ürün · ${money(d.invoice.total)}`;
     status.className='form-status success';
     toast(label+' aktarıldı');
+    if(mode==='stock'){
+      const wh=q('#purchaseExcelWarehouse')?.value||'';
+      if(wh){try{localStorage.setItem(PURCHASE_WH_LS_KEY,wh)}catch{}}
+    }
     purchasePreviewData=null;
     q('#purchaseCostBtn')&&(q('#purchaseCostBtn').disabled=true);
     q('#purchaseStockBtn')&&(q('#purchaseStockBtn').disabled=true);
@@ -3177,7 +3276,10 @@ async function runPurchaseImport(mode){
 }
 q('#purchaseCostBtn')?.addEventListener('click',()=>runPurchaseImport('cost'));
 q('#purchaseStockBtn')?.addEventListener('click',()=>runPurchaseImport('stock'));
-q('#purchaseExcelSupplier')?.addEventListener('change',()=>purchaseSuggestCategory());
+q('#purchaseExcelSupplier')?.addEventListener('change',()=>{
+  purchaseSuggestCategory();
+  purchaseSuggestWarehouse();
+});
 q('#purchaseApplyCategoryBtn')?.addEventListener('click',()=>purchaseApplyDefaultCategoryToRows());
 q('#purchaseNewCategoryBtn')?.addEventListener('click',()=>purchaseCreateCategory());
 q('#purchaseNewCategoryName')?.addEventListener('keydown',e=>{
