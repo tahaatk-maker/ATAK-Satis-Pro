@@ -865,8 +865,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.42-sozlesme-a4',
-  build:'fix-v41',
+  version:'6.3.43-sozlesme-senet',
+  build:'fix-v42',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3307,13 +3307,11 @@ function buildSaleContractHtml(sale,customer,cfg,settings){
   const notes=[];
   return buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes);
 }
-/** Klasik ATAK Satış Sözleşmesi — tek A4 (ürün tablosu + peşinat/bakiye + vade + kefil/borçlu + foto) */
+/** Klasik ATAK Satış Sözleşmesi + Senet — tek A4 */
 function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const items=Array.isArray(sale.items)?sale.items:[];
   const noteList=Array.isArray(notes)?notes.slice().sort((a,b)=>String(a.dueDate||'').localeCompare(String(b.dueDate||''))):[];
-  const gross=Number(sale.grossTotal!=null?sale.grossTotal:sale.total||0);
   const net=Number(sale.total||0);
-  const disc=Number(sale.discountAmount!=null?sale.discountAmount:Math.max(0,gross-net));
   const site=settings?.siteName||cfg.creditorName||'ATAK EV GEREÇLERİ';
   const companyLegal=cfg.creditorName||'ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';
   const phone=settings?.phone||'0212 223 28 71';
@@ -3333,14 +3331,14 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return htmlEsc(s||'');
     const[y,m,day]=s.split('-');return `${day}.${m}.${y}`;
   };
-  const emptyRows=Math.max(0,6-items.length);
-  const productRows=(items.slice(0,6).map(i=>{
+  const emptyRows=Math.max(0,4-items.length);
+  const productRows=(items.slice(0,4).map(i=>{
     const qty=Number(i.quantity||1);
     const total=i.total!=null?i.total:qty*Number(i.unitPrice||0);
     return `<tr><td class="c">${htmlEsc(i.itemCode||i.productCode||'-')}</td><td class="c">${qty}</td><td class="num">${moneyTR(i.unitPrice)}</td><td class="num">${moneyTR(total)}</td></tr>`;
   }).join('')||'')+Array.from({length:emptyRows},()=>'<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>').join('');
-  const schedPad=Math.max(0,5-noteList.length);
-  const scheduleRows=(noteList.slice(0,8).map(n=>`<tr><td class="c">${dateTR(n.dueDate)}</td><td class="num">${moneyTR(n.amount)}</td></tr>`).join('')||'')
+  const schedPad=Math.max(0,4-noteList.length);
+  const scheduleRows=(noteList.slice(0,6).map(n=>`<tr><td class="c">${dateTR(n.dueDate)}</td><td class="num">${moneyTR(n.amount)}</td></tr>`).join('')||'')
     +Array.from({length:schedPad},()=>'<tr><td>&nbsp;</td><td></td></tr>').join('')
     +`<tr><td class="c tot">TOPLAM</td><td class="num tot">${moneyTR(balance||senetTotal)}</td></tr>`;
   const partyRows=(who)=>{
@@ -3348,10 +3346,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
       ['Adı Soyadı',who.name||''],
       ['T.C. Kimlik No',who.tckn||who.taxNo||''],
       ['GSM',who.phone||who.gsm||''],
-      ['İş Tel.',who.workPhone||''],
-      ['Ev Tel.',who.homePhone||''],
-      ['Ev Adresi',who.homeAddress||who.address||''],
-      ['İş Adresi',who.workAddress||'']
+      ['Ev Adresi',who.homeAddress||who.address||'']
     ];
     return rows.map(([l,v])=>`<tr><td class="lbl">${l}</td><td>${htmlEsc(v)}</td></tr>`).join('');
   };
@@ -3362,59 +3357,121 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const corpLine=customerHasCorporateBilling(customer)
     ?`<div class="corp">Fatura firması: <b>${htmlEsc(customer.companyName||'')}</b> · VKN ${htmlEsc(customer.taxNo||'')} · ${htmlEsc(customer.taxOffice||'')}</div>`
     :'';
+
+  // Ana senet: tek taksit varsa o; çokluysa toplam bakiye (vade tablosu sözleşmede)
+  const primary=noteList[0]||null;
+  const senetAmount=primary?Number(primary.amount||0):(senetTotal||balance||0);
+  const senetDue=primary?primary.dueDate:(noteList.at(-1)?.dueDate||'');
+  const senetNo=primary?primary.serial:(sale.reference?`${sale.reference}-SN`:'');
+  const senetWords=senetAmount>0?amountToTrWords(senetAmount):'';
+  const moreSenets=noteList.length>1
+    ?`<div class="senet-note">Bu satışta ${noteList.length} adet senet vardır. Yukarıdaki vade tablosu geçerlidir; her taksit ayrı senet hükmündedir.</div>`
+    :'';
+
+  const extraSenetPages=noteList.slice(1).map((n,idx)=>{
+    const amt=Number(n.amount||0);
+    return `<section class="sheet a4-classic senet-only">
+      <div class="senet-block">
+        <div class="senet-side">
+          <strong>${htmlEsc(companyLegal)}</strong>
+          <div class="brand-row"><span class="pill">beko</span><span class="pill">Bellona</span><span class="pill">istikbal</span></div>
+          <div>${htmlEsc(address)}<br/>Tel: ${htmlEsc(phone)}<br/>${htmlEsc(email)}</div>
+        </div>
+        <div class="senet-main">
+          <div class="senet-head-fields">
+            <div><span>Vade</span><b>${dateTR(n.dueDate)}</b></div>
+            <div><span>Hululü Vade</span><b>${dateTR(n.dueDate)}</b></div>
+            <div><span>Türk Lirası</span><b>${moneyTR(amt)}</b></div>
+            <div><span>No.</span><b>${htmlEsc(n.serial||'')}</b></div>
+          </div>
+          <p class="senet-body">İşbu emre muharrer bono mukabilinde <b class="red">${htmlEsc(companyLegal)}</b> veya emrine <u>${dateTR(n.dueDate)}</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. İşbu senedimin vadesinde ödenmemesi halinde müteakip senetlerimde muacceliyet kesbedeceğini kabul ederim. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri ve İcra Daireleri yetkilidir.</p>
+          <div class="senet-words"><span>Yalnız</span><b>${htmlEsc(amountToTrWords(amt))}</b></div>
+          <div class="senet-parties">
+            <div><span class="red">Ödeyecek</span><div><small>İsim</small><b>${htmlEsc(personName)}</b></div><div><small>Adres</small><b>${htmlEsc(addr||'-')}</b></div></div>
+            <div><span class="red">Müteselsil Borçlu</span><div><small>İsim</small><b>${htmlEsc(guarantor.name||'')}</b></div><div><small>Adres</small><b>${htmlEsc(guarantor.homeAddress||guarantor.address||'')}</b></div></div>
+          </div>
+          <div class="senet-sign"><small>Keşideci İmza</small></div>
+        </div>
+      </div>
+      <div class="foot">${htmlEsc(site)} · Senet ${idx+2}/${noteList.length} · ${htmlEsc(sale.reference||'')}</div>
+    </section>`;
+  }).join('');
+
   return `<section class="sheet a4-classic">
 <style>
-.a4-classic{padding:7mm 8mm 6mm!important;font:10.5px/1.35 "Segoe UI",Arial,sans-serif;color:#1a1a1a;position:relative;overflow:hidden}
+.a4-classic{padding:5.5mm 7mm 5mm!important;font:9.5px/1.28 "Segoe UI",Arial,sans-serif;color:#1a1a1a;position:relative;overflow:hidden}
 .a4-classic *{box-sizing:border-box}
-.a4-classic .wm{position:absolute;inset:30% 14% 24%;background:radial-gradient(circle at 50% 45%,#0b2a5522,#0000 68%);opacity:.55;pointer-events:none}
-.a4-classic .head{display:grid;grid-template-columns:1.15fr .95fr 42mm;gap:8px;align-items:stretch;border-bottom:2.5px solid #0b2a55;padding-bottom:6px;margin-bottom:6px;position:relative;z-index:1}
-.a4-classic .co{font-size:9px;line-height:1.35;color:#4a5568}
-.a4-classic .co strong{display:block;color:#0b2a55;font-size:11.5px;margin-bottom:2px}
-.a4-classic .brands{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:4px;text-align:right}
-.a4-classic .brand-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.a4-classic .pill{border:1px solid #c9d4e2;border-radius:4px;padding:3px 7px;font-weight:800;font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:#0b2a55;background:#f7fafc}
-.a4-classic .doc-title{margin:0;color:#c41230;font-size:15px;font-weight:900;letter-spacing:.04em;line-height:1.1;text-align:right}
-.a4-classic .photo{border:1.5px dashed #9aa8bc;border-radius:6px;background:#f8fafc;min-height:42mm;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.a4-classic .red{color:#c41230}
+.a4-classic .head{display:grid;grid-template-columns:1.2fr .85fr 34mm;gap:6px;align-items:stretch;border-bottom:2px solid #0b2a55;padding-bottom:4px;margin-bottom:4px}
+.a4-classic .co{font-size:8px;line-height:1.3;color:#4a5568}
+.a4-classic .co strong{display:block;color:#0b2a55;font-size:10.5px;margin-bottom:1px}
+.a4-classic .brands{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:2px;text-align:right}
+.a4-classic .brand-row{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.a4-classic .pill{border:1px solid #c9d4e2;border-radius:3px;padding:2px 5px;font-weight:800;font-size:8px;letter-spacing:.03em;text-transform:uppercase;color:#0b2a55;background:#f7fafc}
+.a4-classic .doc-title{margin:0;color:#c41230;font-size:13px;font-weight:900;letter-spacing:.04em;line-height:1.05;text-align:right}
+.a4-classic .photo{border:1.2px dashed #9aa8bc;border-radius:5px;background:#f8fafc;min-height:28mm;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
 .a4-classic .photo img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
-.a4-classic .photo .ph{color:#7a8799;font-size:9px;font-weight:700;text-align:center;padding:6px}
-.a4-classic .mid{display:grid;grid-template-columns:1.25fr .72fr .78fr;gap:6px;margin:6px 0;position:relative;z-index:1}
+.a4-classic .photo .ph{color:#7a8799;font-size:8px;font-weight:700;text-align:center;padding:4px}
+.a4-classic .mid{display:grid;grid-template-columns:1.25fr .7fr .75fr;gap:5px;margin:4px 0}
 .a4-classic table.grid{width:100%;border-collapse:collapse;table-layout:fixed}
-.a4-classic table.grid th,.a4-classic table.grid td{border:1px solid #1a1a1a;padding:3px 4px;vertical-align:middle;height:16px}
-.a4-classic table.grid th{background:#eef2f6;font-size:8.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;text-align:center}
+.a4-classic table.grid th,.a4-classic table.grid td{border:1px solid #1a1a1a;padding:2px 3px;vertical-align:middle;height:13px}
+.a4-classic table.grid th{background:#eef2f6;font-size:7.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;text-align:center}
 .a4-classic .num{text-align:right;font-variant-numeric:tabular-nums}
 .a4-classic .c{text-align:center}
-.a4-classic table.meta td:first-child{width:42%;background:#eef2f6;font-weight:700;white-space:nowrap}
-.a4-classic table.meta td{font-size:9.5px}
+.a4-classic table.meta td:first-child{width:44%;background:#eef2f6;font-weight:700;white-space:nowrap}
+.a4-classic table.meta td{font-size:8.5px}
 .a4-classic .tot{font-weight:800;background:#f3f6fa!important}
-.a4-classic .party{display:grid;grid-template-columns:1fr 1fr;border:1px solid #1a1a1a;margin:6px 0;position:relative;z-index:1}
+.a4-classic .party{display:grid;grid-template-columns:1fr 1fr;border:1px solid #1a1a1a;margin:4px 0}
 .a4-classic .party .col + .col{border-left:1px solid #1a1a1a}
-.a4-classic .party h3{margin:0;padding:4px 6px;background:#0b2a55;color:#fff;font-size:10px;letter-spacing:.06em;text-align:center}
+.a4-classic .party h3{margin:0;padding:3px 5px;background:#0b2a55;color:#fff;font-size:9px;letter-spacing:.05em;text-align:center}
 .a4-classic .party table{width:100%;border-collapse:collapse}
-.a4-classic .party td{border-bottom:1px solid #c5ced8;padding:3px 6px;font-size:9.5px;height:15px}
+.a4-classic .party td{border-bottom:1px solid #c5ced8;padding:2px 5px;font-size:8.5px;height:13px}
 .a4-classic .party tr:last-child td{border-bottom:0}
-.a4-classic .party td.lbl{width:34%;background:#f3f6fa;font-weight:700;color:#4a5568;font-size:8.5px}
-.a4-classic .corp{margin:4px 0;font-size:9px;color:#4a5568;position:relative;z-index:1}
-.a4-classic .terms{margin-top:6px;position:relative;z-index:1}
-.a4-classic .terms h4{margin:0 0 3px;font-size:10px;letter-spacing:.05em;color:#0b2a55;border-bottom:1px solid #0b2a55;display:inline-block;padding-bottom:1px}
-.a4-classic .terms p{margin:0 0 3px;font-size:8px;line-height:1.35;color:#2a3340;text-align:justify}
-.a4-classic .signs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;position:relative;z-index:1}
-.a4-classic .sig{text-align:center;border-top:1px solid #8a96a8;padding-top:5px;min-height:48px}
-.a4-classic .sig b{display:block;font-size:10px;margin-bottom:3px;color:#0b2a55}
-.a4-classic .sig small{display:block;font-size:7.5px;color:#4a5568;line-height:1.3;margin-bottom:16px}
-.a4-classic .sig .name{font-size:9px;font-weight:700}
-.a4-classic .payline{font-size:9px;color:#4a5568;margin-top:4px;position:relative;z-index:1}
-.a4-classic .foot{margin-top:6px;font-size:7.5px;color:#7a8799;text-align:center;position:relative;z-index:1}
-@media print{.a4-classic{page-break-after:avoid!important;min-height:auto!important}}
+.a4-classic .party td.lbl{width:36%;background:#f3f6fa;font-weight:700;color:#4a5568;font-size:7.5px}
+.a4-classic .corp,.a4-classic .payline{margin:2px 0;font-size:8px;color:#4a5568}
+.a4-classic .terms{margin-top:3px}
+.a4-classic .terms h4{margin:0 0 2px;font-size:9px;letter-spacing:.04em;color:#0b2a55;border-bottom:1px solid #0b2a55;display:inline-block}
+.a4-classic .terms p{margin:0 0 2px;font-size:7px;line-height:1.28;color:#2a3340;text-align:justify}
+.a4-classic .signs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px}
+.a4-classic .sig{text-align:center;border-top:1px solid #8a96a8;padding-top:3px;min-height:28px}
+.a4-classic .sig b{display:block;font-size:9px;margin-bottom:2px;color:#0b2a55}
+.a4-classic .sig small{display:block;font-size:6.5px;color:#4a5568;line-height:1.25;margin-bottom:10px}
+.a4-classic .sig .name{font-size:8px;font-weight:700}
+.a4-classic .foot{margin-top:3px;font-size:7px;color:#7a8799;text-align:center}
+.a4-classic .senet-block{display:grid;grid-template-columns:28mm 1fr;gap:0;border:2px solid #0b2a55;margin-top:6px;border-radius:4px;overflow:hidden;background:#fff}
+.a4-classic .senet-side{background:#0b2a55;color:#fff;padding:6px 5px;font-size:7px;line-height:1.3;display:flex;flex-direction:column;gap:6px}
+.a4-classic .senet-side strong{font-size:8px;letter-spacing:.02em}
+.a4-classic .senet-side .pill{background:#fff;color:#0b2a55;border-color:#fff}
+.a4-classic .senet-main{padding:5px 7px 6px}
+.a4-classic .senet-title{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+.a4-classic .senet-title b{font-size:12px;color:#c41230;letter-spacing:.06em}
+.a4-classic .senet-title span{font-size:8px;color:#4a5568}
+.a4-classic .senet-head-fields{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:4px}
+.a4-classic .senet-head-fields > div{border-bottom:1px solid #1a1a1a;padding:2px 0}
+.a4-classic .senet-head-fields span{display:block;font-size:7px;font-weight:800;color:#c41230;text-transform:uppercase}
+.a4-classic .senet-head-fields b{display:block;font-size:10px;min-height:12px}
+.a4-classic .senet-body{margin:3px 0;font-size:7.5px;line-height:1.35;text-align:justify}
+.a4-classic .senet-words{display:flex;gap:6px;align-items:baseline;border:1px solid #c9d4e2;background:#f8fafc;padding:3px 6px;margin:3px 0}
+.a4-classic .senet-words span{font-size:7.5px;font-weight:800;color:#c41230}
+.a4-classic .senet-words b{font-size:8.5px}
+.a4-classic .senet-parties{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.a4-classic .senet-parties > div{border:1px solid #d7e2ef;border-radius:3px;padding:4px 6px;min-height:34px}
+.a4-classic .senet-parties .red{font-size:8px;font-weight:800;letter-spacing:.04em}
+.a4-classic .senet-parties small{display:block;font-size:7px;color:#66768d}
+.a4-classic .senet-parties b{font-size:8.5px}
+.a4-classic .senet-sign{margin-top:6px;text-align:right;border-top:1px solid #9aa8bc;padding-top:10px;font-size:8px;color:#4a5568}
+.a4-classic .senet-note{font-size:7px;color:#66768d;margin-top:2px}
+.a4-classic.senet-only{padding-top:12mm!important}
+.a4-classic.senet-only .senet-block{margin-top:0;min-height:70mm}
+@media print{.a4-classic{page-break-after:avoid!important;min-height:auto!important}.a4-classic.senet-only{page-break-before:always;page-break-after:avoid}}
 </style>
-  <div class="wm" aria-hidden="true"></div>
   <header class="head">
     <div class="co">
       <strong>${htmlEsc(companyLegal)}</strong>
       Beko · Bellona · İstikbal<br/>
       ${htmlEsc(address)}<br/>
       Tel: ${htmlEsc(phone)} · WhatsApp: ${htmlEsc(wa)}<br/>
-      E-posta: ${htmlEsc(email)}<br/>
-      Vergi Dairesi: Sarıyer · Bu belge mali fatura yerine geçmez.
+      E-posta: ${htmlEsc(email)} · VD: Sarıyer
     </div>
     <div class="brands">
       <div class="brand-row"><span class="pill">beko</span><span class="pill">Bellona</span><span class="pill">istikbal</span></div>
@@ -3438,24 +3495,56 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   ${corpLine}
   <div class="party">
     <div class="col"><h3>KEFİL</h3><table>${partyRows(guarantor)}</table></div>
-    <div class="col"><h3>BORÇLU</h3><table>${partyRows({name:personName,tckn:personTax,phone:customer?.phone||'',workPhone:customer?.workPhone||'',homePhone:customer?.homePhone||'',address:addr,workAddress:customer?.workAddress||''})}</table></div>
+    <div class="col"><h3>BORÇLU</h3><table>${partyRows({name:personName,tckn:personTax,phone:customer?.phone||'',address:addr})}</table></div>
   </div>
-  <div class="payline"><b>Ödeme:</b> ${htmlEsc(sale.paymentMethod||'-')}${(sale.payments||[]).length?` · ${(sale.payments||[]).map(p=>`${htmlEsc(p.method||'')}: ${moneyTR(p.amount)}`).join(' · ')}`:''}${sale.dealerName?` · Bayi: ${htmlEsc(sale.dealerName)}`:''}${sale.salespersonName?` · Satıcı: ${htmlEsc(sale.salespersonName)}`:''}</div>
+  <div class="payline"><b>Ödeme:</b> ${htmlEsc(sale.paymentMethod||'-')}${(sale.payments||[]).length?` · ${(sale.payments||[]).map(p=>`${htmlEsc(p.method||'')}: ${moneyTR(p.amount)}`).join(' · ')}`:''}${sale.salespersonName?` · Satıcı: ${htmlEsc(sale.salespersonName)}`:''}</div>
   <div class="terms">
     <h4>ANLAŞMA ŞARTLARI</h4>
-    <p>1) Satıcı, yukarıda cinsi, adedi ve bedeli yazılı ürünleri borçluya satmış; borçlu da ürünleri teslim alarak işbu sözleşmeyi kabul etmiştir. Peşinat ve bakiye / taksit tutarları vade tarihlerinde kayıtsız şartsız ödenecektir. Senetler bu sözleşmenin eki ve ayrılmaz parçasıdır.</p>
-    <p>2) Vadesinde ödenmeyen taksitlere aylık %4 gecikme faizi uygulanır. Borcun kısmen veya tamamen ödenmemesi halinde kalan bakiyenin tamamı muaccel olur; ayrıca bakiye üzerinden %20 oranında cezai şart talep edilebilir.</p>
-    <p>3) Ürünlerin ayıbı, garanti ve iade koşulları üretici / ithalatçı garanti şartları ile 6502 sayılı Tüketicinin Korunması Hakkında Kanun hükümlerine tabidir. Beyaz eşya ve mobilya teslimat / montaj süreçleri satıcının satış politikasına göre yürütülür.</p>
-    <p>4) İşbu sözleşmeden doğacak uyuşmazlıklarda İstanbul Mahkemeleri ve İcra Daireleri yetkilidir. Kefil, borçlu ile birlikte müteselsil sorumludur; satıcının borçluya başvurmadan kefilden talep hakkı saklıdır. Bu belge mali fatura yerine geçmez.</p>
+    <p>1) Satıcı yukarıdaki ürünleri borçluya satmış; borçlu teslim alarak kabul etmiştir. Peşinat ve taksitler vadesinde kayıtsız şartsız ödenir. Senetler bu sözleşmenin eki ve ayrılmaz parçasıdır.</p>
+    <p>2) Vadesinde ödenmeyen taksitlere aylık %4 gecikme faizi uygulanır; kalan bakiye muaccel olur ve %20 cezai şart talep edilebilir. Uyuşmazlıklarda İstanbul Mahkemeleri yetkilidir. Kefil müteselsil sorumludur. Bu belge mali fatura yerine geçmez.</p>
   </div>
   <div class="signs">
     <div class="sig"><b>SATICI</b><small>Kaşe / İmza</small><div class="name">${htmlEsc(companyLegal)}</div></div>
-    <div class="sig"><b>KEFİL</b><small>İşbu anlaşmadaki yazılı bütün şartları borçlu gibi okudum ve aynen kabul ettim.</small><div class="name">${htmlEsc(guarantor.name||'İmza')}</div></div>
-    <div class="sig"><b>BORÇLU</b><small>İşbu anlaşmadaki yazılı bütün şartları okudum ve aynen kabul ettim.</small><div class="name">${htmlEsc(personName||'İmza')}</div></div>
+    <div class="sig"><b>KEFİL</b><small>Şartları borçlu gibi okudum, kabul ettim.</small><div class="name">${htmlEsc(guarantor.name||'İmza')}</div></div>
+    <div class="sig"><b>BORÇLU</b><small>Şartları okudum, kabul ettim.</small><div class="name">${htmlEsc(personName||'İmza')}</div></div>
   </div>
-  <div class="foot">${htmlEsc(site)} · ${htmlEsc(sale.reference||'')} · ${dateTR(sale.date)}</div>
-</section>`;
+
+  <div class="senet-block">
+    <div class="senet-side">
+      <strong>${htmlEsc(companyLegal)}</strong>
+      <div class="brand-row"><span class="pill">beko</span><span class="pill">Bellona</span><span class="pill">istikbal</span></div>
+      <div>${htmlEsc(address)}<br/>Tel: ${htmlEsc(phone)}<br/>${htmlEsc(email)}<br/>VD: Sarıyer</div>
+    </div>
+    <div class="senet-main">
+      <div class="senet-title"><b>SENET</b><span>Emre muharrer bono · ${htmlEsc(sale.reference||'')}</span></div>
+      <div class="senet-head-fields">
+        <div><span>Vade</span><b>${dateTR(senetDue)}</b></div>
+        <div><span>Hululü Vade</span><b>${dateTR(senetDue)}</b></div>
+        <div><span>Türk Lirası</span><b>${senetAmount>0?moneyTR(senetAmount):''}</b></div>
+        <div><span>No.</span><b>${htmlEsc(senetNo)}</b></div>
+      </div>
+      <p class="senet-body">İşbu emre muharrer bono mukabilinde <b class="red">${htmlEsc(companyLegal)}</b> veya emrine <u>${dateTR(senetDue)||'........'}</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. İşbu senedimin vadesinde ödenmemesi halinde müteakip senetlerimde muacceliyet kesbedeceğini kabul ederim. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri ve İcra Daireleri yetkilidir.</p>
+      <div class="senet-words"><span>Yalnız</span><b>${htmlEsc(senetWords||'................................................')}</b></div>
+      <div class="senet-parties">
+        <div>
+          <span class="red">Ödeyecek</span>
+          <div><small>İsim</small><b>${htmlEsc(personName)}</b></div>
+          <div><small>Adres</small><b>${htmlEsc(addr||'-')}</b></div>
+        </div>
+        <div>
+          <span class="red">Müteselsil Borçlu</span>
+          <div><small>İsim</small><b>${htmlEsc(guarantor.name||'')}</b></div>
+          <div><small>Adres</small><b>${htmlEsc(guarantor.homeAddress||guarantor.address||'')}</b></div>
+        </div>
+      </div>
+      <div class="senet-sign"><small>Keşideci / Borçlu İmza</small></div>
+      ${moreSenets}
+    </div>
+  </div>
+  <div class="foot">${htmlEsc(site)} · Sözleşme + Senet · ${htmlEsc(sale.reference||'')} · ${dateTR(sale.date)}</div>
+</section>${extraSenetPages}`;
 }
+
 
 app.get('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=readStore();res.json({settings:s.promissorySettings||{}})});
 app.post('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=readStore(),x=req.body||{};s.promissorySettings={creditorName:String(x.creditorName||s.settings?.siteName||'Atak Pazarlama'),paymentPlace:String(x.paymentPlace||'İstanbul'),issuePlace:String(x.issuePlace||'İstanbul'),prefix:String(x.prefix||'ATAK').replace(/[^A-Za-z0-9_-]/g,'').slice(0,12)||'ATAK',defaultInstallments:Math.min(36,Math.max(1,Math.round(Number(x.defaultInstallments)||1))),firstDueDays:Math.min(365,Math.max(0,Math.round(Number(x.firstDueDays)||30))),intervalMonths:Math.min(12,Math.max(1,Math.round(Number(x.intervalMonths)||1))),copies:Math.min(3,Math.max(1,Math.round(Number(x.copies)||1))),footer:String(x.footer||'')};audit(s,'Senet ayarları güncellendi','Ayarlar');writeStore(s);res.json({ok:true,settings:s.promissorySettings})});
