@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v53 */
+/* ATAK_PERSONEL_BUILD=fix-v54 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -889,13 +889,27 @@ function normalizeSalesGuarantor(g){
     workPhone:String(g.workPhone||'').trim(),
     homePhone:String(g.homePhone||'').trim(),
     homeAddress:String(g.homeAddress||g.address||'').trim(),
-    workAddress:String(g.workAddress||'').trim()
+    workAddress:String(g.workAddress||'').trim(),
+    customerId:g.customerId||g.id||''
   };
+}
+function customerToGuarantor(c){
+  if(!c)return null;
+  const addr=[c.address,c.district,c.city].filter(Boolean).join(', ');
+  return normalizeSalesGuarantor({
+    name:c.name,
+    tckn:c.tckn||'',
+    phone:c.phone||'',
+    workPhone:c.workPhone||'',
+    homePhone:c.homePhone||'',
+    homeAddress:addr||'',
+    workAddress:c.workAddress||'',
+    customerId:c.id
+  });
 }
 function salesSelectedCustomer(){
   return salesCustomers.find(x=>String(x.id)===String($('#salesCustomerSelect')?.value||''))||null;
 }
-function salesCustomerSavedGuarantor(){return normalizeSalesGuarantor(salesSelectedCustomer()?.guarantor)}
 function salesKefilAttached(){return $('#salesKefilAttached')?.value==='1'}
 function salesReadKefilForm(){
   const name=($('#salesKefilName')?.value||'').trim();
@@ -908,7 +922,8 @@ function salesReadKefilForm(){
     workPhone:($('#salesKefilWorkPhone')?.value||'').trim(),
     homePhone:($('#salesKefilHomePhone')?.value||'').trim(),
     homeAddress:($('#salesKefilHomeAddress')?.value||'').trim(),
-    workAddress:($('#salesKefilWorkAddress')?.value||'').trim()
+    workAddress:($('#salesKefilWorkAddress')?.value||'').trim(),
+    customerId:($('#salesKefilCustomerId')?.value||'').trim()
   };
 }
 function salesFillKefilForm(g={}){
@@ -919,41 +934,32 @@ function salesFillKefilForm(g={}){
   if($('#salesKefilHomePhone'))$('#salesKefilHomePhone').value=g.homePhone||'';
   if($('#salesKefilHomeAddress'))$('#salesKefilHomeAddress').value=g.homeAddress||'';
   if($('#salesKefilWorkAddress'))$('#salesKefilWorkAddress').value=g.workAddress||'';
+  if($('#salesKefilCustomerId'))$('#salesKefilCustomerId').value=g.customerId||'';
 }
 function salesClearKefilForm(){salesFillKefilForm({})}
+function salesReadKefilFormSafe(){
+  try{return salesReadKefilForm()}catch(_){return null}
+}
 function salesRefreshKefilUI(){
   const noteAmt=Math.max(0,num($('#payNote')?.value));
-  const saved=salesCustomerSavedGuarantor();
   const attached=salesKefilAttached();
   const hint=$('#salesKefilStatusHint');
   const preview=$('#salesKefilPreview');
   if(hint){
     if(noteAmt<=0)hint.textContent='Senet tutarı girilince kefil eklenebilir';
-    else if(attached)hint.textContent='Kefil bu satışın senetine eklendi — A4 düzeni aynı kalır';
-    else if(saved)hint.textContent=`Kayıtlı kefil: ${saved.name}${saved.phone?' · '+saved.phone:''}`;
-    else hint.textContent='Müşteri kartında kefil yok — müşteriyi düzenleyip kefil kaydedin';
+    else if(attached)hint.textContent='Kefil seçildi — sözleşmede KEFİL kutusu dolar';
+    else hint.textContent='Kefil ekle → kayıtlı müşterilerden seçin';
   }
   $('#salesKefilAddBtn')?.classList.toggle('hidden',noteAmt<=0||attached);
   $('#salesKefilClearBtn')?.classList.toggle('hidden',!attached);
   $('#salesKefilEdit')?.classList.toggle('hidden',!attached);
   if(preview){
     if(attached){
-      let g=null;try{g=salesReadKefilForm()}catch(_){g=null}
-      g=normalizeSalesGuarantor(g)||saved||{};
+      const g=normalizeSalesGuarantor(salesReadKefilFormSafe())||{};
       preview.classList.remove('hidden');
       preview.innerHTML=`<b>${esc(g.name||'-')}</b><span>TCKN ${esc(g.tckn||'—')} · GSM ${esc(g.phone||'—')}</span>`;
     }else{preview.classList.add('hidden');preview.innerHTML=''}
   }
-}
-function salesAttachSavedKefil(){
-  const cust=salesSelectedCustomer();
-  if(!cust){stToast('Önce müşteri seçin');return}
-  const g=salesCustomerSavedGuarantor();
-  if(!g){stToast('Bu müşteride kayıtlı kefil yok. Müşteri kartından kefil ekleyin.');return}
-  salesFillKefilForm(g);
-  if($('#salesKefilAttached'))$('#salesKefilAttached').value='1';
-  salesRefreshKefilUI();
-  stToast(`Kefil eklendi: ${g.name}`);
 }
 function salesDetachKefil({silent=false}={}){
   if($('#salesKefilAttached'))$('#salesKefilAttached').value='0';
@@ -961,9 +967,87 @@ function salesDetachKefil({silent=false}={}){
   salesRefreshKefilUI();
   if(!silent)stToast('Kefil kaldırıldı');
 }
-$('#salesKefilAddBtn')?.addEventListener('click',salesAttachSavedKefil);
+function closeSalesKefilPicker(){
+  $('#salesKefilPickerModal')?.classList.add('hidden');
+}
+async function searchSalesKefilCustomers(term=''){
+  const st=$('#salesKefilPickerStatus'),list=$('#salesKefilPickerList');
+  const debtorId=String($('#salesCustomerSelect')?.value||'');
+  const qTerm=String(term||'').trim();
+  if(st)st.textContent='Aranıyor...';
+  try{
+    let rows=[];
+    if(qTerm.length>=1){
+      const d=await api('/web-api/admin/customers/search?q='+encodeURIComponent(qTerm)+'&limit=60');
+      rows=d.rows||[];
+    }else{
+      rows=(salesCustomers||[]).filter(c=>c.active!==false&&!c.deletedAt).slice(0,80);
+    }
+    rows=rows.filter(c=>String(c.id)!==debtorId&&c.active!==false&&!c.deletedAt);
+    if(list){
+      if(!rows.length){
+        list.innerHTML=`<div class="muted" style="padding:12px">${qTerm?'Sonuç yok.':'Müşteri listesi boş — arama yazın.'}</div>`;
+      }else{
+        list.innerHTML=rows.map(c=>{
+          const sub=[c.phone,c.tckn?('TCKN '+c.tckn):'',[c.district,c.city].filter(Boolean).join('/')].filter(Boolean).join(' · ');
+          return `<button type="button" class="sales-kefil-pick-row" data-kefil-customer="${esc(c.id)}"><b>${esc(c.name||'-')}</b><span>${esc(sub||'—')}</span></button>`;
+        }).join('');
+      }
+    }
+    if(st)st.textContent=`${rows.length} müşteri`;
+  }catch(e){
+    if(list)list.innerHTML='';
+    if(st)st.textContent=e.message||'Arama başarısız';
+  }
+}
+async function openSalesKefilPicker(){
+  if(Math.max(0,num($('#payNote')?.value))<=0){stToast('Önce senet tutarı girin');return}
+  if(!salesSelectedCustomer()){stToast('Önce satış müşterisini seçin');return}
+  const m=$('#salesKefilPickerModal');
+  if(!m){stToast('Kefil seçim penceresi bulunamadı');return}
+  if($('#salesKefilPickerSearch'))$('#salesKefilPickerSearch').value='';
+  m.classList.remove('hidden');
+  await searchSalesKefilCustomers('');
+  $('#salesKefilPickerSearch')?.focus();
+}
+function salesPickKefilCustomer(c){
+  const g=customerToGuarantor(c);
+  if(!g){stToast('Seçilen müşteri kefil olarak kullanılamaz');return}
+  if(String(c.id)===String($('#salesCustomerSelect')?.value||'')){
+    stToast('Borçlu müşteri kefil olarak seçilemez');
+    return;
+  }
+  salesFillKefilForm(g);
+  if($('#salesKefilAttached'))$('#salesKefilAttached').value='1';
+  salesRefreshKefilUI();
+  closeSalesKefilPicker();
+  stToast(`Kefil seçildi: ${g.name}`);
+}
+$('#salesKefilAddBtn')?.addEventListener('click',()=>openSalesKefilPicker());
 $('#salesKefilClearBtn')?.addEventListener('click',()=>salesDetachKefil());
-['salesKefilName','salesKefilTckn','salesKefilPhone','salesKefilWorkPhone','salesKefilHomePhone','salesKefilHomeAddress','salesKefilWorkAddress'].forEach(id=>{
+$('#salesKefilPickerClose')?.addEventListener('click',closeSalesKefilPicker);
+$('#salesKefilPickerModal')?.addEventListener('click',e=>{if(e.target===$('#salesKefilPickerModal'))closeSalesKefilPicker()});
+$('#salesKefilPickerSearch')?.addEventListener('input',()=>{
+  clearTimeout(window.__kefilSearchT);
+  window.__kefilSearchT=setTimeout(()=>searchSalesKefilCustomers($('#salesKefilPickerSearch')?.value||''),220);
+});
+$('#salesKefilPickerList')?.addEventListener('click',async e=>{
+  const btn=e.target.closest('[data-kefil-customer]');if(!btn)return;
+  const id=btn.getAttribute('data-kefil-customer');
+  let c=(salesCustomers||[]).find(x=>String(x.id)===String(id));
+  if(!c){
+    try{
+      const d=await api('/web-api/admin/customers/search?id='+encodeURIComponent(id)+'&limit=1');
+      c=(d.rows||[])[0];
+    }catch(_){}
+  }
+  if(!c){stToast('Müşteri bulunamadı');return}
+  const map=new Map((salesCustomers||[]).map(x=>[String(x.id),x]));
+  map.set(String(c.id),c);
+  salesCustomers=[...map.values()];
+  salesPickKefilCustomer(c);
+});
+['salesKefilWorkPhone','salesKefilHomePhone','salesKefilHomeAddress','salesKefilWorkAddress'].forEach(id=>{
   $('#'+id)?.addEventListener('input',()=>{if(salesKefilAttached())salesRefreshKefilUI()});
 });
 function closePayScreen(){ /* inline ödeme — modal yok */ }
@@ -1412,14 +1496,6 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
       if(taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için 10 haneli VKN zorunludur');
     }
     if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
-    const gName=($('#qcGuarantorName')?.value||'').trim();
-    const gTckn=($('#qcGuarantorTckn')?.value||'').trim();
-    if(gTckn&&gTckn.replace(/\D/g,'').length!==11)throw new Error('Kefil TCKN 11 hane olmalıdır');
-    const guarantor=gName?{
-      name:gName,tckn:gTckn,
-      phone:($('#qcGuarantorPhone')?.value||'').trim(),
-      homeAddress:($('#qcGuarantorHomeAddress')?.value||'').trim()
-    }:null;
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -1429,8 +1505,7 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
         tckn:tckn||'',
         companyName:invoiceType==='corporate'?companyName:'',
         taxOffice:invoiceType==='corporate'?taxOffice:'',
-        taxNo:invoiceType==='corporate'?taxNo:'',
-        guarantor
+        taxNo:invoiceType==='corporate'?taxNo:''
       })
     });
     const row=r.row||{};
