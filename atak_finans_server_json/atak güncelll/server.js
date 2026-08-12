@@ -865,8 +865,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.48-sozlesme-logo',
-  build:'fix-v47',
+  version:'6.3.49-logo-sol',
+  build:'fix-v48',
   ownerOnly:ownerOnlyEnabled(),
   time:new Date().toISOString()
 }));
@@ -3315,6 +3315,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const site=settings?.siteName||cfg.creditorName||'ATAK EV GEREÇLERİ';
   const companyLegal=cfg.creditorName||'ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';
   const atakLogoSrc='/web-admin-assets/atak-header-logo.png';
+  const atakLogoWhiteSrc='/web-admin-assets/atak-header-logo-white.png';
   const phone=settings?.phone||'0212 223 28 71';
   const wa=settings?.whatsapp?String(settings.whatsapp).replace(/^90/,'0'):'0543 358 50 60';
   const email=settings?.email||'tarabyabeko@gmail.com';
@@ -3351,7 +3352,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const css=`<style>
 .a4c{padding:7mm 8mm 6mm!important;font:8.6px/1.3 "Segoe UI",Arial,sans-serif;color:#142033;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:277mm}
 .a4c *{box-sizing:border-box}
-.a4c .logo-top{display:flex;justify-content:center;align-items:center;margin:0 0 4px}.a4c .logo-top img{height:14mm;width:auto;object-fit:contain}.a4c .logo-bottom{display:flex;justify-content:center;align-items:center;margin-top:3px;padding-top:3px;border-top:1px solid #c5d0dd}.a4c .logo-bottom img{height:9mm;width:auto;object-fit:contain}.a4c .top{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0 0 2px}.a4c .logo-top img{height:11mm;width:auto;object-fit:contain}.a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 6px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:18mm;object-fit:contain;object-position:left top;}.a4c .logo-bottom{display:flex;justify-content:center;align-items:center;margin-top:3px;padding-top:3px;border-top:1px solid #c5d0dd}.a4c .logo-bottom img{height:9mm;width:auto;object-fit:contain}.a4c .top{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
 .a4c .name{font-size:10.5px;font-weight:800;color:#0a2748}
 .a4c .meta{margin-top:3px;color:#5a6a7b;font-size:7.5px;line-height:1.4}
 .a4c .mid-head{text-align:right;padding-top:4px;align-self:center}
@@ -3414,10 +3415,9 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c.senet-only .senet{margin-top:0;min-height:90mm}
 @media print{.a4c{page-break-after:avoid!important}.a4c.senet-only{page-break-before:always}}
 </style>`;
-  const extra=noteList.slice(1).map((n,idx)=>{const amt=Number(n.amount||0);return `<section class="sheet a4c senet-only">${css}<div class="senet"><div class="senet-side"><strong>${htmlEsc(companyLegal)}</strong><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}</div></div><div class="senet-main"><div class="senet-bar"><b>SENET</b><span>${idx+2}/${noteList.length} · ${htmlEsc(sale.reference||'')}</span></div><div class="fields"><div><span>Vade</span><b>${dateTR(n.dueDate)}</b></div><div><span>Hululü Vade</span><b>${dateTR(n.dueDate)}</b></div><div><span>Türk Lirası</span><b>${moneyTR(amt)}</b></div><div><span>No.</span><b>${htmlEsc(n.serial||'')}</b></div></div><p class="sbody">İşbu emre muharrer bono mukabilinde <b style="color:#b91c1c">${htmlEsc(companyLegal)}</b> veya emrine <u>${dateTR(n.dueDate)}</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. Vadesinde ödenmemesi halinde müteakip senetlerde muacceliyet kesbedeceğini kabul ederim. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri yetkilidir.</p><div class="words"><span>Yalnız</span><b>${htmlEsc(amountToTrWords(amt))}</b></div><div class="duo"><div><div class="lab">Ödeyecek</div><small>İsim</small><div class="v">${htmlEsc(personName)}</div><small>Adres</small><div class="v">${htmlEsc(addr||'-')}</div></div><div><div class="lab">Müteselsil Borçlu</div><small>İsim</small><div class="v">${htmlEsc(guarantor.name||'')}</div><small>Adres</small><div class="v">${htmlEsc(guarantor.homeAddress||guarantor.address||'')}</div></div></div><div class="signline">Keşideci / Borçlu İmza</div></div></div><div class="logo-bottom"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="foot">${htmlEsc(site)} · Senet ${idx+2}/${noteList.length}</div></section>`;}).join('');
+  const extra=noteList.slice(1).map((n,idx)=>{const amt=Number(n.amount||0);return `<section class="sheet a4c senet-only">${css}<div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}</div></div><div class="senet-main"><div class="senet-bar"><b>SENET</b><span>${idx+2}/${noteList.length} · ${htmlEsc(sale.reference||'')}</span></div><div class="fields"><div><span>Vade</span><b>${dateTR(n.dueDate)}</b></div><div><span>Hululü Vade</span><b>${dateTR(n.dueDate)}</b></div><div><span>Türk Lirası</span><b>${moneyTR(amt)}</b></div><div><span>No.</span><b>${htmlEsc(n.serial||'')}</b></div></div><p class="sbody">İşbu emre muharrer bono mukabilinde <b style="color:#b91c1c">${htmlEsc(companyLegal)}</b> veya emrine <u>${dateTR(n.dueDate)}</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. Vadesinde ödenmemesi halinde müteakip senetlerde muacceliyet kesbedeceğini kabul ederim. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri yetkilidir.</p><div class="words"><span>Yalnız</span><b>${htmlEsc(amountToTrWords(amt))}</b></div><div class="duo"><div><div class="lab">Ödeyecek</div><small>İsim</small><div class="v">${htmlEsc(personName)}</div><small>Adres</small><div class="v">${htmlEsc(addr||'-')}</div></div><div><div class="lab">Müteselsil Borçlu</div><small>İsim</small><div class="v">${htmlEsc(guarantor.name||'')}</div><small>Adres</small><div class="v">${htmlEsc(guarantor.homeAddress||guarantor.address||'')}</div></div></div><div class="signline">Keşideci / Borçlu İmza</div></div></div><div class="logo-bottom"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="foot">${htmlEsc(site)} · Senet ${idx+2}/${noteList.length}</div></section>`;}).join('');
   return `<section class="sheet a4c">${css}
-  <div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div>
-  <div class="top"><div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · VD: Sarıyer</div></div>
+  <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · VD: Sarıyer</div></div>
   <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
   <div class="rule"></div>
   <div class="grid3">
@@ -3433,7 +3433,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   <p><b>3)</b> Ürünlerin teslimi, satıcının alıcı hakkında yapacağı olumlu kredi / risk değerlendirmesine bağlıdır. Beyaz eşya, mobilya, mutfak ve benzeri ürünler üretici / ithalatçı garanti şartlarına tabidir. Montaj ve onarım yetkili servislerce yapılır; aksi halde garanti kapsamı dışına çıkılabilir.</p>
   <p><b>4)</b> Taraflar işbu sözleşmeyi okuyup müzakere ederek imzalamışlardır. Uyuşmazlıklarda İstanbul Mahkemeleri ve İcra Daireleri yetkilidir. Kefil, borçlu ile birlikte müteselsil sorumludur. Bu belge mali fatura yerine geçmez; 4077 sayılı Kanun ve ilgili mevzuat hükümleri uygulanır.</p></div>
   <div class="signs"><div class="sig"><b>SATICI</b><small>Kaşe / İmza</small><div class="nm">${htmlEsc(companyLegal)}</div></div><div class="sig"><b>KEFİL</b><small>İşbu anlaşmadaki yazılı bütün şartları borçlu gibi okudum ve aynen kabul ettim.</small><div class="nm">${htmlEsc(guarantor.name||'İmza')}</div></div><div class="sig"><b>BORÇLU</b><small>İşbu anlaşmadaki yazılı bütün şartları okudum ve aynen kabul ettim.</small><div class="nm">${htmlEsc(personName||'İmza')}</div></div></div>
-  <div class="grow"><div class="senet"><div class="senet-side"><strong>${htmlEsc(companyLegal)}</strong><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}<br/>VD: Sarıyer</div></div>
+  <div class="grow"><div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}<br/>VD: Sarıyer</div></div>
   <div class="senet-main"><div class="senet-bar"><b>SENET</b><span>Emre muharrer bono · ${htmlEsc(sale.reference||'')}</span></div>
   <div class="fields"><div><span>Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Hululü Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Türk Lirası</span><b>${senetAmount>0?moneyTR(senetAmount):''}</b></div><div><span>No.</span><b>${htmlEsc(senetNo)}</b></div></div>
   <p class="sbody">İşbu emre muharrer bono mukabilinde <b style="color:#b91c1c">${htmlEsc(companyLegal)}</b> veya emrine <u>${dateTR(senetDue)||'........'}</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. Vadesinde ödenmemesi halinde müteakip senetlerde muacceliyet kesbedeceğini kabul ederim. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri yetkilidir.</p>
