@@ -143,9 +143,10 @@ function ensureStore(store) {
   store.financeTransactions = Array.isArray(store.financeTransactions) ? store.financeTransactions : [];
   store.receivables = Array.isArray(store.receivables) ? store.receivables : [];
   store.promissoryNotes = Array.isArray(store.promissoryNotes) ? store.promissoryNotes : [];
-  store.promissorySettings ||= {creditorName:ATAK_COMPANY.legalName,paymentPlace:'İstanbul',issuePlace:'İstanbul',prefix:'ATAK',defaultInstallments:1,firstDueDays:30,intervalMonths:1,copies:1,footer:''};
+  store.promissorySettings ||= {creditorName:ATAK_COMPANY.legalName,paymentPlace:'İstanbul',issuePlace:'İstanbul',prefix:'ATAK',defaultInstallments:1,firstDueDays:30,intervalMonths:1,copies:1,footer:'',nextSenetNo:1};
   // Senet/sözleşmede "Atak Home" yasak — her zaman resmi ünvan
   store.promissorySettings.creditorName = ATAK_COMPANY.legalName;
+  if(!Number.isFinite(Number(store.promissorySettings.nextSenetNo))||Number(store.promissorySettings.nextSenetNo)<1)store.promissorySettings.nextSenetNo=1;
   store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:ATAK_COMPANY.taxNo,companyTitle:ATAK_COMPANY.legalName,senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:'',efaturaSeries:'ATK',earsivSeries:'ATA',efaturaNext:1,earsivNext:1};
   if(store.invoiceIntegration && !store.invoiceIntegration.provider)store.invoiceIntegration.provider='qnb-solist';
   if(!String(store.invoiceIntegration.companyVkn||'').trim())store.invoiceIntegration.companyVkn=ATAK_COMPANY.taxNo;
@@ -984,8 +985,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.92-excel-alis',
-  build:'fix-v91',
+  version:'6.3.93-senet-no-siyah',
+  build:'fix-v93',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -2309,6 +2310,7 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     const base=Math.floor((promissoryAmount/count)*100)/100;
     let remaining=Math.round(promissoryAmount*100)/100;
     const planId=crypto.randomUUID(),notes=[];
+    const printNo=allocateSenetPrintNo(s);
     for(let i=0;i<count;i++){
       const due=new Date(first);due.setMonth(due.getMonth()+i*interval);
       const amount=i===count-1?Math.round(remaining*100)/100:base;
@@ -2316,6 +2318,7 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
       notes.push({
         id:crypto.randomUUID(),planId,
         serial:`${settings.prefix||'ATAK'}-${Date.now().toString().slice(-8)}-${String(i+1).padStart(2,'0')}`,
+        printNo,
         customerId:customer.id,saleId:sale.id,saleReference:ref,
         amount,dueDate:due.toISOString().slice(0,10),
         issueDate:String(x.date||todayISO()),status:'open',
@@ -2326,6 +2329,7 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     s.promissoryNotes.push(...notes);
     sale.promissoryPlanId=planId;
     sale.promissoryAmount=promissoryAmount;
+    sale.promissoryPrintNo=printNo;
     promissoryResult={planId,notes,printUrl:`/web-api/admin/promissory-plan/${planId}/print`};
     audit(s,'Satış senet planı oluşturuldu',customer.name,{planId,total:promissoryAmount,count,ref});
   }
@@ -2440,6 +2444,33 @@ function cancelPromissoryNoteInStore(n,actor,reason=''){
   n.cancelledBy=actor||'';
   n.cancelReason=String(reason||'').slice(0,500);
   return true;
+}
+/** Senet döküm No. — 1'den başlar, her planda bir numara */
+function allocateSenetPrintNo(s){
+  s.promissorySettings=s.promissorySettings||{};
+  let n=Math.round(Number(s.promissorySettings.nextSenetNo)||1);
+  if(!Number.isFinite(n)||n<1)n=1;
+  s.promissorySettings.nextSenetNo=n+1;
+  return String(n);
+}
+function ensureNotesHavePrintNo(s,notes,sale){
+  const list=Array.isArray(notes)?notes:[];
+  if(!list.length){
+    if(sale&&Number(sale.promissoryAmount||0)>0.009&&(sale.promissoryPrintNo==null||String(sale.promissoryPrintNo).trim()==='')){
+      sale.promissoryPrintNo=allocateSenetPrintNo(s);
+      return true;
+    }
+    return false;
+  }
+  const existing=list.map(n=>n.printNo!=null&&String(n.printNo).trim()!==''?String(n.printNo).trim():'').find(Boolean)
+    ||(sale&&sale.promissoryPrintNo!=null&&String(sale.promissoryPrintNo).trim()!==''?String(sale.promissoryPrintNo).trim():'');
+  const no=existing||allocateSenetPrintNo(s);
+  let dirty=false;
+  for(const n of list){
+    if(n.printNo==null||String(n.printNo).trim()===''){n.printNo=no;dirty=true}
+  }
+  if(sale&&(sale.promissoryPrintNo==null||String(sale.promissoryPrintNo).trim()==='')){sale.promissoryPrintNo=no;dirty=true}
+  return dirty||!existing;
 }
 function linkedPromissoryNotes(s,sale){
   if(!sale)return[];
@@ -2640,9 +2671,11 @@ function applySaleEditInStore(s,sale,patch={},actor='Yönetici',reason=''){
     const settings=s.promissorySettings||{};
     const planId=sale.promissoryPlanId||crypto.randomUUID();
     const firstDue=linkedNotes.find(n=>n.dueDate)?.dueDate||new Date(Date.now()+Number(settings.firstDueDays||30)*86400000).toISOString().slice(0,10);
+    const printNo=allocateSenetPrintNo(s);
     const note={
       id:crypto.randomUUID(),planId,
       serial:`${settings.prefix||'ATAK'}-${Date.now().toString().slice(-8)}-01`,
+      printNo,
       customerId:sale.customerId,saleId:sale.id,saleReference:sale.reference||'',
       amount:senetPay,dueDate:firstDue,issueDate:String(sale.date||todayISO()),
       status:'open',createdAt:new Date().toISOString(),
@@ -2651,6 +2684,7 @@ function applySaleEditInStore(s,sale,patch={},actor='Yönetici',reason=''){
     s.promissoryNotes.push(note);
     sale.promissoryPlanId=planId;
     sale.promissoryAmount=senetPay;
+    sale.promissoryPrintNo=printNo;
   }else{
     sale.promissoryAmount=0;
   }
@@ -3837,13 +3871,24 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const productRows=(shownItems.map(i=>{const qty=Number(i.quantity||1);const total=i.total!=null?i.total:qty*Number(i.unitPrice||0);const matName=i.productName||i.materialCode||i.searchName||i.name||i.productCode||i.itemCode||'-';return `<tr><td class="mat">${htmlEsc(matName)}</td><td class="c">${qty}</td><td class="num">${moneyTR(i.unitPrice)}</td><td class="num">${moneyTR(total)}</td></tr>`;}).join('')||'')+Array.from({length:emptyRows},()=>'<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>').join('')+(moreProducts?`<tr class="more"><td colspan="4">+${moreProducts} ürün daha (toplam ${items.length} kalem)</td></tr>`:'');
   const schedShow=noteList.slice(0,10);
   const scheduleRows=(schedShow.map(n=>`<tr><td class="c">${dateTR(n.dueDate)}</td><td class="num">${moneyTR(n.amount)}</td></tr>`).join('')||'<tr><td>&nbsp;</td><td></td></tr>')+`<tr class="tot"><td class="c">TOPLAM</td><td class="num">${moneyTR(balance||senetTotal)}</td></tr>`;
-  const partyRows=(who)=>[['Adı Soyadı',who.name||''],['T.C. Kimlik No',who.tckn||who.taxNo||''],['GSM',who.phone||who.gsm||''],['Adres',who.homeAddress||who.address||'']].map(([l,v])=>`<tr><td class="lbl">${l}</td><td>${htmlEsc(v)}</td></tr>`).join('');
+  const partyRows=(who)=>[['Adı Soyadı',who.name||'','nm'],['T.C. Kimlik No',who.tckn||who.taxNo||'',''],['GSM',who.phone||who.gsm||'',''],['Adres',who.homeAddress||who.address||'','']].map(([l,v,cls])=>`<tr><td class="lbl">${l}</td><td class="${cls}">${htmlEsc(v)}</td></tr>`).join('');
   const denseClass=shownItems.length>=4?' dense':'';
   const corpLine=customerHasCorporateBilling(customer)?`<div class="pay">Fatura firması: <b>${htmlEsc(customer.companyName||'')}</b> · VKN ${htmlEsc(customer.taxNo||'')} · ${htmlEsc(customer.taxOffice||'')}</div>`:'';
   // Tek senet: tutar = yazılan toplam senet; taksitler yalnızca sözleşmede
   const senetAmount=senetTotal||balance||0;
   const senetDue=noteList.length?(noteList[noteList.length-1].dueDate||noteList[0].dueDate||''):'';
-  const senetNo=sale.reference?`${sale.reference}-SN`:(noteList[0]?.serial?String(noteList[0].serial).replace(/-\d{1,2}$/,''):'');
+  const resolveSenetPrintNo=()=>{
+    if(sale.senetNo!=null&&String(sale.senetNo).trim()!=='')return String(sale.senetNo).trim();
+    if(sale.promissoryPrintNo!=null&&String(sale.promissoryPrintNo).trim()!=='')return String(sale.promissoryPrintNo).trim();
+    const s0=noteList[0];
+    if(s0?.printNo!=null&&String(s0.printNo).trim()!=='')return String(s0.printNo).trim();
+    const ser=String(s0?.serial||'').trim();
+    if(/^\d+$/.test(ser))return String(Number(ser));
+    const m=ser.match(/(?:^|[^0-9])(\d{1,6})$/);
+    if(m)return String(Number(m[1]));
+    return '1';
+  };
+  const senetNo=resolveSenetPrintNo();
   const senetWords=senetAmount>0?amountToTrWords(senetAmount):'';
   const senetWordsOnly=(senetWords||'').replace(/\s*Türk Lirası.*$/i,'').trim();
   const senetAmtHash=senetAmount>0?('#'+Number(senetAmount).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+'#'):'';
@@ -3880,6 +3925,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c .box table{border:0}
 .a4c .box td{border-color:#e4ebf3;height:11px}
 .a4c .box td.lbl{width:32%;background:#f3f6fa;font-size:7px;font-weight:700;color:#5a6a7b}
+.a4c .box td.nm{font-size:10pt;font-weight:900;color:#000;line-height:1.2;white-space:normal}
 .a4c .pay{margin:3px 0 2px;font-size:7.5px;color:#5a6a7b;flex:0 0 auto}
 .a4c .terms{flex:0 0 auto;min-height:0;margin-top:2px;margin-bottom:0}
 .a4c .terms h4{display:inline-block;font-size:8.2px;letter-spacing:.06em;color:#0a2748;border-bottom:1px solid #0a2748;margin:0 0 3px}
@@ -3888,29 +3934,29 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c .sig{border:1px solid #b8c4d4;border-radius:3px;padding:2px 4px 2px;text-align:center;display:flex;flex-direction:column;background:#fff;height:auto}
 .a4c .sig b{display:block;font-size:7.8px;color:#0a2748;letter-spacing:.05em}
 .a4c .sig small{display:none}
-.a4c .sig .nm{font-size:7px;font-weight:700;margin:1px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.a4c .sig .nm{font-size:10pt;font-weight:900;margin:2px 0 0;color:#000;white-space:normal;overflow:visible;line-height:1.2;word-break:break-word}
 .a4c .sig .sigpad{flex:0 0 auto!important;height:15mm!important;min-height:15mm!important;max-height:15mm!important;margin-top:2px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center}
 .a4c .sig .sigpad span{font-size:5.5px;color:#8a97a8}
 .a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:auto!important;padding-top:8mm;gap:0}
 .a4c .senet{border:1.5px solid #0a2748;border-radius:4px;overflow:hidden;display:grid;grid-template-columns:20mm 1fr;flex:0 0 auto;height:122mm;max-height:122mm;min-height:122mm;font-size:8pt}
 .a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff;padding:4px 3px;font-size:8pt;line-height:1.28;display:flex;flex-direction:column;gap:4px}
 .a4c .senet-side strong{font-size:8pt}
-.a4c .senet-main{padding:4px 6px 4px;display:flex;flex-direction:column;min-height:0;height:100%}
+.a4c .senet-main{padding:4px 6px 4px;display:flex;flex-direction:column;min-height:0;height:100%;color:#000}
 .a4c .senet-bar{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
-.a4c .senet-bar b{font-size:8pt;color:#b91c1c;letter-spacing:.1em;font-weight:900}
-.a4c .senet-bar span{font-size:8pt;color:#5a6a7b}
+.a4c .senet-bar b{font-size:8pt;color:#000;letter-spacing:.1em;font-weight:900}
+.a4c .senet-bar span{font-size:8pt;color:#000}
 .a4c .fields{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:2px}
 .a4c .fields>div{border-bottom:1.2px solid #2a3545;padding:1px 0 2px}
-.a4c .fields span{display:block;font-size:8pt;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:.04em}
-.a4c .fields b{display:block;font-size:8pt;min-height:12px;margin-top:1px}
-.a4c .sbody{font-size:8pt;line-height:1.4;text-align:justify;margin:10mm 0 0}
+.a4c .fields span{display:block;font-size:8pt;font-weight:800;color:#000;text-transform:uppercase;letter-spacing:.04em}
+.a4c .fields b{display:block;font-size:8pt;min-height:12px;margin-top:1px;color:#000}
+.a4c .sbody{font-size:8pt;line-height:1.4;text-align:justify;margin:10mm 0 0;color:#000}.a4c .sbody b,.a4c .sbody u{color:#000!important}
 .a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:0 0 auto;min-height:0;margin-top:20mm}
 .a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:3px 5px 2px;height:38mm;display:flex;flex-direction:column;background:#fff}
-.a4c .duo .lab{font-size:8pt;font-weight:800;color:#b91c1c;letter-spacing:.04em;margin-bottom:1px}
+.a4c .duo .lab{font-size:8pt;font-weight:800;color:#000;letter-spacing:.04em;margin-bottom:1px}
 .a4c .duo small{display:block;font-size:7pt;color:#5a6a7b;line-height:1.2;margin-top:2px}
-.a4c .duo .v{font-size:8pt;font-weight:700;min-height:10px;margin:1px 0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#142033}.a4c .duo .v.nm{font-size:11pt!important;font-weight:900!important;line-height:1.25;min-height:14px;margin:2px 0 4px;white-space:normal;overflow:visible;text-overflow:clip;color:#0a2748;letter-spacing:.01em}.a4c .duo .v:last-of-type{white-space:normal;line-height:1.25;max-height:22px}
+.a4c .duo .v{font-size:8pt;font-weight:700;min-height:10px;margin:1px 0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#000}.a4c .duo .v.nm{font-size:11pt!important;font-weight:900!important;line-height:1.25;min-height:14px;margin:2px 0 4px;white-space:normal;overflow:visible;text-overflow:clip;color:#000!important;letter-spacing:.01em}.a4c .duo .v:last-of-type{white-space:normal;line-height:1.25;max-height:22px}
 .a4c .duo .sigpad{flex:0 0 auto!important;height:12mm!important;min-height:12mm!important;max-height:12mm!important;margin-top:auto;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:flex-end;padding:0 2px 0;font-size:8pt;color:#8a97a8}
-.a4c .keside{margin-top:2px;text-align:right;font-size:8pt;font-weight:700;color:#142033}
+.a4c .keside{margin-top:2px;text-align:right;font-size:8pt;font-weight:700;color:#000}
 .a4c .note{display:none}
 .a4c .foot{margin-top:2px;text-align:center;font-size:6px;color:#8a97a8;flex:0 0 auto}
 .a4c.dense .senet{height:116mm;max-height:116mm;min-height:116mm}
@@ -3918,7 +3964,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c.dense .sbody{font-size:8pt}
 .a4c.senet-only{padding-top:12mm!important}
 .a4c.senet-only .senet{margin-top:0;height:180mm;max-height:none;min-height:180mm}
-@media print{.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important}.a4c .terms{flex:0 0 auto!important;margin-bottom:0!important}.a4c .signs{flex:0 0 auto!important;margin-top:1mm!important;max-height:32mm!important}.a4c .sig .sigpad{flex:0 0 auto!important;height:15mm!important;min-height:15mm!important;max-height:15mm!important}.a4c .duo{margin-top:20mm!important}.a4c .duo .sigpad{flex:0 0 auto!important;height:12mm!important;min-height:12mm!important;max-height:12mm!important}.a4c .grow{margin-top:auto!important;padding-top:8mm!important}.a4c .senet{flex:0 0 auto!important;height:122mm!important;max-height:122mm!important;font-size:8pt!important}.a4c .senet .sbody{margin-top:10mm!important;font-size:8pt!important}.a4c .senet,.a4c .senet-side,.a4c .senet-side strong,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields span,.a4c .fields b,.a4c .sbody,.a4c .duo .lab,.a4c .duo small,.a4c .duo .v:not(.nm),.a4c .duo .sigpad,.a4c .keside{font-size:8pt!important}.a4c .duo .v.nm{font-size:11pt!important;font-weight:900!important}.a4c.senet-only{page-break-before:always}}
+@media print{.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important}.a4c .terms{flex:0 0 auto!important;margin-bottom:0!important}.a4c .signs{flex:0 0 auto!important;margin-top:1mm!important;max-height:32mm!important}.a4c .sig .sigpad{flex:0 0 auto!important;height:15mm!important;min-height:15mm!important;max-height:15mm!important}.a4c .duo{margin-top:20mm!important}.a4c .duo .sigpad{flex:0 0 auto!important;height:12mm!important;min-height:12mm!important;max-height:12mm!important}.a4c .grow{margin-top:auto!important;padding-top:8mm!important}.a4c .senet{flex:0 0 auto!important;height:122mm!important;max-height:122mm!important;font-size:8pt!important}.a4c .senet .sbody{margin-top:10mm!important;font-size:8pt!important}.a4c .senet,.a4c .senet-side,.a4c .senet-side strong,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields span,.a4c .fields b,.a4c .sbody,.a4c .duo .lab,.a4c .duo small,.a4c .duo .v:not(.nm),.a4c .duo .sigpad,.a4c .keside{font-size:8pt!important}.a4c .duo .v.nm{font-size:11pt!important;font-weight:900!important;color:#000!important}.a4c .sig .nm{font-size:10pt!important;font-weight:900!important;color:#000!important;white-space:normal!important}.a4c .senet-main,.a4c .sbody,.a4c .fields b,.a4c .fields span,.a4c .duo .lab,.a4c .duo .v,.a4c .keside,.a4c .senet-bar b,.a4c .senet-bar span{color:#000!important}.a4c.senet-only{page-break-before:always}}
 </style>`;
   return `<section class="sheet a4c${denseClass}">${css}
   <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · ${htmlEsc(companyTaxLine)}</div></div>
@@ -3944,7 +3990,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   <div class="grow"><div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}<br/>${htmlEsc(companyTaxLine)}</div></div>
   <div class="senet-main"><div class="senet-bar"><b>SENET</b><span>Emre muharrer bono · ${htmlEsc(sale.reference||'')}</span></div>
   <div class="fields"><div><span>Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Hululü Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Türk Lirası</span><b>${senetAmtHash}</b></div><div><span>No.</span><b>${htmlEsc(senetNo)}</b></div></div>
-  <p class="sbody">İşbu emre muharrer bono mukabilinde <u>${dateTR(senetDue)||'........'}</u> tarihinde <b style="color:#b91c1c">${htmlEsc(companyLegal)}</b> veyahut emruhavalesine yukarıda yazılı Yalnız <u>${htmlEsc(senetWordsOnly||'....................')}</u> Türk Lirası ödeyeceğim. Bedeli malen ahzolunmuştur. İşbu bono vadesinde ödenmediği takdirde müteakip bonoların da muacceliyet kesbedeceğini, ihtilaf vukuunda <b>İSTANBUL</b> Mahkemelerinin selahiyetini şimdiden kabul eylerim.</p>
+  <p class="sbody">İşbu emre muharrer bono mukabilinde <u>${dateTR(senetDue)||'........'}</u> tarihinde <b>${htmlEsc(companyLegal)}</b> veyahut emruhavalesine yukarıda yazılı Yalnız <u>${htmlEsc(senetWordsOnly||'....................')}</u> Türk Lirası ödeyeceğim. Bedeli malen ahzolunmuştur. İşbu bono vadesinde ödenmediği takdirde müteakip bonoların da muacceliyet kesbedeceğini, ihtilaf vukuunda <b>İSTANBUL</b> Mahkemelerinin selahiyetini şimdiden kabul eylerim.</p>
   <div class="duo">
     <div><div class="lab">Ödeyecek / Borçlu</div><small>İsim</small><div class="v nm">${htmlEsc(personName)||'—'}</div><small>T.C. Kimlik No</small><div class="v">${htmlEsc(personTax||'')}</div><small>Adres</small><div class="v">${htmlEsc(addr||'')}</div><div class="sigpad">Borçlu İmza</div></div>
     <div><div class="lab">Müteselsil Borçlu / Kefil</div><small>İsim</small><div class="v nm">${htmlEsc(guarantor.name||'')||'—'}</div><small>T.C. Kimlik No</small><div class="v">${htmlEsc(guarantor.tckn||guarantor.taxNo||'')}</div><small>Adres</small><div class="v">${htmlEsc(guarantor.homeAddress||guarantor.address||'')}</div><div class="sigpad">Kefil İmza</div></div>
@@ -3958,6 +4004,8 @@ app.get('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{const s=re
 app.post('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{};
   // Alacaklı adı sabit resmi ünvan — "Atak Home" vb. kabul edilmez
+  const prevNext=Math.round(Number(s.promissorySettings?.nextSenetNo)||1);
+  const nextIn=x.nextSenetNo!=null?Math.round(Number(x.nextSenetNo)):prevNext;
   s.promissorySettings={
     creditorName:ATAK_COMPANY.legalName,
     paymentPlace:String(x.paymentPlace||'İstanbul'),
@@ -3967,7 +4015,8 @@ app.post('/web-api/admin/promissory-settings',requireAdmin,(req,res)=>{
     firstDueDays:Math.min(365,Math.max(0,Math.round(Number(x.firstDueDays)||30))),
     intervalMonths:Math.min(12,Math.max(1,Math.round(Number(x.intervalMonths)||1))),
     copies:Math.min(3,Math.max(1,Math.round(Number(x.copies)||1))),
-    footer:String(x.footer||'')
+    footer:String(x.footer||''),
+    nextSenetNo:Math.max(1,Number.isFinite(nextIn)?nextIn:1)
   };
   audit(s,'Senet ayarları güncellendi','Ayarlar');
   writeStore(s);
@@ -4001,6 +4050,7 @@ app.post('/web-api/admin/promissory-plan',requireAdminOrStaff('orders_manage'),(
   const base=Math.floor((total/count)*100)/100;
   let remaining=Math.round(total*100)/100;
   const planId=crypto.randomUUID(),notes=[];
+  const printNo=allocateSenetPrintNo(s);
   const desc=String(x.description||(sale?`${sale.reference} satış senedi`:'Manuel senet planı')).slice(0,500);
   for(let i=0;i<count;i++){
     const due=new Date(first);due.setMonth(due.getMonth()+i*interval);
@@ -4009,6 +4059,7 @@ app.post('/web-api/admin/promissory-plan',requireAdminOrStaff('orders_manage'),(
     notes.push({
       id:crypto.randomUUID(),planId,
       serial:`${settings.prefix||'ATAK'}-${Date.now().toString().slice(-8)}-${String(i+1).padStart(2,'0')}`,
+      printNo,
       customerId:customer.id,
       saleId:sale?.id||'',
       saleReference:sale?.reference||'',
@@ -4020,7 +4071,7 @@ app.post('/web-api/admin/promissory-plan',requireAdminOrStaff('orders_manage'),(
     });
   }
   s.promissoryNotes.push(...notes);
-  if(sale){sale.promissoryPlanId=planId;sale.promissoryAmount=Math.round((Number(sale.promissoryAmount||0)+total)*100)/100}
+  if(sale){sale.promissoryPlanId=planId;sale.promissoryAmount=Math.round((Number(sale.promissoryAmount||0)+total)*100)/100;sale.promissoryPrintNo=printNo}
   audit(s,sale?'Satışa senet planı bağlandı':'Senet planı oluşturuldu (satışsız)',customer.name,{planId,total,count,interval,saleId:sale?.id||'',orphan:!sale});
   writeStore(s);
   res.json({ok:true,planId,notes,printUrl:`/web-api/admin/promissory-plan/${planId}/print`,orphan:!sale});
@@ -4043,6 +4094,8 @@ app.post('/web-api/admin/promissory-note/:id/cancel',requireAdminOrStaffAny('fin
 app.get('/web-api/admin/promissory-plan/:planId/print',requireAdminOrStaff('orders_manage'),(req,res)=>{
   const s=readStore(),notes=(s.promissoryNotes||[]).filter(n=>n.planId===req.params.planId).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
   if(!notes.length)return res.status(404).send('Senet planı bulunamadı');
+  const sale=(s.financeTransactions||[]).find(t=>notes.some(n=>n.saleId&&String(n.saleId)===String(t.id)&&t.kind==='sale'))||null;
+  if(ensureNotesHavePrintNo(s,notes,sale))writeStore(s);
   const customer=s.customers.find(c=>c.id===notes[0].customerId),cfg=s.promissorySettings||{};
   const body=buildSenetCardsHtml(notes,customer,cfg);
   res.type('html').send(printDocShell(`Senet Planı · ${customer?.name||''}`,body));
@@ -4054,6 +4107,7 @@ app.get('/web-api/admin/sale/:id/print-docs',requireAdminOrStaff('orders_manage'
   const cfg=s.promissorySettings||{};
   const settings=s.settings||{};
   const notes=(s.promissoryNotes||[]).filter(n=>n.saleId===sale.id||n.planId===sale.promissoryPlanId).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
+  if(ensureNotesHavePrintNo(s,notes,sale))writeStore(s);
   const body=buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes);
   res.type('html').send(printDocShell(`Sözleşme & Senet · ${sale.reference||''}`,body,{autoPrint:true}));
 });
