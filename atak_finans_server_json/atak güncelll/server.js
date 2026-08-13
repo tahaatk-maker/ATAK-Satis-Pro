@@ -984,8 +984,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.90-mobilya-alis-v2',
-  build:'fix-v89',
+  version:'6.3.92-excel-alis',
+  build:'fix-v91',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -1429,21 +1429,18 @@ app.get('/web-api/admin/products-stock-excel',requireAdmin,(req,res)=>{
       'Barkod':p.barcode||'',
       'Ürün Adı':p.name||'',
       'Marka':p.brand||'',
-      'Alış':Number(p.purchasePrice||0),
-      'Liste':Number(p.listPrice||p.oldPrice||0),
-      'Nakit':Number(p.cashPrice||p.salePrice||0),
-      'Kart':Number(p.cardPrice||p.salePrice||0),
+      'Alış Fiyatı':Number(p.purchasePrice||0),
       'Mevcut Stok':Number(p.stock||0),
       'Adet':'' // kullanıcı doldurur → stok girişi
     });
-    const colWidths=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:10}];
+    const colWidths=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:12},{wch:12},{wch:10}];
     const wb=XLSX.utils.book_new();
     const talimat=XLSX.utils.aoa_to_sheet([
       ['ATAK Stok Giriş Excel'],
       [''],
       ['1) İstediğiniz kategoriyi seçip "Excel İndir" ile indirin (veya tümünü).'],
       ['2) "Adet" sütununa gireceğiniz stok adedini yazın. Boş satırlar atlanır.'],
-      ['3) Alış / Liste / Nakit / Kart fiyat bilgisidir; stok yüklerken zorunlu değildir.'],
+      ['3) "Alış Fiyatı" bilgilendirme içindir; stok yüklerken zorunlu değildir.'],
       ['4) "Mevcut Stok" bilgilendirme içindir; değiştirmeyin.'],
       ['5) Ürün Kodu sütununu değiştirmeyin.'],
       ['6) Tüm Ürünler → Excel\'den stok yükle ile depoyu seçip bu dosyayı yükleyin.'],
