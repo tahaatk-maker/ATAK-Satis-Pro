@@ -1429,24 +1429,30 @@ app.get('/web-api/admin/products-stock-excel',requireAdmin,(req,res)=>{
       'Barkod':p.barcode||'',
       'Ürün Adı':p.name||'',
       'Marka':p.brand||'',
+      'Alış':Number(p.purchasePrice||0),
+      'Liste':Number(p.listPrice||p.oldPrice||0),
+      'Nakit':Number(p.cashPrice||p.salePrice||0),
+      'Kart':Number(p.cardPrice||p.salePrice||0),
       'Mevcut Stok':Number(p.stock||0),
       'Adet':'' // kullanıcı doldurur → stok girişi
     });
+    const colWidths=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:10}];
     const wb=XLSX.utils.book_new();
     const talimat=XLSX.utils.aoa_to_sheet([
       ['ATAK Stok Giriş Excel'],
       [''],
-      ['1) İstediğiniz kategoriyi seçip "Excel\'e indir" ile indirin (veya tümünü).'],
+      ['1) İstediğiniz kategoriyi seçip "Excel İndir" ile indirin (veya tümünü).'],
       ['2) "Adet" sütununa gireceğiniz stok adedini yazın. Boş satırlar atlanır.'],
-      ['3) "Mevcut Stok" bilgilendirme içindir; değiştirmeyin.'],
-      ['4) Ürün Kodu sütununu değiştirmeyin.'],
-      ['5) Tüm Ürünler → Excel\'den stok yükle ile depoyu seçip bu dosyayı yükleyin.'],
-      ['6) Adet = o depodaki yeni stok adedi (mutlak değer).']
+      ['3) Alış / Liste / Nakit / Kart fiyat bilgisidir; stok yüklerken zorunlu değildir.'],
+      ['4) "Mevcut Stok" bilgilendirme içindir; değiştirmeyin.'],
+      ['5) Ürün Kodu sütununu değiştirmeyin.'],
+      ['6) Tüm Ürünler → Excel\'den stok yükle ile depoyu seçip bu dosyayı yükleyin.'],
+      ['7) Adet = o depodaki yeni stok adedi (mutlak değer).']
     ]);
     XLSX.utils.book_append_sheet(wb,talimat,'Talimat');
     const allRows=list.map(toRow);
     const wsAll=XLSX.utils.json_to_sheet(allRows.length?allRows:[toRow({code:'',name:'',brand:'',barcode:'',category:'',stock:0})]);
-    wsAll['!cols']=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:12},{wch:10}];
+    wsAll['!cols']=colWidths;
     XLSX.utils.book_append_sheet(wb,wsAll,'Stok Giris');
     // Kategori bazlı ayrı sayfalar (max 20 sayfa)
     const byCat=new Map();
@@ -1461,7 +1467,7 @@ app.get('/web-api/admin/products-stock-excel',requireAdmin,(req,res)=>{
       let sheetName=String(catName||'Kategori').replace(/[\\/?*\[\]:]/g,' ').trim().slice(0,28)||'Kategori';
       if(wb.SheetNames.includes(sheetName))sheetName=`${sheetName.slice(0,24)}-${sheetCount+1}`;
       const ws=XLSX.utils.json_to_sheet(items.map(toRow));
-      ws['!cols']=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:12},{wch:10}];
+      ws['!cols']=colWidths;
       XLSX.utils.book_append_sheet(wb,ws,sheetName);
       sheetCount++;
     }
