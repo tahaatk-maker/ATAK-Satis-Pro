@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v96 */
+/* ATAK_PERSONEL_BUILD=fix-v97 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1324,7 +1324,7 @@ function salesCombinedContractSenetA4Html(d){
   const moreSenets=noteList.length>1?`<div class="note">Tek senet tutarı toplam bakiyedir (${money(senetAmount)}). ${noteList.length} taksitin vade planı yukarıdaki tablodadır.</div>`:'';
   const css=`<style>
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
-.a4c{padding:6mm 7mm 4mm!important;font:10pt/1.35 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:277mm}
+.a4c{padding:6mm 7mm 4mm!important;font:10pt/1.35 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible;display:flex;flex-direction:column;min-height:277mm}
 .a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0 0 1px}.a4c .logo-top img{height:9mm;width:auto;object-fit:contain}
 .a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 4px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:12mm;object-fit:contain;object-position:left top}
 .a4c .logo-bottom{display:none}
@@ -1335,14 +1335,14 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .mid-head{text-align:right;padding-top:2px;align-self:center}
 .a4c .title{line-height:1.2!important;font-weight:700;color:#000;letter-spacing:.04em}
 .a4c .rule{height:2px;background:#000;margin:4px 0 5px;flex:0 0 auto}
-.a4c .grid3{display:grid;grid-template-columns:1.35fr .65fr .7fr;gap:5px;flex:0 0 auto}
+.a4c .grid3{display:grid;grid-template-columns:1.7fr .55fr .6fr;gap:4px;flex:0 0 auto}
 .a4c table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0}
 .a4c th,.a4c td{border:1px solid #c5d0dd;padding:2.5px 3px;vertical-align:middle;color:#000}
-.a4c th{background:#0a2748;color:#fff!important;font-weight:700;letter-spacing:.02em;text-transform:uppercase;text-align:center;padding:3px 2px}
-.a4c td{height:auto;min-height:12px}
+.a4c th{background:#0a2748;color:#fff!important;font-weight:700;letter-spacing:.02em;text-transform:uppercase;text-align:center;padding:3px 2px}.a4c th.mat{text-align:left!important;padding-left:4px}
+.a4c td{height:auto;min-height:12px;vertical-align:top}.a4c td.c,.a4c td.num{vertical-align:middle;text-align:center}.a4c td.num{text-align:right}
 .a4c .num{text-align:right;font-variant-numeric:tabular-nums}
 .a4c .c{text-align:center}
-.a4c .mat{text-align:left;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#000}
+.a4c .mat{text-align:left!important;font-weight:600;overflow:visible;text-overflow:clip;white-space:normal!important;word-break:break-word;hyphens:auto;color:#000;vertical-align:top;padding:3px 4px!important;line-height:1.25!important}
 .a4c .mmeta td:first-child{width:46%;background:#f3f6fa;font-weight:700;color:#000}
 .a4c .tot td{background:#eef3f9;font-weight:700;color:#000}
 .a4c tr.more td{height:auto;padding:2px 4px;font-weight:700;color:#000;background:#f8fafc;text-align:left}
@@ -1365,8 +1365,8 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .sig .nm{font-weight:700;margin:2px 0 0;color:#000;white-space:normal;overflow:visible;word-break:break-word}
 .a4c .sig .sigpad{flex:0 0 auto!important;height:15mm!important;min-height:15mm!important;max-height:15mm!important;margin-top:2px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center}
 .a4c .sig .sigpad span{color:#000}
-.a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:auto!important;padding-top:6mm;gap:0}
-.a4c .senet{border:1.5px solid #0a2748;border-radius:4px;overflow:hidden;display:grid;grid-template-columns:22mm 1fr;flex:0 0 auto;height:128mm;max-height:128mm;min-height:128mm;color:#000}
+.a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:auto!important;padding-top:3mm;gap:0}
+.a4c .senet{border:1.5px solid #0a2748;border-radius:4px;overflow:visible;display:grid;grid-template-columns:22mm 1fr;flex:0 0 auto;height:auto;max-height:none;min-height:110mm;color:#000}
 .a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff!important;padding:4px 3px;line-height:1.3;display:flex;flex-direction:column;gap:4px}
 .a4c .senet-side,.a4c .senet-side *{color:#fff!important}
 .a4c .senet-main{padding:4px 6px 4px;display:flex;flex-direction:column;min-height:0;height:100%;color:#000}
@@ -1377,19 +1377,19 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .fields>div{border-bottom:1.2px solid #2a3545;padding:1px 0 2px}
 .a4c .fields span{display:block;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:.02em}
 .a4c .fields b{display:block;min-height:12px;margin-top:1px;color:#000;font-weight:700}
-.a4c .sbody{text-align:justify;margin:8mm 0 0;color:#000}.a4c .sbody b,.a4c .sbody u{color:#000!important;font-size:10pt!important}
-.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:0 0 auto;min-height:0;margin-top:10mm}
-.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:4px 6px 3px;min-height:48mm;height:auto;display:flex;flex-direction:column;background:#fff;overflow:visible}
-.a4c .duo .lab{font-size:10pt!important;font-weight:700;color:#000;letter-spacing:.02em;margin:0 0 4px;padding-bottom:2px;border-bottom:1px solid #c5d0dd;flex:0 0 auto}
-.a4c .duo .row{display:flex;flex-direction:column;gap:1px;margin:0 0 4px;flex:0 0 auto}
-.a4c .duo .k{display:block;font-size:8pt!important;line-height:1.2!important;font-weight:700;color:#333;margin:0}
-.a4c .duo .v{display:block;font-size:10pt!important;line-height:1.25!important;font-weight:700;color:#000!important;min-height:1.25em;margin:0;padding:0;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word}
-.a4c .duo .v.nm{font-size:10pt!important;font-weight:700!important;color:#000!important}
-.a4c .duo .sigpad{flex:0 0 auto!important;height:10mm!important;min-height:10mm!important;max-height:10mm!important;margin-top:auto;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:flex-end;padding:0 2px 0;color:#000;font-size:9pt!important}
+.a4c .sbody{text-align:justify;margin:4mm 0 3mm;color:#000;flex:0 0 auto}.a4c .sbody b,.a4c .sbody u{color:#000!important;font-size:10pt!important}
+.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:0 0 auto;min-height:0;margin-top:4mm}
+.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:5px 7px 4px;min-height:42mm;height:auto;display:flex;flex-direction:column;gap:0;background:#fff;overflow:visible}
+.a4c .duo .lab{font-size:9pt!important;font-weight:700;color:#000;letter-spacing:.02em;margin:0 0 5px;padding:0 0 3px;border-bottom:1px solid #c5d0dd;flex:0 0 auto;line-height:1.2!important}
+.a4c .duo .row{display:block;margin:0 0 5px;flex:0 0 auto}
+.a4c .duo .k{display:block;font-size:7.5pt!important;line-height:1.15!important;font-weight:700;color:#444;margin:0 0 2px;padding:0}
+.a4c .duo .v{display:block;font-size:10pt!important;line-height:1.3!important;font-weight:700;color:#000!important;min-height:14px;margin:0;padding:1px 0 3px;border-bottom:1px solid #222;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word;text-align:left!important}
+.a4c .duo .v.nm{font-size:10pt!important;font-weight:700!important;color:#000!important;border-bottom:1px solid #222}
+.a4c .duo .sigpad{flex:0 0 auto!important;height:9mm!important;min-height:9mm!important;max-height:9mm!important;margin-top:auto;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:flex-end;padding:2px 2px 0;color:#666;font-size:8pt!important}
 .a4c .keside{margin-top:2px;text-align:right;font-weight:700;color:#000}
 .a4c .note{display:none}
 .a4c .foot{margin-top:2px;text-align:center;color:#000;flex:0 0 auto}
-.a4c.dense .senet{height:122mm;max-height:122mm;min-height:122mm}
+.a4c.dense .senet{height:auto;max-height:none;min-height:100mm}
 .a4c.dense .duo>div{min-height:44mm;height:auto}
 .a4c.senet-only{padding-top:12mm!important}
 .a4c.senet-only .senet{margin-top:0;height:180mm;max-height:none;min-height:180mm}
@@ -1402,11 +1402,14 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .terms{flex:0 0 auto!important;margin-bottom:0!important}
 .a4c .signs{flex:0 0 auto!important;margin-top:1mm!important;max-height:36mm!important}
 .a4c .sig .sigpad{flex:0 0 auto!important;height:15mm!important;min-height:15mm!important;max-height:15mm!important}
-.a4c .duo{margin-top:10mm!important}
-.a4c .duo .sigpad{flex:0 0 auto!important;height:10mm!important;min-height:10mm!important;max-height:10mm!important}
-.a4c .grow{margin-top:auto!important;padding-top:6mm!important}
-.a4c .senet{flex:0 0 auto!important;height:128mm!important;max-height:128mm!important}
-.a4c .senet .sbody{margin-top:8mm!important}
+.a4c .duo{margin-top:4mm!important}
+.a4c .duo .sigpad{flex:0 0 auto!important;height:9mm!important;min-height:9mm!important;max-height:9mm!important}
+.a4c .duo .k{font-size:7.5pt!important;line-height:1.15!important;margin-bottom:2px!important}
+.a4c .duo .v,.a4c .duo .v.nm{font-size:10pt!important;line-height:1.3!important;padding:1px 0 3px!important;border-bottom:1px solid #222!important;white-space:normal!important;overflow:visible!important;text-align:left!important}
+.a4c .mat{text-align:left!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word!important}
+.a4c .grow{margin-top:auto!important;padding-top:3mm!important}
+.a4c .senet{flex:0 0 auto!important;height:auto!important;max-height:none!important;min-height:105mm!important;overflow:visible!important}
+.a4c .senet .sbody{margin-top:4mm!important;margin-bottom:3mm!important}
 .a4c.senet-only{page-break-before:always}
 }
 </style>`;
@@ -1415,7 +1418,7 @@ function salesCombinedContractSenetA4Html(d){
   <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
   <div class="rule"></div>
   <div class="grid3">
-    <table><thead><tr><th style="width:46%">Malzeme</th><th style="width:12%">Adet</th><th style="width:21%">Birim</th><th style="width:21%">Tutar</th></tr></thead><tbody>${productRows}</tbody></table>
+    <table class="prods"><thead><tr><th class="mat" style="width:58%">Malzeme</th><th style="width:10%">Adet</th><th style="width:16%">Birim</th><th style="width:16%">Tutar</th></tr></thead><tbody>${productRows}</tbody></table>
     <table class="mmeta"><tr><td>Satış Tarihi</td><td>${dateTR(d.date)}</td></tr><tr><td>Satış No</td><td>${esc(saleRef)}</td></tr><tr><td>Müşteri No</td><td>${esc(d.customer?.code||d.customer?.id||'')}</td></tr><tr><td>Toplam</td><td>${money(net)}</td></tr><tr><td>Peşinat</td><td>${money(downPayment)}</td></tr><tr><td>Bakiye</td><td>${money(balance)}</td></tr></table>
     <table><thead><tr><th>Vade</th><th>Taksit</th></tr></thead><tbody>${scheduleRows}</tbody></table>
   </div>${corpLine}
