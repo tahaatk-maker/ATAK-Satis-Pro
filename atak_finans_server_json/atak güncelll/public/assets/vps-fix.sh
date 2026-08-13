@@ -2,7 +2,7 @@
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/satis-merkezi-iskonto-prim-bd99}"
 EXPECT_HEALTH=6.3.102-hesap-aktif
-EXPECT_BUILD=fix-v102
+EXPECT_BUILD=fix-v103
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 

@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v102" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v102" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v103" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v103" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -2094,7 +2094,16 @@ Bulunamayan → Diğer.
 <label>Mağaza<select id="financeAccountStore"></select></label>
 </div>
 <label>Açılış bakiyesi<input id="financeOpeningBalance" step="0.01" type="number" value="0"/></label>
-<label class="check"><input checked="" id="financeAccountActive" type="checkbox"/> Aktif</label>
+<div id="financeAccountStatusBox" style="border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;background:#f8fafc;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+  <div>
+    <div style="font-size:12px;font-weight:700;color:#64748b;letter-spacing:.04em;text-transform:uppercase">Hesap durumu</div>
+    <div id="financeAccountStatusText" style="font-size:18px;font-weight:800;color:#15803d;margin-top:2px">AKTİF</div>
+    <label class="check" style="margin-top:8px;display:inline-flex;gap:8px;align-items:center">
+      <input checked="" id="financeAccountActive" type="checkbox"/> Kaydederken aktif olsun
+    </label>
+  </div>
+  <button class="primary" id="financeAccountActivateBtn" type="button" style="display:none;min-width:140px">Aktifleştir</button>
+</div>
 <div class="button-row">
   <button class="primary" type="submit">Hesabı Kaydet</button>
   <button class="secondary-btn" id="financeAccountNewBtn" type="button">Yeni / Temizle</button>
@@ -2206,5 +2215,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v102"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v103"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
