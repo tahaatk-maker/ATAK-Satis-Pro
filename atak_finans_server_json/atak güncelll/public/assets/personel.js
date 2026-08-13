@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v74 */
+/* ATAK_PERSONEL_BUILD=fix-v75 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1229,7 +1229,7 @@ function salesCombinedContractSenetA4Html(d){
   const shownItems=items.slice(0,maxProducts);
   const moreProducts=Math.max(0,items.length-shownItems.length);
   const emptyRows=shownItems.length?0:1;
-  const productRows=(shownItems.map(i=>{const qty=Number(i.quantity||1);const total=qty*Number(i.unitPrice||0);return `<tr><td class="c">${esc(i.itemCode||i.productCode||'-')}</td><td class="c">${qty}</td><td class="num">${money(i.unitPrice)}</td><td class="num">${money(total)}</td></tr>`;}).join('')||'')+Array.from({length:emptyRows},()=>'<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>').join('')+(moreProducts?`<tr class="more"><td colspan="4">+${moreProducts} ürün daha (toplam ${items.length} kalem)</td></tr>`:'');
+  const productRows=(shownItems.map(i=>{const qty=Number(i.quantity||1);const total=qty*Number(i.unitPrice||0);const matName=i.productName||i.materialCode||i.searchName||i.name||i.productCode||i.itemCode||'-';return `<tr><td class="mat">${esc(matName)}</td><td class="c">${qty}</td><td class="num">${money(i.unitPrice)}</td><td class="num">${money(total)}</td></tr>`;}).join('')||'')+Array.from({length:emptyRows},()=>'<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>').join('')+(moreProducts?`<tr class="more"><td colspan="4">+${moreProducts} ürün daha (toplam ${items.length} kalem)</td></tr>`:'');
   const schedShow=noteList.slice(0,10);
   const scheduleRows=(schedShow.map(n=>`<tr><td class="c">${dateTR(n.dueDate)}</td><td class="num">${money(n.amount)}</td></tr>`).join('')||'<tr><td>&nbsp;</td><td></td></tr>')+`<tr class="tot"><td class="c">TOPLAM</td><td class="num">${money(balance||senetTotal)}</td></tr>`;
   const partyRows=who=>[['Adı Soyadı',who.name||''],['T.C. Kimlik No',who.tckn||who.taxNo||''],['GSM',who.phone||who.gsm||''],['Adres',who.homeAddress||who.address||'']].map(([l,v])=>`<tr><td class="lbl">${l}</td><td>${esc(v)}</td></tr>`).join('');
@@ -1319,7 +1319,7 @@ function salesCombinedContractSenetA4Html(d){
   <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
   <div class="rule"></div>
   <div class="grid3">
-    <table><thead><tr><th style="width:30%">Ürün Kodu</th><th style="width:12%">Adet</th><th style="width:29%">Birim</th><th style="width:29%">Tutar</th></tr></thead><tbody>${productRows}</tbody></table>
+    <table><thead><tr><th style="width:46%">Malzeme</th><th style="width:12%">Adet</th><th style="width:21%">Birim</th><th style="width:21%">Tutar</th></tr></thead><tbody>${productRows}</tbody></table>
     <table class="mmeta"><tr><td>Satış Tarihi</td><td>${dateTR(d.date)}</td></tr><tr><td>Satış No</td><td>${esc(saleRef)}</td></tr><tr><td>Müşteri No</td><td>${esc(d.customer?.code||d.customer?.id||'')}</td></tr><tr><td>Toplam</td><td>${money(net)}</td></tr><tr><td>Peşinat</td><td>${money(downPayment)}</td></tr><tr><td>Bakiye</td><td>${money(balance)}</td></tr></table>
     <table><thead><tr><th>Vade</th><th>Taksit</th></tr></thead><tbody>${scheduleRows}</tbody></table>
   </div>${corpLine}
