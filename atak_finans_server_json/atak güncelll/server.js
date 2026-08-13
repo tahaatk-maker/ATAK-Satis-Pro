@@ -985,8 +985,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.100-hesap-sil',
-  build:'fix-v100',
+  version:'6.3.101-hesap-sil-force',
+  build:'fix-v101',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -1638,19 +1638,30 @@ app.delete('/web-api/admin/finance-account/:id',requireAdmin,(req,res)=>{
   const idx=(s.financeAccounts||[]).findIndex(a=>String(a.id)===id);
   if(idx<0)return res.status(404).json({error:'Hesap bulunamadı'});
   const row=s.financeAccounts[idx];
-  const used=(s.financeTransactions||[]).some(t=>String(t.accountId||'')===id||String(t.counterAccountId||'')===id||String(t.toAccountId||'')===id||String(t.fromAccountId||'')===id);
-  if(used||Math.abs(Number(accountBalance(s,id)||0))>0.009){
-    // Hareketi olan hesap silinmez — pasife alınır (raporlarda bakiye korunur)
+  const bal=Math.round(Number(accountBalance(s,id)||0)*100)/100;
+  const force=req.query.force==='1'||req.body?.force===true;
+  // Bakiyesi sıfır değilse silinmez — pasife alınır
+  if(Math.abs(bal)>0.009){
     row.active=false;
     row.updatedAt=new Date().toISOString();
-    audit(s,'Finans hesabı pasife alındı',row.name,{id,reason:'hareket_var'});
+    audit(s,'Finans hesabı pasife alındı',row.name,{id,reason:'bakiye_var',balance:bal});
     writeStore(s);
-    return res.json({ok:true,softDeleted:true,row:{...row,balance:accountBalance(s,row.id)},message:'Hesapta hareket/bakiye var — silinmedi, pasife alındı'});
+    return res.json({ok:true,softDeleted:true,row:{...row,balance:bal},message:`Bakiyesi ${bal} TL — silinmedi, pasife alındı. Bakiye sıfırlanınca silebilirsiniz.`});
+  }
+  // Bakiye 0: kalıcı sil (geçmiş hareket kayıtları hesap adını kaybedebilir; bu bilinçli temizlik)
+  const txCount=(s.financeTransactions||[]).filter(t=>String(t.accountId||'')===id||String(t.counterAccountId||'')===id||String(t.toAccountId||'')===id||String(t.fromAccountId||'')===id).length;
+  if(txCount>0&&!force&&row.active!==false){
+    // İlk tık: pasife al + bilgilendir; ikinci silmede (zaten pasif / force) kalıcı sil
+    row.active=false;
+    row.updatedAt=new Date().toISOString();
+    audit(s,'Finans hesabı pasife alındı',row.name,{id,reason:'gecmis_hareket',txCount});
+    writeStore(s);
+    return res.json({ok:true,softDeleted:true,canForceDelete:true,txCount,row:{...row,balance:bal},message:`Bu hesapta ${txCount} geçmiş hareket var (bakiye 0). Tekrar “Sil” derseniz kalıcı silinir.`});
   }
   s.financeAccounts.splice(idx,1);
-  audit(s,'Finans hesabı silindi',row.name,{id});
+  audit(s,'Finans hesabı silindi',row.name,{id,txCount,forced:!!force});
   writeStore(s);
-  res.json({ok:true,deleted:true});
+  res.json({ok:true,deleted:true,txCount});
 });
 function customerSnapshot(c={}){
   return {

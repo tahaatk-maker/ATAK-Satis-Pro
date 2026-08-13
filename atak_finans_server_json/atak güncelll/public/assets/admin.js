@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v100 */
+/* ATAK_ADMIN_BUILD=fix-v101 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1159,12 +1159,23 @@ async function deleteFinanceAccount(id){
   if(!accId){toast('Silmek için listeden hesap seçin');return}
   const row=(financeData?.accounts||[]).find(a=>String(a.id)===accId);
   const label=row?.name||accId;
-  if(!confirm(`“${label}” hesabını silmek istiyor musunuz?\n\nHareketi/bakiyesi varsa silinmez, pasife alınır.`))return;
+  const alreadyPassive=row?.active===false;
+  const bal=Number(row?.balance||0);
+  if(Math.abs(bal)>0.009){
+    if(!confirm(`“${label}” bakiyesi ${money(bal)}.\n\nBakiyesi olan hesap silinmez — pasife alınır. Devam?`))return;
+  }else if(alreadyPassive){
+    if(!confirm(`“${label}” zaten pasif (bakiye 0).\n\nKalıcı silinsin mi? Geçmiş hareketlerde hesap adı boş görünebilir.`))return;
+  }else{
+    if(!confirm(`“${label}” hesabını silmek istiyor musunuz?\n\nGeçmiş hareket varsa önce pasife alınır; tekrar Sil derseniz kalıcı silinir.`))return;
+  }
   try{
-    const r=await api('/web-api/admin/finance-account/'+encodeURIComponent(accId),{method:'DELETE'});
+    const force=alreadyPassive||Math.abs(bal)<=0.009&&alreadyPassive;
+    const url='/web-api/admin/finance-account/'+encodeURIComponent(accId)+(alreadyPassive?'?force=1':'');
+    const r=await api(url,{method:'DELETE'});
     resetFinanceAccountForm();
     await loadFinanceCenter();
-    toast(r.softDeleted?(r.message||'Hesap pasife alındı'):'Hesap silindi');
+    if(r.deleted)toast('Hesap kalıcı silindi');
+    else toast(r.message||'Hesap pasife alındı — tekrar Sil ile kalıcı silebilirsiniz');
   }catch(e){toast(e.message||'Silinemedi')}
 }
 function renderCustomerTable(){
