@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v104 */
+/* ATAK_ADMIN_BUILD=fix-v105 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1097,6 +1097,89 @@ function setFinanceReportView(name){
 }
 qa('#financeReportToggle [data-fin-report]').forEach(b=>b.addEventListener('click',()=>setFinanceReportView(b.dataset.finReport)));
 q('#financeReportsRefresh')?.addEventListener('click',()=>loadFinanceCenter().catch(e=>toast(e.message)));
+function financeReportTitle(){
+  return financeReportView==='customers'?'Müşteri Cari'
+    :(financeReportView==='transactions'?'Son Finans Hareketleri':'Hesap Bakiyeleri');
+}
+function financeReportCsvLines(){
+  if(!financeData)return null;
+  const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const lines=[];
+  const s=financeData.summary||{};
+  const day=new Date().toISOString().slice(0,10);
+  lines.push(['ATAK FINANS RAPORU',financeReportTitle(),day].map(esc).join(';'));
+  lines.push(['Toplam Kasa',s.cash,'Toplam Banka',s.bank,'Musteri Alacagi',s.receivable,'Bugunku Masraf',s.todayExpense].map(esc).join(';'));
+  lines.push([]);
+  if(financeReportView==='customers'){
+    lines.push(['Musteri','Telefon','VKN/TCKN','Bakiye','Durum'].map(esc).join(';'));
+    const term=(q('#customerSearch')?.value||'').toLocaleLowerCase('tr-TR');
+    (financeData.customers||[]).filter(x=>`${x.name} ${x.phone} ${x.taxNo}`.toLocaleLowerCase('tr-TR').includes(term)).forEach(x=>{
+      const st=x.balance>0?'Borçlu':x.balance<0?'Alacaklı':'Kapalı';
+      lines.push([x.name,x.phone||'',x.taxNo||'',x.balance,st].map(esc).join(';'));
+    });
+  }else if(financeReportView==='transactions'){
+    lines.push(['Tarih','Islem','Hesap','Musteri','Tutar'].map(esc).join(';'));
+    (financeData.transactions||[]).forEach(x=>{
+      const acc=`${x.accountName||''}${x.counterAccountName?` <- ${x.counterAccountName}`:''}`;
+      lines.push([x.date,x.kind,acc,x.customerName||'',x.amount].map(esc).join(';'));
+    });
+  }else{
+    lines.push(['Hesap','Tur','Magaza','Durum','Bakiye'].map(esc).join(';'));
+    (financeData.accounts||[]).forEach(x=>{
+      const store=(financeData.stores||[]).find(s=>s.id===x.storeId)?.name||'Merkez';
+      lines.push([x.name,x.type==='bank'?'Banka':'Kasa',store,x.active===false?'Pasif':'Aktif',x.balance].map(esc).join(';'));
+    });
+  }
+  return lines;
+}
+function financeReportsExportExcel(){
+  const lines=financeReportCsvLines();
+  if(!lines){toast('Önce rapor yüklensin (Yenile)');return}
+  const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  const slug=financeReportView==='customers'?'musteri-cari':(financeReportView==='transactions'?'hareketler':'hesap-bakiyeleri');
+  a.href=url;a.download=`atak-finans-${slug}-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast('Excel (CSV) indirildi — Excel ile açın');
+}
+function financeReportsPrint(){
+  if(!financeData){toast('Önce rapor yüklensin (Yenile)');return}
+  const panel=q(`[data-fin-report-panel="${financeReportView}"] .turnover-table`);
+  const tableHtml=panel?.innerHTML||'<p>Veri yok</p>';
+  const s=financeData.summary||{};
+  const w=window.open('','_blank','noopener,noreferrer,width=980,height=720');
+  if(!w){toast('Açılır pencere engellendi');return}
+  w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"/><title>${financeReportTitle()}</title>
+<style>
+body{font-family:Arial,sans-serif;color:#111;margin:24px}
+h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 16px;font-size:13px}
+.kpis{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px}
+.kpis div{border:1px solid #ddd;padding:8px 12px;border-radius:8px;min-width:120px}
+.kpis b{display:block;font-size:16px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
+th{background:#f3f4f6}
+.toolbar{margin:0 0 16px}
+.toolbar button{padding:8px 14px;font-weight:700;cursor:pointer}
+@media print{.toolbar{display:none}}
+</style></head><body>
+<div class="toolbar"><button onclick="window.print()">Yazdır / PDF Kaydet</button></div>
+<h1>ATAK — ${financeReportTitle()}</h1>
+<p class="meta">${new Date().toLocaleString('tr-TR')}</p>
+<div class="kpis">
+  <div><span>Toplam Kasa</span><b>${money(s.cash)}</b></div>
+  <div><span>Toplam Banka</span><b>${money(s.bank)}</b></div>
+  <div><span>Müşteri Alacağı</span><b>${money(s.receivable)}</b></div>
+  <div><span>Bugünkü Masraf</span><b>${money(s.todayExpense)}</b></div>
+</div>
+${tableHtml}
+<script>setTimeout(function(){try{window.focus()}catch(e){}},200)<\\/script>
+</body></html>`);
+  w.document.close();
+}
+q('#financeReportsExcelBtn')?.addEventListener('click',financeReportsExportExcel);
+q('#financeReportsPrintBtn')?.addEventListener('click',financeReportsPrint);
 async function loadFinanceCenter(){
   financeData=await api('/web-api/admin/finance-center');
   renderFinanceCenter();
