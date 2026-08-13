@@ -1761,9 +1761,11 @@ Bulunamayan → Diğer.
   <div>
     <small class="eyebrow">FİNANS RAPORLAMA</small>
     <h2>Finans Raporları</h2>
-    <p class="note">Hesap bakiyeleri, müşteri carileri ve son finans hareketlerini ayrı ayrı görüntüle. Tahsilat / transfer için Finans &amp; Cari’ye dön.</p>
+    <p class="note">Alttaki 3 sekme raporun kendisi. <b>Excel İndir</b> veya <b>Yazdır / PDF</b> ile çıktı alın. Tahsilat için Finans &amp; Cari’ye dönün.</p>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button class="primary" id="financeReportsExcelBtn" type="button">⬇ Excel İndir</button>
+    <button class="secondary-btn" id="financeReportsPrintBtn" type="button">🖨 Yazdır / PDF</button>
     <button class="secondary-btn" id="financeReportsRefresh" type="button">Yenile</button>
     <button class="secondary-btn" data-go="financeCenter" type="button">Finans &amp; Cari →</button>
   </div>
@@ -1777,15 +1779,15 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <div class="panel finance-report-panel" id="financeReportAccounts" data-fin-report-panel="accounts">
-  <div class="panel-head"><div><h2>Hesap Bakiyeleri</h2><p class="note">Hesap tanımı için Ayarlar → Kasa ve Banka.</p></div><span id="financeAccountCount"></span></div>
+  <div class="panel-head"><div><h2>Hesap Bakiyeleri</h2><p class="note">Hesap tanımı için Ayarlar → Kasa ve Banka. Rapor için üstteki Excel / Yazdır.</p></div><span id="financeAccountCount"></span></div>
   <div class="turnover-table" id="financeAccountsTable"></div>
 </div>
 <div class="panel finance-report-panel hidden" id="financeReportCustomers" data-fin-report-panel="customers">
-  <div class="panel-head"><h2>Müşteri Carileri</h2><input id="customerSearch" placeholder="Müşteri ara"/></div>
+  <div class="panel-head"><div><h2>Müşteri Carileri</h2><p class="note">Açık bakiyeler. Excel / Yazdır üstte.</p></div><input id="customerSearch" placeholder="Müşteri ara"/></div>
   <div class="turnover-table" id="customerTable"></div>
 </div>
 <div class="panel finance-report-panel hidden" id="financeReportTransactions" data-fin-report-panel="transactions">
-  <div class="panel-head"><h2>Son Finans Hareketleri</h2><span id="financeTransactionCount"></span></div>
+  <div class="panel-head"><div><h2>Son Finans Hareketleri</h2><p class="note">Tahsilat, satış, transfer. Excel / Yazdır üstte.</p></div><span id="financeTransactionCount"></span></div>
   <div class="turnover-table" id="financeTransactionTable"></div>
 </div>
 </section>
