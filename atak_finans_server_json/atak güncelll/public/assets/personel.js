@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v97 */
+/* ATAK_PERSONEL_BUILD=fix-v98 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1324,92 +1324,91 @@ function salesCombinedContractSenetA4Html(d){
   const moreSenets=noteList.length>1?`<div class="note">Tek senet tutarı toplam bakiyedir (${money(senetAmount)}). ${noteList.length} taksitin vade planı yukarıdaki tablodadır.</div>`:'';
   const css=`<style>
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
-.a4c{padding:6mm 7mm 4mm!important;font:10pt/1.35 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible;display:flex;flex-direction:column;min-height:277mm}
-.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0 0 1px}.a4c .logo-top img{height:9mm;width:auto;object-fit:contain}
-.a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 4px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:12mm;object-fit:contain;object-position:left top}
+.a4c{padding:5mm 6mm 3mm!important;font:8pt/1.25 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible;display:flex;flex-direction:column;min-height:277mm}
+.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0}.a4c .logo-top img{height:7mm;width:auto;object-fit:contain}
+.a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 3px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:10mm;object-fit:contain;object-position:left top}
 .a4c .logo-bottom{display:none}
-.a4c .top{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;flex:0 0 auto}
-.a4c .name,.a4c .meta,.a4c .title,.a4c th,.a4c td,.a4c .mat,.a4c .mmeta td,.a4c tr.more td,.a4c .box h3,.a4c .box td,.a4c .box td.lbl,.a4c .box td.nm,.a4c .pay,.a4c .terms h4,.a4c .terms p,.a4c .sig b,.a4c .sig .nm,.a4c .sig .sigpad span,.a4c .senet,.a4c .senet-side,.a4c .senet-side strong,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields span,.a4c .fields b,.a4c .sbody,.a4c .duo .lab,.a4c .duo .v,.a4c .duo .v.nm,.a4c .keside,.a4c .foot,.a4c.dense td,.a4c.dense .mat,.a4c.dense .terms p,.a4c.dense .sbody{font-size:10pt!important;line-height:1.35!important;font-family:Arial,Helvetica,sans-serif!important}
-.a4c .name{font-weight:700;color:#000}
-.a4c .meta{margin-top:2px;color:#000}
-.a4c .mid-head{text-align:right;padding-top:2px;align-self:center}
-.a4c .title{line-height:1.2!important;font-weight:700;color:#000;letter-spacing:.04em}
-.a4c .rule{height:2px;background:#000;margin:4px 0 5px;flex:0 0 auto}
-.a4c .grid3{display:grid;grid-template-columns:1.7fr .55fr .6fr;gap:4px;flex:0 0 auto}
+.a4c .top{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:start;flex:0 0 auto}
+.a4c .name,.a4c .meta,.a4c .title,.a4c th,.a4c td,.a4c .mat,.a4c .mmeta td,.a4c tr.more td,.a4c .box h3,.a4c .box td,.a4c .box td.lbl,.a4c .box td.nm,.a4c .pay,.a4c .terms h4,.a4c .terms p,.a4c .sig b,.a4c .sig .nm,.a4c .sig .sigpad span,.a4c .senet,.a4c .senet-side,.a4c .senet-side strong,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields span,.a4c .fields b,.a4c .sbody,.a4c .sbody b,.a4c .sbody u,.a4c .duo .lab,.a4c .duo .v,.a4c .duo .v.nm,.a4c .keside,.a4c .foot,.a4c.dense td,.a4c.dense .mat,.a4c.dense .terms p,.a4c.dense .sbody{font-size:8pt!important;line-height:1.25!important;font-family:Arial,Helvetica,sans-serif!important;color:#000}
+.a4c .name{font-weight:700}
+.a4c .meta{margin-top:1px;font-size:7pt!important;line-height:1.2!important}
+.a4c .mid-head{text-align:right;padding-top:1px;align-self:center}
+.a4c .title{font-size:11pt!important;line-height:1.1!important;font-weight:700;letter-spacing:.04em}
+.a4c .rule{height:1.5px;background:#000;margin:2px 0 3px;flex:0 0 auto}
+.a4c .grid3{display:grid;grid-template-columns:1.7fr .55fr .6fr;gap:3px;flex:0 0 auto}
 .a4c table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0}
-.a4c th,.a4c td{border:1px solid #c5d0dd;padding:2.5px 3px;vertical-align:middle;color:#000}
-.a4c th{background:#0a2748;color:#fff!important;font-weight:700;letter-spacing:.02em;text-transform:uppercase;text-align:center;padding:3px 2px}.a4c th.mat{text-align:left!important;padding-left:4px}
-.a4c td{height:auto;min-height:12px;vertical-align:top}.a4c td.c,.a4c td.num{vertical-align:middle;text-align:center}.a4c td.num{text-align:right}
-.a4c .num{text-align:right;font-variant-numeric:tabular-nums}
-.a4c .c{text-align:center}
-.a4c .mat{text-align:left!important;font-weight:600;overflow:visible;text-overflow:clip;white-space:normal!important;word-break:break-word;hyphens:auto;color:#000;vertical-align:top;padding:3px 4px!important;line-height:1.25!important}
-.a4c .mmeta td:first-child{width:46%;background:#f3f6fa;font-weight:700;color:#000}
-.a4c .tot td{background:#eef3f9;font-weight:700;color:#000}
-.a4c tr.more td{height:auto;padding:2px 4px;font-weight:700;color:#000;background:#f8fafc;text-align:left}
-.a4c.dense td{height:auto;padding:2px}
-.a4c .parties{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px;flex:0 0 auto}
-.a4c .box{border:1px solid #c5d0dd;border-radius:4px;overflow:hidden;padding:0;background:#fff}
-.a4c .box h3{background:#0a2748;color:#fff!important;letter-spacing:.04em;text-align:center;padding:3px;margin:0;font-weight:700}
+.a4c th,.a4c td{border:1px solid #c5d0dd;padding:2px 3px;vertical-align:top;color:#000}
+.a4c th{background:#0a2748;color:#fff!important;font-weight:700;letter-spacing:.02em;text-transform:uppercase;text-align:center;padding:2px}
+.a4c th.mat{text-align:left!important;padding-left:3px}
+.a4c td{min-height:10px}
+.a4c td.c,.a4c .c{text-align:center;vertical-align:middle}
+.a4c td.num,.a4c .num{text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums}
+.a4c .mat{text-align:left!important;font-weight:600;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word;vertical-align:top;padding:2px 3px!important}
+.a4c .mmeta td:first-child{width:46%;background:#f3f6fa;font-weight:700}
+.a4c .tot td{background:#eef3f9;font-weight:700}
+.a4c tr.more td{height:auto;padding:2px 3px;font-weight:700;background:#f8fafc;text-align:left}
+.a4c .parties{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:3px;flex:0 0 auto}
+.a4c .box{border:1px solid #c5d0dd;border-radius:3px;overflow:hidden;padding:0;background:#fff}
+.a4c .box h3{background:#0a2748;color:#fff!important;text-align:center;padding:2px;margin:0;font-weight:700}
 .a4c .box table{border:0}
-.a4c .box td{border-color:#e4ebf3;height:auto;color:#000}
-.a4c .box td.lbl{width:32%;background:#f3f6fa;font-weight:700;color:#000}
-.a4c .box td.nm{font-weight:700;color:#000;white-space:normal}
-.a4c .pay{margin:3px 0 2px;color:#000;flex:0 0 auto}
-.a4c .terms{flex:0 0 auto;min-height:0;margin-top:2px;margin-bottom:0}
-.a4c .terms h4{display:inline-block;letter-spacing:.04em;color:#000;border-bottom:1px solid #000;margin:0 0 3px;font-weight:700}
-.a4c .terms p{color:#000;text-align:justify;margin:0 0 2.5px}.a4c .terms p:last-child{margin-bottom:0}
-.a4c .signs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:1mm!important;flex:0 0 auto!important;height:auto;max-height:36mm}
-.a4c .sig{border:1px solid #b8c4d4;border-radius:3px;padding:2px 4px 2px;text-align:center;display:flex;flex-direction:column;background:#fff;height:auto}
-.a4c .sig b{display:block;color:#000;letter-spacing:.03em;font-weight:700}
+.a4c .box td{border-color:#e4ebf3}
+.a4c .box td.lbl{width:32%;background:#f3f6fa;font-weight:700}
+.a4c .box td.nm{font-weight:700;white-space:normal;text-align:left}
+.a4c .pay{margin:2px 0 1px;flex:0 0 auto;font-size:7.5pt!important}
+.a4c .terms{flex:0 0 auto;margin-top:2px;margin-bottom:0}
+.a4c .terms h4{display:inline-block;color:#000;border-bottom:1px solid #000;margin:0 0 2px;font-weight:700;font-size:8pt!important}
+.a4c .terms p{text-align:justify;margin:0 0 1.5px;font-size:7pt!important;line-height:1.22!important}.a4c .terms p:last-child{margin:0}
+.a4c .signs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:2mm!important;flex:0 0 auto!important;height:auto;max-height:none}
+.a4c .sig{border:1px solid #b8c4d4;border-radius:3px;padding:3px 4px 2px;text-align:center;display:flex;flex-direction:column;background:#fff;min-height:32mm}
+.a4c .sig b{display:block;font-weight:700;font-size:8pt!important;margin:0}
 .a4c .sig small{display:none}
-.a4c .sig .nm{font-weight:700;margin:2px 0 0;color:#000;white-space:normal;overflow:visible;word-break:break-word}
-.a4c .sig .sigpad{flex:0 0 auto!important;height:15mm!important;min-height:15mm!important;max-height:15mm!important;margin-top:2px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center}
-.a4c .sig .sigpad span{color:#000}
-.a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:auto!important;padding-top:3mm;gap:0}
-.a4c .senet{border:1.5px solid #0a2748;border-radius:4px;overflow:visible;display:grid;grid-template-columns:22mm 1fr;flex:0 0 auto;height:auto;max-height:none;min-height:110mm;color:#000}
-.a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff!important;padding:4px 3px;line-height:1.3;display:flex;flex-direction:column;gap:4px}
-.a4c .senet-side,.a4c .senet-side *{color:#fff!important}
-.a4c .senet-main{padding:4px 6px 4px;display:flex;flex-direction:column;min-height:0;height:100%;color:#000}
-.a4c .senet-bar{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
-.a4c .senet-bar b{color:#000;letter-spacing:.06em;font-weight:700}
-.a4c .senet-bar span{color:#000;font-weight:400}
-.a4c .fields{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:2px}
-.a4c .fields>div{border-bottom:1.2px solid #2a3545;padding:1px 0 2px}
-.a4c .fields span{display:block;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:.02em}
-.a4c .fields b{display:block;min-height:12px;margin-top:1px;color:#000;font-weight:700}
-.a4c .sbody{text-align:justify;margin:4mm 0 3mm;color:#000;flex:0 0 auto}.a4c .sbody b,.a4c .sbody u{color:#000!important;font-size:10pt!important}
-.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:0 0 auto;min-height:0;margin-top:4mm}
-.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:5px 7px 4px;min-height:42mm;height:auto;display:flex;flex-direction:column;gap:0;background:#fff;overflow:visible}
-.a4c .duo .lab{font-size:9pt!important;font-weight:700;color:#000;letter-spacing:.02em;margin:0 0 5px;padding:0 0 3px;border-bottom:1px solid #c5d0dd;flex:0 0 auto;line-height:1.2!important}
-.a4c .duo .row{display:block;margin:0 0 5px;flex:0 0 auto}
-.a4c .duo .k{display:block;font-size:7.5pt!important;line-height:1.15!important;font-weight:700;color:#444;margin:0 0 2px;padding:0}
-.a4c .duo .v{display:block;font-size:10pt!important;line-height:1.3!important;font-weight:700;color:#000!important;min-height:14px;margin:0;padding:1px 0 3px;border-bottom:1px solid #222;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word;text-align:left!important}
-.a4c .duo .v.nm{font-size:10pt!important;font-weight:700!important;color:#000!important;border-bottom:1px solid #222}
-.a4c .duo .sigpad{flex:0 0 auto!important;height:9mm!important;min-height:9mm!important;max-height:9mm!important;margin-top:auto;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:flex-end;padding:2px 2px 0;color:#666;font-size:8pt!important}
-.a4c .keside{margin-top:2px;text-align:right;font-weight:700;color:#000}
+.a4c .sig .nm{font-weight:700;margin:1px 0 0;font-size:8pt!important;line-height:1.2!important;white-space:normal;word-break:break-word;text-align:center}
+.a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important;margin-top:2px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding-bottom:1px}
+.a4c .sig .sigpad span{color:#666;font-size:7pt!important}
+.a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:2mm!important;padding-top:0;gap:0}
+.a4c .senet{border:1.5px solid #0a2748;border-radius:3px;overflow:visible;display:grid;grid-template-columns:20mm 1fr;flex:0 0 auto;height:auto;min-height:0;color:#000}
+.a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff!important;padding:3px 2px;line-height:1.2;display:flex;flex-direction:column;gap:3px;font-size:7pt!important}
+.a4c .senet-side,.a4c .senet-side *{color:#fff!important;font-size:7pt!important;line-height:1.2!important}
+.a4c .senet-main{padding:3px 5px 3px;display:flex;flex-direction:column;min-height:0;color:#000}
+.a4c .senet-bar{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px}
+.a4c .senet-bar b{font-weight:700;letter-spacing:.05em}
+.a4c .fields{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:1px}
+.a4c .fields>div{border-bottom:1px solid #2a3545;padding:0 0 1px}
+.a4c .fields span{display:block;font-weight:700;text-transform:uppercase;font-size:7pt!important}
+.a4c .fields b{display:block;min-height:10px;margin-top:1px;font-weight:700}
+.a4c .sbody{text-align:justify;margin:2mm 0 2mm;flex:0 0 auto;font-size:8pt!important;line-height:1.28!important}
+.a4c .sbody b,.a4c .sbody u{font-size:8pt!important;color:#000!important}
+.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:0 0 auto;margin-top:2mm}
+.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:3px 5px 2px;min-height:48mm;height:48mm;display:flex;flex-direction:column;background:#fff;overflow:visible}
+.a4c .duo .lab{font-size:8pt!important;font-weight:700;margin:0 0 3px;padding:0 0 2px;border-bottom:1px solid #c5d0dd;flex:0 0 auto;line-height:1.15!important}
+.a4c .duo .row{display:block;margin:0 0 2px;flex:0 0 auto}
+.a4c .duo .k{display:block;font-size:7pt!important;line-height:1.1!important;font-weight:700;color:#444;margin:0 0 1px}
+.a4c .duo .v,.a4c .duo .v.nm{display:block;font-size:8pt!important;line-height:1.2!important;font-weight:700;color:#000!important;min-height:11px;margin:0;padding:0 0 2px;border-bottom:1px solid #222;white-space:normal!important;overflow:visible!important;text-align:left!important;word-break:break-word}
+.a4c .duo .sigpad{flex:1 1 auto!important;height:auto!important;min-height:22mm!important;max-height:none!important;margin-top:3px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:flex-end;padding:0 2px 1px;color:#666;font-size:7pt!important}
+.a4c .keside{margin-top:1px;text-align:right;font-weight:700;font-size:8pt!important}
 .a4c .note{display:none}
-.a4c .foot{margin-top:2px;text-align:center;color:#000;flex:0 0 auto}
-.a4c.dense .senet{height:auto;max-height:none;min-height:100mm}
-.a4c.dense .duo>div{min-height:44mm;height:auto}
-.a4c.senet-only{padding-top:12mm!important}
-.a4c.senet-only .senet{margin-top:0;height:180mm;max-height:none;min-height:180mm}
+.a4c .foot{margin-top:1px;text-align:center;font-size:7pt!important;color:#444;flex:0 0 auto}
+.a4c.dense .duo>div{min-height:46mm;height:46mm}
+.a4c.senet-only{padding-top:10mm!important}
+.a4c.senet-only .senet{margin-top:0;min-height:180mm}
 @media print{
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important}
-.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important;font-size:10pt!important;color:#000!important}
-.a4c .name,.a4c .meta,.a4c .title,.a4c th,.a4c td,.a4c .mat,.a4c .pay,.a4c .terms h4,.a4c .terms p,.a4c .sig b,.a4c .sig .nm,.a4c .sig .sigpad span,.a4c .box td,.a4c .box td.lbl,.a4c .box td.nm,.a4c .senet,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields span,.a4c .fields b,.a4c .sbody,.a4c .sbody b,.a4c .sbody u,.a4c .duo .lab,.a4c .duo .v,.a4c .duo .v.nm,.a4c .keside,.a4c .foot{font-size:10pt!important;line-height:1.35!important;color:#000!important}.a4c .duo .k{font-size:8pt!important;line-height:1.2!important;color:#333!important}.a4c .duo .sigpad{font-size:9pt!important;color:#000!important}
-.a4c th,.a4c .box h3{color:#fff!important;font-size:10pt!important}
-.a4c .senet-side,.a4c .senet-side *{color:#fff!important;font-size:10pt!important}
-.a4c .terms{flex:0 0 auto!important;margin-bottom:0!important}
-.a4c .signs{flex:0 0 auto!important;margin-top:1mm!important;max-height:36mm!important}
-.a4c .sig .sigpad{flex:0 0 auto!important;height:15mm!important;min-height:15mm!important;max-height:15mm!important}
-.a4c .duo{margin-top:4mm!important}
-.a4c .duo .sigpad{flex:0 0 auto!important;height:9mm!important;min-height:9mm!important;max-height:9mm!important}
-.a4c .duo .k{font-size:7.5pt!important;line-height:1.15!important;margin-bottom:2px!important}
-.a4c .duo .v,.a4c .duo .v.nm{font-size:10pt!important;line-height:1.3!important;padding:1px 0 3px!important;border-bottom:1px solid #222!important;white-space:normal!important;overflow:visible!important;text-align:left!important}
-.a4c .mat{text-align:left!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word!important}
-.a4c .grow{margin-top:auto!important;padding-top:3mm!important}
-.a4c .senet{flex:0 0 auto!important;height:auto!important;max-height:none!important;min-height:105mm!important;overflow:visible!important}
-.a4c .senet .sbody{margin-top:4mm!important;margin-bottom:3mm!important}
+.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important;font-size:8pt!important;color:#000!important}
+.a4c .name,.a4c .title,.a4c th,.a4c td,.a4c .mat,.a4c .pay,.a4c .terms h4,.a4c .sig b,.a4c .sig .nm,.a4c .box td,.a4c .box td.nm,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields b,.a4c .sbody,.a4c .sbody b,.a4c .sbody u,.a4c .duo .lab,.a4c .duo .v,.a4c .duo .v.nm,.a4c .keside{font-size:8pt!important;line-height:1.25!important;color:#000!important}
+.a4c .meta,.a4c .terms p,.a4c .fields span,.a4c .duo .k,.a4c .sig .sigpad span,.a4c .duo .sigpad,.a4c .foot{font-size:7pt!important;color:#000!important}
+.a4c .duo .k{color:#444!important}
+.a4c th,.a4c .box h3{color:#fff!important;font-size:8pt!important}
+.a4c .senet-side,.a4c .senet-side *{color:#fff!important;font-size:7pt!important}
+.a4c .mat{text-align:left!important;white-space:normal!important;overflow:visible!important}
+.a4c .signs{margin-top:2mm!important;max-height:none!important}
+.a4c .sig{min-height:32mm!important}
+.a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important}
+.a4c .duo{margin-top:2mm!important}
+.a4c .duo>div{min-height:48mm!important;height:48mm!important}
+.a4c .duo .sigpad{flex:1 1 auto!important;min-height:22mm!important;height:auto!important;max-height:none!important}
+.a4c .grow{margin-top:2mm!important;padding-top:0!important}
+.a4c .senet{height:auto!important;max-height:none!important;overflow:visible!important}
+.a4c .senet .sbody{margin-top:2mm!important;margin-bottom:2mm!important}
 .a4c.senet-only{page-break-before:always}
 }
 </style>`;
