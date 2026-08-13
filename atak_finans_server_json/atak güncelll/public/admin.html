@@ -1782,16 +1782,26 @@ Bulunamayan → Diğer.
   <div class="panel-head">
     <div>
       <h2>Kimden Ne Geldi</h2>
-      <p class="note">Tahsilatlar ve para girişleri: kim ödedi, nasıl ödedi, hangi hesaba girdi.</p>
+      <p class="note">Hesaba tıklayın (örn. BEKO GARANTİ) — sadece o hesabın girişleri açılsın. Excel indirmeye gerek yok.</p>
     </div>
     <span id="financeMovementCount"></span>
   </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:0 4px">
+    <span style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em">Ay</span>
+    <div class="period-toggle" id="finMoveMonthToggle" role="group">
+      <button type="button" class="period-btn active" data-fin-month="this">Bu Ay</button>
+      <button type="button" class="period-btn" data-fin-month="last">Geçen Ay</button>
+      <button type="button" class="period-btn" data-fin-month="all">Tümü</button>
+    </div>
+    <button type="button" class="primary" id="finMovePickAccountBtn">Hesap Seç</button>
+    <button type="button" class="secondary-btn" id="finMoveClearAccountBtn">Tüm Hesaplar</button>
+  </div>
+  <div id="finMoveAccountChips" style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:0 4px"></div>
+  <div id="finMoveSelectedLabel" style="margin:0 0 10px;padding:10px 12px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe;font-weight:750;color:#1e3a8a;display:none"></div>
   <div class="sales-report-filters" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:0 0 12px;padding:0 4px">
     <label>Başlangıç<input id="finMoveFrom" type="date"/></label>
     <label>Bitiş<input id="finMoveTo" type="date"/></label>
-    <label>Hesap
-      <select id="finMoveAccount"><option value="">Tüm hesaplar</option></select>
-    </label>
+    <select id="finMoveAccount" class="hidden" aria-hidden="true"><option value="">Tüm hesaplar</option></select>
     <label class="wide" style="flex:1;min-width:180px">Ara
       <input id="finMoveSearch" placeholder="Müşteri, açıklama, yöntem…"/>
     </label>
@@ -1801,8 +1811,22 @@ Bulunamayan → Diğer.
   <div class="turnover-table" id="financeMovementTable"></div>
 </div>
 <div class="panel finance-report-panel hidden" id="financeReportAccounts" data-fin-report-panel="accounts">
-  <div class="panel-head"><div><h2>Hesap Bakiyeleri</h2><p class="note">Kasa/banka anlık bakiyeler.</p></div><span id="financeAccountCount"></span></div>
+  <div class="panel-head"><div><h2>Hesap Bakiyeleri</h2><p class="note">Hesaba tıklayın → Kimden Ne Geldi’de sadece o hesap açılır.</p></div><span id="financeAccountCount"></span></div>
   <div class="turnover-table" id="financeAccountsTable"></div>
+</div>
+<div id="finAccountPickerModal" class="hidden" style="position:fixed;inset:0;z-index:12000;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:18px 18px 14px;box-shadow:0 20px 50px rgba(0,0,0,.25)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
+      <div>
+        <div style="font-size:12px;font-weight:800;color:#64748b;letter-spacing:.04em;text-transform:uppercase">Hesap seç</div>
+        <h3 style="margin:2px 0 0;font-size:20px">Hangi hesabı görelim?</h3>
+      </div>
+      <button type="button" class="secondary-btn" id="finAccountPickerClose">Kapat</button>
+    </div>
+    <p class="note" style="margin:0 0 12px">Örn. BEKO GARANTİ’ye tıklayın — sadece o hesaba gelen tahsilatlar listelenir.</p>
+    <button type="button" class="secondary-btn" data-fin-pick-account="" style="width:100%;margin-bottom:8px;text-align:left;padding:12px 14px">Tüm hesaplar</button>
+    <div id="finAccountPickerList" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
 </div>
 <div class="panel finance-report-panel hidden" id="financeReportCustomers" data-fin-report-panel="customers">
   <div class="panel-head"><div><h2>Müşteri Carileri</h2><p class="note">Açık bakiyeler (kim ne kadar borçlu).</p></div><input id="customerSearch" placeholder="Müşteri ara"/></div>
