@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v106 */
+/* ATAK_ADMIN_BUILD=fix-v107 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1113,6 +1113,58 @@ function financeMoneyInRows(){
     return Number(t.amount||0)>0;
   });
 }
+function financeMonthRange( whicht ){
+  const now=new Date();
+  const y=now.getFullYear(),m=now.getMonth();
+  const pad=n=>String(n).padStart(2,'0');
+  if(whicht==='all')return{from:'',to:''};
+  if(whicht==='last'){
+    const d=new Date(y,m-1,1);
+    const end=new Date(y,m,0);
+    return{from:`${d.getFullYear()}-${pad(d.getMonth()+1)}-01`,to:`${end.getFullYear()}-${pad(end.getMonth()+1)}-${pad(end.getDate())}`};
+  }
+  const end=new Date(y,m+1,0);
+  return{from:`${y}-${pad(m+1)}-01`,to:`${y}-${pad(m+1)}-${pad(end.getDate())}`};
+}
+function setFinanceMoveMonth(which){
+  const r=financeMonthRange(which||'this');
+  if(q('#finMoveFrom'))q('#finMoveFrom').value=r.from;
+  if(q('#finMoveTo'))q('#finMoveTo').value=r.to;
+  qa('#finMoveMonthToggle [data-fin-month]').forEach(b=>b.classList.toggle('active',b.dataset.finMonth===(which||'this')));
+  renderFinanceMovements();
+}
+function openFinanceAccountPicker(){
+  const modal=q('#finAccountPickerModal');
+  const list=q('#finAccountPickerList');
+  if(!modal||!list||!financeData)return;
+  const cur=q('#finMoveAccount')?.value||'';
+  list.innerHTML=(financeData.accounts||[]).map(a=>{
+    const on=String(a.id)===String(cur);
+    const type=a.type==='bank'?'Banka':'Kasa';
+    return `<button type="button" data-fin-pick-account="${a.id}" style="width:100%;text-align:left;padding:12px 14px;border-radius:12px;border:2px solid ${on?'#2563eb':'#e2e8f0'};background:${on?'#eff6ff':'#fff'};cursor:pointer">
+      <b style="display:block;font-size:15px">${a.name}</b>
+      <small style="color:#64748b">${type} · bakiye ${money(a.balance)}</small>
+    </button>`;
+  }).join('')||'<p class="note">Hesap yok — Ayarlar’dan ekleyin.</p>';
+  modal.classList.remove('hidden');
+  modal.style.display='flex';
+}
+function closeFinanceAccountPicker(){
+  const modal=q('#finAccountPickerModal');
+  if(!modal)return;
+  modal.classList.add('hidden');
+  modal.style.display='none';
+}
+function selectFinanceMoveAccount(accountId,opts={}){
+  const id=String(accountId||'');
+  if(q('#finMoveAccount'))q('#finMoveAccount').value=id;
+  if(opts.openMovements!==false)setFinanceReportView('movements');
+  closeFinanceAccountPicker();
+  renderFinanceMovements();
+  const acc=(financeData?.accounts||[]).find(a=>String(a.id)===id);
+  if(id&&acc)toast(`${acc.name} — sadece bu hesap`);
+  else if(!id)toast('Tüm hesaplar');
+}
 function financeFilteredMovements(){
   const from=q('#finMoveFrom')?.value||'';
   const to=q('#finMoveTo')?.value||'';
@@ -1130,11 +1182,47 @@ function financeFilteredMovements(){
     return true;
   });
 }
+function renderFinanceAccountChips(){
+  const box=q('#finMoveAccountChips');
+  if(!box||!financeData)return;
+  const cur=q('#finMoveAccount')?.value||'';
+  const accounts=financeData.accounts||[];
+  box.innerHTML=[
+    `<button type="button" data-fin-chip-account="" class="period-btn ${cur?'':'active'}" style="min-height:40px;padding:8px 12px">Tümü</button>`,
+    ...accounts.map(a=>{
+      const on=String(a.id)===String(cur);
+      const type=a.type==='bank'?'Banka':'Kasa';
+      return `<button type="button" data-fin-chip-account="${a.id}" class="period-btn ${on?'active':''}" style="min-height:40px;padding:8px 12px;text-align:left">
+        <b>${a.name}</b> <small style="opacity:.8">${type}</small>
+      </button>`;
+    })
+  ].join('');
+  qa('[data-fin-chip-account]').forEach(b=>b.onclick=()=>selectFinanceMoveAccount(b.dataset.finChipAccount||''));
+}
 function renderFinanceMovements(){
   if(!financeData)return;
-  if(q('#finMoveAccount')&&!q('#finMoveAccount').dataset.filled){
+  if(q('#finMoveAccount')){
+    const cur=q('#finMoveAccount').value;
     q('#finMoveAccount').innerHTML='<option value="">Tüm hesaplar</option>'+(financeData.accounts||[]).map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
-    q('#finMoveAccount').dataset.filled='1';
+    if(cur&&[...q('#finMoveAccount').options].some(o=>o.value===cur))q('#finMoveAccount').value=cur;
+  }
+  if(!q('#finMoveFrom')?.value&&!q('#finMoveTo')?.value&&!q('#finMoveMonthToggle')?.dataset.init){
+    setFinanceMoveMonth('this');
+    if(q('#finMoveMonthToggle'))q('#finMoveMonthToggle').dataset.init='1';
+    return; // setFinanceMoveMonth already re-renders
+  }
+  renderFinanceAccountChips();
+  const accId=q('#finMoveAccount')?.value||'';
+  const acc=(financeData.accounts||[]).find(a=>String(a.id)===String(accId));
+  const lab=q('#finMoveSelectedLabel');
+  if(lab){
+    if(acc){
+      lab.style.display='block';
+      lab.innerHTML=`Seçili hesap: <b>${acc.name}</b> · ${acc.type==='bank'?'Banka':'Kasa'} · bakiye ${money(acc.balance)} — sadece bu hesaba gelenler`;
+    }else{
+      lab.style.display='none';
+      lab.textContent='';
+    }
   }
   const rows=financeFilteredMovements();
   if(q('#financeMovementCount'))q('#financeMovementCount').textContent=`${rows.length} kayıt`;
@@ -1148,12 +1236,12 @@ function renderFinanceMovements(){
   if(q('#financeMovementKpis')){
     const parts=Object.entries(byMethod).sort((a,b)=>b[1]-a[1]).slice(0,6)
       .map(([k,v])=>`<article><b>${money(v)}</b><span>${k}</span></article>`).join('');
-    q('#financeMovementKpis').innerHTML=`<article><b>${money(totalIn)}</b><span>Toplam gelen</span></article>${parts}`
+    q('#financeMovementKpis').innerHTML=`<article><b>${money(totalIn)}</b><span>Toplam gelen${acc?` · ${acc.name}`:''}</span></article>${parts}`
       ||`<article><b>${money(0)}</b><span>Toplam gelen</span></article>`;
   }
   if(!q('#financeMovementTable'))return;
   if(!rows.length){
-    q('#financeMovementTable').innerHTML='<p class="note">Bu filtrede tahsilat yok. Satış yapıp nakit/kart/havale alınınca burada “kimden → ne → nereye” görünür.</p>';
+    q('#financeMovementTable').innerHTML=`<p class="note">${acc?`“${acc.name}” için bu dönemde tahsilat yok.`:'Bu filtrede tahsilat yok. Hesap seçin veya satış/tahsilat yapın.'}</p>`;
     return;
   }
   q('#financeMovementTable').innerHTML=`<table><thead><tr>
@@ -1259,6 +1347,16 @@ q('#financeReportsPrintBtn')?.addEventListener('click',financeReportsPrint);
 q('#finMoveFilterBtn')?.addEventListener('click',()=>renderFinanceMovements());
 q('#finMoveSearch')?.addEventListener('input',()=>renderFinanceMovements());
 ['#finMoveFrom','#finMoveTo','#finMoveAccount'].forEach(id=>q(id)?.addEventListener('change',()=>renderFinanceMovements()));
+qa('#finMoveMonthToggle [data-fin-month]').forEach(b=>b.addEventListener('click',()=>setFinanceMoveMonth(b.dataset.finMonth)));
+q('#finMovePickAccountBtn')?.addEventListener('click',openFinanceAccountPicker);
+q('#finMoveClearAccountBtn')?.addEventListener('click',()=>selectFinanceMoveAccount(''));
+q('#finAccountPickerClose')?.addEventListener('click',closeFinanceAccountPicker);
+q('#finAccountPickerModal')?.addEventListener('click',e=>{
+  if(e.target===q('#finAccountPickerModal'))closeFinanceAccountPicker();
+  const btn=e.target.closest?.('[data-fin-pick-account]');
+  if(btn)selectFinanceMoveAccount(btn.getAttribute('data-fin-pick-account')||'');
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeFinanceAccountPicker()});
 async function loadFinanceCenter(){
   financeData=await api('/web-api/admin/finance-center');
   renderFinanceCenter();
@@ -1287,9 +1385,21 @@ function renderFinanceCenter(){
       :'<p class="note">Henüz hesap yok. Yukarıdan ekleyip Kaydet’e basın.</p>';
   }
   if(q('#financeAccountCount'))q('#financeAccountCount').textContent=`${(financeData.accounts||[]).length} hesap`;
-  if(q('#financeAccountsTable'))q('#financeAccountsTable').innerHTML=`<table><thead><tr><th>Hesap</th><th>Tür</th><th>Mağaza</th><th>Durum</th><th>Bakiye</th></tr></thead><tbody>${(financeData.accounts||[]).map(x=>`<tr><td><b>${x.name}</b></td><td>${x.type==='bank'?'Banka':'Kasa'}</td><td>${(financeData.stores||[]).find(s=>s.id===x.storeId)?.name||'Merkez'}</td><td>${x.active===false?'Pasif':'Aktif'}</td><td><b>${money(x.balance)}</b></td></tr>`).join('')||'<tr><td colspan="5">Hesap yok</td></tr>'}</tbody></table>`;
+  if(q('#financeAccountsTable')){
+    q('#financeAccountsTable').innerHTML=`<table><thead><tr><th>Hesap</th><th>Tür</th><th>Mağaza</th><th>Durum</th><th>Bakiye</th><th></th></tr></thead><tbody>${(financeData.accounts||[]).map(x=>`<tr data-fin-open-account="${x.id}" style="cursor:pointer" title="Tıklayınca bu hesabın girişlerini aç">
+      <td><b>${x.name}</b></td>
+      <td>${x.type==='bank'?'Banka':'Kasa'}</td>
+      <td>${(financeData.stores||[]).find(s=>s.id===x.storeId)?.name||'Merkez'}</td>
+      <td>${x.active===false?'Pasif':'Aktif'}</td>
+      <td><b>${money(x.balance)}</b></td>
+      <td><button type="button" class="secondary-btn" data-fin-open-account="${x.id}">Gör</button></td>
+    </tr>`).join('')||'<tr><td colspan="6">Hesap yok</td></tr>'}</tbody></table>`;
+    qa('[data-fin-open-account]').forEach(el=>el.onclick=e=>{
+      e.preventDefault();e.stopPropagation();
+      selectFinanceMoveAccount(el.getAttribute('data-fin-open-account')||el.dataset.finOpenAccount||'');
+    });
+  }
   renderCustomerTable();
-  if(q('#finMoveAccount'))delete q('#finMoveAccount').dataset.filled;
   renderFinanceMovements();
   // Eski hareket tablosu (varsa) — ters kayıt butonu için
   if(q('#financeTransactionTable')){
