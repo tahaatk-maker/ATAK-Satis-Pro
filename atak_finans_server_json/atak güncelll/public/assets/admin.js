@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v77 */
+/* ATAK_ADMIN_BUILD=fix-v78 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2995,7 +2995,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c.dense .senet{max-height:92mm;min-height:72mm}
 .a4c.senet-only{padding-top:12mm!important}
 .a4c.senet-only .senet{margin-top:0;min-height:160mm;max-height:none}
-@media print{.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important}.a4c .signs{flex:0 0 auto!important}.a4c .sig .sigpad{flex:0 0 auto!important;height:16mm!important}.a4c .grow{margin-top:auto!important}.a4c .senet{flex:0 0 auto!important;height:auto!important}.a4c.senet-only{page-break-before:always}}
+@media print{.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important}.a4c .signs{flex:0 0 auto!important;max-height:32mm!important}.a4c .sig .sigpad{flex:0 0 auto!important;height:11mm!important;min-height:11mm!important;max-height:11mm!important}.a4c .grow{margin-top:4px!important}.a4c .senet{flex:0 0 auto!important;height:auto!important}.a4c.senet-only{page-break-before:always}}
 </style>`;
   return `<section class="sheet a4c${denseClass}">${css}
   <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${salesEsc(companyLegal)}</div><div class="meta">${salesEsc(address)}<br/>${salesEsc(phone)} · ${salesEsc(wa)} · ${salesEsc(email)} · ${salesEsc(companyTaxLine)}</div></div>
