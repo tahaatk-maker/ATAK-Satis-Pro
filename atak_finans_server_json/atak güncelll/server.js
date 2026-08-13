@@ -985,8 +985,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.99-senet-temiz',
-  build:'fix-v99',
+  version:'6.3.100-hesap-sil',
+  build:'fix-v100',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -1632,6 +1632,25 @@ app.post('/web-api/admin/finance-account',requireAdmin,(req,res)=>{
   const data={name,type,storeId:String(x.storeId||''),openingBalance:cleanMoney(x.openingBalance),active:x.active!==false,updatedAt:new Date().toISOString()};
   if(row)Object.assign(row,data);else{row={id:slug(name)||crypto.randomUUID(),createdAt:new Date().toISOString(),...data};if(s.financeAccounts.some(v=>v.id===row.id))row.id=`${row.id}-${Date.now()}`;s.financeAccounts.push(row)}
   audit(s,'Finans hesabı kaydedildi',row.name,{type});writeStore(s);res.json({ok:true,row:{...row,balance:accountBalance(s,row.id)}});
+});
+app.delete('/web-api/admin/finance-account/:id',requireAdmin,(req,res)=>{
+  const s=readStore(),id=String(req.params.id||'').trim();
+  const idx=(s.financeAccounts||[]).findIndex(a=>String(a.id)===id);
+  if(idx<0)return res.status(404).json({error:'Hesap bulunamadı'});
+  const row=s.financeAccounts[idx];
+  const used=(s.financeTransactions||[]).some(t=>String(t.accountId||'')===id||String(t.counterAccountId||'')===id||String(t.toAccountId||'')===id||String(t.fromAccountId||'')===id);
+  if(used||Math.abs(Number(accountBalance(s,id)||0))>0.009){
+    // Hareketi olan hesap silinmez — pasife alınır (raporlarda bakiye korunur)
+    row.active=false;
+    row.updatedAt=new Date().toISOString();
+    audit(s,'Finans hesabı pasife alındı',row.name,{id,reason:'hareket_var'});
+    writeStore(s);
+    return res.json({ok:true,softDeleted:true,row:{...row,balance:accountBalance(s,row.id)},message:'Hesapta hareket/bakiye var — silinmedi, pasife alındı'});
+  }
+  s.financeAccounts.splice(idx,1);
+  audit(s,'Finans hesabı silindi',row.name,{id});
+  writeStore(s);
+  res.json({ok:true,deleted:true});
 });
 function customerSnapshot(c={}){
   return {
