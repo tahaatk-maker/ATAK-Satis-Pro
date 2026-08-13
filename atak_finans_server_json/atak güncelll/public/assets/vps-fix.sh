@@ -1,8 +1,8 @@
-# ATAK VPS kesin deploy (fix-v85) — health 6.3.86-urun-excel olmadan DONE yazmaz
+# ATAK VPS kesin deploy (fix-v86) — health 6.3.87-excel-indir olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/satis-merkezi-iskonto-prim-bd99}"
-EXPECT_HEALTH=6.3.86-urun-excel
-EXPECT_BUILD=fix-v85
+EXPECT_HEALTH=6.3.87-excel-indir
+EXPECT_BUILD=fix-v86
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
