@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v99" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v99" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v100" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v100" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -2086,7 +2086,7 @@ Bulunamayan → Diğer.
 <div class="foundation-head panel"><div><small class="eyebrow">SİSTEM AYARLARI</small><h2>Ayarlar</h2><p class="note">Kasa/banka hesapları, senet ve bayi/prim ayarları burada. QNB e-Fatura ayarları <b>e-Fatura Merkezi → Kurulum</b> altındadır.</p></div></div>
 <div class="settings-grid">
 <form class="panel form-stack" id="financeAccountForm">
-<div class="panel-head"><div><h2>💵 Kasa ve Banka Hesapları</h2><p class="note">Hesap tanımı bir kurulum işidir. Tahsilat <b>Müşteri Ödemeleri</b>’nde; bakiyeler <b>Finans Raporları</b>’nda.</p></div></div>
+<div class="panel-head"><div><h2>💵 Kasa ve Banka Hesapları</h2><p class="note">Hesap ekle / düzenle / sil. Bakiyeler ve hareketler: sol menü <b>📑 Finans Raporları</b> → Hesap Bakiyeleri.</p></div></div>
 <input id="financeAccountId" type="hidden"/>
 <label>Hesap adı<input id="financeAccountName" required=""/></label>
 <div class="two-cols">
@@ -2095,7 +2095,12 @@ Bulunamayan → Diğer.
 </div>
 <label>Açılış bakiyesi<input id="financeOpeningBalance" step="0.01" type="number" value="0"/></label>
 <label class="check"><input checked="" id="financeAccountActive" type="checkbox"/> Aktif</label>
-<div class="button-row"><button class="primary" type="submit">Hesabı Kaydet</button><button class="secondary-btn" data-go="financeCenter" type="button">Finans &amp; Cari →</button></div>
+<div class="button-row">
+  <button class="primary" type="submit">Hesabı Kaydet</button>
+  <button class="secondary-btn" id="financeAccountNewBtn" type="button">Yeni / Temizle</button>
+  <button class="secondary-btn" id="financeAccountDeleteBtn" type="button">Hesabı Sil</button>
+  <button class="secondary-btn" data-go="financeReports" type="button">Raporu Gör →</button>
+</div>
 <div class="mini-list" id="financeAccountList"></div>
 </form>
 <form class="panel form-stack" id="promissorySettingsForm">
@@ -2201,5 +2206,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v99"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v100"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

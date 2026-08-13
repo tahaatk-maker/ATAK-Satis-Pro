@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v99 */
+/* ATAK_ADMIN_BUILD=fix-v100 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1116,10 +1116,15 @@ function renderFinanceCenter(){
   const accountOpts=(financeData.accounts||[]).filter(x=>x.active!==false).map(x=>`<option value="${x.id}">${x.name} — ${money(x.balance)}</option>`).join('');
   ['#transferFromAccount','#transferToAccount'].forEach(id=>{if(q(id))q(id).innerHTML=accountOpts});
   if(q('#financeAccountList')){
-    q('#financeAccountList').innerHTML=(financeData.accounts||[]).map(x=>`<button type="button" data-fin-account="${x.id}"><b>${x.name}</b><small>${x.type==='bank'?'Banka':'Kasa'} · ${money(x.balance)}</small></button>`).join('');
+    q('#financeAccountList').innerHTML=(financeData.accounts||[]).length
+      ?(financeData.accounts||[]).map(x=>`<div class="fin-acc-row" style="display:flex;gap:6px;align-items:stretch;margin:0 0 6px">
+        <button type="button" data-fin-account="${x.id}" style="flex:1;text-align:left"><b>${x.name}</b><small>${x.type==='bank'?'Banka':'Kasa'} · ${money(x.balance)}${x.active===false?' · PASİF':''}</small></button>
+        <button type="button" class="secondary-btn" data-fin-del="${x.id}" title="Sil" style="min-width:64px">Sil</button>
+      </div>`).join('')
+      :'<p class="note">Henüz hesap yok. Yukarıdan ekleyip Kaydet’e basın.</p>';
   }
   if(q('#financeAccountCount'))q('#financeAccountCount').textContent=`${(financeData.accounts||[]).length} hesap`;
-  if(q('#financeAccountsTable'))q('#financeAccountsTable').innerHTML=`<table><thead><tr><th>Hesap</th><th>Tür</th><th>Mağaza</th><th>Bakiye</th></tr></thead><tbody>${(financeData.accounts||[]).map(x=>`<tr><td><b>${x.name}</b></td><td>${x.type==='bank'?'Banka':'Kasa'}</td><td>${(financeData.stores||[]).find(s=>s.id===x.storeId)?.name||'Merkez'}</td><td><b>${money(x.balance)}</b></td></tr>`).join('')}</tbody></table>`;
+  if(q('#financeAccountsTable'))q('#financeAccountsTable').innerHTML=`<table><thead><tr><th>Hesap</th><th>Tür</th><th>Mağaza</th><th>Durum</th><th>Bakiye</th></tr></thead><tbody>${(financeData.accounts||[]).map(x=>`<tr><td><b>${x.name}</b></td><td>${x.type==='bank'?'Banka':'Kasa'}</td><td>${(financeData.stores||[]).find(s=>s.id===x.storeId)?.name||'Merkez'}</td><td>${x.active===false?'Pasif':'Aktif'}</td><td><b>${money(x.balance)}</b></td></tr>`).join('')||'<tr><td colspan="5">Hesap yok</td></tr>'}</tbody></table>`;
   renderCustomerTable();
   if(q('#financeTransactionCount'))q('#financeTransactionCount').textContent=`${(financeData.transactions||[]).length} hareket`;
   if(q('#financeTransactionTable')){
@@ -1135,8 +1140,32 @@ function renderFinanceCenter(){
     if(q('#financeOpeningBalance'))q('#financeOpeningBalance').value=x.openingBalance||0;
     if(q('#financeAccountActive'))q('#financeAccountActive').checked=x.active!==false;
   });
+  qa('[data-fin-del]').forEach(b=>b.onclick=async e=>{
+    e.preventDefault();e.stopPropagation();
+    await deleteFinanceAccount(b.dataset.finDel);
+  });
   qa('[data-reverse-finance]').forEach(b=>b.onclick=async()=>{if(!confirm('Bu hareket için ters kayıt oluşturulsun mu?'))return;await api('/web-api/admin/finance-reverse/'+b.dataset.reverseFinance,{method:'POST'});await loadFinanceCenter();toast('Ters kayıt oluşturuldu')});
   setFinanceReportView(financeReportView);
+}
+function resetFinanceAccountForm(){
+  const f=q('#financeAccountForm');
+  if(f)f.reset();
+  if(q('#financeAccountId'))q('#financeAccountId').value='';
+  if(q('#financeOpeningBalance'))q('#financeOpeningBalance').value=0;
+  if(q('#financeAccountActive'))q('#financeAccountActive').checked=true;
+}
+async function deleteFinanceAccount(id){
+  const accId=String(id||q('#financeAccountId')?.value||'').trim();
+  if(!accId){toast('Silmek için listeden hesap seçin');return}
+  const row=(financeData?.accounts||[]).find(a=>String(a.id)===accId);
+  const label=row?.name||accId;
+  if(!confirm(`“${label}” hesabını silmek istiyor musunuz?\n\nHareketi/bakiyesi varsa silinmez, pasife alınır.`))return;
+  try{
+    const r=await api('/web-api/admin/finance-account/'+encodeURIComponent(accId),{method:'DELETE'});
+    resetFinanceAccountForm();
+    await loadFinanceCenter();
+    toast(r.softDeleted?(r.message||'Hesap pasife alındı'):'Hesap silindi');
+  }catch(e){toast(e.message||'Silinemedi')}
 }
 function renderCustomerTable(){
   if(!financeData||!q('#customerTable'))return;
@@ -1146,7 +1175,9 @@ function renderCustomerTable(){
 }
 q('#customerSearch')?.addEventListener('input',renderCustomerTable);
 if(q('#transferDate'))q('#transferDate').value=new Date().toISOString().slice(0,10);
-q('#financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/finance-account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#financeAccountId').value,name:q('#financeAccountName').value,type:q('#financeAccountType').value,storeId:q('#financeAccountStore').value,openingBalance:q('#financeOpeningBalance').value,active:q('#financeAccountActive').checked})});e.target.reset();q('#financeAccountId').value='';q('#financeOpeningBalance').value=0;q('#financeAccountActive').checked=true;await loadFinanceCenter();toast('Hesap kaydedildi')});
+q('#financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/finance-account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#financeAccountId').value,name:q('#financeAccountName').value,type:q('#financeAccountType').value,storeId:q('#financeAccountStore').value,openingBalance:q('#financeOpeningBalance').value,active:q('#financeAccountActive').checked})});resetFinanceAccountForm();await loadFinanceCenter();toast('Hesap kaydedildi')});
+q('#financeAccountNewBtn')?.addEventListener('click',()=>{resetFinanceAccountForm();toast('Yeni hesap formu hazır')});
+q('#financeAccountDeleteBtn')?.addEventListener('click',()=>deleteFinanceAccount());
 
 q('#financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/finance-transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:q('#transferDate').value,fromAccountId:q('#transferFromAccount').value,toAccountId:q('#transferToAccount').value,amount:q('#transferFinanceAmount').value,description:q('#transferFinanceDescription').value})});e.target.reset();q('#transferDate').value=new Date().toISOString().slice(0,10);closeFinanceTransfer();await loadFinanceCenter();toast('Transfer tamamlandı')});
 function openFinanceTransfer(){
