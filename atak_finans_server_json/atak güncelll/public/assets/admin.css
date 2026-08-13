@@ -654,3 +654,4 @@ aside nav button.active{
 }
 .v4-quick-actions b{grid-column:2;font-size:15px;color:#071a33}
 .v4-quick-actions small{grid-column:2;color:#667890;font-weight:650}
+.products-toolbar{flex-wrap:wrap;align-items:center}.products-toolbar-actions{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.products-toolbar-actions .backup-btn{border:0;cursor:pointer;white-space:nowrap}.products-toolbar-actions select{min-width:120px}
