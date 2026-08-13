@@ -89,6 +89,7 @@ function goTab(id,{remember=true}={}){
   if(productTabs.has(id))setProductsMenu(true);
   if(id==='foundation')setTimeout(()=>loadFoundation().catch(e=>toast(e.message)),20);
   if(id==='stockCenter')setTimeout(()=>loadStockCenter().catch(e=>toast(e.message)),20);
+  if(id==='products')setTimeout(()=>refreshProductsStockWarehouseOptions().catch(()=>{}),20);
   if(id==='financeCenter')setTimeout(()=>loadFinanceCenter().catch(e=>toast(e.message)),20);
   if(id==='financeReports')setTimeout(()=>loadFinanceCenter().catch(e=>toast(e.message)),20);
   if(id==='customersPage')setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),20);
@@ -116,7 +117,7 @@ document.addEventListener('click',e=>{
 });
 q('#productsMenuToggle')?.addEventListener('click',()=>setProductsMenu(!q('#productsNavGroup')?.classList.contains('open')));
 q('#submenuNewProduct')?.addEventListener('click',()=>{goTab('products');q('#newProductBtn')?.click()});
-function renderAll(){renderDashboard();renderCategoryOptions();renderBrandOptions();renderProducts();renderBrands();renderCategories();renderCampaigns();renderBanners();renderRevenue();renderUsers()}
+function renderAll(){renderDashboard();renderCategoryOptions();renderBrandOptions();renderProducts();renderBrands();renderCategories();renderCampaigns();renderBanners();renderRevenue();renderUsers();refreshProductsStockWarehouseOptions().catch(()=>{})}
 function localDate(d=new Date()){const z=new Date(d.getTime()-d.getTimezoneOffset()*60000);return z.toISOString().slice(0,10)}
 function weekStart(d=new Date()){const x=new Date(d),day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return localDate(x)}
 async function fetchRevenueSummary(startDate,endDate){return api(`/web-api/admin/revenue-summary?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`)}
@@ -577,6 +578,62 @@ q('#adminSearch').oninput=()=>{page=1;renderProducts()};q('#globalSearch').oninp
 qa('[data-bulk]').forEach(b=>b.onclick=async()=>{const map={active:['active',true],passive:['active',false],featured:['featured',true],unfeatured:['featured',false]},[action,value]=map[b.dataset.bulk];if(!selected.size)return;await bulk({action,value});});
 async function bulk(body){const r=await api('/web-api/admin/bulk-products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[...selected],...body})});toast(`${r.count} ürün güncellendi`);selected.clear();await load()}
 q('#newProductBtn').onclick=()=>openProduct({active:true,featured:false,brand:'Beko',priceMode:'same',stock:0,tags:[],vatRate:20,purchasePrice:0,listPrice:0,cashPrice:0,cardPrice:0,minimumSalePrice:0,barcode:''});q('#quickNewProduct')?.addEventListener('click',()=>{goTab('products');q('#newProductBtn')?.click()});q('#closeModal').onclick=()=>q('#productModal').classList.add('hidden');window.editProduct=id=>openProduct(store.products.find(p=>p.id===id));window.disableProduct=async id=>{if(!confirm('Ürün pasife alınsın mı?'))return;await api('/web-api/admin/product/'+id,{method:'DELETE'});toast('Ürün pasife alındı');await load()};
+async function refreshProductsStockWarehouseOptions(){
+  const sel=q('#productsStockWarehouse');if(!sel)return;
+  try{
+    const data=await api('/web-api/admin/stock-center');
+    const wh=(data.warehouses||[]).filter(x=>x.active!==false&&!x.deletedAt);
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Depo seç</option>'+wh.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+    if(cur&&wh.some(x=>x.id===cur))sel.value=cur;
+    else if(wh[0])sel.value=wh[0].id;
+  }catch(_){/* ignore */}
+}
+q('#productsExcelExportBtn')?.addEventListener('click',async()=>{
+  try{
+    const params=new URLSearchParams({
+      category:q('#filterCategory')?.value||'all',
+      status:q('#filterStatus')?.value||'all',
+      q:q('#adminSearch')?.value||''
+    });
+    const r=await fetch('/web-api/admin/products-stock-excel?'+params.toString(),{credentials:'same-origin'});
+    if(!r.ok){
+      let msg='Excel indirilemedi';
+      try{const j=await r.json();if(j.error)msg=j.error}catch(_){}
+      throw new Error(msg);
+    }
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const cat=q('#filterCategory')?.value||'all';
+    const catName=cat==='all'?'tum':(q('#filterCategory')?.selectedOptions?.[0]?.textContent||cat).trim().replace(/\s+/g,'-');
+    a.href=url;a.download=`atak-stok-giris-${catName}.xlsx`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    toast('Excel indirildi — Adet sütununu doldurup yükleyin');
+  }catch(e){toast(e.message||'Excel indirilemedi')}
+});
+q('#productsExcelImportBtn')?.addEventListener('click',async()=>{
+  const wh=q('#productsStockWarehouse')?.value;
+  if(!wh){toast('Önce depo seçin');return}
+  if(!q('#productsStockWarehouse')?.options?.length)await refreshProductsStockWarehouseOptions();
+  q('#productsExcelImportFile')?.click();
+});
+q('#productsExcelImportFile')?.addEventListener('change',async e=>{
+  const file=e.target.files?.[0];
+  e.target.value='';
+  if(!file)return;
+  const warehouseId=q('#productsStockWarehouse')?.value;
+  if(!warehouseId){toast('Depo seçin');return}
+  try{
+    const fd=new FormData();
+    fd.append('file',file);
+    fd.append('warehouseId',warehouseId);
+    const r=await api('/web-api/admin/stock-import',{method:'POST',body:fd});
+    toast(`${r.imported||0} ürün stoğu güncellendi${r.skipped?` · ${r.skipped} atlandı`:''}`);
+    await load();
+  }catch(err){toast(err.message||'Stok yüklenemedi')}
+});
 function resolveVatRateClient(p={}){
   const cat=String(p.category||'').toLocaleLowerCase('tr-TR');
   const brand=String(p.brand||'').toLocaleLowerCase('tr-TR');

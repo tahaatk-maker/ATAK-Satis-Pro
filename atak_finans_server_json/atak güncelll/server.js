@@ -943,8 +943,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.85-senet-8pt',
-  build:'fix-v84',
+  version:'6.3.86-urun-excel',
+  build:'fix-v85',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -1297,30 +1297,141 @@ app.post('/web-api/admin/stock-zero',requireAdmin,(req,res)=>{
     res.status(400).json({error:e.message||'Stok sıfırlanamadı'});
   }
 });
-app.post('/web-api/admin/stock-import',requireAdmin,upload.single('file'),(req,res)=>{
+function parseStockImportRows(buffer,originalName=''){
+  const name=String(originalName||'').toLocaleLowerCase('tr-TR');
+  const isExcel=/\.xlsx?$/.test(name)||(!name&&buffer?.[0]===0x50&&buffer?.[1]===0x4b);
+  const rows=[];
+  const pushFromMatrix=(matrix)=>{
+    if(!Array.isArray(matrix)||matrix.length<2)return;
+    const header=matrix[0].map(x=>String(x??'').trim().toLocaleLowerCase('tr-TR'));
+    const codeIndex=header.findIndex(x=>/ürün.?kodu|urun.?kodu|^kod$|product.?code|item.?code/.test(x));
+    // Adet sütunu tercih; "Mevcut Stok" hariç
+    let qtyIndex=header.findIndex(x=>/^adet$|girilecek.?adet|yeni.?stok|quantity|qty/.test(x));
+    if(qtyIndex<0)qtyIndex=header.findIndex(x=>/^(stok|stock)$/.test(x));
+    if(codeIndex<0||qtyIndex<0)return;
+    for(const line of matrix.slice(1)){
+      const cols=Array.isArray(line)?line:[];
+      const code=String(cols[codeIndex]??'').trim();
+      if(!code||/^kategori$/i.test(code))continue;
+      const raw=cols[qtyIndex];
+      if(raw===''||raw==null)continue;
+      const qty=Math.max(0,Math.round(normalizeNumber(raw)));
+      rows.push({code,qty});
+    }
+  };
+  if(isExcel){
+    const wb=XLSX.read(buffer,{type:'buffer',cellDates:false});
+    for(const sheetName of wb.SheetNames||[]){
+      if(/^talimat/i.test(String(sheetName)))continue;
+      const ws=wb.Sheets[sheetName];
+      if(!ws)continue;
+      pushFromMatrix(XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false}));
+    }
+  }else{
+    const text=buffer.toString('utf8').replace(/^\uFEFF/,'');
+    const lines=text.split(/\r?\n/).filter(Boolean);
+    if(lines.length<2)return rows;
+    const delimiter=(lines[0].match(/;/g)||[]).length>=(lines[0].match(/,/g)||[]).length?';':',';
+    pushFromMatrix(lines.map(line=>line.split(delimiter).map(x=>x.trim().replace(/^"|"$/g,''))));
+  }
+  // Aynı kod birden fazla satırdaysa son adet geçerli
+  const map=new Map();
+  for(const r of rows)map.set(r.code.toLocaleUpperCase('tr-TR'),r);
+  return [...map.values()];
+}
+
+app.post('/web-api/admin/stock-import',requireAdmin,dynamicsUpload.single('file'),(req,res)=>{
   try{
-    if(!req.file)return res.status(400).json({error:'CSV dosyası seçilmedi'});
+    if(!req.file)return res.status(400).json({error:'Excel/CSV dosyası seçilmedi'});
     const warehouseId=String(req.body?.warehouseId||'');
     if(!warehouseId)return res.status(400).json({error:'Depo seçilmelidir'});
-    const text=req.file.buffer.toString('utf8').replace(/^\uFEFF/,'');
-    const lines=text.split(/\r?\n/).filter(Boolean);
-    if(lines.length<2)return res.status(400).json({error:'CSV dosyasında veri bulunamadı'});
-    const delimiter=(lines[0].match(/;/g)||[]).length>=(lines[0].match(/,/g)||[]).length?';':',';
-    const header=lines[0].split(delimiter).map(x=>x.trim().toLocaleLowerCase('tr-TR'));
-    const codeIndex=header.findIndex(x=>/ürün.?kodu|urun.?kodu|kod|product.?code/.test(x));
-    const qtyIndex=header.findIndex(x=>/adet|stok|quantity|qty/.test(x));
-    if(codeIndex<0||qtyIndex<0)return res.status(400).json({error:'CSV içinde Ürün Kodu ve Adet/Stok sütunları bulunmalı'});
-    const s=readStore();let imported=0,skipped=0;
-    for(const line of lines.slice(1)){
-      const cols=line.split(delimiter).map(x=>x.trim().replace(/^"|"$/g,''));
-      const code=String(cols[codeIndex]||'').trim(),qty=Math.max(0,Math.round(normalizeNumber(cols[qtyIndex])));
-      if(!code){skipped++;continue}
+    const parsed=parseStockImportRows(req.file.buffer,req.file.originalname||'');
+    if(!parsed.length)return res.status(400).json({error:'Dosyada Ürün Kodu + Adet dolu satır bulunamadı. Adet sütununu doldurun.'});
+    const s=readStore();let imported=0,skipped=0,updatedCatalog=0;
+    for(const {code,qty} of parsed){
+      const product=s.products.find(p=>String(p.code||'').toLocaleLowerCase('tr-TR')===code.toLocaleLowerCase('tr-TR'));
+      if(!product){skipped++;continue}
       const current=Number(currentStock(s,code,warehouseId)?.quantity||0);
-      addStockMovement(s,{productCode:code,warehouseId,type:'import',quantity:qty-current,reference:'CSV Stok Aktarımı',note:'Toplu stok aktarımı',user:currentActor(req)?.name||'Admin'});
+      addStockMovement(s,{productCode:code,warehouseId,type:'import',quantity:qty-current,reference:'Excel/CSV Stok Aktarımı',note:'Toplu stok aktarımı',user:currentActor(req)?.name||'Admin'});
+      if(Number(product.stock||0)!==qty){product.stock=qty;product.updatedAt=new Date().toISOString();updatedCatalog++}
       imported++;
     }
-    audit(s,'CSV stok aktarımı',warehouseId,{imported,skipped});writeStore(s);res.json({ok:true,imported,skipped});
+    audit(s,'Excel/CSV stok aktarımı',warehouseId,{imported,skipped,updatedCatalog});writeStore(s);res.json({ok:true,imported,skipped,updatedCatalog});
   }catch(error){res.status(500).json({error:error.message||'Stok aktarımı başarısız'})}
+});
+
+app.get('/web-api/admin/products-stock-excel',requireAdmin,(req,res)=>{
+  try{
+    const s=readStore();
+    const catFilter=String(req.query.category||'all');
+    const status=String(req.query.status||'all');
+    const term=String(req.query.q||'').toLocaleLowerCase('tr-TR').trim();
+    const cats=Object.fromEntries((s.categories||[]).map(c=>[c.id,c.name]));
+    let list=(s.products||[]).filter(p=>{
+      if(catFilter!=='all'&&p.category!==catFilter)return false;
+      if(status==='active'&&!p.active)return false;
+      if(status==='passive'&&p.active)return false;
+      if(status==='featured'&&!p.featured)return false;
+      if(term&&!`${p.code||''} ${p.name||''} ${p.brand||''} ${p.barcode||''}`.toLocaleLowerCase('tr-TR').includes(term))return false;
+      return true;
+    });
+    list=list.slice().sort((a,b)=>{
+      const ca=String(cats[a.category]||a.category||'');
+      const cb=String(cats[b.category]||b.category||'');
+      const c=ca.localeCompare(cb,'tr');
+      if(c)return c;
+      return String(a.code||'').localeCompare(String(b.code||''),'tr');
+    });
+    const toRow=p=>({
+      'Kategori':cats[p.category]||p.category||'',
+      'Ürün Kodu':p.code||'',
+      'Barkod':p.barcode||'',
+      'Ürün Adı':p.name||'',
+      'Marka':p.brand||'',
+      'Mevcut Stok':Number(p.stock||0),
+      'Adet':'' // kullanıcı doldurur → stok girişi
+    });
+    const wb=XLSX.utils.book_new();
+    const talimat=XLSX.utils.aoa_to_sheet([
+      ['ATAK Stok Giriş Excel'],
+      [''],
+      ['1) İstediğiniz kategoriyi seçip "Excel\'e indir" ile indirin (veya tümünü).'],
+      ['2) "Adet" sütununa gireceğiniz stok adedini yazın. Boş satırlar atlanır.'],
+      ['3) "Mevcut Stok" bilgilendirme içindir; değiştirmeyin.'],
+      ['4) Ürün Kodu sütununu değiştirmeyin.'],
+      ['5) Tüm Ürünler → Excel\'den stok yükle ile depoyu seçip bu dosyayı yükleyin.'],
+      ['6) Adet = o depodaki yeni stok adedi (mutlak değer).']
+    ]);
+    XLSX.utils.book_append_sheet(wb,talimat,'Talimat');
+    const allRows=list.map(toRow);
+    const wsAll=XLSX.utils.json_to_sheet(allRows.length?allRows:[toRow({code:'',name:'',brand:'',barcode:'',category:'',stock:0})]);
+    wsAll['!cols']=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:12},{wch:10}];
+    XLSX.utils.book_append_sheet(wb,wsAll,'Stok Giris');
+    // Kategori bazlı ayrı sayfalar (max 20 sayfa)
+    const byCat=new Map();
+    for(const p of list){
+      const key=String(cats[p.category]||p.category||'Kategori');
+      if(!byCat.has(key))byCat.set(key,[]);
+      byCat.get(key).push(p);
+    }
+    let sheetCount=0;
+    for(const [catName,items] of [...byCat.entries()].sort((a,b)=>a[0].localeCompare(b[0],'tr'))){
+      if(sheetCount>=20)break;
+      let sheetName=String(catName||'Kategori').replace(/[\\/?*\[\]:]/g,' ').trim().slice(0,28)||'Kategori';
+      if(wb.SheetNames.includes(sheetName))sheetName=`${sheetName.slice(0,24)}-${sheetCount+1}`;
+      const ws=XLSX.utils.json_to_sheet(items.map(toRow));
+      ws['!cols']=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:12},{wch:10}];
+      XLSX.utils.book_append_sheet(wb,ws,sheetName);
+      sheetCount++;
+    }
+    const buf=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+    const catLabel=catFilter==='all'?'tum':String(cats[catFilter]||catFilter).replace(/[^\w\-ğüşıöçĞÜŞİÖÇ]+/gi,'_').slice(0,40);
+    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition',`attachment; filename="atak-stok-giris-${catLabel}.xlsx"`);
+    res.send(Buffer.from(buf));
+  }catch(e){
+    res.status(500).json({error:e.message||'Excel oluşturulamadı'});
+  }
 });
 
 
