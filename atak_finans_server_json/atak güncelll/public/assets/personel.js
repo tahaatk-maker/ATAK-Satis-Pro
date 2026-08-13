@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v103 */
+/* ATAK_PERSONEL_BUILD=fix-v104 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -722,17 +722,20 @@ function addToCart(code){
 function syncPayAccounts(){
   const cashOpts=salesAccounts.filter(a=>a.type==='cash'&&a.active!==false);
   const bankOpts=salesAccounts.filter(a=>a.type==='bank'&&a.active!==false);
-  const all=salesAccounts.filter(a=>a.active!==false);
-  const fill=(sel,rows)=>{
+  const fill=(sel,rows,emptyLabel)=>{
     if(!sel)return;
     const cur=sel.value;
-    const list=rows.length?rows:all;
-    sel.innerHTML=list.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Hesap yok</option>';
+    if(!rows.length){
+      sel.innerHTML=`<option value="">${emptyLabel}</option>`;
+      return;
+    }
+    sel.innerHTML=rows.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
     if(cur && [...sel.options].some(o=>o.value===cur))sel.value=cur;
+    else sel.value=rows[0].id;
   };
-  fill($('#payCashAccount'),cashOpts);
-  fill($('#payCardAccount'),bankOpts);
-  fill($('#payTransferAccount'),bankOpts);
+  fill($('#payCashAccount'),cashOpts,'Kasa hesabı yok — Ayarlar’dan ekleyin');
+  fill($('#payCardAccount'),bankOpts,'Banka / POS yok — Ayarlar → Tür: Banka');
+  fill($('#payTransferAccount'),bankOpts,'Banka hesabı yok — Ayarlar → Tür: Banka');
 }
 function paySplits(){
   return {
@@ -761,6 +764,20 @@ function setSalesPayPlanOpen(open){
     setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'nearest'}),40);
   }
 }
+function salesHighlightPayRow(fieldId){
+  document.querySelectorAll('.sales-pay-list .pay-method').forEach(el=>el.classList.remove('pay-row-focus'));
+  const map={payCash:'.pay-cash',payCard:'.pay-card',payTransfer:'.pay-transfer',payCredit:'.pay-credit',payNote:'.pay-note'};
+  const row=map[fieldId]?document.querySelector('.sales-pay-list '+map[fieldId]):null;
+  if(row)row.classList.add('pay-row-focus');
+  const accMap={payCash:'#payCashAccount',payCard:'#payCardAccount',payTransfer:'#payTransferAccount'};
+  const acc=accMap[fieldId]?$(accMap[fieldId]):null;
+  if(acc){
+    setTimeout(()=>{try{acc.focus()}catch(_){}},60);
+    if((fieldId==='payCard'||fieldId==='payTransfer')&&!acc.value){
+      toast('Kart/Havale için önce Ayarlar → Kasa ve Banka’dan Tür=Banka hesabı ekleyin');
+    }
+  }
+}
 function salesFillRemainingTo(fieldId){
   setSalesPayPlanOpen(true);
   const map={payCash:'cash',payCard:'card',payTransfer:'transfer',payCredit:'credit',payNote:'note'};
@@ -774,8 +791,15 @@ function salesFillRemainingTo(fieldId){
   const el=$('#'+fieldId);if(!el)return;
   el.value=fill?String(fill):'';
   salesRecalcPay();
-  el.focus();
-  try{el.select()}catch(_){}
+  salesHighlightPayRow(fieldId);
+  if(fieldId==='payCard'||fieldId==='payTransfer'){
+    const acc=$(fieldId==='payCard'?'#payCardAccount':'#payTransferAccount');
+    if(acc&&acc.value){try{acc.focus()}catch(_){}}
+    else{el.focus();try{el.select()}catch(_){}}
+  }else{
+    el.focus();
+    try{el.select()}catch(_){}
+  }
 }
 function buildPromissorySchedule(amount,installments,firstDue,intervalMonths){
   const total=Math.max(0,num(amount));
@@ -1076,8 +1100,8 @@ function collectSalesDraft(){
   if(Math.abs(allocated-net)>0.009)return{error:`Dağılım nete eşit olmalı. Net ${money(net)} · Dağıtılan ${money(allocated)}`,status};
   if(s.note>0 && !$('#promissoryFirstDue')?.value)return{error:'Senet için ilk vade girin',status};
   if(s.cash>0 && !$('#payCashAccount')?.value)return{error:'Nakit için kasa seçin',status};
-  if(s.card>0 && !$('#payCardAccount')?.value)return{error:'Kart için hesap seçin',status};
-  if(s.transfer>0 && !$('#payTransferAccount')?.value)return{error:'Havale için banka seçin',status};
+  if(s.card>0 && !$('#payCardAccount')?.value)return{error:'Kart için banka / POS seçin (Ayarlar → Tür: Banka)',status};
+  if(s.transfer>0 && !$('#payTransferAccount')?.value)return{error:'Havale için banka seçin (Ayarlar → Tür: Banka)',status};
   const stockSel=$('#salesDeductStock')?.value||'no';
   const canStock=canDeductStock();
   const stockMode=stockSel==='yes'&&canStock?'deduct':(stockSel==='reserve'?'reserve':'none');

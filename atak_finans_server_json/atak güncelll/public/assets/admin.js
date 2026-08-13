@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v103 */
+/* ATAK_ADMIN_BUILD=fix-v104 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1982,15 +1982,7 @@ async function loadSalesCenter(){
         if(match)q('#salesSalesperson').value=match.id;
       }
     }
-    const accountOpts=salesCenterData.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
-    ['#salesAccount','#payCashAccount','#payCardAccount','#payTransferAccount'].forEach(id=>{
-      if(q(id))q(id).innerHTML=accountOpts;
-    });
-    const cashAcc=salesCenterData.accounts.find(a=>a.type==='cash')||salesCenterData.accounts[0];
-    const bankAcc=salesCenterData.accounts.find(a=>a.type==='bank')||salesCenterData.accounts[0];
-    if(cashAcc&&q('#payCashAccount'))q('#payCashAccount').value=cashAcc.id;
-    if(bankAcc&&q('#payCardAccount'))q('#payCardAccount').value=bankAcc.id;
-    if(bankAcc&&q('#payTransferAccount'))q('#payTransferAccount').value=bankAcc.id;
+    syncSalesPayAccounts();
     if(q('#salesWarehouse'))q('#salesWarehouse').innerHTML=salesCenterData.warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('');
     salesFillCustomerSelect(list||salesCenterData.customers||[]);
     if(typeof refreshSalesProductSelects==='function')refreshSalesProductSelects();
@@ -2152,6 +2144,44 @@ function salesReset(){
   salesCalculate();
   salesSetWizardStep(1);
   toast('Yeni satış formu hazır');
+}
+function syncSalesPayAccounts(){
+  const all=(salesCenterData?.accounts||[]).filter(a=>a&&a.active!==false);
+  const cash=all.filter(a=>a.type==='cash');
+  const bank=all.filter(a=>a.type==='bank');
+  const fill=(sel,rows,emptyLabel)=>{
+    if(!sel)return;
+    const cur=sel.value;
+    if(!rows.length){
+      sel.innerHTML=`<option value="">${emptyLabel}</option>`;
+      return;
+    }
+    sel.innerHTML=rows.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+    if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
+    else sel.value=rows[0].id;
+  };
+  fill(q('#payCashAccount'),cash,'Kasa hesabı yok — Ayarlar’dan ekleyin');
+  fill(q('#payCardAccount'),bank,'Banka / POS yok — Ayarlar → Tür: Banka');
+  fill(q('#payTransferAccount'),bank,'Banka hesabı yok — Ayarlar → Tür: Banka');
+  if(q('#salesAccount')){
+    const cur=q('#salesAccount').value;
+    q('#salesAccount').innerHTML=all.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Hesap yok</option>';
+    if(cur&&[...q('#salesAccount').options].some(o=>o.value===cur))q('#salesAccount').value=cur;
+  }
+}
+function salesHighlightPayRow(fieldId){
+  qa('.sales-pay-list .pay-method').forEach(el=>el.classList.remove('pay-row-focus'));
+  const map={payCash:'.pay-cash',payCard:'.pay-card',payTransfer:'.pay-transfer',payCredit:'.pay-credit',payNote:'.pay-note'};
+  const row=map[fieldId]?q('.sales-pay-list '+map[fieldId]):null;
+  if(row)row.classList.add('pay-row-focus');
+  const accMap={payCash:'#payCashAccount',payCard:'#payCardAccount',payTransfer:'#payTransferAccount'};
+  const acc=accMap[fieldId]?q(accMap[fieldId]):null;
+  if(acc){
+    setTimeout(()=>{try{acc.focus()}catch(_){}},60);
+    if((fieldId==='payCard'||fieldId==='payTransfer')&&!acc.value){
+      toast('Kart/Havale için önce Ayarlar → Kasa ve Banka’dan Tür=Banka hesabı ekleyin');
+    }
+  }
 }
 function salesPaymentSplits(){
   return{
@@ -2794,7 +2824,14 @@ function salesFillRemainingTo(fieldId){
   const el=q('#'+fieldId);if(!el)return;
   el.value=String(fill);
   salesCalculate();
-  el.focus();el.select?.();
+  salesHighlightPayRow(fieldId);
+  if(fieldId==='payCard'||fieldId==='payTransfer'){
+    const acc=q(fieldId==='payCard'?'#payCardAccount':'#payTransferAccount');
+    if(acc&&acc.value){try{acc.focus()}catch(_){}}
+    else{el.focus();el.select?.()}
+  }else{
+    el.focus();el.select?.();
+  }
 }
 qa('[data-pay-fill]').forEach(btn=>{
   btn.addEventListener('click',()=>salesFillRemainingTo(btn.getAttribute('data-pay-fill')));
@@ -2925,7 +2962,24 @@ function collectSalesDraft(){
   if(!items.length)return{error:'En az bir ürün eklemelisiniz.',...draft};
   if((deductStock||reserveStock)&&!warehouseId)return{error:reserveStock?'Rezerve etmek için satış deposu seçmelisiniz.':'Stoktan düşmek için satış deposu seçmelisiniz.',...draft};
   if(total>0&&Math.abs(calc.remaining)>0.009)return{error:`Ödeme dağılımı net tutara eşit olmalı. Kalan: ${salesMoney(calc.remaining)}`,...draft};
-  if(draft.payments.some(p=>['Nakit','Kredi Kartı','Havale'].includes(p.method)&&p.amount>0&&!p.accountId))return{error:'Nakit / kart / havale için hesap seçmelisiniz.',...draft};
+  if(draft.payments.some(p=>['Nakit','Kredi Kartı','Havale'].includes(p.method)&&p.amount>0&&!p.accountId)){
+    if(splits.card>0&&!splits.cardAccountId)return{error:'Kart ödemesi için banka / POS hesabı seçin. (Ayarlar → Tür: Banka)',...draft};
+    if(splits.transfer>0&&!splits.transferAccountId)return{error:'Havale için banka hesabı seçin. (Ayarlar → Tür: Banka)',...draft};
+    return{error:'Nakit / kart / havale için hesap seçmelisiniz.',...draft};
+  }
+  const accById=id=>(salesCenterData.accounts||[]).find(a=>String(a.id)===String(id));
+  if(splits.card>0){
+    const a=accById(splits.cardAccountId);
+    if(!a||a.type!=='bank')return{error:'Kart için hesap Türü Banka olmalı. Ayarlar’da hesabı Banka yapın veya yeni banka ekleyin.',...draft};
+  }
+  if(splits.transfer>0){
+    const a=accById(splits.transferAccountId);
+    if(!a||a.type!=='bank')return{error:'Havale için hesap Türü Banka olmalı.',...draft};
+  }
+  if(splits.cash>0){
+    const a=accById(splits.cashAccountId);
+    if(a&&a.type==='bank'){/* bankaya nakit de yazılabilir — izin */ }
+  }
   if(promissory){
     if(!promissory.firstDueDate)return{error:'Senet için ilk vade tarihini girin.',...draft};
     if(!promissory.schedule.length)return{error:'Senet takvimi oluşturulamadı. Vade tarihini kontrol edin.',...draft};

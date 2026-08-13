@@ -985,8 +985,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.103-hesap-aktiflestir',
-  build:'fix-v103',
+  version:'6.3.104-kart-banka',
+  build:'fix-v104',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -2207,7 +2207,11 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   for(const p of normalizedPayments){
     if(['Nakit','Kredi Kartı','Havale'].includes(p.method)){
       if(!p.accountId)return res.status(400).json({error:`${p.method} için kasa/banka seçilmelidir`});
-      if(!s.financeAccounts.some(a=>a.id===p.accountId&&a.active!==false))return res.status(400).json({error:`${p.method} hesabı geçersiz`});
+      const acc=s.financeAccounts.find(a=>a.id===p.accountId&&a.active!==false);
+      if(!acc)return res.status(400).json({error:`${p.method} hesabı geçersiz`});
+      if((p.method==='Kredi Kartı'||p.method==='Havale')&&acc.type!=='bank'){
+        return res.status(400).json({error:`${p.method} için hesap Türü Banka olmalı (Ayarlar → Kasa ve Banka)`});
+      }
     }
   }
   if(promissoryAmount>0){
@@ -2629,7 +2633,11 @@ function applySaleEditInStore(s,sale,patch={},actor='Yönetici',reason=''){
   for(const p of payments){
     if(['Nakit','Kredi Kartı','Havale'].includes(p.method)){
       if(!p.accountId)throw new Error(`${p.method} için kasa/banka seçilmelidir`);
-      if(!s.financeAccounts.some(a=>a.id===p.accountId&&a.active!==false))throw new Error(`${p.method} hesabı geçersiz`);
+      const acc=s.financeAccounts.find(a=>a.id===p.accountId&&a.active!==false);
+      if(!acc)throw new Error(`${p.method} hesabı geçersiz`);
+      if((p.method==='Kredi Kartı'||p.method==='Havale')&&acc.type!=='bank'){
+        throw new Error(`${p.method} için hesap Türü Banka olmalı (Ayarlar → Kasa ve Banka)`);
+      }
     }
   }
 

@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v103">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v103">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v104">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v104">
 </head>
 <body>
 
@@ -413,13 +413,13 @@
         <div class="pay-method pay-card">
           <span class="pay-method-badge">Kart</span>
           <input id="payCard" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off"/>
-          <select id="payCardAccount"></select>
+          <select id="payCardAccount" aria-label="Kart banka hesabı"><option value="">Banka / POS seçin</option></select>
           <button type="button" class="pay-fill-btn" data-pay-fill="payCard">KALAN</button>
         </div>
         <div class="pay-method pay-transfer">
           <span class="pay-method-badge">Havale</span>
           <input id="payTransfer" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off"/>
-          <select id="payTransferAccount"></select>
+          <select id="payTransferAccount" aria-label="Havale banka hesabı"><option value="">Banka hesabı seçin</option></select>
           <button type="button" class="pay-fill-btn" data-pay-fill="payTransfer">KALAN</button>
         </div>
         <div class="pay-method pay-credit">
@@ -627,6 +627,6 @@
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/assets/personel.js?v=fix-v103"></script>
+<script src="/assets/personel.js?v=fix-v104"></script>
 </body>
 </html>
