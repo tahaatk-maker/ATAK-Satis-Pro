@@ -1,80 +1,91 @@
 #!/bin/bash
 set -euo pipefail
-echo "=== ATAK BASIT DEPLOY BASLADI ==="
+OUT=/tmp/atak-ok.txt
+: > "$OUT"
+log(){ echo "$*" | tee -a "$OUT"; }
+die(){ log "FAIL: $*"; exit 1; }
+
+log "=== ATAK DEPLOY ==="
 BRANCH="cursor/satis-merkezi-iskonto-prim-bd99"
 EXPECT_V="6.3.72-senet-birebir"
 EXPECT_B="fix-v71"
 APP="${APP_DIR:-/root/atak-v10}"
+[ -d /root/atakhome-platform ] && [ ! -f "$APP/server.js" ] && APP=/root/atakhome-platform
 
-echo "1) Eski /tmp temiz"
+log "APP=$APP"
+log "EXPECT $EXPECT_V / $EXPECT_B"
+
+log "1) temizle"
 rm -rf /tmp/atak-deploy-src /tmp/atak-src.tgz
 mkdir -p /tmp/atak-deploy-src
 
-echo "2) Kod indir"
-curl -fL "https://codeload.github.com/tahaatk-maker/ATAK-Satis-Pro/tar.gz/refs/heads/${BRANCH}" -o /tmp/atak-src.tgz
-tar -xzf /tmp/atak-src.tgz -C /tmp/atak-deploy-src
+log "2) indir"
+curl -fL "https://codeload.github.com/tahaatk-maker/ATAK-Satis-Pro/tar.gz/refs/heads/${BRANCH}" -o /tmp/atak-src.tgz || die "github indirilemedi"
+tar -xzf /tmp/atak-src.tgz -C /tmp/atak-deploy-src || die "tar acilamadi"
 SRC=$(find /tmp/atak-deploy-src -type d -name 'atak güncelll' | head -1)
-echo "SRC=$SRC"
-test -f "$SRC/server.js"
-test -f "$SRC/public/assets/admin.js"
+log "SRC=$SRC"
+[ -n "$SRC" ] || die "kaynak klasor yok"
+[ -f "$SRC/server.js" ] || die "server.js yok"
+[ -f "$SRC/public/assets/admin.js" ] || die "admin.js yok"
 
-echo "3) Kaynak surum kontrol"
-head -1 "$SRC/public/assets/admin.js"
-grep -E "version:|build:" "$SRC/server.js" | head -2
-grep -q "$EXPECT_B" "$SRC/public/assets/admin.js"
-grep -q "$EXPECT_V" "$SRC/server.js"
-grep -q "build:'$EXPECT_B'" "$SRC/server.js"
-echo "   kaynak OK"
+log "3) kaynak kontrol"
+head -1 "$SRC/public/assets/admin.js" | tee -a "$OUT"
+grep -E "version:|build:" "$SRC/server.js" | head -2 | tee -a "$OUT"
+grep -q "$EXPECT_B" "$SRC/public/assets/admin.js" || die "kaynak admin build yanlis"
+grep -q "$EXPECT_V" "$SRC/server.js" || die "kaynak version yanlis"
+grep -q "build:'$EXPECT_B'" "$SRC/server.js" || die "kaynak build yanlis"
+log "   kaynak OK"
 
-echo "4) Yedek + kopyala (data dokunulmaz)"
+log "4) kopyala (data dokunulmaz)"
 mkdir -p "$APP/data" "$APP/public/assets"
 if [ -f "$APP/data/store.json" ]; then
   cp -a "$APP/data/store.json" "$APP/data/store.json.bak-$(date +%Y%m%d-%H%M%S)"
-  echo "   store.json yedeklendi"
+  log "   store.json yedek"
 fi
-# Tum olasi app koklerine yaz
 for D in "$APP" /root/atak-v10 /root/atakhome-platform; do
   [ -d "$D" ] || continue
-  echo "   SYNC -> $D"
+  log "   SYNC -> $D"
   rsync -a --delete --exclude data --exclude node_modules --exclude .env --exclude '*.bak-*' "$SRC"/ "$D"/
-  # Zorla kritik dosyalar
   cp -f "$SRC/server.js" "$D/server.js"
   cp -f "$SRC/public/admin.html" "$D/public/admin.html"
   cp -f "$SRC/public/assets/admin.js" "$D/public/assets/admin.js"
   cp -f "$SRC/public/assets/admin.css" "$D/public/assets/admin.css"
+  cp -f "$SRC/public/assets/personel.js" "$D/public/assets/personel.js" 2>/dev/null || true
 done
 
-echo "5) Disk kontrol ($APP)"
-head -1 "$APP/public/assets/admin.js"
-grep -E "version:|build:" "$APP/server.js" | head -2
-grep -q "$EXPECT_V" "$APP/server.js"
-grep -q "build:'$EXPECT_B'" "$APP/server.js"
-grep -q "ATAK_ADMIN_BUILD=$EXPECT_B" "$APP/public/assets/admin.js"
-echo "   disk OK"
+log "5) disk kontrol"
+head -1 "$APP/public/assets/admin.js" | tee -a "$OUT"
+grep -E "version:|build:" "$APP/server.js" | head -2 | tee -a "$OUT"
+grep -q "$EXPECT_V" "$APP/server.js" || die "disk version yanlis"
+grep -q "build:'$EXPECT_B'" "$APP/server.js" || die "disk build yanlis"
+grep -q "ATAK_ADMIN_BUILD=$EXPECT_B" "$APP/public/assets/admin.js" || die "disk admin build yanlis"
+log "   disk OK"
 
-echo "6) Port 3100 temizle + pm2 yeniden"
+log "6) npm + pm2"
+cd "$APP"
+if [ ! -d node_modules ]; then
+  log "   npm install"
+  npm install --omit=dev --no-audit --no-fund || die "npm install fail"
+fi
 pm2 delete atak 2>/dev/null || true
 sleep 1
-# eski process kaldiysa oldur
 for P in 3100 3000; do
   PID=$(ss -lntp 2>/dev/null | awk -v p=":$P" '$4 ~ p{print}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1 || true)
   if [ -n "${PID:-}" ]; then
-    echo "   kill pid $PID on $P"
+    log "   kill $PID :$P"
     kill -9 "$PID" 2>/dev/null || true
   fi
 done
 sleep 1
-cd "$APP"
-pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env
+pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env || die "pm2 start fail"
 pm2 save || true
-sleep 3
+sleep 5
 
-echo "7) Health"
-H1=$(curl -sS -m 5 http://127.0.0.1:3100/health || true)
-H2=$(curl -sS -m 5 https://panel.atakhome.com.tr/health || true)
-echo "LOCAL  $H1"
-echo "PUBLIC $H2"
-echo "$H1" | grep -q "$EXPECT_V"
-echo "$H1" | grep -q "$EXPECT_B"
-echo "=== BASARILI: $EXPECT_V / $EXPECT_B ==="
-echo "Tarayicida Ctrl+Shift+R yap"
+log "7) health (/health — /web-api/health DEGIL)"
+H1=$(curl -sS -m 8 http://127.0.0.1:3100/health || true)
+log "LOCAL=$H1"
+echo "$H1" | grep -q "$EXPECT_V" || die "health version yok: $H1"
+echo "$H1" | grep -q "$EXPECT_B" || die "health build yok: $H1"
+log "=== BASARILI $EXPECT_V / $EXPECT_B ==="
+echo OK > /tmp/atak-deploy-OK
+log "Log dosyasi: $OUT"
