@@ -225,13 +225,23 @@ function ensureStore(store) {
     return row;
   });
   if(istikbalFixed>0)store.__istikbalCategoryFixed=istikbalFixed;
-  // Tek sefer: Mobilya kategorisindeki alış (purchasePrice) sıfırla — ürün kartı kalır
+  // Tek sefer (v2): Mobilya kategorisindeki alış (purchasePrice) sıfırla — ürün kartı kalır
   store.metaFlags=(store.metaFlags&&typeof store.metaFlags==='object')?store.metaFlags:{};
-  if(!store.metaFlags.clearMobilyaPurchase_v1){
+  if(!store.metaFlags.clearMobilyaPurchase_v2){
+    const mobilyaIds=new Set(
+      (store.categories||[])
+        .filter(c=>String(c.id||'').toLocaleLowerCase('tr-TR')==='mobilya'||/mobilya/i.test(String(c.name||'')))
+        .map(c=>String(c.id).toLocaleLowerCase('tr-TR'))
+    );
+    mobilyaIds.add('mobilya');
+    mobilyaIds.add(String(mobilyaId).toLocaleLowerCase('tr-TR'));
     let cleared=0;
     for(const p of (store.products||[])){
       const cat=String(p.category||'').toLocaleLowerCase('tr-TR');
-      if(cat!==String(mobilyaId).toLocaleLowerCase('tr-TR')&&cat!=='mobilya')continue;
+      const brand=String(p.brand||'').toLocaleLowerCase('tr-TR');
+      const isMobilya=mobilyaIds.has(cat)||cat==='mobilya'||/mobilya/.test(cat);
+      // Mobilya kategorisi VEYA İstikbal markası (ekranda Mobilya altında görünenler)
+      if(!isMobilya&&!/istikbal/.test(brand))continue;
       if(!(normalizeNumber(p.purchasePrice)>0)&&!p.purchasePriceSource)continue;
       p.purchasePrice=0;
       p.purchasePriceSource='manual-zero';
@@ -240,8 +250,9 @@ function ensureStore(store) {
       cleared++;
     }
     store.metaFlags.clearMobilyaPurchase_v1=true;
-    store.metaFlags.clearMobilyaPurchase_v1_at=new Date().toISOString();
-    store.metaFlags.clearMobilyaPurchase_v1_count=cleared;
+    store.metaFlags.clearMobilyaPurchase_v2=true;
+    store.metaFlags.clearMobilyaPurchase_v2_at=new Date().toISOString();
+    store.metaFlags.clearMobilyaPurchase_v2_count=cleared;
     store.__mobilyaPurchaseCleared=cleared;
   }
   store.campaigns = store.campaigns.map((c,i)=>({ id:c.id||crypto.randomUUID(), title:c.title||'Kampanya', subtitle:c.subtitle||'', label:c.label||'FIRSAT', startDate:c.startDate||'', endDate:c.endDate||'', active:c.active!==false, homepage:c.homepage!==false, sort:Number(c.sort??i), productIds:Array.isArray(c.productIds)?c.productIds:[] }));
@@ -973,8 +984,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.89-senet-isim',
-  build:'fix-v88',
+  version:'6.3.90-mobilya-alis-v2',
+  build:'fix-v89',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -5174,7 +5185,9 @@ app.post('/web-api/admin/products/zero-purchase-costs',requireAdmin,(req,res)=>{
         match=tags.includes('alis-faturasi')||tags.includes('auto-created')||src.startsWith('purchase-invoice');
       }else if(scope==='mobilya'||scope==='category'){
         const want=String(categoryId||'mobilya').toLocaleLowerCase('tr-TR');
-        match=cat===want||cat==='mobilya'||want==='mobilya'&&cat==='mobilya';
+        const catIds=new Set((s.categories||[]).filter(c=>String(c.id||'').toLocaleLowerCase('tr-TR')===want||/mobilya/i.test(String(c.name||''))).map(c=>String(c.id).toLocaleLowerCase('tr-TR')));
+        catIds.add('mobilya');catIds.add(want);
+        match=catIds.has(cat)||cat==='mobilya'||/istikbal/.test(brand);
       }else{
         // istikbal (varsayılan)
         match=/istikbal/.test(brand)||tags.includes('istikbal')||(tags.includes('mobilya')&&tags.includes('alis-faturasi'));
