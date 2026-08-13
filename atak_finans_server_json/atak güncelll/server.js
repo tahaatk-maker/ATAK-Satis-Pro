@@ -943,8 +943,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.74-imza-alanlari',
-  build:'fix-v73',
+  version:'6.3.75-urun-6satir',
+  build:'fix-v74',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -3675,12 +3675,15 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const downPayment=cashPaid>0?cashPaid:Math.max(0,Math.round((net-senetTotal)*100)/100);
   const balance=senetTotal>0?senetTotal:Math.max(0,Math.round((net-downPayment)*100)/100);
   const dateTR=d=>{const s=String(d||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return htmlEsc(s||'');const[y,m,day]=s.split('-');return `${day}.${m}.${y}`};
-  const emptyRows=Math.max(0,Math.min(2,3-items.length));
-  const productRows=(items.slice(0,3).map(i=>{const qty=Number(i.quantity||1);const total=i.total!=null?i.total:qty*Number(i.unitPrice||0);return `<tr><td class="c">${htmlEsc(i.itemCode||i.productCode||'-')}</td><td class="c">${qty}</td><td class="num">${moneyTR(i.unitPrice)}</td><td class="num">${moneyTR(total)}</td></tr>`;}).join('')||'')+Array.from({length:emptyRows},()=>'<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>').join('');
+  const maxProducts=6;
+  const shownItems=items.slice(0,maxProducts);
+  const moreProducts=Math.max(0,items.length-shownItems.length);
+  const emptyRows=shownItems.length?0:1;
+  const productRows=(shownItems.map(i=>{const qty=Number(i.quantity||1);const total=i.total!=null?i.total:qty*Number(i.unitPrice||0);return `<tr><td class="c">${htmlEsc(i.itemCode||i.productCode||'-')}</td><td class="c">${qty}</td><td class="num">${moneyTR(i.unitPrice)}</td><td class="num">${moneyTR(total)}</td></tr>`;}).join('')||'')+Array.from({length:emptyRows},()=>'<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>').join('')+(moreProducts?`<tr class="more"><td colspan="4">+${moreProducts} ürün daha (toplam ${items.length} kalem)</td></tr>`:'');
   const schedShow=noteList.slice(0,10);
-  const schedPad=Math.max(0,Math.min(2,3-schedShow.length));
-  const scheduleRows=(schedShow.map(n=>`<tr><td class="c">${dateTR(n.dueDate)}</td><td class="num">${moneyTR(n.amount)}</td></tr>`).join('')||'')+Array.from({length:schedPad},()=>'<tr><td>&nbsp;</td><td></td></tr>').join('')+`<tr class="tot"><td class="c">TOPLAM</td><td class="num">${moneyTR(balance||senetTotal)}</td></tr>`;
+  const scheduleRows=(schedShow.map(n=>`<tr><td class="c">${dateTR(n.dueDate)}</td><td class="num">${moneyTR(n.amount)}</td></tr>`).join('')||'<tr><td>&nbsp;</td><td></td></tr>')+`<tr class="tot"><td class="c">TOPLAM</td><td class="num">${moneyTR(balance||senetTotal)}</td></tr>`;
   const partyRows=(who)=>[['Adı Soyadı',who.name||''],['T.C. Kimlik No',who.tckn||who.taxNo||''],['GSM',who.phone||who.gsm||''],['Adres',who.homeAddress||who.address||'']].map(([l,v])=>`<tr><td class="lbl">${l}</td><td>${htmlEsc(v)}</td></tr>`).join('');
+  const denseClass=shownItems.length>=4?' dense':'';
   const corpLine=customerHasCorporateBilling(customer)?`<div class="pay">Fatura firması: <b>${htmlEsc(customer.companyName||'')}</b> · VKN ${htmlEsc(customer.taxNo||'')} · ${htmlEsc(customer.taxOffice||'')}</div>`:'';
   // Tek senet: tutar = yazılan toplam senet; taksitler yalnızca sözleşmede
   const senetAmount=senetTotal||balance||0;
@@ -3711,6 +3714,14 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c .c{text-align:center}
 .a4c .mmeta td:first-child{width:46%;background:#f3f6fa;font-weight:700;color:#5a6a7b;font-size:6.8px}
 .a4c .tot td{background:#eef3f9;font-weight:800}
+.a4c tr.more td{height:auto;padding:2px 4px;font-size:6.5px;font-weight:700;color:#5a6a7b;background:#f8fafc;text-align:left}
+.a4c.dense td{height:10px;font-size:7px;padding:1.5px 2px}
+.a4c.dense .terms p{font-size:5.6px;line-height:1.22;margin:0 0 1px}
+.a4c.dense .sig .sigpad{min-height:16mm}
+.a4c.dense .duo{min-height:48mm}
+.a4c.dense .duo>div{min-height:48mm}
+.a4c.dense .duo .sigpad{min-height:22mm}
+.a4c.dense .sbody{font-size:7px;line-height:1.35;margin:1px 0 3px}
 .a4c .parties{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px}
 .a4c .box{border:1px solid #c5d0dd;border-radius:4px;overflow:hidden;padding:0;background:#fff}
 .a4c .box h3{background:#0a2748;color:#fff;font-size:7.2px;letter-spacing:.1em;text-align:center;padding:3px;margin:0;font-weight:700}
@@ -3753,7 +3764,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c.senet-only .senet{margin-top:0;min-height:180mm}
 @media print{.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important}.a4c .grow,.a4c .senet,.a4c .duo,.a4c .sig .sigpad,.a4c .duo .sigpad{flex:1 1 auto!important}.a4c.senet-only{page-break-before:always}}
 </style>`;
-  return `<section class="sheet a4c">${css}
+  return `<section class="sheet a4c${denseClass}">${css}
   <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · ${htmlEsc(companyTaxLine)}</div></div>
   <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
   <div class="rule"></div>
