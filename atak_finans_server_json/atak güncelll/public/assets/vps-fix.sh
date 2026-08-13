@@ -1,8 +1,8 @@
-# ATAK VPS kesin deploy (fix-v72) — health 6.3.73-senet-buyuk olmadan DONE yazmaz
+# ATAK VPS kesin deploy (fix-v73) — health 6.3.74-imza-alanlari olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/satis-merkezi-iskonto-prim-bd99}"
-EXPECT_HEALTH=6.3.73-senet-buyuk
-EXPECT_BUILD=fix-v72
+EXPECT_HEALTH=6.3.74-imza-alanlari
+EXPECT_BUILD=fix-v73
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
