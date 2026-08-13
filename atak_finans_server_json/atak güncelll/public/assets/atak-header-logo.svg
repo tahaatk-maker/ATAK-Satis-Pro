@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" role="img" aria-label="Atak Pazarlama">
+  <defs>
+    <linearGradient id="hBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1b76cc"/>
+      <stop offset="100%" stop-color="#0a4d94"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(14 6)">
+    <path fill="url(#hBlue)" fill-rule="evenodd" d="
+      M50 2
+      L104 108 H80
+      L68.5 84 H32.5
+      L21 108 H-3
+      L50 2 Z
+      M50 30
+      L62 56 H38 Z
+    "/>
+    <rect x="24" y="42" width="22" height="9" rx="1" fill="url(#hBlue)"/>
+  </g>
+
+  <text x="128" y="56"
+        font-family="Montserrat, 'Arial Black', Arial, sans-serif"
+        font-size="44" font-weight="900" letter-spacing="6"
+        fill="#0a4d94">ATAK</text>
+  <text x="130" y="88"
+        font-family="Montserrat, Arial, Helvetica, sans-serif"
+        font-size="17" font-weight="700" letter-spacing="7.5"
+        fill="#0a4d94">PAZARLAMA</text>
+</svg>
