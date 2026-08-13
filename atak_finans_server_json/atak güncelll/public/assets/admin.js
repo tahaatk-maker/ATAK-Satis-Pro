@@ -634,6 +634,18 @@ q('#productsExcelImportFile')?.addEventListener('change',async e=>{
     await load();
   }catch(err){toast(err.message||'Stok yüklenemedi')}
 });
+q('#productsClearMobilyaPurchaseBtn')?.addEventListener('click',async()=>{
+  if(!confirm('Mobilya kategorisindeki TÜM ürünlerde ALIŞ fiyatı sıfırlansın mı?\nÜrünler silinmez — sadece Alış = ₺0 olur.'))return;
+  try{
+    const r=await api('/web-api/admin/products/zero-purchase-costs',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({scope:'mobilya',categoryId:'mobilya'})
+    });
+    toast(`${r.cleared||0} mobilya ürününde alış sıfırlandı`);
+    await load();
+  }catch(e){toast(e.message||'Alışlar silinemedi')}
+});
 function resolveVatRateClient(p={}){
   const cat=String(p.category||'').toLocaleLowerCase('tr-TR');
   const brand=String(p.brand||'').toLocaleLowerCase('tr-TR');

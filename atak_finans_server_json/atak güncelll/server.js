@@ -225,6 +225,25 @@ function ensureStore(store) {
     return row;
   });
   if(istikbalFixed>0)store.__istikbalCategoryFixed=istikbalFixed;
+  // Tek sefer: Mobilya kategorisindeki alış (purchasePrice) sıfırla — ürün kartı kalır
+  store.metaFlags=(store.metaFlags&&typeof store.metaFlags==='object')?store.metaFlags:{};
+  if(!store.metaFlags.clearMobilyaPurchase_v1){
+    let cleared=0;
+    for(const p of (store.products||[])){
+      const cat=String(p.category||'').toLocaleLowerCase('tr-TR');
+      if(cat!==String(mobilyaId).toLocaleLowerCase('tr-TR')&&cat!=='mobilya')continue;
+      if(!(normalizeNumber(p.purchasePrice)>0)&&!p.purchasePriceSource)continue;
+      p.purchasePrice=0;
+      p.purchasePriceSource='manual-zero';
+      p.purchasePriceUpdatedAt=new Date().toISOString();
+      p.updatedAt=new Date().toISOString();
+      cleared++;
+    }
+    store.metaFlags.clearMobilyaPurchase_v1=true;
+    store.metaFlags.clearMobilyaPurchase_v1_at=new Date().toISOString();
+    store.metaFlags.clearMobilyaPurchase_v1_count=cleared;
+    store.__mobilyaPurchaseCleared=cleared;
+  }
   store.campaigns = store.campaigns.map((c,i)=>({ id:c.id||crypto.randomUUID(), title:c.title||'Kampanya', subtitle:c.subtitle||'', label:c.label||'FIRSAT', startDate:c.startDate||'', endDate:c.endDate||'', active:c.active!==false, homepage:c.homepage!==false, sort:Number(c.sort??i), productIds:Array.isArray(c.productIds)?c.productIds:[] }));
   if (!store.banners.length) store.banners.push({ id:crypto.randomUUID(), headline:'Evinizi sadece döşemeyin. Yaşatın.', subheadline:'Beko ürünleri, mobilya, klima, TV ve ev yaşam çözümleri Atak Home’da.', ctaText:'Ürünleri keşfet', ctaUrl:'#products', desktopImage:'', mobileImage:'', active:true, sort:0 });
   return store;
@@ -241,11 +260,22 @@ function readStore(){
       console.log(`[istikbal] ${n} ürün Mobilya kategorisine taşındı`);
     }catch(e){console.error('[istikbal] kategori kaydı yazılamadı',e.message)}
   }
+  if(s.__mobilyaPurchaseCleared!=null){
+    const n=s.__mobilyaPurchaseCleared;
+    delete s.__mobilyaPurchaseCleared;
+    try{
+      const t=`${STORE_PATH}.tmp`;
+      fs.writeFileSync(t,JSON.stringify(s,null,2),'utf8');
+      fs.renameSync(t,STORE_PATH);
+      console.log(`[mobilya] ${n} ürün alış maliyeti sıfırlandı`);
+    }catch(e){console.error('[mobilya] alış sıfırlama kaydı yazılamadı',e.message)}
+  }
   return s;
 }
 function writeStore(store){
   const clean={...ensureStore(store)};
   delete clean.__istikbalCategoryFixed;
+  delete clean.__mobilyaPurchaseCleared;
   const t=`${STORE_PATH}.tmp`;
   fs.writeFileSync(t,JSON.stringify(clean,null,2),'utf8');
   fs.renameSync(t,STORE_PATH);
@@ -943,8 +973,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.87-excel-indir',
-  build:'fix-v86',
+  version:'6.3.88-mobilya-alis',
+  build:'fix-v87',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -5129,17 +5159,22 @@ app.post('/web-api/admin/purchase-invoice/:id/revert',requireAdmin,(req,res)=>{
 app.post('/web-api/admin/products/zero-purchase-costs',requireAdmin,(req,res)=>{
   try{
     const s=readStore();
-    const scope=String(req.body?.scope||'istikbal').toLocaleLowerCase('tr-TR'); // istikbal | imported | all
+    const scope=String(req.body?.scope||'istikbal').toLocaleLowerCase('tr-TR'); // istikbal | imported | mobilya | all
+    const categoryId=String(req.body?.categoryId||req.body?.category||'').trim();
     let cleared=0;
     for(const p of (s.products||[])){
       const brand=String(p.brand||'').toLocaleLowerCase('tr-TR');
       const tags=(p.tags||[]).map(t=>String(t).toLocaleLowerCase('tr-TR'));
       const src=String(p.purchasePriceSource||'');
+      const cat=String(p.category||'').toLocaleLowerCase('tr-TR');
       let match=false;
       if(scope==='all'){
         match=true; // alışı olan/olmayan tüm ürünler — source temizlensin
       }else if(scope==='imported'){
         match=tags.includes('alis-faturasi')||tags.includes('auto-created')||src.startsWith('purchase-invoice');
+      }else if(scope==='mobilya'||scope==='category'){
+        const want=String(categoryId||'mobilya').toLocaleLowerCase('tr-TR');
+        match=cat===want||cat==='mobilya'||want==='mobilya'&&cat==='mobilya';
       }else{
         // istikbal (varsayılan)
         match=/istikbal/.test(brand)||tags.includes('istikbal')||(tags.includes('mobilya')&&tags.includes('alis-faturasi'));
@@ -5155,7 +5190,7 @@ app.post('/web-api/admin/products/zero-purchase-costs',requireAdmin,(req,res)=>{
       p.updatedAt=new Date().toISOString();
       cleared++;
     }
-    audit(s,'Alış maliyetleri sıfırlandı','Ürünler',{scope,cleared});
+    audit(s,'Alış maliyetleri sıfırlandı','Ürünler',{scope,categoryId:categoryId||null,cleared});
     writeStore(s);
     res.json({ok:true,cleared,scope});
   }catch(e){
