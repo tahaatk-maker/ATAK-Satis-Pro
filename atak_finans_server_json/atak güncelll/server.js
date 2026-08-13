@@ -943,8 +943,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.71-finans-raporlari',
-  build:'fix-v70',
+  version:'6.3.72-senet-birebir',
+  build:'fix-v71',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -3694,6 +3694,8 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const senetDue=noteList.length?(noteList[noteList.length-1].dueDate||noteList[0].dueDate||''):'';
   const senetNo=sale.reference?`${sale.reference}-SN`:(noteList[0]?.serial?String(noteList[0].serial).replace(/-\d{1,2}$/,''):'');
   const senetWords=senetAmount>0?amountToTrWords(senetAmount):'';
+  const senetWordsOnly=(senetWords||'').replace(/\s*Türk Lirası.*$/i,'').trim();
+  const senetAmtHash=senetAmount>0?('#'+Number(senetAmount).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+'#'):'';
   const moreSenets=noteList.length>1?`<div class="note">Tek senet tutarı toplam bakiyedir (${moneyTR(senetAmount)}). ${noteList.length} taksitin vade planı yukarıdaki tablodadır.</div>`:'';
   const css=`<style>
 .a4c{padding:7mm 8mm 6mm!important;font:8.6px/1.3 "Segoe UI",Arial,sans-serif;color:#142033;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:277mm}
@@ -3745,16 +3747,14 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c .fields>div{border-bottom:1.2px solid #2a3545;padding:2px 0 3px}
 .a4c .fields span{display:block;font-size:6.5px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:.05em}
 .a4c .fields b{display:block;font-size:9.5px;min-height:12px;margin-top:1px}
-.a4c .sbody{font-size:7.2px;line-height:1.4;text-align:justify;margin:2px 0 5px}
-.a4c .words{display:flex;gap:6px;align-items:baseline;background:#f3f6fa;border:1px solid #c5d0dd;border-radius:4px;padding:4px 7px;margin-bottom:5px}
-.a4c .words span{font-size:7px;font-weight:800;color:#b91c1c}
-.a4c .words b{font-size:8px}
+.a4c .sbody{font-size:7.3px;line-height:1.45;text-align:justify;margin:2px 0 6px}
 .a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:1}
 .a4c .duo>div{border:1px solid #c5d0dd;border-radius:4px;padding:5px 6px;min-height:34px}
 .a4c .duo .lab{font-size:7px;font-weight:800;color:#b91c1c;letter-spacing:.05em;margin-bottom:2px}
 .a4c .duo small{display:block;font-size:6.2px;color:#5a6a7b}
 .a4c .duo .v{font-size:7.8px;font-weight:700;min-height:10px;margin-bottom:2px}
-.a4c .signline{margin-top:6px;text-align:right;border-top:1px solid #c5d0dd;padding-top:10px;font-size:7px;color:#5a6a7b}
+.a4c .keside{margin-top:4px;text-align:right;font-size:8px;font-weight:700;color:#142033}
+.a4c .signline{margin-top:4px;text-align:right;border-top:1px solid #c5d0dd;padding-top:8px;font-size:7px;color:#5a6a7b}
 .a4c .note{margin-top:3px;font-size:6.2px;color:#7a8799}
 .a4c .foot{margin-top:4px;text-align:center;font-size:6.2px;color:#8a97a8}
 .a4c.senet-only{padding-top:12mm!important}
@@ -3780,10 +3780,10 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   <div class="signs"><div class="sig"><b>SATICI</b><small>Kaşe / İmza</small><div class="nm">${htmlEsc(companyLegal)}</div></div><div class="sig"><b>KEFİL</b><small>İşbu anlaşmadaki yazılı bütün şartları borçlu gibi okudum ve aynen kabul ettim.</small><div class="nm">${htmlEsc(guarantor.name||'İmza')}</div></div><div class="sig"><b>BORÇLU</b><small>İşbu anlaşmadaki yazılı bütün şartları okudum ve aynen kabul ettim.</small><div class="nm">${htmlEsc(personName||'İmza')}</div></div></div>
   <div class="grow"><div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}<br/>${htmlEsc(companyTaxLine)}</div></div>
   <div class="senet-main"><div class="senet-bar"><b>SENET</b><span>Emre muharrer bono · ${htmlEsc(sale.reference||'')}</span></div>
-  <div class="fields"><div><span>Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Hululü Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Türk Lirası</span><b>${senetAmount>0?moneyTR(senetAmount):''}</b></div><div><span>No.</span><b>${htmlEsc(senetNo)}</b></div></div>
-  <p class="sbody">İşbu emre muharrer bono mukabilinde <b style="color:#b91c1c">${htmlEsc(companyLegal)}</b> veya emrine <u>${dateTR(senetDue)||'........'}</u> tarihinde yukarıda yazılı bedeli kayıtsız şartsız ödemeyi taahhüt ederim. Bedeli nakden ve tamamen aldım. Taksitler satış sözleşmesindeki vade tablosuna göredir; bir taksitin ödenmemesi halinde kalan tutar muaccel olur. Uyuşmazlıklarda <b>İSTANBUL</b> Mahkemeleri yetkilidir.</p>
-  <div class="words"><span>Yalnız</span><b>${htmlEsc(senetWords||'................................')}</b></div>
-  <div class="duo"><div><div class="lab">Ödeyecek</div><small>İsim</small><div class="v">${htmlEsc(personName)}</div><small>Adres</small><div class="v">${htmlEsc(addr||'-')}</div></div><div><div class="lab">Müteselsil Borçlu</div><small>İsim</small><div class="v">${htmlEsc(guarantor.name||'')}</div><small>Adres</small><div class="v">${htmlEsc(guarantor.homeAddress||guarantor.address||'')}</div></div></div>
+  <div class="fields"><div><span>Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Hululü Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Türk Lirası</span><b>${senetAmtHash}</b></div><div><span>No.</span><b>${htmlEsc(senetNo)}</b></div></div>
+  <p class="sbody">İşbu emre muharrer bono mukabilinde <u>${dateTR(senetDue)||'........'}</u> tarihinde <b style="color:#b91c1c">${htmlEsc(companyLegal)}</b> veyahut emruhavalesine yukarıda yazılı Yalnız <u>${htmlEsc(senetWordsOnly||'....................')}</u> Türk Lirası ödeyeceğim. Bedeli malen ahzolunmuştur. İşbu bono vadesinde ödenmediği takdirde müteakip bonoların da muacceliyet kesbedeceğini, ihtilaf vukuunda <b>İSTANBUL</b> Mahkemelerinin selahiyetini şimdiden kabul eylerim.</p>
+  <div class="duo"><div><div class="lab">Ödeyecek</div><small>İsim</small><div class="v">${htmlEsc(personName)}</div><small>T.C. Kimlik No</small><div class="v">${htmlEsc(personTax||'')}</div><small>Adres</small><div class="v">${htmlEsc(addr||'')}</div></div><div><div class="lab">Müteselsil Borçlu</div><small>İsim</small><div class="v">${htmlEsc(guarantor.name||'')}</div><small>Adres</small><div class="v">${htmlEsc(guarantor.homeAddress||guarantor.address||'')}</div></div></div>
+  <div class="keside">Keşide: ${dateTR(sale.date)||'........'}</div>
   <div class="signline">Keşideci / Borçlu İmza</div>${moreSenets}</div></div></div>
   <div class="logo-bottom"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="foot">${htmlEsc(site)} · Sözleşme + Senet · ${htmlEsc(sale.reference||'')} · ${dateTR(sale.date)}</div>
 </section>`;

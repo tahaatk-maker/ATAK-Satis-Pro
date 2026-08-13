@@ -2,8 +2,8 @@
 set -euo pipefail
 echo "=== ATAK BASIT DEPLOY BASLADI ==="
 BRANCH="cursor/satis-merkezi-iskonto-prim-bd99"
-EXPECT_V="6.3.71-finans-raporlari"
-EXPECT_B="fix-v70"
+EXPECT_V="6.3.72-senet-birebir"
+EXPECT_B="fix-v71"
 APP="${APP_DIR:-/root/atak-v10}"
 
 echo "1) Eski /tmp temiz"
