@@ -155,6 +155,8 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .pay-method-badge{font-size:12px;font-weight:900;color:#0b2a4a}
 .pay-method input{min-height:42px;border:1px solid #d6e0ec;border-radius:8px;padding:8px 10px;font:inherit;font-size:16px;font-variant-numeric:tabular-nums}
 .pay-method select{min-height:42px;border:1px solid #d6e0ec;border-radius:8px;padding:8px;font:inherit;background:#fff}
+.pay-method.pay-row-focus{background:#fff7ed}
+.pay-method.pay-row-focus select{border-color:#ea580c;box-shadow:0 0 0 3px rgba(234,88,12,.18)}
 .pay-method-hint{font-size:11px;color:#7a879a;font-weight:700}
 .pay-fill-btn{min-height:42px;border:0;border-radius:8px;background:#075eae;color:#fff;font-weight:900;font-size:11px;cursor:pointer;letter-spacing:.03em}
 .pay-fill-btn:hover{background:#0b4d94}
