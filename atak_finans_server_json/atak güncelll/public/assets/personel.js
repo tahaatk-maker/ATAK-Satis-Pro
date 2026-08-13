@@ -1262,6 +1262,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c td{height:11px;font-size:7.5px}
 .a4c .num{text-align:right;font-variant-numeric:tabular-nums}
 .a4c .c{text-align:center}
+.a4c .mat{text-align:left;font-size:7.2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .a4c .mmeta td:first-child{width:46%;background:#f3f6fa;font-weight:700;color:#5a6a7b;font-size:6.8px}
 .a4c .tot td{background:#eef3f9;font-weight:800}
 .a4c tr.more td{height:auto;padding:2px 4px;font-size:6.5px;font-weight:700;color:#5a6a7b;background:#f8fafc;text-align:left}
