@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v105" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v105" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v106" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v106" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1761,7 +1761,7 @@ Bulunamayan → Diğer.
   <div>
     <small class="eyebrow">FİNANS RAPORLAMA</small>
     <h2>Finans Raporları</h2>
-    <p class="note">Alttaki 3 sekme raporun kendisi. <b>Excel İndir</b> veya <b>Yazdır / PDF</b> ile çıktı alın. Tahsilat için Finans &amp; Cari’ye dönün.</p>
+    <p class="note"><b>Kimden Ne Geldi</b> sekmesinde müşteri → nakit/kart/havale → hangi kasa/banka → tutar görünür. Excel / Yazdır üstte.</p>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     <button class="primary" id="financeReportsExcelBtn" type="button">⬇ Excel İndir</button>
@@ -1773,22 +1773,40 @@ Bulunamayan → Diğer.
 <div class="foundation-summary" id="financeReportsSummary"></div>
 <div class="panel">
   <div class="period-toggle" id="financeReportToggle" role="tablist" aria-label="Finans rapor seçimi">
-    <button type="button" class="period-btn active" data-fin-report="accounts">Hesap Bakiyeleri</button>
+    <button type="button" class="period-btn active" data-fin-report="movements">Kimden Ne Geldi</button>
+    <button type="button" class="period-btn" data-fin-report="accounts">Hesap Bakiyeleri</button>
     <button type="button" class="period-btn" data-fin-report="customers">Müşteri Cari</button>
-    <button type="button" class="period-btn" data-fin-report="transactions">Son Finans Hareketleri</button>
   </div>
 </div>
-<div class="panel finance-report-panel" id="financeReportAccounts" data-fin-report-panel="accounts">
-  <div class="panel-head"><div><h2>Hesap Bakiyeleri</h2><p class="note">Hesap tanımı için Ayarlar → Kasa ve Banka. Rapor için üstteki Excel / Yazdır.</p></div><span id="financeAccountCount"></span></div>
+<div class="panel finance-report-panel" id="financeReportMovements" data-fin-report-panel="movements">
+  <div class="panel-head">
+    <div>
+      <h2>Kimden Ne Geldi</h2>
+      <p class="note">Tahsilatlar ve para girişleri: kim ödedi, nasıl ödedi, hangi hesaba girdi.</p>
+    </div>
+    <span id="financeMovementCount"></span>
+  </div>
+  <div class="sales-report-filters" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:0 0 12px;padding:0 4px">
+    <label>Başlangıç<input id="finMoveFrom" type="date"/></label>
+    <label>Bitiş<input id="finMoveTo" type="date"/></label>
+    <label>Hesap
+      <select id="finMoveAccount"><option value="">Tüm hesaplar</option></select>
+    </label>
+    <label class="wide" style="flex:1;min-width:180px">Ara
+      <input id="finMoveSearch" placeholder="Müşteri, açıklama, yöntem…"/>
+    </label>
+    <button type="button" class="secondary-btn" id="finMoveFilterBtn">Filtrele</button>
+  </div>
+  <div class="foundation-summary" id="financeMovementKpis" style="margin-bottom:12px"></div>
+  <div class="turnover-table" id="financeMovementTable"></div>
+</div>
+<div class="panel finance-report-panel hidden" id="financeReportAccounts" data-fin-report-panel="accounts">
+  <div class="panel-head"><div><h2>Hesap Bakiyeleri</h2><p class="note">Kasa/banka anlık bakiyeler.</p></div><span id="financeAccountCount"></span></div>
   <div class="turnover-table" id="financeAccountsTable"></div>
 </div>
 <div class="panel finance-report-panel hidden" id="financeReportCustomers" data-fin-report-panel="customers">
-  <div class="panel-head"><div><h2>Müşteri Carileri</h2><p class="note">Açık bakiyeler. Excel / Yazdır üstte.</p></div><input id="customerSearch" placeholder="Müşteri ara"/></div>
+  <div class="panel-head"><div><h2>Müşteri Carileri</h2><p class="note">Açık bakiyeler (kim ne kadar borçlu).</p></div><input id="customerSearch" placeholder="Müşteri ara"/></div>
   <div class="turnover-table" id="customerTable"></div>
-</div>
-<div class="panel finance-report-panel hidden" id="financeReportTransactions" data-fin-report-panel="transactions">
-  <div class="panel-head"><div><h2>Son Finans Hareketleri</h2><p class="note">Tahsilat, satış, transfer. Excel / Yazdır üstte.</p></div><span id="financeTransactionCount"></span></div>
-  <div class="turnover-table" id="financeTransactionTable"></div>
 </div>
 </section>
 <section class="tab" id="customerPayments">
@@ -2223,5 +2241,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v105"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v106"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

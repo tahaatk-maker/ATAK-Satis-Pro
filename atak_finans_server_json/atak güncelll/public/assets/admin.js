@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v105 */
+/* ATAK_ADMIN_BUILD=fix-v106 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1089,17 +1089,89 @@ const foundationGoTab=goTab;goTab=function(id){foundationGoTab(id);if(id==='stoc
 
 
 let financeData=null;
-let financeReportView='accounts';
+let financeReportView='movements';
 function setFinanceReportView(name){
-  financeReportView=name||'accounts';
+  financeReportView=name||'movements';
   qa('#financeReportToggle [data-fin-report]').forEach(b=>b.classList.toggle('active',b.dataset.finReport===financeReportView));
   qa('[data-fin-report-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.finReportPanel!==financeReportView));
 }
 qa('#financeReportToggle [data-fin-report]').forEach(b=>b.addEventListener('click',()=>setFinanceReportView(b.dataset.finReport)));
 q('#financeReportsRefresh')?.addEventListener('click',()=>loadFinanceCenter().catch(e=>toast(e.message)));
+function financeKindLabel(kind){
+  const m={
+    collection:'Tahsilat',sale:'Satış (cari)',transfer:'Transfer',income:'Gelir',expense:'Gider',
+    reversal:'Ters kayıt',collection_cancel:'Tahsilat iptali',sale_cancel:'Satış iptali'
+  };
+  return m[String(kind||'').toLowerCase()]||String(kind||'-');
+}
+function financeMoneyInRows(){
+  // Kimden ne geldi: tahsilat + pozitif girişler (transfer hariç satış satırı tutarsız olabilir)
+  return (financeData?.transactions||[]).filter(t=>{
+    const k=String(t.kind||'').toLowerCase();
+    if(k==='transfer'||k==='sale')return false;
+    if(k==='collection'||k==='income')return true;
+    return Number(t.amount||0)>0;
+  });
+}
+function financeFilteredMovements(){
+  const from=q('#finMoveFrom')?.value||'';
+  const to=q('#finMoveTo')?.value||'';
+  const acc=q('#finMoveAccount')?.value||'';
+  const term=(q('#finMoveSearch')?.value||'').toLocaleLowerCase('tr-TR');
+  return financeMoneyInRows().filter(x=>{
+    const day=String(x.date||'').slice(0,10);
+    if(from&&day<from)return false;
+    if(to&&day>to)return false;
+    if(acc&&String(x.accountId||'')!==acc)return false;
+    if(term){
+      const hay=`${x.customerName||''} ${x.accountName||''} ${x.category||''} ${x.description||''} ${x.reference||''} ${x.salespersonName||''}`.toLocaleLowerCase('tr-TR');
+      if(!hay.includes(term))return false;
+    }
+    return true;
+  });
+}
+function renderFinanceMovements(){
+  if(!financeData)return;
+  if(q('#finMoveAccount')&&!q('#finMoveAccount').dataset.filled){
+    q('#finMoveAccount').innerHTML='<option value="">Tüm hesaplar</option>'+(financeData.accounts||[]).map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+    q('#finMoveAccount').dataset.filled='1';
+  }
+  const rows=financeFilteredMovements();
+  if(q('#financeMovementCount'))q('#financeMovementCount').textContent=`${rows.length} kayıt`;
+  const byMethod={};
+  let totalIn=0;
+  rows.forEach(x=>{
+    const m=String(x.category||financeKindLabel(x.kind)||'Diğer').trim()||'Diğer';
+    byMethod[m]=(byMethod[m]||0)+Math.abs(Number(x.amount||0));
+    totalIn+=Math.abs(Number(x.amount||0));
+  });
+  if(q('#financeMovementKpis')){
+    const parts=Object.entries(byMethod).sort((a,b)=>b[1]-a[1]).slice(0,6)
+      .map(([k,v])=>`<article><b>${money(v)}</b><span>${k}</span></article>`).join('');
+    q('#financeMovementKpis').innerHTML=`<article><b>${money(totalIn)}</b><span>Toplam gelen</span></article>${parts}`
+      ||`<article><b>${money(0)}</b><span>Toplam gelen</span></article>`;
+  }
+  if(!q('#financeMovementTable'))return;
+  if(!rows.length){
+    q('#financeMovementTable').innerHTML='<p class="note">Bu filtrede tahsilat yok. Satış yapıp nakit/kart/havale alınınca burada “kimden → ne → nereye” görünür.</p>';
+    return;
+  }
+  q('#financeMovementTable').innerHTML=`<table><thead><tr>
+    <th>Tarih</th><th>Kimden</th><th>Ne geldi</th><th>Nereye (hesap)</th><th>Tutar</th><th>Personel</th><th>Açıklama</th><th></th>
+  </tr></thead><tbody>${rows.map(x=>`<tr>
+    <td>${x.date||'-'}</td>
+    <td><b>${x.customerName||'-'}</b></td>
+    <td>${x.category||financeKindLabel(x.kind)}</td>
+    <td>${x.accountName||'-'}${x.counterAccountName?` ← ${x.counterAccountName}`:''}</td>
+    <td class="stock-plus"><b>${money(Math.abs(Number(x.amount||0)))}</b></td>
+    <td>${x.salespersonName||x.createdBy||'-'}</td>
+    <td><small>${x.description||x.reference||''}</small></td>
+    <td>${x.id?`<a class="receipt-link" href="/web-api/admin/receipt/${x.id}" target="_blank">Makbuz</a>`:''}</td>
+  </tr>`).join('')}</tbody></table>`;
+}
 function financeReportTitle(){
   return financeReportView==='customers'?'Müşteri Cari'
-    :(financeReportView==='transactions'?'Son Finans Hareketleri':'Hesap Bakiyeleri');
+    :(financeReportView==='accounts'?'Hesap Bakiyeleri':'Kimden Ne Geldi');
 }
 function financeReportCsvLines(){
   if(!financeData)return null;
@@ -1117,17 +1189,20 @@ function financeReportCsvLines(){
       const st=x.balance>0?'Borçlu':x.balance<0?'Alacaklı':'Kapalı';
       lines.push([x.name,x.phone||'',x.taxNo||'',x.balance,st].map(esc).join(';'));
     });
-  }else if(financeReportView==='transactions'){
-    lines.push(['Tarih','Islem','Hesap','Musteri','Tutar'].map(esc).join(';'));
-    (financeData.transactions||[]).forEach(x=>{
-      const acc=`${x.accountName||''}${x.counterAccountName?` <- ${x.counterAccountName}`:''}`;
-      lines.push([x.date,x.kind,acc,x.customerName||'',x.amount].map(esc).join(';'));
-    });
-  }else{
+  }else if(financeReportView==='accounts'){
     lines.push(['Hesap','Tur','Magaza','Durum','Bakiye'].map(esc).join(';'));
     (financeData.accounts||[]).forEach(x=>{
       const store=(financeData.stores||[]).find(s=>s.id===x.storeId)?.name||'Merkez';
       lines.push([x.name,x.type==='bank'?'Banka':'Kasa',store,x.active===false?'Pasif':'Aktif',x.balance].map(esc).join(';'));
+    });
+  }else{
+    lines.push(['Tarih','Kimden','Ne geldi','Nereye','Tutar','Personel','Aciklama','Referans'].map(esc).join(';'));
+    financeFilteredMovements().forEach(x=>{
+      lines.push([
+        x.date||'',x.customerName||'',x.category||financeKindLabel(x.kind),
+        x.accountName||'',Math.abs(Number(x.amount||0)),x.salespersonName||x.createdBy||'',
+        x.description||'',x.reference||''
+      ].map(esc).join(';'));
     });
   }
   return lines;
@@ -1137,7 +1212,7 @@ function financeReportsExportExcel(){
   if(!lines){toast('Önce rapor yüklensin (Yenile)');return}
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
-  const slug=financeReportView==='customers'?'musteri-cari':(financeReportView==='transactions'?'hareketler':'hesap-bakiyeleri');
+  const slug=financeReportView==='customers'?'musteri-cari':(financeReportView==='accounts'?'hesap-bakiyeleri':'kimden-ne-geldi');
   a.href=url;a.download=`atak-finans-${slug}-${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -1148,15 +1223,17 @@ function financeReportsPrint(){
   const panel=q(`[data-fin-report-panel="${financeReportView}"] .turnover-table`);
   const tableHtml=panel?.innerHTML||'<p>Veri yok</p>';
   const s=financeData.summary||{};
-  const w=window.open('','_blank','noopener,noreferrer,width=980,height=720');
+  const kpis=q('#financeMovementKpis')?.innerHTML||'';
+  const w=window.open('','_blank','noopener,noreferrer,width=1100,height=760');
   if(!w){toast('Açılır pencere engellendi');return}
   w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"/><title>${financeReportTitle()}</title>
 <style>
 body{font-family:Arial,sans-serif;color:#111;margin:24px}
 h1{font-size:20px;margin:0 0 6px} .meta{color:#555;margin:0 0 16px;font-size:13px}
-.kpis{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px}
-.kpis div{border:1px solid #ddd;padding:8px 12px;border-radius:8px;min-width:120px}
-.kpis b{display:block;font-size:16px}
+.kpis,.foundation-summary{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px}
+.kpis div,.foundation-summary article{border:1px solid #ddd;padding:8px 12px;border-radius:8px;min-width:120px}
+.kpis b,.foundation-summary b{display:block;font-size:16px}
+.foundation-summary span{font-size:12px;color:#555}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
 th{background:#f3f4f6}
@@ -1167,12 +1244,11 @@ th{background:#f3f4f6}
 <div class="toolbar"><button onclick="window.print()">Yazdır / PDF Kaydet</button></div>
 <h1>ATAK — ${financeReportTitle()}</h1>
 <p class="meta">${new Date().toLocaleString('tr-TR')}</p>
-<div class="kpis">
+${financeReportView==='movements'?`<div class="foundation-summary">${kpis}</div>`:`<div class="kpis">
   <div><span>Toplam Kasa</span><b>${money(s.cash)}</b></div>
   <div><span>Toplam Banka</span><b>${money(s.bank)}</b></div>
   <div><span>Müşteri Alacağı</span><b>${money(s.receivable)}</b></div>
-  <div><span>Bugünkü Masraf</span><b>${money(s.todayExpense)}</b></div>
-</div>
+</div>`}
 ${tableHtml}
 <script>setTimeout(function(){try{window.focus()}catch(e){}},200)<\\/script>
 </body></html>`);
@@ -1180,6 +1256,9 @@ ${tableHtml}
 }
 q('#financeReportsExcelBtn')?.addEventListener('click',financeReportsExportExcel);
 q('#financeReportsPrintBtn')?.addEventListener('click',financeReportsPrint);
+q('#finMoveFilterBtn')?.addEventListener('click',()=>renderFinanceMovements());
+q('#finMoveSearch')?.addEventListener('input',()=>renderFinanceMovements());
+['#finMoveFrom','#finMoveTo','#finMoveAccount'].forEach(id=>q(id)?.addEventListener('change',()=>renderFinanceMovements()));
 async function loadFinanceCenter(){
   financeData=await api('/web-api/admin/finance-center');
   renderFinanceCenter();
@@ -1210,10 +1289,12 @@ function renderFinanceCenter(){
   if(q('#financeAccountCount'))q('#financeAccountCount').textContent=`${(financeData.accounts||[]).length} hesap`;
   if(q('#financeAccountsTable'))q('#financeAccountsTable').innerHTML=`<table><thead><tr><th>Hesap</th><th>Tür</th><th>Mağaza</th><th>Durum</th><th>Bakiye</th></tr></thead><tbody>${(financeData.accounts||[]).map(x=>`<tr><td><b>${x.name}</b></td><td>${x.type==='bank'?'Banka':'Kasa'}</td><td>${(financeData.stores||[]).find(s=>s.id===x.storeId)?.name||'Merkez'}</td><td>${x.active===false?'Pasif':'Aktif'}</td><td><b>${money(x.balance)}</b></td></tr>`).join('')||'<tr><td colspan="5">Hesap yok</td></tr>'}</tbody></table>`;
   renderCustomerTable();
-  if(q('#financeTransactionCount'))q('#financeTransactionCount').textContent=`${(financeData.transactions||[]).length} hareket`;
+  if(q('#finMoveAccount'))delete q('#finMoveAccount').dataset.filled;
+  renderFinanceMovements();
+  // Eski hareket tablosu (varsa) — ters kayıt butonu için
   if(q('#financeTransactionTable')){
     const txs=financeData.transactions||[];
-    q('#financeTransactionTable').innerHTML=txs.length?`<table><thead><tr><th>Tarih</th><th>İşlem</th><th>Hesap</th><th>Müşteri</th><th>Tutar</th><th></th></tr></thead><tbody>${txs.map(x=>`<tr><td>${x.date}</td><td>${x.kind}</td><td>${x.accountName}${x.counterAccountName?` ← ${x.counterAccountName}`:''}</td><td>${x.customerName||'-'}</td><td class="${x.amount>=0?'stock-plus':'stock-minus'}">${money(x.amount)}</td><td><a class="receipt-link" href="/web-api/admin/receipt/${x.id}" target="_blank">Makbuz</a> ${x.reversedBy?'Ters kayıt oluşturuldu':`<button type="button" data-reverse-finance="${x.id}">Ters Kayıt</button>`}</td></tr>`).join('')}</tbody></table>`:'<p>Henüz finans hareketi yok.</p>';
+    q('#financeTransactionTable').innerHTML=txs.length?`<table><thead><tr><th>Tarih</th><th>İşlem</th><th>Hesap</th><th>Müşteri</th><th>Tutar</th><th></th></tr></thead><tbody>${txs.map(x=>`<tr><td>${x.date}</td><td>${financeKindLabel(x.kind)}</td><td>${x.accountName}${x.counterAccountName?` ← ${x.counterAccountName}`:''}</td><td>${x.customerName||'-'}</td><td class="${x.amount>=0?'stock-plus':'stock-minus'}">${money(x.amount)}</td><td><a class="receipt-link" href="/web-api/admin/receipt/${x.id}" target="_blank">Makbuz</a> ${x.reversedBy?'Ters kayıt oluşturuldu':`<button type="button" data-reverse-finance="${x.id}">Ters Kayıt</button>`}</td></tr>`).join('')}</tbody></table>`:'<p>Henüz finans hareketi yok.</p>';
   }
   qa('[data-fin-account]').forEach(b=>b.onclick=()=>{
     const x=financeData.accounts.find(v=>v.id===b.dataset.finAccount);if(!x)return;
