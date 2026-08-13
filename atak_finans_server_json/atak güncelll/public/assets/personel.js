@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v94 */
+/* ATAK_PERSONEL_BUILD=fix-v95 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1158,27 +1158,95 @@ function salesOfferText(d){
   const note=d.promissory?`\nSenet: ${money(d.promissory.amount)} / ${d.promissory.installments} taksit / ilk vade ${d.promissory.firstDueDate}`:'';
   return `ATAK PAZARLAMA TEKLİF\nMüşteri: ${d.customer?.name||''}\n${d.items.map(i=>`${i.quantity} x ${i.itemCode||'-'} / ${i.materialCode||i.productName} - ${money(i.quantity*i.unitPrice)}`).join('\n')}\n\nBrüt: ${money(d.grossTotal)}\nİskonto: -${money(d.discountAmount||0)}\nNet: ${money(d.total)}\nÖdeme:\n${pay}${note}\n${d.description||''}`;
 }
+function salesOfferWhatsAppUrl(d){
+  const phone=String(d.customer?.phone||'').replace(/\D/g,'');
+  if(!phone)return '';
+  const trPhone=phone.startsWith('0')?'90'+phone.slice(1):(phone.startsWith('90')?phone:'90'+phone);
+  return `https://wa.me/${trPhone}?text=${encodeURIComponent(salesOfferText(d))}`;
+}
+function salesOfferSheetHtml(d){
+  const rows=(d.items||[]).map(i=>`<tr><td>${esc(i.itemCode||'-')}</td><td>${esc(i.materialCode||i.productName||i.productCode||'')}</td><td class="num">${i.quantity}</td><td class="num">${money(i.unitPrice)}</td><td class="num">${money(i.quantity*i.unitPrice)}</td></tr>`).join('');
+  const addr=[d.customer?.address,d.customer?.district,d.customer?.city].filter(Boolean).join(', ');
+  const pay=(d.payments||[]).map(p=>`<div><span>${esc(p.method)}</span><b>${money(p.amount)}</b></div>`).join('');
+  const note=d.promissory?`<div><span>Senet</span><b>${money(d.promissory.amount)}</b></div>`:'';
+  return `<section class="sheet">
+    <div class="doc-head"><div class="brand">ATAK PAZARLAMA<small>Satış Teklifi · Müşteri kopyası</small></div>
+      <div class="doc-meta"><b>TEKLİF</b><div>Tarih: ${esc(d.date||'')}</div><div>Satıcı: ${esc(d.salesperson?.name||'')}</div></div></div>
+    <h2>SATIŞ TEKLİFİ</h2>
+    <div class="grid2">
+      <div class="box"><small>Müşteri</small><b>${esc(d.customer?.name||'-')}</b><div>${esc(d.customer?.phone||'')}</div></div>
+      <div class="box"><small>Geçerlilik</small><b>3 iş günü</b><div>Fiyatlar stok / kampanya durumuna göre değişebilir</div></div>
+      <div class="box" style="grid-column:1/-1"><small>Adres</small><b>${esc(addr||'-')}</b></div>
+    </div>
+    <table><thead><tr><th>Kod</th><th>Ürün / Malzeme</th><th class="num">Adet</th><th class="num">Birim</th><th class="num">Tutar</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="totals">
+      <div><span>Brüt Toplam</span><b>${money(d.grossTotal)}</b></div>
+      <div><span>İskonto</span><b>-${money(d.discountAmount||0)}</b></div>
+      <div class="net"><span>Net Satış</span><b>${money(d.total)}</b></div>
+      ${pay}${note}
+    </div>
+    ${d.promissory?`<div class="note-line"><b>Senet planı:</b> ${money(d.promissory.amount)} · ${d.promissory.installments} taksit · İlk vade ${esc(d.promissory.firstDueDate)}</div>`:''}
+    ${d.description?`<div class="note-line"><b>Not:</b> ${esc(d.description)}</div>`:''}
+    <div class="terms"><b>Notlar</b><ol><li>Bu belge tekliftir; sipariş onayı / satış kaydı sonrası sözleşme ve senet basılır.</li><li>Mali fatura yerine geçmez.</li></ol></div>
+    <div class="signs"><div class="sig"><small>Satış Temsilcisi</small>${esc(d.salesperson?.name||'')}</div><div class="sig"><small>Müşteri</small>${esc(d.customer?.name||'')}</div></div>
+  </section>`;
+}
+function openSalesOfferPrintWindow(d){
+  const w=window.open('','_blank');
+  if(!w){stToast('Açılır pencere engellendi');return null}
+  const wa=salesOfferWhatsAppUrl(d);
+  const waBtn=wa?`<a class="btn wa" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp Gönder</a>`:'';
+  w.document.open();
+  w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Satış Teklifi</title><style>
+@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:10pt/1.45 Arial,Helvetica,sans-serif}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;padding:12px;background:#0b2a55;color:#fff}
+.toolbar button,.toolbar a.btn{border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer;background:#fff;color:#0b2a55;text-decoration:none;display:inline-block;font:inherit}
+.toolbar button.primary{background:#dda20c;color:#1a1300}.toolbar a.btn.wa{background:#25D366;color:#063}
+.sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:14mm;box-shadow:0 10px 30px #0002}
+.doc-head{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid #0b2a55;padding-bottom:12px;margin-bottom:14px}
+.brand{font-size:22px;font-weight:900;color:#0b2a55}.brand small{display:block;font-size:11px;font-weight:600;color:#66768d;margin-top:3px}
+.doc-meta{text-align:right;font-size:12px;color:#4b5b73}.doc-meta b{display:block;font-size:16px;color:#0b2a55;margin-bottom:4px}
+h2{margin:0 0 12px;font-size:18px;color:#0b2a55}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.box{border:1px solid #d7e2ef;border-radius:8px;padding:10px 12px;background:#f8fafc}.box small{display:block;color:#66768d;font-size:11px;margin-bottom:3px}
+table{width:100%;border-collapse:collapse;margin:14px 0}th,td{border-bottom:1px solid #e3ebf4;padding:8px 6px;text-align:left}th{font-size:11px;text-transform:uppercase;color:#66768d;border-bottom:2px solid #0b2a55}.num{text-align:right;white-space:nowrap}
+.totals{width:320px;margin-left:auto}.totals div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e8eef5}.totals .net{font-size:16px;font-weight:900;color:#0b2a55;border-bottom:0;padding-top:10px}
+.note-line{margin-top:12px;padding:10px 12px;border:1px solid #f0d48a;background:#fff8e8;border-radius:8px;font-size:12px}
+.terms{margin-top:16px;font-size:11px;color:#4b5b73}.terms ol{margin:6px 0 0;padding-left:18px}
+.signs{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px}.sig{border-top:1px solid #9aa8bc;padding-top:8px;text-align:center;min-height:70px}.sig small{display:block;color:#66768d;margin-bottom:28px}
+@media print{body{background:#fff}.toolbar{display:none!important}.sheet{margin:0;box-shadow:none;width:auto}}
+</style></head><body>
+<div class="toolbar"><b>Satış Teklifi</b><button class="primary" onclick="window.print()">Yazdır / PDF Kaydet</button>${waBtn}<button onclick="window.close()">Kapat</button></div>
+${salesOfferSheetHtml(d)}
+</body></html>`);
+  w.document.close();
+  try{w.focus()}catch(_){}
+  return w;
+}
+function sendSalesOfferWhatsAppOnly(){
+  if(!canSaleOffer()){stToast('Teklif yetkiniz yok');return}
+  const d=activeSalesDraft||collectSalesDraft();
+  if(d.error){stToast(d.error);return}
+  const url=salesOfferWhatsAppUrl(d);
+  if(!url){navigator.clipboard?.writeText(salesOfferText(d));stToast('Telefon yok — teklif panoya kopyalandı');return}
+  const win=window.open(url,'_blank');
+  if(!win){navigator.clipboard?.writeText(salesOfferText(d));stToast('Pencere engellendi — teklif panoya kopyalandı')}
+}
+/** Teklif: yazdırılabilir şablon (+ WhatsApp) */
 function sendSalesOffer(){
   if(!canSaleOffer()){stToast('Teklif yetkiniz yok');return}
   const d=activeSalesDraft||collectSalesDraft();
   if(d.error){stToast(d.error);return}
-  const phone=String(d.customer?.phone||'').replace(/\D/g,'');
-  const raw=salesOfferText(d),text=encodeURIComponent(raw);
-  if(phone){
-    const trPhone=phone.startsWith('0')?'90'+phone.slice(1):(phone.startsWith('90')?phone:'90'+phone);
-    const win=window.open(`https://wa.me/${trPhone}?text=${text}`,'_blank');
-    if(!win){navigator.clipboard?.writeText(raw);stToast('Pencere engellendi — teklif panoya kopyalandı')}
-  }else{navigator.clipboard?.writeText(raw);stToast('Telefon yok — teklif panoya kopyalandı')}
+  activeSalesDraft=d;
+  const w=openSalesOfferPrintWindow(d);
+  if(w)stToast(salesOfferWhatsAppUrl(d)?'Teklif şablonu açıldı — Yazdır veya WhatsApp':'Teklif şablonu açıldı');
 }
 function printSalesOffer(){
   if(!canSaleOffer()){stToast('Teklif yetkiniz yok');return}
   const d=activeSalesDraft||collectSalesDraft();
   if(d.error){stToast(d.error);return}
-  const w=window.open('','_blank');
-  if(!w){stToast('Açılır pencere engellendi');return}
-  const rows=(d.items||[]).map(i=>`<tr><td>${esc(i.itemCode||'-')}</td><td>${esc(i.materialCode||i.productName)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(i.quantity*i.unitPrice)}</td></tr>`).join('');
-  w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Teklif</title><style>body{font:14px/1.45 Arial;padding:24px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left}.net{font-size:18px;font-weight:900}</style></head><body><h1>ATAK PAZARLAMA — Satış Teklifi</h1><p><b>${esc(d.customer?.name||'')}</b> · ${esc(d.date||'')}</p><table><thead><tr><th>Kod</th><th>Ürün</th><th>Adet</th><th>Birim</th><th>Tutar</th></tr></thead><tbody>${rows}</tbody></table><p class="net">Net: ${money(d.total)}</p><button onclick="print()">Yazdır / PDF</button></body></html>`);
-  w.document.close();
+  activeSalesDraft=d;
+  openSalesOfferPrintWindow(d);
 }
 function salesAmountWords(n){
   n=Math.round(Number(n||0)*100)/100;
@@ -1512,7 +1580,7 @@ $('#salesWizardOfferBtn')?.addEventListener('click',()=>sendSalesOffer());
 $('#salesWizardInvoiceBtn')?.addEventListener('click',()=>salesIssueInvoiceNow());
 $('#salesPreviewClose')?.addEventListener('click',closeSalesPreview);
 $('#salesPreviewConfirmBtn')?.addEventListener('click',confirmSalesDraft);
-$('#salesPreviewOfferBtn')?.addEventListener('click',sendSalesOffer);
+$('#salesPreviewOfferBtn')?.addEventListener('click',sendSalesOfferWhatsAppOnly);
 $('#salesPreviewPrintBtn')?.addEventListener('click',printSalesOffer);
 $('#salesPreviewDocsBtn')?.addEventListener('click',printSalesContractAndNotes);
 $('#salesInvoiceStatus')?.addEventListener('change',salesRecalcPay);

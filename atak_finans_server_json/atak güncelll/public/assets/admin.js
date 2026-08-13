@@ -2898,10 +2898,12 @@ function salesAmountWords(n){
   return out.replace(/\s+/g,' ').trim();
 }
 function salesPrintCss(){
-  return `@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:13px/1.45 "Segoe UI",Arial,sans-serif}
+  return `@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:10pt/1.45 Arial,Helvetica,sans-serif}
 .toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;padding:12px;background:#0b2a55;color:#fff}
-.toolbar button{border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer;background:#fff;color:#0b2a55}
-.toolbar button.primary{background:#dda20c;color:#1a1300}
+.toolbar button,.toolbar a.btn{border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer;background:#fff;color:#0b2a55;text-decoration:none;display:inline-block;font:inherit}
+.toolbar button.primary,.toolbar a.btn.primary{background:#dda20c;color:#1a1300}
+.toolbar a.btn.wa{background:#25D366;color:#063}
+.toolbar span.hint{opacity:.9;font-size:12px}
 .sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:14mm;box-shadow:0 10px 30px #0002;page-break-after:always}
 .sheet:last-child{page-break-after:auto}
 .doc-head{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid #0b2a55;padding-bottom:12px;margin-bottom:14px}
@@ -3125,12 +3127,13 @@ function salesCombinedContractSenetA4Html(d){
 }
 function salesContractSheetHtml(d){return salesCombinedContractSenetA4Html(d)}
 function salesSenetSheetsHtml(){return ''}
-function openSalesPrintWindow(title,bodyHtml){
+function openSalesPrintWindow(title,bodyHtml,opts={}){
   const w=window.open('','_blank');
   if(!w){toast('Tarayıcı yeni sekmeyi engelledi. Açılır pencerelere izin verin.');return null}
+  const wa=opts.whatsappUrl?`<a class="btn wa" href="${salesEsc(opts.whatsappUrl)}" target="_blank" rel="noopener">WhatsApp Gönder</a>`:'';
   w.document.open();
   w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${salesEsc(title)}</title><style>${salesPrintCss()}</style></head><body>
-    <div class="toolbar"><b>${salesEsc(title)}</b><button class="primary" onclick="window.print()">Yazdır / PDF Kaydet</button><button onclick="window.close()">Kapat</button><span style="opacity:.9;font-size:12px">Yazdır penceresinden “PDF olarak kaydet” seçebilirsiniz</span></div>
+    <div class="toolbar"><b>${salesEsc(title)}</b><button class="primary" onclick="window.print()">Yazdır / PDF Kaydet</button>${wa}<button onclick="window.close()">Kapat</button><span class="hint">Önce şablonu yazdırın; dilerseniz WhatsApp ile gönderin</span></div>
     ${bodyHtml}
   </body></html>`);
   w.document.close();
@@ -3142,11 +3145,32 @@ function salesOfferText(d){
   const note=d.promissory?`\nSenet: ${salesMoney(d.promissory.amount)} / ${d.promissory.installments} taksit / ilk vade ${d.promissory.firstDueDate}`:'';
   return `ATAK PAZARLAMA TEKLİF\nMüşteri: ${d.customer?.name||''}\n${d.items.map(i=>`${i.quantity} x ${i.itemCode||'-'} / ${i.materialCode||i.productName} - ${salesMoney(i.quantity*i.unitPrice)}`).join('\n')}\n\nBrüt: ${salesMoney(d.grossTotal)}\nİskonto (%${String(d.discountPct||0).replace('.',',')}): -${salesMoney(d.discountAmount||0)}\nNet Toplam: ${salesMoney(d.total)}\nÖdeme:\n${pay}${note}\n${d.description||''}`;
 }
-function sendSalesOffer(){const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);const phone=String(d.customer?.phone||'').replace(/\D/g,'');const raw=salesOfferText(d),text=encodeURIComponent(raw);if(phone){const trPhone=phone.startsWith('0')?'90'+phone.slice(1):(phone.startsWith('90')?phone:'90'+phone);const win=window.open(`https://wa.me/${trPhone}?text=${text}`,'_blank');if(!win){navigator.clipboard?.writeText(raw);toast('Tarayıcı yeni pencereyi engelledi. Teklif panoya kopyalandı.')}}else{navigator.clipboard?.writeText(raw);toast('Müşterinin telefonu yok. Teklif metni panoya kopyalandı.')}}
+function salesOfferWhatsAppUrl(d){
+  const phone=String(d.customer?.phone||'').replace(/\D/g,'');
+  if(!phone)return '';
+  const trPhone=phone.startsWith('0')?'90'+phone.slice(1):(phone.startsWith('90')?phone:'90'+phone);
+  return `https://wa.me/${trPhone}?text=${encodeURIComponent(salesOfferText(d))}`;
+}
+function sendSalesOfferWhatsAppOnly(){
+  const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);
+  const url=salesOfferWhatsAppUrl(d);
+  if(!url){navigator.clipboard?.writeText(salesOfferText(d));toast('Müşterinin telefonu yok. Teklif metni panoya kopyalandı.');return}
+  const win=window.open(url,'_blank');
+  if(!win){navigator.clipboard?.writeText(salesOfferText(d));toast('Tarayıcı yeni pencereyi engelledi. Teklif panoya kopyalandı.')}
+}
+/** Teklif: yazdırılabilir şablon açılır (+ WhatsApp butonu) */
+function sendSalesOffer(){
+  const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);
+  activeSalesDraft=d;
+  const wa=salesOfferWhatsAppUrl(d);
+  const w=openSalesPrintWindow('Atak Pazarlama · Satış Teklifi',salesOfferSheetHtml(d),{whatsappUrl:wa||undefined});
+  if(!w)return;
+  toast(wa?'Teklif şablonu açıldı — Yazdır / PDF veya WhatsApp':'Teklif şablonu açıldı — WhatsApp için müşteri telefonu girin');
+}
 function printSalesPreview(){
   const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);
-  // Müşteri teklifi: prim / stok / iç notlar yok
-  openSalesPrintWindow('Atak Pazarlama · Satış Teklifi',salesOfferSheetHtml(d));
+  activeSalesDraft=d;
+  openSalesPrintWindow('Atak Pazarlama · Satış Teklifi',salesOfferSheetHtml(d),{whatsappUrl:salesOfferWhatsAppUrl(d)||undefined});
 }
 async function printSalesContractAndNotes(){
   const d=activeSalesDraft||collectSalesDraft();if(d.error)return toast(d.error);
@@ -3216,7 +3240,7 @@ q('#salesWizardOfferBtn')?.addEventListener('click',()=>{
   const d=collectSalesDraft();
   if(d.error){toast(d.error);return}
   activeSalesDraft=d;
-  sendSalesOffer();
+  sendSalesOffer(); // şablon + yazdır + WhatsApp
 });
 q('#salesWizardInvoiceBtn')?.addEventListener('click',()=>salesIssueInvoiceNow());
 q('#salesDockDocsHintBtn')?.addEventListener('click',()=>printSalesContractAndNotes());
@@ -3230,20 +3254,23 @@ q('#posStep3')?.addEventListener('click',()=>{if(salesWizardCanGo(3))salesSetWiz
 try{salesSetWizardStep(1)}catch(_){q('#salesCenter')?.setAttribute('data-pos-step','1')}
 q('#salesPreviewClose')?.addEventListener('click',closeSalesPreview);
 q('#salesPreviewConfirmBtn')?.addEventListener('click',confirmSalesDraft);
-q('#salesPreviewOfferBtn')?.addEventListener('click',sendSalesOffer);
+q('#salesPreviewOfferBtn')?.addEventListener('click',sendSalesOfferWhatsAppOnly);
 q('#salesPreviewPrintBtn')?.addEventListener('click',printSalesPreview);
 q('#salesPreviewDocsBtn')?.addEventListener('click',printSalesContractAndNotes);
 document.addEventListener('click',e=>{
   const offer=e.target.closest('#salesPreviewOfferBtn');
-  if(offer && !offer.dataset.boundFallback){e.preventDefault();sendSalesOffer()}
+  if(offer && !offer.dataset.boundFallback){e.preventDefault();sendSalesOfferWhatsAppOnly()}
   const print=e.target.closest('#salesPreviewPrintBtn');
   if(print && !print.dataset.boundFallback){e.preventDefault();printSalesPreview()}
+  const wizOffer=e.target.closest('#salesWizardOfferBtn');
+  if(wizOffer && !wizOffer.dataset.boundFallback){e.preventDefault();sendSalesOffer()}
   const docs=e.target.closest('#salesPreviewDocsBtn');
   if(docs && !docs.dataset.boundFallback){e.preventDefault();printSalesContractAndNotes()}
 });
 q('#salesPreviewOfferBtn')?.setAttribute('data-bound-fallback','1');
 q('#salesPreviewPrintBtn')?.setAttribute('data-bound-fallback','1');
 q('#salesPreviewDocsBtn')?.setAttribute('data-bound-fallback','1');
+q('#salesWizardOfferBtn')?.setAttribute('data-bound-fallback','1');
 q('#salesPreviewModal')?.addEventListener('click',e=>{if(e.target===q('#salesPreviewModal'))closeSalesPreview()});
 
 
