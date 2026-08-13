@@ -985,8 +985,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.105-finans-rapor-excel',
-  build:'fix-v105',
+  version:'6.3.106-kimden-ne-geldi',
+  build:'fix-v106',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
