@@ -7,8 +7,8 @@ die(){ log "FAIL: $*"; exit 1; }
 
 log "=== ATAK DEPLOY ==="
 BRANCH="cursor/satis-merkezi-iskonto-prim-bd99"
-EXPECT_V="6.3.89-senet-isim"
-EXPECT_B="fix-v88"
+EXPECT_V="6.3.90-mobilya-alis-v2"
+EXPECT_B="fix-v89"
 APP="${APP_DIR:-/root/atak-v10}"
 [ -d /root/atakhome-platform ] && [ ! -f "$APP/server.js" ] && APP=/root/atakhome-platform
 
@@ -60,6 +60,44 @@ grep -q "$EXPECT_V" "$APP/server.js" || die "disk version yanlis"
 grep -q "build:'$EXPECT_B'" "$APP/server.js" || die "disk build yanlis"
 grep -q "ATAK_ADMIN_BUILD=$EXPECT_B" "$APP/public/assets/admin.js" || die "disk admin build yanlis"
 log "   disk OK"
+
+log "5b) Mobilya / İstikbal alış maliyetlerini sıfırla (store.json)"
+for STORE in "$APP/data/store.json" /root/atak-v10/data/store.json /root/atakhome-platform/data/store.json; do
+  [ -f "$STORE" ] || continue
+  CLEAR_N=$(node -e '
+const fs=require("fs");
+const p=process.argv[1];
+const s=JSON.parse(fs.readFileSync(p,"utf8"));
+s.products=Array.isArray(s.products)?s.products:[];
+s.categories=Array.isArray(s.categories)?s.categories:[];
+s.metaFlags=(s.metaFlags&&typeof s.metaFlags==="object")?s.metaFlags:{};
+const ids=new Set(s.categories.filter(c=>String(c.id||"").toLowerCase()==="mobilya"||/mobilya/i.test(String(c.name||""))).map(c=>String(c.id).toLowerCase()));
+ids.add("mobilya");
+let cleared=0;
+for(const prod of s.products){
+  const cat=String(prod.category||"").toLowerCase();
+  const brand=String(prod.brand||"").toLocaleLowerCase("tr-TR");
+  const isMobilya=ids.has(cat)||cat==="mobilya"||/mobilya/.test(cat);
+  if(!isMobilya&&!/istikbal/.test(brand))continue;
+  const price=Number(prod.purchasePrice||0);
+  if(!(price>0)&&!prod.purchasePriceSource)continue;
+  prod.purchasePrice=0;
+  prod.purchasePriceSource="manual-zero";
+  prod.purchasePriceUpdatedAt=new Date().toISOString();
+  prod.updatedAt=new Date().toISOString();
+  cleared++;
+}
+s.metaFlags.clearMobilyaPurchase_v1=true;
+s.metaFlags.clearMobilyaPurchase_v2=true;
+s.metaFlags.clearMobilyaPurchase_v2_at=new Date().toISOString();
+s.metaFlags.clearMobilyaPurchase_v2_count=cleared;
+const tmp=p+".tmp";
+fs.writeFileSync(tmp,JSON.stringify(s,null,2),"utf8");
+fs.renameSync(tmp,p);
+process.stdout.write(String(cleared));
+' "$STORE" 2>/tmp/atak-clear-err.txt) || die "alis sifirlama fail: $(cat /tmp/atak-clear-err.txt 2>/dev/null)"
+  log "   $STORE -> $CLEAR_N alis sifirlandi"
+done
 
 log "6) npm + pm2"
 cd "$APP"
