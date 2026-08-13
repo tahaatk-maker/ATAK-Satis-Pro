@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v98 */
+/* ATAK_ADMIN_BUILD=fix-v99 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -3054,7 +3054,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff!important;padding:3px 2px;line-height:1.2;display:flex;flex-direction:column;gap:3px;font-size:7pt!important}
 .a4c .senet-side,.a4c .senet-side *{color:#fff!important;font-size:7pt!important;line-height:1.2!important}
 .a4c .senet-main{padding:3px 5px 3px;display:flex;flex-direction:column;min-height:0;color:#000}
-.a4c .senet-bar{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px}
+.a4c .senet-bar{display:flex;justify-content:flex-start;align-items:baseline;margin-bottom:1px}.a4c .senet-bar span,.a4c .keside,.a4c .foot{display:none!important}
 .a4c .senet-bar b{font-weight:700;letter-spacing:.05em}
 .a4c .fields{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:1px}
 .a4c .fields>div{border-bottom:1px solid #2a3545;padding:0 0 1px}
@@ -3068,7 +3068,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .duo .row{display:block;margin:0 0 2px;flex:0 0 auto}
 .a4c .duo .k{display:block;font-size:7pt!important;line-height:1.1!important;font-weight:700;color:#444;margin:0 0 1px}
 .a4c .duo .v,.a4c .duo .v.nm{display:block;font-size:8pt!important;line-height:1.2!important;font-weight:700;color:#000!important;min-height:11px;margin:0;padding:0 0 2px;border-bottom:1px solid #222;white-space:normal!important;overflow:visible!important;text-align:left!important;word-break:break-word}
-.a4c .duo .sigpad{flex:1 1 auto!important;height:auto!important;min-height:22mm!important;max-height:none!important;margin-top:3px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:flex-end;padding:0 2px 1px;color:#666;font-size:7pt!important}
+.a4c .duo .sigpad{flex:1 1 auto!important;height:auto!important;min-height:22mm!important;max-height:none!important;margin-top:auto;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding:0 2px 2px;color:#666;font-size:7pt!important;position:relative}.a4c .duo .sigpad span{display:block;width:100%;text-align:center;color:#666;font-size:7pt!important}
 .a4c .keside{margin-top:1px;text-align:right;font-weight:700;font-size:8pt!important}
 .a4c .note{display:none}
 .a4c .foot{margin-top:1px;text-align:center;font-size:7pt!important;color:#444;flex:0 0 auto}
@@ -3118,7 +3118,7 @@ function salesCombinedContractSenetA4Html(d){
     <div class="sig"><b>BORÇLU</b><small>İşbu anlaşmadaki yazılı bütün şartları okudum ve aynen kabul ettim.</small><div class="nm">${salesEsc(personName||'')}</div><div class="sigpad"><span>Borçlu İmza</span></div></div>
   </div>
   <div class="grow"><div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${salesEsc(address)}<br/>${salesEsc(phone)}<br/>${salesEsc(email)}<br/>${salesEsc(companyTaxLine)}</div></div>
-  <div class="senet-main"><div class="senet-bar"><b>SENET</b><span>Emre muharrer bono · ${salesEsc(saleRef)}</span></div>
+  <div class="senet-main"><div class="senet-bar"><b>SENET</b></div>
   <div class="fields"><div><span>Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Hululü Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Türk Lirası</span><b>${senetAmtHash}</b></div><div><span>No.</span><b>${salesEsc(senetNo)}</b></div></div>
   <p class="sbody">İşbu emre muharrer bono mukabilinde <u>${dateTR(senetDue)||'........'}</u> tarihinde <b>${salesEsc(companyLegal)}</b> veyahut emruhavalesine yukarıda yazılı Yalnız <u>${salesEsc(senetWordsOnly||'....................')}</u> Türk Lirası ödeyeceğim. Bedeli malen ahzolunmuştur. İşbu bono vadesinde ödenmediği takdirde müteakip bonoların da muacceliyet kesbedeceğini, ihtilaf vukuunda <b>İSTANBUL</b> Mahkemelerinin selahiyetini şimdiden kabul eylerim.</p>
   <div class="duo">
@@ -3126,15 +3126,14 @@ function salesCombinedContractSenetA4Html(d){
       <div class="row"><span class="k">İsim</span><span class="v nm">${salesEsc(personName)||'—'}</span></div>
       <div class="row"><span class="k">T.C. Kimlik No</span><span class="v">${salesEsc(personTax||'')||'—'}</span></div>
       <div class="row"><span class="k">Adres</span><span class="v">${salesEsc(addr||'')||'—'}</span></div>
-      <div class="sigpad">Borçlu İmza</div></div>
+      <div class="sigpad"><span>Borçlu İmza</span></div></div>
     <div><div class="lab">Müteselsil Borçlu / Kefil</div>
       <div class="row"><span class="k">İsim</span><span class="v nm">${salesEsc(guarantor.name||'')||'—'}</span></div>
       <div class="row"><span class="k">T.C. Kimlik No</span><span class="v">${salesEsc(guarantor.tckn||guarantor.taxNo||'')||'—'}</span></div>
       <div class="row"><span class="k">Adres</span><span class="v">${salesEsc(guarantor.homeAddress||guarantor.address||'')||'—'}</span></div>
-      <div class="sigpad">Kefil İmza</div></div>
+      <div class="sigpad"><span>Kefil İmza</span></div></div>
   </div>
-  <div class="keside">Keşide: ${dateTR(d.date)||'........'}</div>${moreSenets}</div></div></div>
-  <div class="foot">${salesEsc(site)} · Sözleşme + Senet · ${salesEsc(saleRef)} · ${dateTR(d.date)}</div>
+  ${moreSenets}</div></div></div>
 </section>`;
 }
 function salesContractSheetHtml(d){return salesCombinedContractSenetA4Html(d)}
