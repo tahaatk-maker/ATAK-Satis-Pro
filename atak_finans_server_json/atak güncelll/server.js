@@ -943,8 +943,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.72-senet-birebir',
-  build:'fix-v71',
+  version:'6.3.73-senet-buyuk',
+  build:'fix-v72',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -3566,7 +3566,7 @@ body{margin:0;background:#d9e2ec;color:#13233f;font:13px/1.45 "Segoe UI",Arial,s
 .sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:14mm 14mm 12mm;box-shadow:0 10px 30px #0002;page-break-after:always}
 .sheet:last-child,.sheet.a4-one{page-break-after:auto}
 .sheet.a4-one{min-height:auto;padding:8mm;margin:8px auto}
-@media print{body{background:#fff}.toolbar{display:none}.sheet,.sheet.a4-one{margin:0;box-shadow:none;width:auto;min-height:auto}}
+@media print{body{background:#fff}.toolbar{display:none}.sheet{margin:0;box-shadow:none;width:auto;min-height:297mm;height:297mm}.sheet.a4-one{margin:0;box-shadow:none;width:auto;min-height:auto}}
 .doc-head{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid #0b2a55;padding-bottom:12px;margin-bottom:14px}
 .brand{font-size:22px;font-weight:900;color:#0b2a55;letter-spacing:.02em}
 .brand small{display:block;font-size:11px;font-weight:600;color:#66768d;margin-top:3px}
@@ -3600,7 +3600,8 @@ table.items td.num,table.items th.num{text-align:right;white-space:nowrap}
 @media print{
   body{background:#fff}
   .toolbar{display:none!important}
-  .sheet{margin:0;box-shadow:none;width:auto;min-height:auto;padding:0}
+  .sheet{margin:0;box-shadow:none;width:auto;min-height:297mm;height:297mm;padding:0}
+  .sheet.a4-one{min-height:auto;height:auto}
 }
 </style></head><body>
 <div class="toolbar"><b>${htmlEsc(title)}</b><button class="primary" onclick="window.print()">Yazdır / PDF Kaydet</button><button onclick="window.close()">Kapat</button><span style="opacity:.85;font-size:12px">Yazdır → “PDF olarak kaydet” seçebilirsiniz</span></div>
@@ -3729,37 +3730,37 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c .pay{margin:5px 0 3px;font-size:7.5px;color:#5a6a7b}
 .a4c .terms h4{display:inline-block;font-size:7.8px;letter-spacing:.07em;color:#0a2748;border-bottom:1px solid #0a2748;margin:0 0 3px}
 .a4c .terms p{font-size:6.5px;line-height:1.32;color:#3a4656;text-align:justify;margin:0 0 2.5px}
-.a4c .signs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:8px}
-.a4c .sig{border-top:1px solid #9aa8b8;padding-top:3px;text-align:center;min-height:28px}
+.a4c .signs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:5px}
+.a4c .sig{border-top:1px solid #9aa8b8;padding-top:2px;text-align:center;min-height:20px}
 .a4c .sig b{display:block;font-size:8px;color:#0a2748;margin-bottom:2px}
 .a4c .sig small{display:block;font-size:5.8px;color:#5a6a7b;line-height:1.2;margin-bottom:8px}
 .a4c .sig .nm{font-size:7.5px;font-weight:700}
-.a4c .grow{flex:1 1 auto;display:flex;flex-direction:column;justify-content:flex-end;margin-top:8px}
-.a4c .senet{border:1.6px solid #0a2748;border-radius:6px;overflow:hidden;display:grid;grid-template-columns:24mm 1fr;min-height:62mm}
-.a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff;padding:7px 5px;font-size:6.6px;line-height:1.35;display:flex;flex-direction:column;gap:7px}
-.a4c .senet-side strong{font-size:7.4px}
+.a4c .grow{flex:1 1 auto;display:flex;flex-direction:column;justify-content:stretch;margin-top:6px;min-height:0}
+.a4c .senet{border:1.8px solid #0a2748;border-radius:6px;overflow:hidden;display:grid;grid-template-columns:26mm 1fr;flex:1 1 auto;min-height:105mm;height:100%}
+.a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff;padding:9px 6px;font-size:7px;line-height:1.4;display:flex;flex-direction:column;gap:8px}
+.a4c .senet-side strong{font-size:7.8px}
 .a4c .senet-side .pill{background:#fff;color:#0a2748;border-color:#fff;padding:1.5px 5px}
-.a4c .senet-main{padding:6px 8px 7px;display:flex;flex-direction:column}
-.a4c .senet-bar{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
-.a4c .senet-bar b{font-size:13px;color:#b91c1c;letter-spacing:.12em}
-.a4c .senet-bar span{font-size:7.2px;color:#5a6a7b}
-.a4c .fields{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:5px}
-.a4c .fields>div{border-bottom:1.2px solid #2a3545;padding:2px 0 3px}
-.a4c .fields span{display:block;font-size:6.5px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:.05em}
-.a4c .fields b{display:block;font-size:9.5px;min-height:12px;margin-top:1px}
-.a4c .sbody{font-size:7.3px;line-height:1.45;text-align:justify;margin:2px 0 6px}
-.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:1}
-.a4c .duo>div{border:1px solid #c5d0dd;border-radius:4px;padding:5px 6px;min-height:34px}
-.a4c .duo .lab{font-size:7px;font-weight:800;color:#b91c1c;letter-spacing:.05em;margin-bottom:2px}
-.a4c .duo small{display:block;font-size:6.2px;color:#5a6a7b}
-.a4c .duo .v{font-size:7.8px;font-weight:700;min-height:10px;margin-bottom:2px}
-.a4c .keside{margin-top:4px;text-align:right;font-size:8px;font-weight:700;color:#142033}
-.a4c .signline{margin-top:4px;text-align:right;border-top:1px solid #c5d0dd;padding-top:8px;font-size:7px;color:#5a6a7b}
+.a4c .senet-main{padding:8px 10px 10px;display:flex;flex-direction:column;min-height:0;height:100%}
+.a4c .senet-bar{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.a4c .senet-bar b{font-size:15px;color:#b91c1c;letter-spacing:.12em}
+.a4c .senet-bar span{font-size:7.5px;color:#5a6a7b}
+.a4c .fields{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:6px}
+.a4c .fields>div{border-bottom:1.2px solid #2a3545;padding:3px 0 4px}
+.a4c .fields span{display:block;font-size:6.8px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:.05em}
+.a4c .fields b{display:block;font-size:10.5px;min-height:14px;margin-top:2px}
+.a4c .sbody{font-size:8px;line-height:1.5;text-align:justify;margin:3px 0 8px}
+.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1 1 auto;min-height:42px}
+.a4c .duo>div{border:1px solid #c5d0dd;border-radius:4px;padding:7px 8px;min-height:48px}
+.a4c .duo .lab{font-size:7.5px;font-weight:800;color:#b91c1c;letter-spacing:.05em;margin-bottom:3px}
+.a4c .duo small{display:block;font-size:6.5px;color:#5a6a7b}
+.a4c .duo .v{font-size:8.2px;font-weight:700;min-height:12px;margin-bottom:3px}
+.a4c .keside{margin-top:auto;padding-top:8px;text-align:right;font-size:8.5px;font-weight:700;color:#142033}
+.a4c .signline{margin-top:6px;text-align:right;border-top:1px solid #c5d0dd;padding-top:28px;min-height:36px;font-size:7.5px;color:#5a6a7b}
 .a4c .note{margin-top:3px;font-size:6.2px;color:#7a8799}
-.a4c .foot{margin-top:4px;text-align:center;font-size:6.2px;color:#8a97a8}
+.a4c .foot{margin-top:3px;text-align:center;font-size:6.2px;color:#8a97a8}
 .a4c.senet-only{padding-top:12mm!important}
-.a4c.senet-only .senet{margin-top:0;min-height:90mm}
-@media print{.a4c{page-break-after:avoid!important}.a4c.senet-only{page-break-before:always}}
+.a4c.senet-only .senet{margin-top:0;min-height:180mm}
+@media print{.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important}.a4c .grow,.a4c .senet{flex:1 1 auto!important}.a4c.senet-only{page-break-before:always}}
 </style>`;
   return `<section class="sheet a4c">${css}
   <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · ${htmlEsc(companyTaxLine)}</div></div>
