@@ -5,19 +5,7 @@
     "whatsapp": "905433585060",
     "phone": "02122232871",
     "email": "tarabyabeko@gmail.com",
-    "address": "Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul",
-    "companyLegalName": "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.",
-    "taxOffice": "Sarıyer",
-    "taxNo": "0940148218",
-    "smtp": {
-      "enabled": false,
-      "host": "smtp.gmail.com",
-      "port": 465,
-      "secure": true,
-      "user": "",
-      "pass": "",
-      "from": ""
-    }
+    "address": "Sarıyer / İstanbul"
   },
   "categories": [
     {
@@ -151,13 +139,6 @@
       "name": "Ek Garanti",
       "active": true,
       "sort": 18,
-      "description": ""
-    },
-    {
-      "id": "yazar-kasa",
-      "name": "Yazar Kasa",
-      "active": true,
-      "sort": 90,
       "description": ""
     }
   ],
@@ -19728,29 +19709,7 @@
       }
     }
   ],
-  "brands": [
-    {
-      "id": "istikbal",
-      "name": "İstikbal",
-      "active": true,
-      "sort": 0,
-      "logo": ""
-    },
-    {
-      "id": "istikbal",
-      "name": "İstikbal",
-      "active": true,
-      "sort": 1,
-      "logo": ""
-    },
-    {
-      "id": "istikbal",
-      "name": "İstikbal",
-      "active": true,
-      "sort": 2,
-      "logo": ""
-    }
-  ],
+  "brands": [],
   "sales": [],
   "orders": [],
   "users": [
@@ -19982,7 +19941,7 @@
     }
   ],
   "promissorySettings": {
-    "creditorName": "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.",
+    "creditorName": "Atak Home",
     "paymentPlace": "İstanbul",
     "issuePlace": "İstanbul",
     "prefix": "ATAK",
@@ -19990,25 +19949,20 @@
     "firstDueDays": 30,
     "intervalMonths": 1,
     "copies": 1,
-    "footer": "",
-    "nextSenetNo": 1
+    "footer": ""
   },
   "invoiceIntegration": {
     "provider": "qnb-efinans",
     "environment": "test",
     "enabled": false,
-    "companyVkn": "0940148218",
-    "companyTitle": "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.",
+    "companyVkn": "",
+    "companyTitle": "",
     "senderAlias": "",
     "webServiceUrl": "",
     "username": "",
     "password": "",
     "draftMode": true,
-    "autoDetectType": true,
-    "efaturaSeries": "ATK",
-    "earsivSeries": "ATA",
-    "efaturaNext": 1,
-    "earsivNext": 1
+    "autoDetectType": true
   },
   "invoiceQueue": [
     {
@@ -20067,32 +20021,5 @@
       "active": true
     }
   ],
-  "cancellationRequests": [],
-  "passwordResets": [],
-  "invoiceInbox": [],
-  "invoiceAppResponses": [],
-  "purchaseInvoices": [],
-  "suppliers": [
-    {
-      "id": "arcelik",
-      "name": "Arçelik A.Ş.",
-      "active": true
-    },
-    {
-      "id": "istikbal-tedarik",
-      "name": "İstikbal / Doğtaş",
-      "active": true
-    },
-    {
-      "id": "diger-tedarik",
-      "name": "Diğer Tedarikçi",
-      "active": true
-    }
-  ],
-  "metaFlags": {
-    "clearMobilyaPurchase_v1": true,
-    "clearMobilyaPurchase_v2": true,
-    "clearMobilyaPurchase_v2_at": "2026-08-15T07:10:57.376Z",
-    "clearMobilyaPurchase_v2_count": 0
-  }
+  "cancellationRequests": []
 }
