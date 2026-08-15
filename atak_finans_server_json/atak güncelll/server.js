@@ -985,8 +985,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.107-hesap-sec-filtre',
-  build:'fix-v107',
+  version:'6.3.108-kullanici-aktif-sil',
+  build:'fix-v108',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
