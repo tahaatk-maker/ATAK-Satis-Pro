@@ -1202,8 +1202,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.124-header-logos',
-  build:'fix-v124',
+  version:'6.3.125-phones',
+  build:'fix-v125',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
