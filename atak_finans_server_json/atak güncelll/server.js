@@ -1202,8 +1202,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.114-mail-hazir',
-  build:'fix-v114',
+  version:'6.3.115-senet-nakden',
+  build:'fix-v115',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -4332,7 +4332,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important;margin-top:2px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding-bottom:1px}
 .a4c .sig .sigpad span{color:#666;font-size:7pt!important}
 .a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:2mm!important;padding-top:0;gap:0}
-.a4c .senet{border:1.5px solid #0a2748;border-radius:3px;overflow:visible;display:grid;grid-template-columns:20mm 1fr;flex:0 0 auto;height:auto;min-height:0;color:#000}
+.a4c .senet{border:1.5px solid #0a2748;border-radius:3px;overflow:hidden;display:grid;grid-template-columns:20mm 1fr;flex:0 0 auto;height:auto;min-height:0;color:#000}
 .a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff!important;padding:3px 2px;line-height:1.2;display:flex;flex-direction:column;gap:3px;font-size:7pt!important}
 .a4c .senet-side,.a4c .senet-side *{color:#fff!important;font-size:7pt!important;line-height:1.2!important}
 .a4c .senet-main{padding:3px 5px 3px;display:flex;flex-direction:column;min-height:0;color:#000}
@@ -4344,17 +4344,17 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c .fields b{display:block;min-height:10px;margin-top:1px;font-weight:700}
 .a4c .sbody{text-align:justify;margin:2mm 0 2mm;flex:0 0 auto;font-size:8pt!important;line-height:1.28!important}
 .a4c .sbody b,.a4c .sbody u{font-size:8pt!important;color:#000!important}
-.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:0 0 auto;margin-top:2mm}
-.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:3px 5px 2px;min-height:48mm;height:48mm;display:flex;flex-direction:column;background:#fff;overflow:visible}
+.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:0 0 auto;margin-top:2mm;align-items:stretch}
+.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:3px 5px 4px;min-height:42mm;height:auto;display:flex;flex-direction:column;background:#fff;overflow:hidden}
 .a4c .duo .lab{font-size:8pt!important;font-weight:700;margin:0 0 3px;padding:0 0 2px;border-bottom:1px solid #c5d0dd;flex:0 0 auto;line-height:1.15!important}
 .a4c .duo .row{display:block;margin:0 0 2px;flex:0 0 auto}
 .a4c .duo .k{display:block;font-size:7pt!important;line-height:1.1!important;font-weight:700;color:#444;margin:0 0 1px}
-.a4c .duo .v,.a4c .duo .v.nm{display:block;font-size:8pt!important;line-height:1.2!important;font-weight:700;color:#000!important;min-height:11px;margin:0;padding:0 0 2px;border-bottom:1px solid #222;white-space:normal!important;overflow:visible!important;text-align:left!important;word-break:break-word}
-.a4c .duo .sigpad{flex:1 1 auto!important;height:auto!important;min-height:22mm!important;max-height:none!important;margin-top:auto;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding:0 2px 2px;color:#666;font-size:7pt!important;position:relative}.a4c .duo .sigpad span{display:block;width:100%;text-align:center;color:#666;font-size:7pt!important}
+.a4c .duo .v,.a4c .duo .v.nm{display:block;font-size:8pt!important;line-height:1.2!important;font-weight:700;color:#000!important;min-height:11px;margin:0;padding:0 0 2px;border-bottom:1px solid #222;white-space:normal!important;overflow:hidden!important;text-align:left!important;word-break:break-word}
+.a4c .duo .sigpad{flex:1 1 auto!important;height:auto!important;min-height:18mm!important;max-height:28mm!important;margin-top:4px;border-top:1px dashed #9aa8b8;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:8px 2px 2px;color:#666;font-size:7pt!important;position:relative;box-sizing:border-box}.a4c .duo .sigpad span{display:block;width:100%;text-align:center;color:#444;font-size:7.5pt!important;font-weight:700}
 .a4c .keside{margin-top:1px;text-align:right;font-weight:700;font-size:8pt!important}
 .a4c .note{display:none}
 .a4c .foot{margin-top:1px;text-align:center;font-size:7pt!important;color:#444;flex:0 0 auto}
-.a4c.dense .duo>div{min-height:46mm;height:46mm}
+.a4c.dense .duo>div{min-height:40mm;height:auto}
 .a4c.senet-only{padding-top:10mm!important}
 .a4c.senet-only .senet{margin-top:0;min-height:180mm}
 @media print{
@@ -4370,8 +4370,8 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c .sig{min-height:32mm!important}
 .a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important}
 .a4c .duo{margin-top:2mm!important}
-.a4c .duo>div{min-height:48mm!important;height:48mm!important}
-.a4c .duo .sigpad{flex:1 1 auto!important;min-height:22mm!important;height:auto!important;max-height:none!important}
+.a4c .duo>div{min-height:42mm!important;height:auto!important;overflow:hidden!important}
+.a4c .duo .sigpad{flex:1 1 auto!important;min-height:18mm!important;height:auto!important;max-height:28mm!important;justify-content:flex-end!important}
 .a4c .grow{margin-top:2mm!important;padding-top:0!important}
 .a4c .senet{height:auto!important;max-height:none!important;overflow:visible!important}
 .a4c .senet .sbody{margin-top:2mm!important;margin-bottom:2mm!important}
@@ -4402,18 +4402,18 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   <div class="grow"><div class="senet"><div class="senet-side"><div class="senet-logo"><img src="${atakLogoWhiteSrc}" alt="ATAK Pazarlama"/></div><div>${htmlEsc(address)}<br/>${htmlEsc(phone)}<br/>${htmlEsc(email)}<br/>${htmlEsc(companyTaxLine)}</div></div>
   <div class="senet-main"><div class="senet-bar"><b>SENET</b></div>
   <div class="fields"><div><span>Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Hululü Vade</span><b>${dateTR(senetDue)}</b></div><div><span>Türk Lirası</span><b>${senetAmtHash}</b></div><div><span>No.</span><b>${htmlEsc(senetNo)}</b></div></div>
-  <p class="sbody">İşbu emre muharrer bono mukabilinde <u>${dateTR(senetDue)||'........'}</u> tarihinde <b>${htmlEsc(companyLegal)}</b> veyahut emruhavalesine yukarıda yazılı Yalnız <u>${htmlEsc(senetWordsOnly||'....................')}</u> Türk Lirası ödeyeceğim. Bedeli malen ahzolunmuştur. İşbu bono vadesinde ödenmediği takdirde müteakip bonoların da muacceliyet kesbedeceğini, ihtilaf vukuunda <b>İSTANBUL</b> Mahkemelerinin selahiyetini şimdiden kabul eylerim.</p>
+  <p class="sbody">İşbu emre muharrer bono mukabilinde <u>${dateTR(senetDue)||'........'}</u> tarihinde <b>${htmlEsc(companyLegal)}</b> veyahut emruhavalesine yukarıda yazılı Yalnız <u>${htmlEsc(senetWordsOnly||'....................')}</u> Türk Lirası ödeyeceğim. Bedeli nakden ahzolunmuştur. İşbu bono vadesinde ödenmediği takdirde müteakip bonoların da muacceliyet kesbedeceğini, ihtilaf vukuunda <b>İSTANBUL</b> Mahkemelerinin selahiyetini şimdiden kabul eylerim.</p>
   <div class="duo">
     <div><div class="lab">Ödeyecek / Borçlu</div>
       <div class="row"><span class="k">İsim</span><span class="v nm">${htmlEsc(personName)||'—'}</span></div>
       <div class="row"><span class="k">T.C. Kimlik No</span><span class="v">${htmlEsc(personTax||'')||'—'}</span></div>
       <div class="row"><span class="k">Adres</span><span class="v">${htmlEsc(addr||'')||'—'}</span></div>
-      <div class="sigpad"><span>Borçlu İmza</span></div></div>
+      <div class="sigpad"><span class="sig-title">Borçlu İmza</span></div></div>
     <div><div class="lab">Müteselsil Borçlu / Kefil</div>
       <div class="row"><span class="k">İsim</span><span class="v nm">${htmlEsc(guarantor.name||'')||'—'}</span></div>
       <div class="row"><span class="k">T.C. Kimlik No</span><span class="v">${htmlEsc(guarantor.tckn||guarantor.taxNo||'')||'—'}</span></div>
       <div class="row"><span class="k">Adres</span><span class="v">${htmlEsc(guarantor.homeAddress||guarantor.address||'')||'—'}</span></div>
-      <div class="sigpad"><span>Kefil İmza</span></div></div>
+      <div class="sigpad"><span class="sig-title">Kefil İmza</span></div></div>
   </div>
   ${moreSenets}</div></div></div>
 </section>`;
