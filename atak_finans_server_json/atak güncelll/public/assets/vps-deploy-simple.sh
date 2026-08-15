@@ -7,8 +7,8 @@ die(){ log "FAIL: $*"; exit 1; }
 
 log "=== ATAK DEPLOY ==="
 BRANCH="cursor/satis-merkezi-iskonto-prim-bd99"
-EXPECT_V="6.3.113-giris-kod"
-EXPECT_B="fix-v113"
+EXPECT_V="6.3.114-mail-hazir"
+EXPECT_B="fix-v114"
 APP="${APP_DIR:-/root/atak-v10}"
 [ -d /root/atakhome-platform ] && [ ! -f "$APP/server.js" ] && APP=/root/atakhome-platform
 
@@ -108,12 +108,21 @@ process.stdout.write(String(cleared));
   log "   $STORE -> $CLEAR_N alis sifirlandi"
 done
 
-log "6) npm + pm2"
+log "6) npm + pm2 + MFA kapali"
 cd "$APP"
+touch .env
+if grep -q '^ATAK_MFA_ENABLED=' .env; then
+  sed -i 's/^ATAK_MFA_ENABLED=.*/ATAK_MFA_ENABLED=0/' .env
+else
+  echo 'ATAK_MFA_ENABLED=0' >> .env
+fi
+log "   ATAK_MFA_ENABLED=0 (.env)"
 if [ ! -d node_modules ]; then
   log "   npm install"
   npm install --omit=dev --no-audit --no-fund || die "npm install fail"
 fi
+# nodemailer yoksa ekle (mail ayari icin)
+node -e "require('nodemailer')" 2>/dev/null || npm install nodemailer --omit=dev --no-audit --no-fund || true
 pm2 delete atak 2>/dev/null || true
 sleep 1
 for P in 3100 3000; do
@@ -133,6 +142,7 @@ H1=$(curl -sS -m 8 http://127.0.0.1:3100/health || true)
 log "LOCAL=$H1"
 echo "$H1" | grep -q "$EXPECT_V" || die "health version yok: $H1"
 echo "$H1" | grep -q "$EXPECT_B" || die "health build yok: $H1"
-log "=== BASARILI $EXPECT_V / $EXPECT_B ==="
+echo "$H1" | grep -q '"mfa":false' || log "UYARI: mfa true — .env kontrol"
+log "=== BASARILI $EXPECT_V / $EXPECT_B (MFA kapali) ==="
 echo OK > /tmp/atak-deploy-OK
 log "Log dosyasi: $OUT"

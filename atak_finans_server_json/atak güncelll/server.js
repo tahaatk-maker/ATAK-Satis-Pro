@@ -771,7 +771,11 @@ function publicBaseUrl(req){
 }
 
 /** Giriş kodu (e-posta OTP) + tarayıcı tanıma (varsayılan 6 saat) */
-function mfaEnabled(){ return String(process.env.ATAK_MFA_ENABLED ?? '1').trim() !== '0'; }
+function mfaEnabled(){
+  // Varsayılan KAPALI — SMTP/mail kurulana kadar giriş kodu istenmez.
+  // Açmak için .env: ATAK_MFA_ENABLED=1
+  return String(process.env.ATAK_MFA_ENABLED ?? '0').trim() === '1';
+}
 function mfaTrustMs(){
   const h=Number(process.env.ATAK_MFA_TRUST_HOURS || 6);
   return Math.max(1, Number.isFinite(h)?h:6) * 60 * 60 * 1000;
@@ -876,17 +880,17 @@ async function issueMfaOrFinish(req,res,{portal,username,email,sessionData}){
     const user=applyMfaSession(req,sessionData);
     return res.json({ok:true,user,ownerOnly:ownerOnlyEnabled(),mfaRequired:false,trusted:isTrustedDevice(req,username,portal)});
   };
+  // Varsayılan kapalı (ATAK_MFA_ENABLED=1 + SMTP ile açılır)
   if(!mfaEnabled())return finish();
   if(isTrustedDevice(req,username,portal))return finish();
   const s=readStore();
-  // SMTP / e-posta yokken kilitleme — yoksa Ayarlar’a hiç girilemez
   if(!smtpConfig(s).enabled){
-    console.warn('[MFA] SMTP kapalı — kod atlandı, düz giriş:', username);
+    console.warn('[MFA] SMTP kapalı — kod atlandı:', username);
     return finish();
   }
   const to=String(email||'').trim();
   if(!to.includes('@')){
-    console.warn('[MFA] E-posta yok — kod atlandı, düz giriş:', username);
+    console.warn('[MFA] E-posta yok — kod atlandı:', username);
     return finish();
   }
   purgeMfaChallenges();
@@ -1198,8 +1202,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.112-giris-kod',
-  build:'fix-v112',
+  version:'6.3.114-mail-hazir',
+  build:'fix-v114',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
