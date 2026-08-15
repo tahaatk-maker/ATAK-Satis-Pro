@@ -140,6 +140,8 @@
 .customer-sms-panel.hidden{display:none!important}
 .customer-sms-panel .panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .customer-sms-panel textarea{width:100%;min-height:96px;resize:vertical}
+.sms-advanced{margin:4px 0 8px;padding:10px 12px;border:1px solid #e8d5bf;border-radius:12px;background:#fffdf9}
+.sms-advanced>summary{cursor:pointer;font-weight:800;color:#7c2d12}
 .customer-debt-box{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
 .customer-debt-box article{padding:12px 14px;border:1px solid #e3e9f0;border-radius:12px;background:#fff}
 .customer-debt-box small{display:block;font-size:11px;color:#6b788d;font-weight:800}

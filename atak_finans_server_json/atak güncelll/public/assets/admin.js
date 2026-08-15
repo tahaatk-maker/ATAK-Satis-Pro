@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v130 */
+/* ATAK_ADMIN_BUILD=fix-v131 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2215,7 +2215,7 @@ async function openCustomerSmsPanel(type){
   if(q('#customerSmsTitle'))q('#customerSmsTitle').textContent=type==='overdue'?'Gecikme SMS':'Özel SMS';
   if(q('#customerSmsHint'))q('#customerSmsHint').textContent=type==='overdue'
     ?'Geciken senet / cari borca göre şablon doldurulur. İsterseniz metni düzenleyip gönderin.'
-    :'Serbest metin yazın; müşteri telefonuna Corvass ile gider.';
+    :'Serbest metin yazın; bağlı SMS firması üzerinden gider.';
   if(q('#customerSmsPhone'))q('#customerSmsPhone').value=c.phone||'';
   if(q('#customerSmsStatus')){q('#customerSmsStatus').textContent='';q('#customerSmsStatus').className='form-status'}
   if(type==='overdue'){
@@ -4031,61 +4031,119 @@ function renderSmsRecent(rows){
     const when=String(r.at||'').replace('T',' ').slice(0,16);
     const typ=r.type==='overdue'?'Gecikme':(r.type==='test'?'Test':'Özel');
     const who=salesEsc(r.customerName||r.phone||'-');
-    const st=ok?`OK ${salesEsc(r.code||'')}`:`Hata: ${salesEsc(r.error||'')}`;
+    const st=ok?`OK ${salesEsc(r.code||'')}${r.provider?' · '+salesEsc(r.provider):''}`:`Hata: ${salesEsc(r.error||'')}`;
     const msg=salesEsc(String(r.message||'').slice(0,80));
     return `<tr><td>${when}</td><td>${typ}</td><td><b>${who}</b><small>${salesEsc(r.phone||'')}</small></td><td>${st}</td><td>${msg}</td></tr>`;
   }).join('')}</tbody></table></div>`;
+}
+let smsPresetsCache=[];
+function smsPayloadFromForm(){
+  return{
+    enabled:q('#smsEnabled')?.checked===true,
+    provider:q('#smsProvider')?.value||'generic',
+    endpoint:q('#smsEndpoint')?.value,
+    method:q('#smsMethod')?.value,
+    contentType:q('#smsContentType')?.value,
+    username:q('#smsUsername')?.value,
+    password:q('#smsPassword')?.value,
+    originator:q('#smsOriginator')?.value,
+    phoneFormat:q('#smsPhoneFormat')?.value,
+    successRule:q('#smsSuccessRule')?.value,
+    fieldUsername:q('#smsFieldUsername')?.value,
+    fieldPassword:q('#smsFieldPassword')?.value,
+    fieldOriginator:q('#smsFieldOriginator')?.value,
+    fieldNumbers:q('#smsFieldNumbers')?.value,
+    fieldMessage:q('#smsFieldMessage')?.value,
+    extraJson:q('#smsExtraJson')?.value,
+    bodyTemplate:q('#smsBodyTemplate')?.value,
+    overdueTemplate:q('#smsOverdueTemplate')?.value
+  };
+}
+function applySmsPreset(id,{fillEmptyOnly=false}={}){
+  const p=(smsPresetsCache||[]).find(x=>x.id===id);
+  if(!p)return;
+  const set=(sel,val)=>{
+    const el=q(sel); if(!el)return;
+    if(fillEmptyOnly&&String(el.value||'').trim())return;
+    el.value=val==null?'':String(val);
+  };
+  set('#smsEndpoint',p.endpoint||'');
+  set('#smsMethod',p.method||'POST');
+  set('#smsContentType',p.contentType||'form');
+  set('#smsPhoneFormat',p.phoneFormat||'national10');
+  set('#smsSuccessRule',p.successRule||'auto');
+  set('#smsFieldUsername',p.fields?.username||'username');
+  set('#smsFieldPassword',p.fields?.password||'password');
+  set('#smsFieldOriginator',p.fields?.originator||'originator');
+  set('#smsFieldNumbers',p.fields?.numbers||'numbers');
+  set('#smsFieldMessage',p.fields?.message||'message');
+  set('#smsBodyTemplate',p.bodyTemplate||'');
+  const extra=p.extra&&Object.keys(p.extra).length?JSON.stringify(p.extra):'';
+  set('#smsExtraJson',extra);
+  if(q('#smsProviderHint'))q('#smsProviderHint').textContent=p.hint||'Firmanın API dokümanındaki endpoint ve alan adlarını kullanın.';
 }
 async function loadSmsSettings(){
   const st=q('#smsSettingsStatus');
   try{
     const d=await api('/web-api/admin/sms-settings');
     const s=d.settings||{};
+    smsPresetsCache=d.presets||[];
+    const sel=q('#smsProvider');
+    if(sel){
+      sel.innerHTML=smsPresetsCache.map(p=>`<option value="${p.id}">${salesEsc(p.label)}</option>`).join('')
+        ||'<option value="generic">Genel HTTP</option>';
+      sel.value=s.provider||'generic';
+    }
     if(q('#smsEnabled'))q('#smsEnabled').checked=s.enabled===true;
-    if(q('#smsEndpoint'))q('#smsEndpoint').value=s.endpoint||'https://sms.corvass.net/http';
+    if(q('#smsEndpoint'))q('#smsEndpoint').value=s.endpoint||'';
+    if(q('#smsMethod'))q('#smsMethod').value=s.method||'POST';
+    if(q('#smsContentType'))q('#smsContentType').value=s.contentType||'form';
     if(q('#smsUsername'))q('#smsUsername').value=s.username||'';
     if(q('#smsPassword'))q('#smsPassword').value=s.password||'';
     if(q('#smsOriginator'))q('#smsOriginator').value=s.originator||'';
-    if(q('#smsRecipientType'))q('#smsRecipientType').value=s.recipientType||'BIREYSEL';
+    if(q('#smsPhoneFormat'))q('#smsPhoneFormat').value=s.phoneFormat||'national10';
+    if(q('#smsSuccessRule'))q('#smsSuccessRule').value=s.successRule||'auto';
+    if(q('#smsFieldUsername'))q('#smsFieldUsername').value=s.fieldUsername||'username';
+    if(q('#smsFieldPassword'))q('#smsFieldPassword').value=s.fieldPassword||'password';
+    if(q('#smsFieldOriginator'))q('#smsFieldOriginator').value=s.fieldOriginator||'originator';
+    if(q('#smsFieldNumbers'))q('#smsFieldNumbers').value=s.fieldNumbers||'numbers';
+    if(q('#smsFieldMessage'))q('#smsFieldMessage').value=s.fieldMessage||'message';
+    if(q('#smsExtraJson'))q('#smsExtraJson').value=s.extraJson||'';
+    if(q('#smsBodyTemplate'))q('#smsBodyTemplate').value=s.bodyTemplate||'';
     if(q('#smsOverdueTemplate'))q('#smsOverdueTemplate').value=s.overdueTemplate||'';
-    if(st){st.textContent=s.configured?'Corvass SMS hazır — cari üzerinden gönderim yapılabilir.':'SMS henüz yapılandırılmadı.';st.className='form-status '+(s.configured?'success':'')}
+    const preset=(smsPresetsCache||[]).find(x=>x.id===(s.provider||'generic'));
+    if(q('#smsProviderHint'))q('#smsProviderHint').textContent=preset?.hint||'Firmanın API dokümanındaki endpoint ve alan adlarını kullanın.';
+    if(st){
+      st.textContent=s.configured
+        ?`SMS hazır (${s.providerLabel||s.provider||'gateway'}) — cari üzerinden gönderim yapılabilir.`
+        :'SMS henüz yapılandırılmadı (endpoint + kullanıcı + şifre + gönderici).';
+      st.className='form-status '+(s.configured?'success':'');
+    }
     renderSmsRecent(d.recent||[]);
   }catch(e){if(st){st.textContent=e.message;st.className='form-status error'}}
 }
+q('#smsProvider')?.addEventListener('change',()=>{
+  const id=q('#smsProvider')?.value||'generic';
+  applySmsPreset(id,{fillEmptyOnly:false});
+});
 q('#smsSettingsForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
   const st=q('#smsSettingsStatus');
   try{
-    const r=await api('/web-api/admin/sms-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      enabled:q('#smsEnabled')?.checked===true,
-      endpoint:q('#smsEndpoint')?.value,
-      username:q('#smsUsername')?.value,
-      password:q('#smsPassword')?.value,
-      originator:q('#smsOriginator')?.value,
-      recipientType:q('#smsRecipientType')?.value,
-      overdueTemplate:q('#smsOverdueTemplate')?.value
-    })});
-    if(st){st.textContent=r.configured?'SMS ayarları kaydedildi · Corvass hazır':'Kaydedildi — kullanıcı / şifre / gönderici eksik olabilir';st.className='form-status success'}
+    const r=await api('/web-api/admin/sms-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(smsPayloadFromForm())});
+    if(st){st.textContent=r.configured?`SMS ayarları kaydedildi · ${r.provider||'gateway'} hazır`:'Kaydedildi — endpoint / kullanıcı / şifre / gönderici eksik olabilir';st.className='form-status success'}
     await loadSmsSettings();
   }catch(err){if(st){st.textContent=err.message;st.className='form-status error'}}
 });
 q('#smsTestBtn')?.addEventListener('click',async()=>{
   const st=q('#smsSettingsStatus');
   try{
-    await api('/web-api/admin/sms-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      enabled:true,
-      endpoint:q('#smsEndpoint')?.value,
-      username:q('#smsUsername')?.value,
-      password:q('#smsPassword')?.value,
-      originator:q('#smsOriginator')?.value,
-      recipientType:q('#smsRecipientType')?.value,
-      overdueTemplate:q('#smsOverdueTemplate')?.value
-    })});
+    await api('/web-api/admin/sms-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...smsPayloadFromForm(),enabled:true})});
     const to=q('#smsTestPhone')?.value||'';
-    const message=q('#smsTestMessage')?.value||'ATAK · Corvass SMS test';
+    const message=q('#smsTestMessage')?.value||'ATAK · SMS test';
     if(!to){toast('Test telefonu girin');return}
     const r=await api('/web-api/admin/sms-settings/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to,message})});
-    if(st){st.textContent=`Test SMS gönderildi → ${r.to}`;st.className='form-status success'}
+    if(st){st.textContent=`Test SMS gönderildi → ${r.to}${r.provider?' · '+r.provider:''}`;st.className='form-status success'}
     toast('Test SMS gönderildi');
     await loadSmsSettings();
   }catch(err){if(st){st.textContent=err.message;st.className='form-status error'};toast(err.message||'Test başarısız')}

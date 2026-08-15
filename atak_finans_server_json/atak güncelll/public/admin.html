@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v130" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v130" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v131" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v131" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1959,7 +1959,7 @@ Bulunamayan → Diğer.
     <h3 id="customerSmsTitle">SMS</h3>
     <button type="button" class="secondary-btn" id="customerSmsClose">Kapat</button>
   </div>
-  <p class="note" id="customerSmsHint" style="margin:8px 0">Corvass üzerinden müşteri telefonuna SMS gider.</p>
+  <p class="note" id="customerSmsHint" style="margin:8px 0">Bağlı SMS firması üzerinden müşteri telefonuna SMS gider.</p>
   <label>Telefon<input id="customerSmsPhone" inputmode="tel" placeholder="05xx…"/></label>
   <label>Mesaj<textarea id="customerSmsMessage" rows="4" maxlength="640" placeholder="SMS metni"></textarea></label>
   <div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -2198,7 +2198,7 @@ Bulunamayan → Diğer.
   </button>
   <button type="button" class="settings-nav-btn" data-settings-tab="sms">
     <b>📱 SMS</b>
-    <small>Corvass · gecikme / özel</small>
+    <small>Her firma · gecikme / özel</small>
   </button>
   <button type="button" class="settings-nav-btn" data-settings-tab="test">
     <b>🧪 Test</b>
@@ -2298,25 +2298,70 @@ Bulunamayan → Diğer.
 <form class="panel form-stack settings-panel hidden" id="smsSettingsForm" data-settings-panel="sms">
   <div class="panel-head">
     <div>
-      <h2>SMS (Corvass)</h2>
-      <p class="note">Corvass paneli kullanıcı adı, şifre ve onaylı gönderici adını (originator) girin. Müşteri carisinden gecikme / özel SMS atılır.</p>
+      <h2>SMS Gateway</h2>
+      <p class="note">Herhangi bir SMS firmasıyla çalışır. Hazır seçenek (Corvass, Netgsm…) veya <b>Genel HTTP</b> ile firmanızın API adresini / alan adlarını girin.</p>
     </div>
   </div>
-  <label class="check"><input id="smsEnabled" type="checkbox"/> SMS açık (Corvass ile gönderilsin)</label>
-  <label>API endpoint<input id="smsEndpoint" placeholder="https://sms.corvass.net/http" value="https://sms.corvass.net/http"/></label>
+  <label class="check"><input id="smsEnabled" type="checkbox"/> SMS açık</label>
+  <label>Sağlayıcı
+    <select id="smsProvider"></select>
+    <small class="field-hint" id="smsProviderHint">Firmanın API dokümanındaki endpoint ve alan adlarını kullanın.</small>
+  </label>
+  <label>API endpoint<input id="smsEndpoint" placeholder="https://api.ornek.com/sms/send"/></label>
   <div class="two-col">
-    <label>Kullanıcı adı<input id="smsUsername" autocomplete="off" placeholder="Corvass kullanıcı"/></label>
-    <label>Şifre<input id="smsPassword" type="password" autocomplete="new-password" placeholder="••••••••"/></label>
-  </div>
-  <div class="two-col">
-    <label>Gönderici adı (originator)<input id="smsOriginator" placeholder="ATAK / onaylı başlık"/></label>
-    <label>Alıcı tipi
-      <select id="smsRecipientType">
-        <option value="BIREYSEL">Bireysel</option>
-        <option value="TACIR">Ticari</option>
+    <label>Metod
+      <select id="smsMethod"><option value="POST">POST</option><option value="GET">GET</option></select>
+    </label>
+    <label>İçerik tipi
+      <select id="smsContentType">
+        <option value="form">Form (x-www-form-urlencoded)</option>
+        <option value="json">JSON</option>
+        <option value="query">Query string</option>
       </select>
     </label>
   </div>
+  <div class="two-col">
+    <label>Kullanıcı adı / API user<input id="smsUsername" autocomplete="off" placeholder="kullanıcı"/></label>
+    <label>Şifre / API key<input id="smsPassword" type="password" autocomplete="new-password" placeholder="••••••••"/></label>
+  </div>
+  <div class="two-col">
+    <label>Gönderici adı (originator / header)<input id="smsOriginator" placeholder="Onaylı başlık"/></label>
+    <label>Telefon formatı
+      <select id="smsPhoneFormat">
+        <option value="national10">5XXXXXXXXX</option>
+        <option value="with90">905XXXXXXXXX</option>
+        <option value="with0">05XXXXXXXXX</option>
+      </select>
+    </label>
+  </div>
+  <details class="sms-advanced" id="smsAdvancedBox">
+    <summary>Gelişmiş API alanları (firma dokümanına göre)</summary>
+    <div class="two-col" style="margin-top:10px">
+      <label>Alan: kullanıcı<input id="smsFieldUsername" placeholder="username"/></label>
+      <label>Alan: şifre<input id="smsFieldPassword" placeholder="password"/></label>
+    </div>
+    <div class="two-col">
+      <label>Alan: gönderici<input id="smsFieldOriginator" placeholder="originator"/></label>
+      <label>Alan: telefon<input id="smsFieldNumbers" placeholder="numbers"/></label>
+    </div>
+    <div class="two-col">
+      <label>Alan: mesaj<input id="smsFieldMessage" placeholder="message"/></label>
+      <label>Başarı kuralı
+        <select id="smsSuccessRule">
+          <option value="auto">Otomatik</option>
+          <option value="http">Sadece HTTP 2xx</option>
+          <option value="zero">Kod = 0</option>
+          <option value="netgsm">Netgsm (00/01/02)</option>
+          <option value="contains:OK">Yanıtta OK geçsin</option>
+        </select>
+      </label>
+    </div>
+    <label>Ek parametreler (JSON)<input id="smsExtraJson" placeholder='{"action":"0"}'/></label>
+    <label>Özel body şablonu (opsiyonel)
+      <textarea id="smsBodyTemplate" rows="3" placeholder='{"user":"{username}","to":"{numbers}","message":"{message}"}'></textarea>
+      <small class="field-hint">{username} {password} {originator} {numbers} {message}</small>
+    </label>
+  </details>
   <label>Gecikme SMS şablonu
     <textarea id="smsOverdueTemplate" rows="3" placeholder="Sayin {ad}, ..."></textarea>
     <small class="field-hint">Değişkenler: {ad} {geciken} {bakiye} {acik} {firma} {telefon}</small>
@@ -2441,5 +2486,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v130"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v131"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
