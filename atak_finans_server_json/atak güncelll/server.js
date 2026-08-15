@@ -879,12 +879,15 @@ async function issueMfaOrFinish(req,res,{portal,username,email,sessionData}){
   if(!mfaEnabled())return finish();
   if(isTrustedDevice(req,username,portal))return finish();
   const s=readStore();
+  // SMTP / e-posta yokken kilitleme — yoksa Ayarlar’a hiç girilemez
   if(!smtpConfig(s).enabled){
-    return res.status(400).json({error:'Giriş kodu için e-posta (SMTP) açık olmalı. Ayarlar → E-posta, veya geçici ATAK_MFA_ENABLED=0'});
+    console.warn('[MFA] SMTP kapalı — kod atlandı, düz giriş:', username);
+    return finish();
   }
   const to=String(email||'').trim();
   if(!to.includes('@')){
-    return res.status(400).json({error:'Bu kullanıcıda e-posta yok. Kullanıcılar’dan e-posta ekleyin veya .env içine ATAK_OWNER_EMAIL=...'});
+    console.warn('[MFA] E-posta yok — kod atlandı, düz giriş:', username);
+    return finish();
   }
   purgeMfaChallenges();
   const code=String(100000+crypto.randomInt(900000));
