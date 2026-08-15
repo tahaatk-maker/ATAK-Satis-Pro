@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atak Finans</title>
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#6b7280;--line:#e5e7eb;--brand:#111827;--bad:#dc2626}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:1180px;margin:auto;padding:16px}.hidden{display:none!important}.card{background:white;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 3px 12px rgba(0,0,0,.04)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kpi small,.muted{color:var(--muted)}.kpi strong{display:block;font-size:26px;margin-top:6px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.nav{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.nav button,button{border:1px solid var(--line);background:#fff;padding:10px 13px;border-radius:10px;cursor:pointer}.nav button.active,.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px}.section{display:none}.section.active{display:block}
+form{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left}
+.login{min-height:100vh;display:grid;place-items:center;padding:20px}.login .card{width:min(420px,100%)}.danger{color:var(--bad)}
+@media(max-width:850px){.grid{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1fr}form{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.grid{grid-template-columns:1fr}form{grid-template-columns:1fr}.wrap{padding:10px}}
+</style></head>
+<body>
+<div id="login" class="login"><div class="card">
+<h1>Atak Finans</h1><p class="muted">Aile işletmesi finans yönetimi</p>
+<select id="loginName"><option>Taha</option><option>Hasan</option><option>Emir</option><option>İbrahim</option></select>
+<input id="loginPass" type="password" placeholder="Şifre" style="margin-top:8px">
+<button class="primary" style="width:100%;margin-top:8px" onclick="doLogin()">Giriş</button>
+<p class="muted">İlk kurulum varsayılan şifre: 1234. Taha giriş yaptıktan sonra değiştirin.</p>
+</div></div>
+
+<div id="app" class="hidden"><div class="wrap">
+<div class="top"><div><h2 style="margin:0">ATAK FİNANS</h2><span class="muted">Beko • İstikbal • Aile • Ortaklar</span></div><div><b id="me"></b> <button onclick="logout()">Çıkış</button></div></div>
+<div id="nav" class="nav"></div>
+
+<section id="dashboard" class="section active">
+<div class="grid">
+<div class="card kpi"><small>Banka + Kasa</small><strong id="cash">0 ₺</strong></div>
+<div class="card kpi"><small>Beko Borcu</small><strong id="beko">0 ₺</strong></div>
+<div class="card kpi"><small>İstikbal Borcu</small><strong id="istikbal">0 ₺</strong></div>
+<div class="card kpi"><small>Kart Borçları</small><strong id="cardsDebt">0 ₺</strong></div>
+<div class="card kpi"><small>Bu Ay Net</small><strong id="net">0 ₺</strong></div>
+<div class="card kpi"><small>Kullanılabilir Para</small><strong id="free">0 ₺</strong></div>
+<div class="card kpi"><small>Kontrol Bekleyen</small><strong id="reviewCount">0</strong></div>
+</div>
+</section>
+
+<section id="tx" class="section"><div class="card">
+<h3>Gelir / Gider</h3>
+<form onsubmit="addTx(event)">
+<input id="txDate" type="date" required><select id="txType"><option>Gider</option><option>Gelir</option></select>
+<select id="txUnit"><option>Beko</option><option>İstikbal</option><option>Ortak İşletme</option><option>Aile</option><option>Taha</option><option>Hasan</option></select>
+<input id="txCat" placeholder="Kategori" required><input id="txDesc" placeholder="Açıklama" required><input id="txAmount" type="number" step="0.01" placeholder="Tutar" required><input id="txPay" placeholder="Ödeme yöntemi"><button class="primary">Kaydet</button>
+</form>
+<table><thead><tr><th>Tarih</th><th>Tür</th><th>Birim</th><th>Kategori</th><th>Açıklama</th><th>Tutar</th></tr></thead><tbody id="txBody"></tbody></table>
+</div></section>
+
+<section id="cards" class="section"><div class="card">
+<h3>Kredi Kartları</h3>
+<form id="cardForm" onsubmit="addCard(event)">
+<select id="cOwner"><option>Taha</option><option>Hasan</option></select><input id="cBank" placeholder="Banka / Kart" required><input id="cLast4" placeholder="Son 4 hane"><input id="cLimit" type="number" placeholder="Limit"><input id="cDebt" type="number" placeholder="Borç"><input id="cCut" type="number" placeholder="Kesim günü"><input id="cDue" type="number" placeholder="Son ödeme"><button class="primary">Kart Ekle</button>
+</form><div id="cardList"></div></div></section>
+
+<section id="imports" class="section">
+<div class="grid">
+<div class="card"><h3>Beko Hesap Akışı</h3><input id="bekoFile" type="file"><button class="primary" onclick="sendFile('bekoFile','/api/import/beko')">Yükle</button></div>
+<div class="card"><h3>QNB Gelen Faturalar</h3><input id="qnbFile" type="file"><button class="primary" onclick="sendFile('qnbFile','/api/import/qnb')">Yükle</button></div>
+<div class="card"><h3>Garanti Hesap Ekstresi</h3><input id="garantiFile" type="file"><button class="primary" onclick="sendFile('garantiFile','/api/import/garanti')">Yükle</button></div>
+<div class="card"><h3>Kredi Kartı Ekstresi</h3><select id="cardSelect"></select><input id="cardFile" type="file"><button class="primary" onclick="sendCardFile()">Yükle</button></div>
+</div><div id="importMsg" class="card" style="margin-top:12px">Henüz dosya yüklenmedi.</div>
+</section>
+
+<section id="review" class="section"><div class="card"><h3>Kontrol Bekleyen</h3>
+<table><thead><tr><th>Tarih</th><th>Kaynak</th><th>Açıklama</th><th>Tutar</th><th>Dağıt</th></tr></thead><tbody id="reviewBody"></tbody></table>
+</div></section>
+
+<section id="settings" class="section"><div class="row">
+<div class="card"><h3>Finans Ayarları</h3><input id="setCash" type="number" placeholder="Banka + kasa"><input id="setTax" type="number" placeholder="Vergi için ayrılan" style="margin-top:8px"><button class="primary" style="margin-top:8px" onclick="saveSettings()">Kaydet</button></div>
+<div class="card"><h3>Kullanıcı Şifreleri</h3><select id="pwUser"><option>Taha</option><option>Hasan</option><option>Emir</option><option>İbrahim</option></select><input id="pwNew" type="password" placeholder="Yeni şifre" style="margin-top:8px"><button class="primary" style="margin-top:8px" onclick="changePassword()">Şifreyi Değiştir</button></div>
+</div></section>
+</div></div>
+
+<script>
+let USER=null;
+const money=v=>new Intl.NumberFormat("tr-TR",{style:"currency",currency:"TRY",maximumFractionDigits:0}).format(Number(v||0));
+async function api(url,opt={}){const r=await fetch(url,opt);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"İşlem başarısız");return d}
+async function doLogin(){try{USER=await api("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:loginName.value,password:loginPass.value})});boot()}catch(e){alert(e.message)}}
+async function logout(){await api("/api/logout",{method:"POST"});location.reload()}
+function show(id,b){document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active"); if(id==="review")loadReview()}
+function nav(){
+ const items=[["dashboard","Ana Panel"],["tx","Gelir/Gider"]];
+ if(["admin","partner"].includes(USER.role))items.push(["cards","Kredi Kartları"]);
+ if(USER.role==="admin")items.push(["imports","Dosya Yükle"],["review","Kontrol Bekliyor"],["settings","Ayarlar"]);
+ navEl=document.getElementById("nav");navEl.innerHTML="";
+ items.forEach(([id,t],i)=>{let b=document.createElement("button");b.textContent=t;b.className=i===0?"active":"";b.onclick=()=>show(id,b);navEl.appendChild(b)})
+}
+async function boot(){login.classList.add("hidden");app.classList.remove("hidden");me.textContent=USER.name;nav();txDate.value=new Date().toISOString().slice(0,10);await refresh()}
+async function refresh(){
+ const d=await api("/api/dashboard");cash.textContent=money(d.cash);beko.textContent=money(d.bekoDebt);istikbal.textContent=money(d.istikbalDebt);cardsDebt.textContent=money(d.cardDebt);net.textContent=money(d.monthNet);free.textContent=money(d.freeCash);reviewCount.textContent=d.review;
+ const t=await api("/api/transactions");txBody.innerHTML=t.map(x=>`<tr><td>${x.date}</td><td>${x.type}</td><td>${x.unit}</td><td>${x.category}</td><td>${x.description}</td><td>${money(x.amount)}</td></tr>`).join("");
+ if(["admin","partner"].includes(USER.role)){const c=await api("/api/cards");cardList.innerHTML=c.map(x=>`<p><b>${x.owner}</b> — ${x.bank_name} ${x.last4?"•••• "+x.last4:""} | Borç: ${money(x.debt)}</p>`).join("");cardSelect.innerHTML=c.map(x=>`<option value="${x.id}">${x.owner} — ${x.bank_name} ${x.last4||""}</option>`).join("")}
+}
+async function addTx(e){e.preventDefault();await api("/api/transactions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({date:txDate.value,type:txType.value,unit:txUnit.value,category:txCat.value,description:txDesc.value,amount:+txAmount.value,payment_method:txPay.value})});e.target.reset();txDate.value=new Date().toISOString().slice(0,10);await refresh()}
+async function addCard(e){e.preventDefault();await api("/api/cards",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({owner:cOwner.value,bank_name:cBank.value,last4:cLast4.value,card_limit:+cLimit.value,debt:+cDebt.value,cut_day:+cCut.value,due_day:+cDue.value})});e.target.reset();await refresh()}
+async function sendFile(id,url){let f=document.getElementById(id).files[0];if(!f)return alert("Dosya seç");let fd=new FormData();fd.append("file",f);try{let r=await api(url,{method:"POST",body:fd});importMsg.textContent=`${r.new} yeni kayıt işlendi, ${r.skipped} kayıt atlandı.`;await refresh()}catch(e){alert(e.message)}}
+async function sendCardFile(){if(!cardSelect.value)return alert("Önce kart ekle");await sendFile("cardFile","/api/import/card/"+cardSelect.value)}
+async function loadReview(){const r=await api("/api/review");reviewBody.innerHTML=r.map(x=>`<tr><td>${x.date||""}</td><td>${x.source}</td><td>${x.description}</td><td>${money(Math.abs(x.amount))}</td><td><select id="rv${x.id}"><option>Beko</option><option>İstikbal</option><option>Ortak İşletme</option><option>Aile</option><option>Taha</option><option>Hasan</option></select> <button class="primary" onclick="resolve(${x.id})">İşle</button></td></tr>`).join("")}
+async function resolve(id){await api("/api/review/"+id+"/resolve",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target:document.getElementById("rv"+id).value})});await loadReview();await refresh()}
+async function saveSettings(){await api("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cash:+setCash.value,tax_reserved:+setTax.value})});await refresh();alert("Kaydedildi")}
+async function changePassword(){if(!pwNew.value)return;await api("/api/users/"+encodeURIComponent(pwUser.value)+"/password",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:pwNew.value})});pwNew.value="";alert("Şifre değişti")}
+(async()=>{USER=await api("/api/me").catch(()=>null);if(USER)boot()})();
+</script></body></html>

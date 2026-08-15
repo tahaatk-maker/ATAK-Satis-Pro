@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atak Pazarlama · Personel</title>
+<link rel="icon" href="/assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v129">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v129">
+</head>
+<body>
+
+<div id="login" class="login-shell">
+<form id="loginForm" class="login-card">
+<img class="brand-logo login-logo" src="/assets/atak-pazarlama-full.png?v=logo5" alt="Atak Pazarlama">
+<div class="login-kicker">ATAK PAZARLAMA</div>
+<h1>Personel Girişi</h1>
+<p>Mağaza hesabınızla satış ve cari işlemlerine devam edin.</p>
+<input id="username" autocomplete="username" placeholder="Kullanıcı adı" required>
+<input id="password" autocomplete="current-password" placeholder="Şifre" type="password" required>
+<button type="submit">Giriş Yap</button>
+<button type="button" id="forgotOpenBtn" class="linkish" style="margin-top:10px;background:transparent;border:0;color:#9a3412;font-weight:700;cursor:pointer;text-decoration:underline">Şifremi unuttum</button>
+<div id="loginError"></div>
+</form>
+
+<form id="mfaForm" class="login-card hidden">
+<img class="brand-logo login-logo" src="/assets/atak-pazarlama-full.png?v=logo5" alt="Atak Pazarlama">
+<div class="login-kicker">ATAK PAZARLAMA</div>
+<h1>Giriş kodu</h1>
+<p id="mfaHint">E-postanıza 6 haneli kod gönderildi. Bu tarayıcı 6 saat tanınır.</p>
+<input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6 haneli kod" required>
+<button type="submit">Kodu Doğrula</button>
+<button type="button" id="mfaBackBtn" class="linkish" style="margin-top:10px;background:transparent;border:0;color:#64748b;font-weight:700;cursor:pointer">← Şifreye dön</button>
+<div id="mfaError"></div>
+</form>
+
+<form id="forgotForm" class="login-card hidden">
+<img class="brand-logo login-logo" src="/assets/atak-pazarlama-full.png?v=logo5" alt="Atak Pazarlama">
+<div class="login-kicker">ATAK PAZARLAMA</div>
+<h1>Şifremi Unuttum</h1>
+<p>Kullanıcı adı veya kayıtlı e-postanızı yazın. Sıfırlama linki mailinize gelir.</p>
+<input id="forgotUser" autocomplete="username" placeholder="Kullanıcı adı veya e-posta" required>
+<button type="submit">Sıfırlama Maili Gönder</button>
+<button type="button" id="forgotBackBtn" class="linkish" style="margin-top:10px;background:transparent;border:0;color:#64748b;font-weight:700;cursor:pointer">← Girişe dön</button>
+<div id="forgotError"></div>
+</form>
+
+<form id="resetForm" class="login-card hidden">
+<img class="brand-logo login-logo" src="/assets/atak-pazarlama-full.png?v=logo5" alt="Atak Pazarlama">
+<div class="login-kicker">ATAK PAZARLAMA</div>
+<h1>Yeni Şifre</h1>
+<p>Maildeki link ile geldiniz. Yeni şifrenizi belirleyin (en az 6 karakter).</p>
+<input id="resetPassword" type="password" autocomplete="new-password" placeholder="Yeni şifre" required minlength="6">
+<input id="resetPassword2" type="password" autocomplete="new-password" placeholder="Yeni şifre (tekrar)" required minlength="6">
+<button type="submit">Şifreyi Kaydet</button>
+<button type="button" id="resetBackBtn" class="linkish" style="margin-top:10px;background:transparent;border:0;color:#64748b;font-weight:700;cursor:pointer">← Girişe dön</button>
+<div id="resetError"></div>
+</form>
+</div>
+
+<div id="app" class="hidden">
+<header>
+<img class="brand-logo header-logo" src="/assets/atak-pazarlama-full.png?v=logo5" alt="Atak Pazarlama">
+<div class="user">
+<b id="welcome"></b>
+<small id="roleName"></small>
+</div>
+<button id="homeBtn" type="button">Ana Sayfa</button>
+<button id="logout" type="button">Çıkış</button>
+</header>
+
+<main>
+<section id="home">
+<div class="hero">
+<div>
+<small>ATAK PAZARLAMA · PERSONEL</small>
+<h1>İşlem Merkezi</h1>
+<p id="permissionText">Yetkilerinize açık modüller aşağıda. Satış için Satış Merkezi’ne girin.</p>
+</div>
+</div>
+
+<div class="modules kiosk">
+<button id="salesCard" class="module-card hidden tile-primary" type="button">
+<span class="mod-ico">₺</span>
+<b>SATIŞ YAP</b>
+<small>Müşteri → ürün → ödeme</small>
+</button>
+
+<button id="paymentsCard" class="module-card hidden tile-collect" type="button">
+<span class="mod-ico">◎</span>
+<b>TAHSİLAT</b>
+<small>Taksit al, A5 makbuz ver</small>
+</button>
+
+<button id="financeCard" class="module-card hidden tile-finance" type="button">
+<span class="mod-ico">₣</span>
+<b>FİNANS &amp; CARİ</b>
+<small>Cari bakiye ve ciro</small>
+</button>
+
+<button id="stockCard" class="module-card hidden tile-stock" type="button">
+<span class="mod-ico">▣</span>
+<b>STOK / DEPO</b>
+<small>Ürün ve depo stokları</small>
+</button>
+
+<button id="announceCard" class="module-card tile-news" type="button">
+<span class="mod-ico">!</span>
+<b>DUYURULAR</b>
+<small>Mağaza duyuruları</small>
+</button>
+</div>
+</section>
+
+<section id="financePanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">FİNANS</small>
+<h2>Finans &amp; Cari</h2>
+<p id="financeScopeHint">Hareketleriniz yükleniyor…</p>
+</div>
+<button id="financeRefresh" class="ghost-btn" type="button">Yenile</button>
+</div>
+
+<div id="adminCiroWrap" class="hidden">
+<div class="ciro-grid" id="ciroBrandGrid"></div>
+<div class="toolbar finance-filters">
+<label>Bayi / Marka
+<select id="dealerFilter">
+<option value="">Tümü (Total)</option>
+<option value="atak-beko">Beko</option>
+<option value="atak-istikbal">İstikbal</option>
+</select>
+</label>
+<label>Personel
+<select id="salespersonFilter"><option value="">Tüm personel</option></select>
+</label>
+<button id="financeFilterApply" class="primary-btn" type="button">Uygula</button>
+</div>
+</div>
+
+<div id="financeStats" class="stat-grid"></div>
+
+<div class="month-prim-box">
+  <div class="panel-head" style="margin-bottom:10px">
+    <div>
+      <div class="section-title" style="margin:0">Ay Bazlı Satış &amp; Prim</div>
+      <p id="monthPrimHint" class="soft-hint">İptal ve iade düşülmüş net satış ile priminiz.</p>
+    </div>
+    <div class="toolbar" style="margin:0">
+      <label class="field" style="min-width:150px">Ay
+        <input id="financeMonth" type="month">
+      </label>
+      <label id="monthPersonWrap" class="field hidden" style="min-width:170px">Personel
+        <select id="monthSalesperson"><option value="">Tümü / Ben</option></select>
+      </label>
+      <button id="monthRefresh" class="primary-btn" type="button">Ayı Getir</button>
+    </div>
+  </div>
+  <div id="monthStats" class="stat-grid month-stats"></div>
+  <div class="warn-banner" id="cancelWarnBanner">İptal / iade talebi yöneticiye gider. Onaylanmadan satış ve prim düşmez. Sebep yazmak zorunludur.</div>
+  <div class="section-title">Bu Ayın Satışları</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tarih</th><th>Müşteri</th><th>Net</th><th>Prim</th><th>Durum</th><th>İşlem</th></tr></thead>
+      <tbody id="monthSaleRows"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="managerApprovalsWrap" class="approvals-box hidden">
+  <div class="section-title">Yönetici Onayları — İptal / İade Uyarıları</div>
+  <p class="soft-hint">Personel iptal veya iade istediğinde burada onaylamanız gerekir. Prim ancak onay sonrası düşer.</p>
+  <div id="approvalRows" class="approval-list"></div>
+</div>
+
+<div class="split-panels">
+<div>
+<div class="section-title">Satışlarım / Hareketler</div>
+<div class="toolbar">
+<input id="txSearch" placeholder="Müşteri, referans veya açıklama ara">
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Tarih</th><th>Tür</th><th>Müşteri</th><th>Bayi</th><th>Tutar</th></tr></thead>
+<tbody id="txRows"></tbody>
+</table>
+</div>
+</div>
+<div>
+<div class="section-title">Cariler</div>
+<div class="toolbar">
+<input id="customerSearch" placeholder="Müşteri, telefon veya vergi no ara">
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Müşteri</th><th>Telefon</th><th>Bakiye</th></tr></thead>
+<tbody id="customerRows"></tbody>
+</table>
+</div>
+<div id="personnelCiroWrap" class="hidden">
+<div class="section-title" style="margin-top:16px">Personel Bazlı Ciro</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Personel</th><th>Beko</th><th>İstikbal</th><th>Toplam</th><th>Adet</th></tr></thead>
+<tbody id="personnelCiroRows"></tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+<div id="financeStatus" class="status"></div>
+
+<div id="cancelReasonModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="panel-head">
+      <div>
+        <small class="eyebrow">YÖNETİCİ ONAYI GEREKLİ</small>
+        <h2 id="cancelModalTitle">İptal / İade Talebi</h2>
+      </div>
+      <button id="cancelModalClose" class="ghost-btn" type="button">Kapat</button>
+    </div>
+    <p id="cancelModalHint" class="soft-hint">Bu talep yöneticiye uyarı olarak gider. Onaylanmadan satış ve priminiz düşmez.</p>
+    <div class="info-box" style="margin-bottom:12px">
+      <div><small>Satış</small><b id="cancelModalRef">—</b></div>
+      <div><small>Tutar</small><b id="cancelModalTotal">—</b></div>
+      <div><small>Prim</small><b id="cancelModalPrim">—</b></div>
+    </div>
+    <label class="field wide">Neden * (zorunlu — sonra hatırlamanız için)
+      <textarea id="cancelReasonInput" rows="3" placeholder="Örn: Müşteri vazgeçti / yanlış ürün / iade talebi..."></textarea>
+    </label>
+    <div class="pay-screen-actions">
+      <button id="cancelSubmitBtn" class="danger-btn" type="button">Talebi Yöneticiye Gönder</button>
+      <button id="cancelModalCancel" class="ghost-btn" type="button">Vazgeç</button>
+    </div>
+    <div id="cancelModalStatus" class="status"></div>
+  </div>
+</div>
+</section>
+
+<section id="paymentsPanel" class="panel hidden">
+<div class="panel-head">
+  <div>
+    <small class="eyebrow">TAHSİLAT</small>
+    <h2>Müşteri Ödemeleri</h2>
+    <p>Eski satışların aylık taksit / senet takibi · ödeme al · A5 makbuz yazdır</p>
+  </div>
+  <button id="payRefresh" class="ghost-btn" type="button">Yenile</button>
+</div>
+<div id="paySummary" class="stat-grid"></div>
+<div class="toolbar finance-filters pay-filter-bar">
+  <div class="period-toggle" id="payFilterToggle">
+    <button type="button" class="period-btn active" data-pay-filter="overdue">Geciken</button>
+    <button type="button" class="period-btn" data-pay-filter="due">Bu Ay</button>
+    <button type="button" class="period-btn" data-pay-filter="open">Açık</button>
+    <button type="button" class="period-btn" data-pay-filter="paid">Ödenenler</button>
+    <button type="button" class="period-btn" data-pay-filter="all">Tümü</button>
+  </div>
+  <label class="field">Ara<input id="paySearch" placeholder="Müşteri veya telefon"></label>
+</div>
+<div class="split-panels pay-track-split">
+  <div>
+    <div class="section-title">Müşteri Listesi</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Müşteri</th><th>Durum</th><th>Cari</th><th>Geciken</th><th>Bu Ay</th><th>Vade</th></tr></thead>
+        <tbody id="payRows"></tbody>
+      </table>
+    </div>
+  </div>
+  <div>
+    <div class="section-title">Ödeme Al</div>
+    <p class="soft-hint" id="payDetailHint">Soldan müşteri seçin.</p>
+    <div id="payDetailBody" class="hidden">
+      <div class="info-box" id="payCustomerBox"></div>
+      <div class="section-title">Taksit Planı <small style="font-weight:500;color:#68758a">(işaret yoksa en yakın vadeden)</small></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>Senet</th><th>Vade</th><th>Kalan</th><th>Durum</th></tr></thead>
+          <tbody id="payNotes"></tbody>
+        </table>
+      </div>
+      <form id="payForm" class="form-grid" style="margin-top:12px">
+        <label>Tutar *<input id="custPayAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
+        <label>Ödeme şekli
+          <select id="payMethod"><option>Nakit</option><option>Kredi Kartı</option><option>Havale</option></select>
+        </label>
+        <label>Kasa / Banka *<select id="payAccount" required></select></label>
+        <label>Tarih<input id="payDate" type="date"></label>
+        <label class="wide">Açıklama<input id="payDesc" placeholder="Aylık ödeme"></label>
+        <div class="button-row wide">
+          <button class="primary-btn" type="submit">Ödemeyi Kaydet + A5 Makbuz</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="section-title" style="margin-top:16px">Son Tahsilatlar</div>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Şekil</th><th>Makbuz</th></tr></thead>
+    <tbody id="payRecent"></tbody>
+  </table>
+</div>
+<div id="payStatus" class="status"></div>
+</section>
+
+<section id="salesPanel" class="panel hidden sales-panel-v17">
+<div class="panel-head sales-panel-head">
+<div>
+<small class="eyebrow">SATIŞ KASASI</small>
+<h2>Satış Merkezi</h2>
+<p id="salesScopeHint">Müşteri → ürün → ödeme. Bayi seçimi Beko / İstikbal ayrımı için önemli.</p>
+</div>
+<button id="salesResetBtn" class="ghost-btn" type="button">Yeni Fiş</button>
+</div>
+
+<nav class="pos-steps" aria-label="Satış adımları">
+  <button type="button" class="pos-step active" data-pos-step="1"><b>1</b><span>Müşteri<small>Ara / seç / yeni</small></span></button>
+  <button type="button" class="pos-step" data-pos-step="2"><b>2</b><span>Ürün / Sepet<small>Kod veya ad</small></span></button>
+  <button type="button" class="pos-step" data-pos-step="3"><b>3</b><span>Ödeme<small>Dağıtım + senet</small></span></button>
+</nav>
+<div class="pos-banner" id="salesBanner">ADIM 1/3 — Önce müşteri seçin</div>
+<div id="salesStatus" class="status"></div>
+
+<div id="salesStep1" class="pos-step-panel">
+  <div class="toolbar sales-customer-search-bar">
+    <input id="customerSearchSale" placeholder="Ad, telefon, VKN veya TCKN yazın — otomatik arar" autocomplete="off">
+    <button id="customerSearchSaleBtn" class="primary-btn" type="button">🔍 Ara</button>
+    <button id="salesNewCustomerBtn" class="ghost-btn" type="button">+ Yeni Müşteri</button>
+  </div>
+  <p class="sales-customer-hint" id="salesCustomerSearchHint">10.000+ müşteri için tüm liste yüklenmez. Ara butonuyla bulun, sonra seçin.</p>
+  <label class="field">Sonuçlar
+    <select id="salesCustomerSelect"><option value="">Önce arayın, sonra seçin</option></select>
+  </label>
+  <small id="salesCustomerCount" class="muted">0 sonuç</small>
+  <div id="salesCustomerInfo" class="info-box hidden"></div>
+  <input type="hidden" id="salesBillingParty" value="individual"/>
+  <div id="salesBillingAutoHint" class="status hidden"></div>
+  <div class="pos-nav">
+    <span id="salesHint1">Müşteri seçmeden devam edilemez</span>
+    <button id="salesNext1" class="primary-btn" type="button" disabled>Devam Et → Ürün</button>
+  </div>
+</div>
+
+<div id="salesStep2" class="pos-step-panel hidden">
+  <div class="sales-grid">
+    <div>
+      <div class="toolbar product-filters">
+        <input id="salesItemCodeFilter" placeholder="Madde kodu">
+        <input id="salesMaterialCodeFilter" placeholder="Malzeme / ürün adı">
+        <input id="productSearch" placeholder="Genel ara (barkod, kod)">
+      </div>
+      <div class="product-list-head"><span>Madde</span><span>Malzeme</span><span>Liste</span><span></span></div>
+      <div class="product-list" id="productRows"></div>
+    </div>
+    <div>
+      <div class="section-title">Sepet <small id="cartCount">0 kalem</small></div>
+      <p class="muted cart-price-hint">Birim tutarı elle girin — otomatik dolmaz.</p>
+      <div class="cart-cols"><span>Madde / Malzeme</span><span>Adet</span><span>Tutar</span><span></span></div>
+      <div id="cartRows" class="cart-list"></div>
+      <div class="cart-total"><span>Ara toplam</span><b id="cartSubtotal">₺0,00</b></div>
+    </div>
+  </div>
+  <div class="pos-nav">
+    <button id="salesBack2" class="ghost-btn" type="button">← Müşteri</button>
+    <span id="salesHint2">Sepete ürün ekleyin</span>
+    <button id="salesNext2" class="primary-btn" type="button" disabled>Devam Et → Ödeme</button>
+  </div>
+</div>
+
+<div id="salesStep3" class="pos-step-panel hidden">
+  <div class="pos-block-head pos-block-3">
+    <div class="left"><em>03</em><div><h3>ÖDEME PLANI</h3><p>Dağıtımı yapın · sonra senet/sözleşme veya önizle/teklif</p></div></div>
+    <button class="pos-big-btn" id="salesJumpPreviewBtn" type="button">Önizle</button>
+  </div>
+
+  <div class="sc-sec">
+    <div class="sc-sec-title"><span>Satış bilgisi</span></div>
+    <div class="sc-grid-2">
+      <label class="field">Bayi<select id="salesDealer"></select></label>
+      <label class="field">İskonto %<input id="salesDiscountPct" type="number" min="0" max="100" step="0.01" value="0" inputmode="decimal"></label>
+    </div>
+    <div class="sc-grid-2" style="margin-top:8px">
+      <label class="field">İskonto ₺<input id="salesDiscountAmount" type="number" min="0" step="0.01" value="0" readonly></label>
+      <label class="field">Tarih<input id="salesDate" type="date"></label>
+    </div>
+    <div class="sc-grid-2 staff-perm-stock" style="margin-top:8px" data-need-perm="sale_deduct_stock">
+      <label class="field">Stok
+        <select id="salesDeductStock">
+          <option value="no" selected>Değişmesin</option>
+          <option value="reserve">Rezerve et</option>
+          <option value="yes">Stoktan düş</option>
+        </select>
+      </label>
+      <label class="field" id="salesWarehouseWrap">Depo<select id="salesWarehouse"></select></label>
+    </div>
+    <div class="sc-meta-line"><span id="salesCommissionPreview">Prim: ₺0,00</span> · <span id="payMethodPreview">Ödeme seçilmedi</span></div>
+    <span id="payGross" class="hidden">₺0,00</span>
+    <span id="payDiscount" class="hidden">₺0,00</span>
+    <span id="payNet" class="hidden">₺0,00</span>
+  </div>
+
+  <div class="sc-sec sales-pay-plan-gate">
+    <div class="sc-sec-title"><span>Ödeme planı</span></div>
+    <div class="sales-pay-plan-summary" id="salesPayPlanSummary">
+      <div><small>Dağıtılan</small><b id="payAllocatedSummary">₺0,00</b></div>
+      <div><small>Kalan</small><b id="payRemainingSummary">₺0,00</b></div>
+      <div class="wide"><small>Seçili</small><b id="payMethodSummary">Henüz seçilmedi</b></div>
+    </div>
+    <button type="button" class="sales-pay-plan-btn" id="salesPayPlanToggleBtn" aria-expanded="false">
+      <span>ÖDEME PLANI</span>
+      <small id="salesPayPlanBtnHint">NAKİT · KART · HAVALE · VADELİ · SENET</small>
+    </button>
+  </div>
+
+  <div class="sc-sec sales-pay-plan-panel pay-inline-box hidden" id="salesPayPlanPanel" aria-hidden="true">
+    <div class="sales-payments-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <b>Ödeme yöntemi seç (kalanı yazar)</b>
+        <small>NAKİT · KART · HAVALE · VADELİ · SENET</small>
+      </div>
+      <button type="button" class="sales-pay-plan-close" id="salesPayPlanCloseBtn">Kapat</button>
+    </div>
+    <div class="pos-pay-tiles" id="posPayTilesInline">
+      <button type="button" class="pos-pay-tile cash" data-pay-fill="payCash"><b>NAKİT</b><small>Kalanı yaz</small></button>
+      <button type="button" class="pos-pay-tile card" data-pay-fill="payCard"><b>KART</b><small>Kalanı yaz</small></button>
+      <button type="button" class="pos-pay-tile transfer" data-pay-fill="payTransfer"><b>HAVALE</b><small>Kalanı yaz</small></button>
+      <button type="button" class="pos-pay-tile credit" data-pay-fill="payCredit"><b>VADELİ</b><small>Cariye yaz</small></button>
+      <button type="button" class="pos-pay-tile note" data-pay-fill="payNote"><b>SENET</b><small>Vade planı</small></button>
+    </div>
+    <div class="sales-payments-box">
+      <div class="sales-payments-title">
+        <b>Detaylı dağılım</b>
+        <small>İstersen tutarı elle yaz · hesap seç · KALAN butonu</small>
+      </div>
+      <div class="sc-pay-cols"><span>Yöntem</span><span>Tutar</span><span>Hesap</span><span></span></div>
+      <div class="sales-pay-list">
+        <div class="pay-method pay-cash">
+          <span class="pay-method-badge">Nakit</span>
+          <input id="payCash" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off"/>
+          <select id="payCashAccount"></select>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payCash">KALAN</button>
+        </div>
+        <div class="pay-method pay-card">
+          <span class="pay-method-badge">Kart</span>
+          <input id="payCard" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off"/>
+          <select id="payCardAccount" aria-label="Kart banka hesabı"><option value="">Banka / POS seçin</option></select>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payCard">KALAN</button>
+        </div>
+        <div class="pay-method pay-transfer">
+          <span class="pay-method-badge">Havale</span>
+          <input id="payTransfer" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off"/>
+          <select id="payTransferAccount" aria-label="Havale banka hesabı"><option value="">Banka hesabı seçin</option></select>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payTransfer">KALAN</button>
+        </div>
+        <div class="pay-method pay-credit">
+          <span class="pay-method-badge">Vadeli</span>
+          <input id="payCredit" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off"/>
+          <span class="pay-method-hint">Cariye yazılır</span>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payCredit">KALAN</button>
+        </div>
+        <div class="pay-method pay-note">
+          <span class="pay-method-badge">Senet</span>
+          <input id="payNote" min="0" step="0.01" type="text" inputmode="decimal" value="" placeholder="0" autocomplete="off"/>
+          <span class="pay-method-hint">Vade planı</span>
+          <button type="button" class="pay-fill-btn" data-pay-fill="payNote">KALAN</button>
+        </div>
+      </div>
+      <div class="sales-pay-sum">
+        <div><span>Dağıtılan</span><b id="payAllocated">₺0,00</b></div>
+        <div><span>Kalan</span><b id="payRemaining">₺0,00</b></div>
+      </div>
+      <div id="payBalanceHint" class="sales-pay-balance warn">Ödemeyi net tutara eşitleyin.</div>
+    </div>
+    <div id="promissoryWrap" class="pay-grid promissory-box hidden">
+      <label class="field">Senet taksit<input id="promissoryInstallments" type="number" min="1" max="36" value="1"></label>
+      <label class="field">Aralık (ay)<input id="promissoryInterval" type="number" min="1" max="12" value="1"></label>
+      <label class="field">İlk vade<input id="promissoryFirstDue" type="date"></label>
+      <div id="salesPromissorySchedule" class="sales-promissory-schedule" style="grid-column:1/-1"></div>
+      <div class="sales-kefil-box" id="salesKefilBox" style="grid-column:1/-1">
+        <div class="sales-kefil-head">
+          <b>Kefil</b>
+          <small id="salesKefilStatusHint">Senet için kefil olarak kayıtlı müşterilerden birini seçin</small>
+        </div>
+        <div class="sales-kefil-actions">
+          <button type="button" class="secondary-btn" id="salesKefilAddBtn">Kefil ekle</button>
+          <button type="button" class="secondary-btn hidden" id="salesKefilClearBtn">Kefili kaldır</button>
+        </div>
+        <div id="salesKefilPreview" class="sales-kefil-preview hidden"></div>
+        <div id="salesKefilEdit" class="sales-kefil-edit hidden">
+          <div class="pay-grid" style="grid-template-columns:1fr 1fr;gap:8px">
+            <label class="field">Ad Soyad<input id="salesKefilName" autocomplete="off" readonly/></label>
+            <label class="field">TCKN<input id="salesKefilTckn" inputmode="numeric" autocomplete="off" readonly/></label>
+            <label class="field">GSM<input id="salesKefilPhone" autocomplete="off" readonly/></label>
+            <label class="field">İş Tel.<input id="salesKefilWorkPhone" autocomplete="off"/></label>
+            <label class="field" style="grid-column:1/-1">Ev Tel.<input id="salesKefilHomePhone" autocomplete="off"/></label>
+            <label class="field" style="grid-column:1/-1">Ev Adresi<textarea id="salesKefilHomeAddress" rows="2"></textarea></label>
+            <label class="field" style="grid-column:1/-1">İş Adresi<textarea id="salesKefilWorkAddress" rows="2"></textarea></label>
+          </div>
+        </div>
+        <input type="hidden" id="salesKefilAttached" value="0"/>
+        <input type="hidden" id="salesKefilCustomerId" value=""/>
+      </div>
+    </div>
+  </div>
+
+  <div class="sc-sec" style="margin-top:12px">
+    <div class="sc-sec-title"><span>Fatura &amp; not</span></div>
+    <label class="field">Fatura durumu
+      <select id="salesInvoiceStatus">
+        <option value="not_required" selected>Fatura gerekmiyor</option>
+        <option value="pending">Daha sonra kes (e-Fatura Merkezi’ne düşer)</option>
+        <option value="queue_qnb" data-need-perm="sale_invoice_qnb">QNB Solist ile kes (e-Fatura / e-Arşiv)</option>
+        <option value="issued" data-need-perm="sale_invoice_qnb">Manuel faturalandı</option>
+      </select>
+    </label>
+    <div id="salesInvoiceIssuedFields" class="hidden" style="margin-top:8px">
+      <div class="sc-grid-2">
+        <label class="field">Fatura no<input id="salesInvoiceNumber" placeholder="Fatura no"/></label>
+        <label class="field">Fatura tarihi<input id="salesInvoiceDate" type="date"/></label>
+      </div>
+    </div>
+    <label class="field" style="margin-top:8px">Açıklama<textarea id="salesDescription" placeholder="Mağaza satışı" rows="2"></textarea></label>
+  </div>
+
+  <div class="sc-checkout-foot">
+    <div class="pos-net-hero">
+      <div><span>Net tahsilat</span><strong id="salesGrandTotal">₺0,00</strong></div>
+      <div style="text-align:right;font-size:11px;color:#9ec0ef">Prim<br><b id="salesCommissionAmountPreview" style="color:#fff;font-size:13px">₺0,00</b></div>
+    </div>
+    <div class="sales-calc-box">
+      <div class="sales-total-line"><span>Brüt</span><b id="salesGrossPreview">₺0,00</b></div>
+      <div class="sales-total-line discount"><span>İskonto <i id="salesDiscountPctLabel">(%0)</i></span><b id="salesDiscountPreview">-₺0,00</b></div>
+      <div class="sales-total-line commission"><span>Prim oranı <i id="salesCommissionPctLabel">(%0)</i></span><b>—</b></div>
+    </div>
+    <div class="sc-foot-mini">
+      <span>Tahsil <b id="salesPaidPreview">₺0,00</b></span>
+      <span>Cari / senet <b id="salesDuePreview">₺0,00</b></span>
+    </div>
+    <div class="pos-finish-split pos-finish-3">
+      <div class="pos-finish-card docs" data-need-perm="sale_docs">
+        <h4>Senet + Sözleşme</h4>
+        <p>Tek A4 sayfada sözleşme ve senet planı.</p>
+        <button class="pos-action-btn docs" id="salesWizardDocsBtn" type="button">TEK A4 BAS</button>
+      </div>
+      <div class="pos-finish-card offer">
+        <h4>Önizle / Teklif</h4>
+        <p>Teklif şablonunu yazdırın veya WhatsApp ile gönderin.</p>
+        <button class="pos-action-btn preview" id="salesSaveInlineBtn" type="button">ÖNİZLE VE SATIŞI YAP</button>
+        <button class="pos-action-btn secondary" id="salesWizardOfferBtn" type="button" data-need-perm="sale_offer">TEKLİF YAZDIR / GÖNDER</button>
+      </div>
+      <div class="pos-finish-card invoice" data-need-perm="sale_invoice_qnb">
+        <h4>Fatura Kes</h4>
+        <p>QNB Solist e-Fatura / e-Arşiv kuyruğuna al.</p>
+        <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button">FATURA KES (QNB)</button>
+      </div>
+    </div>
+    <div class="pos-nav">
+      <button id="salesBack3" class="ghost-btn" type="button">← Ürün / Sepet</button>
+      <button id="salesFooterResetBtn" class="ghost-btn" type="button">Fişi Temizle</button>
+    </div>
+    <div id="payInlineStatus" class="status"></div>
+  </div>
+</div>
+
+<div class="pos-sticky-dock hidden" id="salesStickyDock">
+  <div class="dock-meta">
+    <div><small>Adım</small><b id="salesDockStep">1 / 3</b></div>
+    <div><small>Net</small><b id="salesDockNet">₺0,00</b></div>
+    <div><small>Kalan ödeme</small><b id="salesDockRemain">₺0,00</b></div>
+    <div><small>Müşteri</small><b id="salesDockCustomer">—</b></div>
+  </div>
+  <button type="button" id="salesDockPreviewBtn">DEVAM ET →</button>
+</div>
+
+<div id="salesPreviewModal" class="sales-preview-modal hidden" aria-hidden="true">
+  <div class="sales-preview-card">
+    <div class="sales-preview-head"><div><small>SATIŞ ÖNİZLEME</small><h2>Satışı Kontrol Et</h2></div><button id="salesPreviewClose" type="button">×</button></div>
+    <div id="salesPreviewBody"></div>
+    <div class="sales-preview-actions">
+      <button id="salesPreviewOfferBtn" class="ghost-btn" type="button" data-need-perm="sale_offer">Teklif WhatsApp</button>
+      <button id="salesPreviewPrintBtn" class="ghost-btn" type="button" data-need-perm="sale_offer">Teklif PDF</button>
+      <button id="salesPreviewDocsBtn" class="ghost-btn" type="button" data-need-perm="sale_docs">Sözleşme + Senet</button>
+      <button id="salesPreviewConfirmBtn" class="primary-btn" type="button">✓ Kontrol Ettim, Satışı Yap</button>
+    </div>
+  </div>
+</div>
+
+<div id="salesQuickCustomerModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="panel-head">
+      <h2>Yeni Müşteri</h2>
+      <button id="salesQuickCustomerClose" class="ghost-btn" type="button">Kapat</button>
+    </div>
+    <form id="salesQuickCustomerForm" class="form-grid">
+      <label class="field">Ad Soyad (Şahıs / Senet) *<input id="qcName" required placeholder="Senet borçlusu"></label>
+      <label class="field">Telefon *<input id="qcPhone" required></label>
+      <label class="field">İl *<input id="qcCity" required></label>
+      <label class="field">İlçe *<input id="qcDistrict" required></label>
+      <label class="field wide">Açık adres *<textarea id="qcAddress" rows="2" required></textarea></label>
+      <div class="field wide" id="qcIndividualSec" style="display:grid;gap:8px">
+        <small style="font-weight:800;color:#0b2a4a">Bireysel bilgiler</small>
+        <small class="muted">Senet ve sözleşme bu bilgilere yazılır. TCKN zorunlu değildir.</small>
+        <label class="field" style="margin:0">TCKN<input id="qcTckn" placeholder="11 haneli TCKN" inputmode="numeric"></label>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="individual" checked/> Bireysel fatura</label>
+          <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="corporate"/> Kurumsal fatura</label>
+        </div>
+      </div>
+      <label class="field hidden" id="qcCompanyWrap">Firma ünvanı *<input id="qcCompanyName" placeholder="Şirket ünvanı"></label>
+      <label class="field hidden" id="qcTaxOfficeWrap">Vergi dairesi *<input id="qcTaxOffice"></label>
+      <label class="field hidden" id="qcTaxNoWrap">VKN *<input id="qcTaxNo" placeholder="10 hane" inputmode="numeric"></label>
+      <input type="hidden" id="qcInvoiceType" value="individual"/>
+      <button class="primary-btn wide" type="submit">Kaydet ve Seç</button>
+      <div id="qcStatus" class="status"></div>
+    </form>
+  </div>
+</div>
+</section>
+
+<section id="stockPanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">STOK</small>
+<h2>Stok &amp; Depo</h2>
+</div>
+</div>
+<div id="stockStatus" class="status">Yükleniyor...</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Ürün</th><th>Depo</th><th>Stok</th><th>Kullanılabilir</th></tr></thead>
+<tbody id="stockRows"></tbody>
+</table>
+</div>
+</section>
+
+<section id="announcementPanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">DUYURU</small>
+<h2>Duyurular</h2>
+</div>
+</div>
+<div id="announcementList"></div>
+</section>
+</main>
+</div>
+
+<div id="salesKefilPickerModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="panel-head">
+      <h2>Kefil seç (müşteri)</h2>
+      <button id="salesKefilPickerClose" class="ghost-btn" type="button">Kapat</button>
+    </div>
+    <p class="muted" style="margin:0 0 10px">Kayıtlı müşterilerden kefil seçin. Borçlu listede yok.</p>
+    <label class="field">Ara<input id="salesKefilPickerSearch" type="search" placeholder="Ad, telefon, TCKN..." autocomplete="off"></label>
+    <div id="salesKefilPickerStatus" class="status"></div>
+    <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
+  </div>
+</div>
+<script src="/assets/personel.js?v=fix-v129"></script>
+</body>
+</html>
