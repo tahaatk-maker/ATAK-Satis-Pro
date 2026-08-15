@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v110 */
+/* ATAK_ADMIN_BUILD=fix-v111 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -812,12 +812,37 @@ q('#importResetBtn').onclick=()=>{importDraft=null;q('#importUrl').value='';q('#
 const ROLE_LABELS={owner:'Sahip / Tam Yetki',admin:'Yönetici',sales:'Satış Personeli',warehouse:'Depo',accounting:'Muhasebe',service:'Servis',viewer:'Sadece Görüntüleme'};
 
 let permissionDefs=[],rolePermissionMap={};
-function currentCheckedPermissions(){return qa('[data-user-permission]:checked').map(x=>x.value)}
+function currentCheckedPermissions(){
+  return qa('[data-user-permission].on').map(x=>x.dataset.userPermission||x.value).filter(Boolean);
+}
 function renderPermissionEditor(selected=[]){
   const box=q('#userPermissionList');if(!box)return;
   const selectedSet=new Set(selected),groups={};
   permissionDefs.forEach(p=>(groups[p.group]||(groups[p.group]=[])).push(p));
-  box.innerHTML=Object.entries(groups).map(([group,rows])=>`<fieldset><legend>${group}</legend>${rows.map(p=>`<label class="permission-check"><input type="checkbox" data-user-permission value="${p.id}" ${selectedSet.has(p.id)?'checked':''}><span>${p.name}</span></label>`).join('')}</fieldset>`).join('');
+  box.innerHTML=Object.entries(groups).map(([group,rows])=>{
+    const onCount=rows.filter(p=>selectedSet.has(p.id)||selectedSet.has('*')).length;
+    return `<details class="perm-group" open>
+      <summary><b>${group}</b><small>${onCount}/${rows.length} açık</small></summary>
+      <div class="perm-chip-row">${rows.map(p=>{
+        const on=selectedSet.has(p.id)||selectedSet.has('*');
+        return `<button type="button" class="perm-chip ${on?'on':''}" data-user-permission="${p.id}" aria-pressed="${on?'true':'false'}">${p.name}</button>`;
+      }).join('')}</div>
+    </details>`;
+  }).join('');
+  qa('[data-user-permission]',box).forEach(btn=>{
+    btn.onclick=()=>{
+      const on=!btn.classList.contains('on');
+      btn.classList.toggle('on',on);
+      btn.setAttribute('aria-pressed',on?'true':'false');
+      const group=btn.closest('.perm-group');
+      if(group){
+        const total=group.querySelectorAll('[data-user-permission]').length;
+        const open=group.querySelectorAll('[data-user-permission].on').length;
+        const small=group.querySelector('summary small');
+        if(small)small.textContent=`${open}/${total} açık`;
+      }
+    };
+  });
 }
 function applyRoleDefaultPermissions(){
   const role=q('#userRole')?.value||'viewer',perms=rolePermissionMap[role]||[];

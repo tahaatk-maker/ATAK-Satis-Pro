@@ -500,12 +500,32 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 @media(max-width:980px){.pay-track-layout{grid-template-columns:1fr}.pay-track-detail{position:static}}
 
 /* V6.3.4 kullanıcı bazlı yetkiler */
-.permission-editor{border:1px solid var(--line);border-radius:10px;padding:10px;background:#f8fafc;display:grid;gap:10px}
+.permission-editor{border:1px solid var(--line);border-radius:12px;padding:12px;background:#f8fafc;display:grid;gap:10px}
 .permission-editor-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.permission-editor-head small{display:block;color:var(--muted);margin-top:3px}
-.permission-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.permission-grid fieldset{border:1px solid var(--line);border-radius:9px;padding:9px;background:#fff;display:grid;gap:6px}
-.permission-grid legend{font-size:11px;font-weight:900;padding:0 5px;color:var(--navy)}.permission-check{display:flex!important;align-items:center;gap:8px;font-size:12px!important;font-weight:700!important}.permission-check input{width:17px;height:17px}
+.permission-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.permission-grid .perm-group{border:1px solid var(--line);border-radius:12px;background:#fff;padding:0;overflow:hidden}
+.permission-grid .perm-group>summary{
+  list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:10px 12px;font-weight:800;color:var(--navy);background:#fffaf5;user-select:none;
+}
+.permission-grid .perm-group>summary::-webkit-details-marker{display:none}
+.permission-grid .perm-group>summary::after{content:'▾';color:#9a3412;font-size:12px}
+.permission-grid .perm-group:not([open])>summary::after{content:'▸'}
+.permission-grid .perm-group>summary small{font-size:11px;font-weight:750;color:#7a5230}
+.permission-grid .perm-chip-row{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px 12px}
+.permission-grid .perm-chip{
+  appearance:none;border:1.5px solid #d6e0ec;background:#fff;color:#0f172a;
+  border-radius:999px;padding:8px 12px;font:inherit;font-size:12px;font-weight:750;
+  cursor:pointer;line-height:1.2;transition:background .12s,border-color .12s,color .12s,transform .1s;
+}
+.permission-grid .perm-chip:hover{border-color:#9a3412;transform:translateY(-1px)}
+.permission-grid .perm-chip.on{
+  border-color:#9a3412;background:linear-gradient(180deg,#fff7ed,#ffedd5);color:#7c2d12;
+  box-shadow:0 0 0 2px rgba(154,52,18,.12);
+}
+.permission-grid .perm-chip.on::before{content:'✓ ';font-weight:900}
 .permission-hidden{display:none!important}
-@media(max-width:780px){.permission-grid{grid-template-columns:1fr}.permission-editor-head{align-items:flex-start;flex-direction:column}}
+@media(max-width:780px){.permission-editor-head{align-items:flex-start;flex-direction:column}}
 
 /* ===== Compact density + UI scale (%100 tarayıcı zoom) ===== */
 html{font-size:13px}
