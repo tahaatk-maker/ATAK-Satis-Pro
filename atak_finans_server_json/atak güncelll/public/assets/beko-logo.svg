@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 100" role="img" aria-label="beko">
+  <rect width="220" height="100" fill="#fff"/>
+  <text x="18" y="58" font-family="Arial Rounded MT Bold, Arial, Helvetica, sans-serif"
+        font-size="52" font-weight="800" fill="#0057a8">beko</text>
+  <!-- classic slanted underline under b→o -->
+  <path d="M22 70 L168 62" stroke="#0057a8" stroke-width="7" stroke-linecap="round"/>
+</svg>

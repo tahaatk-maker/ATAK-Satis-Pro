@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 100" role="img" aria-label="istikbal">
+  <rect width="340" height="100" fill="#fff"/>
+  <g transform="translate(8 22)">
+    <path d="M0 6 C12 0,26 0,38 6 C50 12,64 12,76 6 L76 16 C64 22,50 22,38 16 C26 10,12 10,0 16 Z" fill="#f0b429"/>
+    <path d="M0 24 C12 18,26 18,38 24 C50 30,64 30,76 24 L76 34 C64 40,50 40,38 34 C26 28,12 28,0 34 Z" fill="#f0b429"/>
+    <path d="M0 42 C12 36,26 36,38 42 C50 48,64 48,76 42 L76 52 C64 58,50 58,38 52 C26 46,12 46,0 52 Z" fill="#f0b429"/>
+  </g>
+  <text x="100" y="62" font-family="Arial, Helvetica, sans-serif"
+        font-size="42" font-style="italic" font-weight="700" fill="#0a4d94">istikbal</text>
+</svg>
