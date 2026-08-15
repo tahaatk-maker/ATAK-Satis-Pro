@@ -1202,8 +1202,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.120-header-logos',
-  build:'fix-v120',
+  version:'6.3.121-header-logos',
+  build:'fix-v121',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -4244,7 +4244,9 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const companyTaxNo=ATAK_COMPANY.taxNo;
   const address=ATAK_COMPANY.address;
   const companyTaxLine=`VD: ${companyTaxOffice} · Vergi No: ${companyTaxNo}`;
-  const atakLogoSrc='/web-admin-assets/atak-contract-header-brands.png';
+  const atakLogoSrc='/web-admin-assets/atak-header-logo.png';
+  const bekoLogoSrc='/web-admin-assets/beko-logo.png';
+  const istikbalLogoSrc='/web-admin-assets/istikbal-logo.png';
   const atakLogoWhiteSrc='/web-admin-assets/atak-header-logo-white.png';
   const phone=settings?.phone||'0212 223 28 71';
   const wa=settings?.whatsapp?String(settings.whatsapp).replace(/^90/,'0'):'0543 358 50 60';
@@ -4291,14 +4293,14 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const css=`<style>
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
 .a4c{padding:5mm 6mm 3mm!important;font:8pt/1.25 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible;display:flex;flex-direction:column;min-height:277mm}
-.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;gap:0;margin:0 0 1.2mm}.a4c .logo-top img{height:9.5mm;width:auto;max-width:130mm;object-fit:contain;object-position:left center}
+.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;gap:0;margin:0 0 1.2mm}.a4c .logo-top img{height:9mm;width:auto;max-width:55mm;object-fit:contain;object-position:left center}.a4c .top{display:grid;grid-template-columns:1fr auto;grid-template-areas:'left title' 'meta meta';gap:2px 6px;align-items:start;flex:0 0 auto}.a4c .head-left{grid-area:left}.a4c .mid-head{grid-area:title;text-align:right;padding-top:1px;align-self:center}.a4c .meta-row{grid-area:meta;display:flex;align-items:center;gap:5mm;margin-top:1px;min-height:6.5mm}.a4c .meta-row .meta{margin:0;flex:0 1 auto;font-size:7pt!important;line-height:1.2!important}.a4c .partners{display:flex;align-items:center;justify-content:flex-start;gap:3.5mm;flex:0 0 auto}.a4c .partners img{height:6mm;width:auto;max-height:6mm;object-fit:contain;display:block}
 .a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 3px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:10mm;object-fit:contain;object-position:left top}
 .a4c .logo-bottom{display:none}
-.a4c .top{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:start;flex:0 0 auto}
+/* top grid areas */
 .a4c .name,.a4c .meta,.a4c .title,.a4c th,.a4c td,.a4c .mat,.a4c .mmeta td,.a4c tr.more td,.a4c .box h3,.a4c .box td,.a4c .box td.lbl,.a4c .box td.nm,.a4c .pay,.a4c .terms h4,.a4c .terms p,.a4c .sig b,.a4c .sig .nm,.a4c .sig .sigpad span,.a4c .senet,.a4c .senet-side,.a4c .senet-side strong,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields span,.a4c .fields b,.a4c .sbody,.a4c .sbody b,.a4c .sbody u,.a4c .duo .lab,.a4c .duo .v,.a4c .duo .v.nm,.a4c .keside,.a4c .foot,.a4c.dense td,.a4c.dense .mat,.a4c.dense .terms p,.a4c.dense .sbody{font-size:8pt!important;line-height:1.25!important;font-family:Arial,Helvetica,sans-serif!important;color:#000}
 .a4c .name{font-weight:700}
 .a4c .meta{margin-top:1px;font-size:7pt!important;line-height:1.2!important}
-.a4c .mid-head{text-align:right;padding-top:1px;align-self:center}
+/* mid-head area */
 .a4c .title{font-size:11pt!important;line-height:1.1!important;font-weight:700;letter-spacing:.04em}
 .a4c .rule{height:1.5px;background:#000;margin:2px 0 3px;flex:0 0 auto}
 .a4c .grid3{display:grid;grid-template-columns:1.7fr .55fr .6fr;gap:3px;flex:0 0 auto}
@@ -4379,8 +4381,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 }
 </style>`;
   return `<section class="sheet a4c${denseClass}">${css}
-  <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK · Beko · İstikbal"/></div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta">${htmlEsc(address)}<br/>${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · ${htmlEsc(companyTaxLine)}</div></div>
-  <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
+  <div class="top"><div class="head-left"><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${htmlEsc(companyLegal)}</div><div class="meta addr">${htmlEsc(address)}</div></div><div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div><div class="meta-row"><div class="meta">${htmlEsc(phone)} · ${htmlEsc(wa)} · ${htmlEsc(email)} · ${htmlEsc(companyTaxLine)}</div><div class="partners"><img src="${bekoLogoSrc}" alt="beko"/><img src="${istikbalLogoSrc}" alt="istikbal"/></div></div></div>
   <div class="rule"></div>
   <div class="grid3">
     <table class="prods"><thead><tr><th class="mat" style="width:58%">Malzeme</th><th style="width:10%">Adet</th><th style="width:16%">Birim</th><th style="width:16%">Tutar</th></tr></thead><tbody>${productRows}</tbody></table>
