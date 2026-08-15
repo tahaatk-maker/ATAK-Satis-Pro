@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v107 */
+/* ATAK_ADMIN_BUILD=fix-v108 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -873,17 +873,126 @@ function applyPermissionVisibility(){
 async function loadCurrentAdminPermissions(){
   try{const d=await api('/web-api/me');window.__currentAdminUser=d.user||null;applyPermissionVisibility()}catch(e){}
 }
-function resetUserForm(){q('#userId').value='';q('#userName').value='';q('#userUsername').value='';q('#userRole').value='viewer';q('#userPassword').value='';q('#userActive').checked=true;setTimeout(applyRoleDefaultPermissions,0)}
+function syncUserStatusUi(){
+  const active=q('#userActive')?.checked!==false;
+  const st=q('#userStatusText');
+  const btn=q('#userActivateBtn');
+  const box=q('#userStatusBox');
+  if(st){st.textContent=active?'AKTİF':'PASİF';st.style.color=active?'#15803d':'#b91c1c'}
+  if(box){box.style.background=active?'#f0fdf4':'#fef2f2';box.style.borderColor=active?'#86efac':'#fca5a5'}
+  if(btn){
+    const hasId=!!String(q('#userId')?.value||'').trim();
+    btn.style.display=(!active&&hasId)?'inline-flex':'none';
+  }
+}
+function resetUserForm(){
+  q('#userId').value='';
+  q('#userName').value='';
+  q('#userUsername').value='';
+  q('#userRole').value='viewer';
+  q('#userPassword').value='';
+  q('#userActive').checked=true;
+  syncUserStatusUi();
+  setTimeout(applyRoleDefaultPermissions,0);
+}
+function fillUserForm(u){
+  if(!u)return;
+  q('#userId').value=u.id;
+  q('#userName').value=u.name;
+  q('#userUsername').value=u.username;
+  q('#userRole').value=u.role;
+  q('#userPassword').value='';
+  q('#userActive').checked=u.active!==false;
+  renderPermissionEditor((u.permissions||[]).includes('*')?permissionDefs.map(p=>p.id):(u.permissions||[]));
+  syncUserStatusUi();
+  goTab('users');
+}
+async function activateUser(id){
+  const users=store?.users||[];
+  const uid=String(id||q('#userId')?.value||'').trim();
+  const u=users.find(x=>String(x.id)===uid);
+  if(!u){toast('Önce listeden kullanıcı seçin');return}
+  if(u.active!==false){toast('Kullanıcı zaten aktif');return}
+  try{
+    await api('/web-api/admin/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      id:u.id,name:u.name,username:u.username,role:u.role,active:true,
+      permissions:u.permissions||[],password:''
+    })});
+    await load();
+    const updated=(store?.users||[]).find(x=>String(x.id)===uid);
+    if(updated)fillUserForm(updated);
+    toast('Kullanıcı aktifleştirildi');
+  }catch(e){toast(e.message||'Aktifleştirilemedi')}
+}
+async function deleteUser(id){
+  const users=store?.users||[];
+  const uid=String(id||q('#userId')?.value||'').trim();
+  if(!uid){toast('Silmek için listeden kullanıcı seçin');return}
+  const u=users.find(x=>String(x.id)===uid);
+  const label=u?`${u.name} (@${u.username})`:uid;
+  const alreadyPassive=u?.active===false;
+  if(alreadyPassive){
+    if(!confirm(`“${label}” zaten pasif.\n\nKalıcı silinsin mi? Bu işlem geri alınamaz.`))return;
+  }else{
+    if(!confirm(`“${label}” pasife alınsın mı?\n\nTekrar Sil derseniz kalıcı silinir. Aktifleştir ile geri açabilirsiniz.`))return;
+  }
+  try{
+    const url='/web-api/admin/user/'+encodeURIComponent(uid)+(alreadyPassive?'?force=1':'');
+    const r=await api(url,{method:'DELETE'});
+    resetUserForm();
+    await load();
+    if(r.deleted)toast('Kullanıcı kalıcı silindi');
+    else toast(r.message||'Kullanıcı pasife alındı');
+  }catch(e){toast(e.message||'Silinemedi')}
+}
 function renderUsers(){
   if(!q('#userList'))return;
   const users=store?.users||[];
   q('#userRole').innerHTML=Object.entries(ROLE_LABELS).map(([id,name])=>`<option value="${id}">${name}</option>`).join('');
-  q('#userList').innerHTML=users.length?users.map(u=>`<div class="admin-card user-card"><div><h3>${u.name}</h3><p>@${u.username} · ${u.roleName||ROLE_LABELS[u.role]}</p><small>${u.active!==false?'Aktif':'Pasif'}</small></div><div class="admin-card-actions"><button data-user-edit="${u.id}">Düzenle</button>${u.active!==false?`<button data-user-disable="${u.id}">Pasife al</button>`:''}</div></div>`).join(''):'<p>Henüz ek kullanıcı yok.</p>';
-  qa('[data-user-edit]').forEach(b=>b.onclick=()=>{const u=users.find(x=>x.id===b.dataset.userEdit);q('#userId').value=u.id;q('#userName').value=u.name;q('#userUsername').value=u.username;q('#userRole').value=u.role;q('#userPassword').value='';q('#userActive').checked=u.active!==false;renderPermissionEditor((u.permissions||[]).includes('*')?permissionDefs.map(p=>p.id):(u.permissions||[]));goTab('users')});
-  qa('[data-user-disable]').forEach(b=>b.onclick=async()=>{if(!confirm('Kullanıcı pasife alınsın mı?'))return;await api(`/web-api/admin/user/${b.dataset.userDisable}`,{method:'DELETE'});await load();toast('Kullanıcı pasife alındı')});
+  q('#userList').innerHTML=users.length?users.map(u=>`<div class="admin-card user-card" style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap">
+    <div style="flex:1;min-width:160px">
+      <h3>${u.name}</h3>
+      <p>@${u.username} · ${u.roleName||ROLE_LABELS[u.role]}</p>
+      <small style="font-weight:800;color:${u.active!==false?'#15803d':'#b91c1c'}">${u.active!==false?'AKTİF':'PASİF'}</small>
+    </div>
+    <div class="admin-card-actions" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <button type="button" data-user-edit="${u.id}">Düzenle</button>
+      ${u.active===false
+        ?`<button type="button" class="primary" data-user-activate="${u.id}">Aktifleştir</button>`
+        :`<button type="button" data-user-disable="${u.id}">Pasife al</button>`}
+      <button type="button" class="secondary-btn" data-user-del="${u.id}">Sil</button>
+    </div>
+  </div>`).join(''):'<p>Henüz ek kullanıcı yok. Soldan ad / kullanıcı adı / şifre girip Kaydet’e basın.</p>';
+  qa('[data-user-edit]').forEach(b=>b.onclick=()=>{
+    const u=users.find(x=>x.id===b.dataset.userEdit);if(!u)return;fillUserForm(u);
+  });
+  qa('[data-user-activate]').forEach(b=>b.onclick=()=>activateUser(b.dataset.userActivate));
+  qa('[data-user-disable]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDisable));
+  qa('[data-user-del]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDel));
 }
-q('#userForm').onsubmit=async e=>{e.preventDefault();const payload={id:q('#userId').value||undefined,name:q('#userName').value.trim(),username:q('#userUsername').value.trim(),role:q('#userRole').value,password:q('#userPassword').value,active:q('#userActive').checked,permissions:currentCheckedPermissions()};await api('/web-api/admin/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});resetUserForm();await load();toast(payload.id?'Kullanıcı ve yetkileri güncellendi':'Kullanıcı eklendi')};
+q('#userForm').onsubmit=async e=>{
+  e.preventDefault();
+  const payload={
+    id:q('#userId').value||undefined,
+    name:q('#userName').value.trim(),
+    username:q('#userUsername').value.trim(),
+    role:q('#userRole').value,
+    password:q('#userPassword').value,
+    active:q('#userActive').checked,
+    permissions:currentCheckedPermissions()
+  };
+  try{
+    await api('/web-api/admin/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    resetUserForm();
+    await load();
+    toast(payload.id?'Kullanıcı güncellendi':'Kullanıcı eklendi');
+  }catch(err){toast(err.message||'Kaydedilemedi')}
+};
 q('#userReset').onclick=resetUserForm;
+q('#userActivateBtn')?.addEventListener('click',()=>activateUser());
+q('#userDeleteBtn')?.addEventListener('click',()=>deleteUser());
+q('#userActive')?.addEventListener('change',syncUserStatusUi);
+syncUserStatusUi();
 q('#applyRolePermissions')?.addEventListener('click',applyRoleDefaultPermissions);
 q('#userRole')?.addEventListener('change',applyRoleDefaultPermissions);
 

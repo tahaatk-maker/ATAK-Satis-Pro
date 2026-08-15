@@ -1248,7 +1248,23 @@ body.inv-full #pageTitle{font-size:18px}
   <div class="permission-editor-head"><div><b>Ekran & İşlem Yetkileri</b><small>Rolü seçin, sonra izinleri tek tek açıp kapatın.</small></div><button id="applyRolePermissions" class="secondary-btn" type="button">Rol Varsayılanını Uygula</button></div>
   <div id="userPermissionList" class="permission-grid"></div>
 </div>
-<label>Şifre<input id="userPassword" placeholder="Yeni kayıtta zorunlu" type="password"/></label><label class="check"><input checked="" id="userActive" type="checkbox"/> Aktif</label><button class="primary" type="submit">Kullanıcıyı Kaydet</button><button class="secondary-btn" id="userReset" type="button">Temizle</button></form>
+<label>Şifre<input id="userPassword" placeholder="Yeni kayıtta zorunlu · güncellemede boş bırakılabilir" type="password"/></label>
+<div id="userStatusBox" style="border:1px solid #86efac;border-radius:10px;padding:12px 14px;background:#f0fdf4;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+  <div>
+    <div style="font-size:12px;font-weight:700;color:#64748b;letter-spacing:.04em;text-transform:uppercase">Kullanıcı durumu</div>
+    <div id="userStatusText" style="font-size:18px;font-weight:800;color:#15803d;margin-top:2px">AKTİF</div>
+    <label class="check" style="margin-top:8px;display:inline-flex;gap:8px;align-items:center">
+      <input checked="" id="userActive" type="checkbox"/> Kaydederken aktif olsun
+    </label>
+  </div>
+  <button class="primary" id="userActivateBtn" type="button" style="display:none;min-width:140px">Aktifleştir</button>
+</div>
+<div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+  <button class="primary" type="submit">Kullanıcıyı Kaydet</button>
+  <button class="secondary-btn" id="userReset" type="button">Yeni / Temizle</button>
+  <button class="secondary-btn" id="userDeleteBtn" type="button">Kullanıcıyı Sil</button>
+</div>
+</form>
 <div class="panel"><h2>Kullanıcılar</h2><div class="card-list" id="userList"></div><div class="roles-info"><h3>Hazır roller</h3><p>Sahip, Yönetici, Satış, Depo, Muhasebe, Servis ve Sadece Görüntüleme.</p></div></div>
 </div>
 </section>

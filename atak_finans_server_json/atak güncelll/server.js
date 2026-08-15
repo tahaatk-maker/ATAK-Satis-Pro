@@ -985,8 +985,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.107-hesap-sec-filtre',
-  build:'fix-v107',
+  version:'6.3.108-kullanici-aktif-sil',
+  build:'fix-v108',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -1042,8 +1042,27 @@ app.post('/web-api/admin/user',requirePermission('users_manage'),(req,res)=>{
   audit(s,x.id?'Kullanıcı güncellendi':'Kullanıcı eklendi',username,{role,permissions});writeStore(s);res.json({ok:true,user:publicUser(user)});
 });
 app.delete('/web-api/admin/user/:id',requirePermission('users_manage'),(req,res)=>{
-  const s=readStore(),user=(s.users||[]).find(x=>x.id===req.params.id);if(!user)return res.status(404).json({error:'Kullanıcı bulunamadı'});
-  user.active=false;user.updatedAt=new Date().toISOString();audit(s,'Kullanıcı pasife alındı',user.username,{role:user.role});writeStore(s);res.json({ok:true});
+  const s=readStore(),id=String(req.params.id||'').trim();
+  const idx=(s.users||[]).findIndex(x=>String(x.id)===id);
+  if(idx<0)return res.status(404).json({error:'Kullanıcı bulunamadı'});
+  const user=s.users[idx];
+  const force=req.query.force==='1'||req.body?.force===true;
+  // Zaten pasif + force → kalıcı sil
+  if(force||user.active===false){
+    if(!force&&user.active===false){
+      // İlk tık pasifte: bilgi; ikinci (force) kalıcı — UI force gönderir
+    }
+    if(force){
+      s.users.splice(idx,1);
+      audit(s,'Kullanıcı silindi',user.username,{role:user.role});
+      writeStore(s);
+      return res.json({ok:true,deleted:true});
+    }
+  }
+  user.active=false;user.updatedAt=new Date().toISOString();
+  audit(s,'Kullanıcı pasife alındı',user.username,{role:user.role});
+  writeStore(s);
+  res.json({ok:true,softDeleted:true,canForceDelete:true,message:'Kullanıcı pasife alındı. Tekrar Sil ile kalıcı silebilirsiniz.'});
 });
 
 
