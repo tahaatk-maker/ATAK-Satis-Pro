@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v122 */
+/* ATAK_PERSONEL_BUILD=fix-v123 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1437,8 +1437,8 @@ function salesCombinedContractSenetA4Html(d){
   const moreSenets=noteList.length>1?`<div class="note">Tek senet tutarı toplam bakiyedir (${money(senetAmount)}). ${noteList.length} taksitin vade planı yukarıdaki tablodadır.</div>`:'';
   const css=`<style>
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
-.a4c{padding:5mm 6mm 3mm!important;font:8pt/1.25 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible;display:flex;flex-direction:column;min-height:277mm}
-.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;gap:0;margin:0 0 1.2mm}.a4c .logo-top img{height:9mm;width:auto;max-width:55mm;object-fit:contain;object-position:left center}.a4c .top{display:grid;grid-template-columns:1fr auto;grid-template-areas:'left title' 'meta meta';gap:2px 6px;align-items:start;flex:0 0 auto}.a4c .head-left{grid-area:left}.a4c .mid-head{grid-area:title;text-align:right;padding-top:1px;align-self:center}.a4c .meta-row{grid-area:meta;display:flex;align-items:center;flex-wrap:nowrap;gap:4mm;margin-top:0;min-height:12mm}.a4c .meta-texts{display:flex;flex-direction:column;justify-content:center;gap:1px;flex:0 1 auto;min-width:0}.a4c .meta-row .meta,.a4c .meta-texts .meta{margin:0;flex:0 1 auto;white-space:nowrap;font-size:7pt!important;line-height:1.2!important}.a4c .partners{display:flex;align-items:center;justify-content:flex-start;gap:3.5mm;flex:0 0 auto;margin-left:1mm;height:11mm}.a4c .partners img{height:11mm;width:auto;max-height:11mm;object-fit:contain;object-position:left center;display:block}
+.a4c{padding:5mm 6mm 3mm!important;font:8pt/1.25 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible!important;display:flex;flex-direction:column;min-height:277mm}
+.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;gap:0;margin:0 0 1.2mm}.a4c .logo-top img{height:9mm;width:auto;max-width:55mm;object-fit:contain;object-position:left center}.a4c .top{display:grid;grid-template-columns:1fr auto;grid-template-areas:'left title' 'meta meta';gap:2px 6px;align-items:start;flex:0 0 auto}.a4c .head-left{grid-area:left}.a4c .mid-head{grid-area:title;text-align:right;padding-top:1px;align-self:center}.a4c .meta-row{grid-area:meta;display:flex;align-items:center;justify-content:flex-start;gap:3mm;margin-top:0;min-height:16mm;overflow:visible}.a4c .meta-texts{display:flex;flex-direction:column;justify-content:center;gap:1.5px;flex:1 1 auto;min-width:0;min-height:16mm}.a4c .meta-row .meta,.a4c .meta-texts .meta{margin:0;white-space:normal;font-size:7pt!important;line-height:1.25!important}.a4c .partners{display:flex;align-items:center;justify-content:flex-start;gap:3.5mm;flex:0 0 auto;height:16mm;overflow:visible;margin-left:2mm}.a4c .partners img{height:16mm;width:auto;max-height:16mm;max-width:none;object-fit:contain;object-position:left center;display:block;flex-shrink:0}.a4c .partners img.beko{height:16mm;width:auto;min-width:36mm;object-fit:contain;object-position:left center;padding:0;box-sizing:content-box}
 .a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 3px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:10mm;object-fit:contain;object-position:left top}
 .a4c .logo-bottom{display:none}
 /* top grid areas */
@@ -1526,7 +1526,7 @@ function salesCombinedContractSenetA4Html(d){
 }
 </style>`;
   return `<section class="sheet a4c${denseClass}">${css}
-  <div class="top"><div class="head-left"><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${esc(companyLegal)}</div></div><div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div><div class="meta-row"><div class="meta-texts"><div class="meta addr">${esc(address)}</div><div class="meta">${esc(phone)} · ${esc(wa)} · ${esc(email)} · ${esc(companyTaxLine)}</div></div><div class="partners"><img src="${bekoLogoSrc}" alt="beko"/><img src="${istikbalLogoSrc}" alt="istikbal"/></div></div></div>
+  <div class="top"><div class="head-left"><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${esc(companyLegal)}</div></div><div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div><div class="meta-row"><div class="meta-texts"><div class="meta addr">${esc(address)}</div><div class="meta">${esc(phone)} · ${esc(wa)} · ${esc(email)} · ${esc(companyTaxLine)}</div></div><div class="partners"><img src="${bekoLogoSrc}" alt="beko" class="beko"/><img src="${istikbalLogoSrc}" alt="istikbal"/></div></div></div>
   <div class="rule"></div>
   <div class="grid3">
     <table class="prods"><thead><tr><th class="mat" style="width:58%">Malzeme</th><th style="width:10%">Adet</th><th style="width:16%">Birim</th><th style="width:16%">Tutar</th></tr></thead><tbody>${productRows}</tbody></table>
