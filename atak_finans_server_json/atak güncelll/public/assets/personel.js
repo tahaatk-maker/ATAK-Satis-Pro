@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v118 */
+/* ATAK_PERSONEL_BUILD=fix-v119 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1309,7 +1309,7 @@ function openSalesOfferPrintWindow(d){
   const waBtn=wa?`<a class="btn wa" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp Gönder</a>`:'';
   w.document.open();
   w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Satış Teklifi</title><style>
-@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:10pt/1.45 Arial,Helvetica,sans-serif}
+@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:10pt/1.45 Arial,Helvetica,sans-serif}
 .toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;padding:12px;background:#0b2a55;color:#fff}
 .toolbar button,.toolbar a.btn{border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer;background:#fff;color:#0b2a55;text-decoration:none;display:inline-block;font:inherit}
 .toolbar button.primary{background:#dda20c;color:#1a1300}.toolbar a.btn.wa{background:#25D366;color:#063}
@@ -1434,7 +1434,6 @@ function salesCombinedContractSenetA4Html(d){
   const saleRef=d.reference||'TASLAK';
   const moreSenets=noteList.length>1?`<div class="note">Tek senet tutarı toplam bakiyedir (${money(senetAmount)}). ${noteList.length} taksitin vade planı yukarıdaki tablodadır.</div>`:'';
   const css=`<style>
-@page{size:A4;margin:0}
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
 .a4c{padding:5mm 6mm 3mm!important;font:8pt/1.25 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible;display:flex;flex-direction:column;min-height:277mm}
 .a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0}.a4c .logo-top img{height:7mm;width:auto;object-fit:contain}
@@ -1478,7 +1477,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important;margin-top:2px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding-bottom:1px}
 .a4c .sig .sigpad span{color:#666;font-size:7pt!important}
 .a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:2mm!important;padding-top:0;gap:0}
-.a4c .senet{border:1.5px solid #0a2748;border-radius:3px;overflow:hidden;display:grid;grid-template-columns:20mm 1fr;flex:0 0 auto;height:auto;min-height:0;color:#000}
+.a4c .senet{border:1.5px solid #0a2748;border-radius:3px;overflow:visible;display:grid;grid-template-columns:20mm 1fr;flex:0 0 auto;height:auto;min-height:0;color:#000}
 .a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff!important;padding:3px 2px;line-height:1.2;display:flex;flex-direction:column;gap:3px;font-size:7pt!important}
 .a4c .senet-side,.a4c .senet-side *{color:#fff!important;font-size:7pt!important;line-height:1.2!important}
 .a4c .senet-main{padding:3px 5px 3px;display:flex;flex-direction:column;min-height:0;color:#000}
@@ -1490,17 +1489,17 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .fields b{display:block;min-height:10px;margin-top:1px;font-weight:700}
 .a4c .sbody{text-align:justify;margin:2mm 0 2mm;flex:0 0 auto;font-size:8pt!important;line-height:1.28!important}
 .a4c .sbody b,.a4c .sbody u{font-size:8pt!important;color:#000!important}
-.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:0 0 auto;margin-top:2mm;align-items:stretch}
-.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:3px 5px 4px;min-height:42mm;height:auto;display:flex;flex-direction:column;background:#fff;overflow:hidden}
+.a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:0 0 auto;margin-top:2mm}
+.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:3px 5px 2px;min-height:48mm;height:48mm;display:flex;flex-direction:column;background:#fff;overflow:visible}
 .a4c .duo .lab{font-size:8pt!important;font-weight:700;margin:0 0 3px;padding:0 0 2px;border-bottom:1px solid #c5d0dd;flex:0 0 auto;line-height:1.15!important}
 .a4c .duo .row{display:block;margin:0 0 2px;flex:0 0 auto}
 .a4c .duo .k{display:block;font-size:7pt!important;line-height:1.1!important;font-weight:700;color:#444;margin:0 0 1px}
-.a4c .duo .v,.a4c .duo .v.nm{display:block;font-size:8pt!important;line-height:1.2!important;font-weight:700;color:#000!important;min-height:11px;margin:0;padding:0 0 2px;border-bottom:1px solid #222;white-space:normal!important;overflow:hidden!important;text-align:left!important;word-break:break-word}
-.a4c .duo .sigpad{flex:1 1 auto!important;height:auto!important;min-height:18mm!important;max-height:28mm!important;margin-top:4px;border-top:1px dashed #9aa8b8;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:8px 2px 2px;color:#666;font-size:7pt!important;position:relative;box-sizing:border-box}.a4c .duo .sigpad span{display:block;width:100%;text-align:center;color:#444;font-size:7.5pt!important;font-weight:700}
+.a4c .duo .v,.a4c .duo .v.nm{display:block;font-size:8pt!important;line-height:1.2!important;font-weight:700;color:#000!important;min-height:11px;margin:0;padding:0 0 2px;border-bottom:1px solid #222;white-space:normal!important;overflow:visible!important;text-align:left!important;word-break:break-word}
+.a4c .duo .sigpad{flex:1 1 auto!important;height:auto!important;min-height:22mm!important;max-height:none!important;margin-top:auto;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding:0 2px 2px;color:#666;font-size:7pt!important;position:relative}.a4c .duo .sigpad span{display:block;width:100%;text-align:center;color:#666;font-size:7pt!important}
 .a4c .keside{margin-top:1px;text-align:right;font-weight:700;font-size:8pt!important}
 .a4c .note{display:none}
 .a4c .foot{margin-top:1px;text-align:center;font-size:7pt!important;color:#444;flex:0 0 auto}
-.a4c.dense .duo>div{min-height:40mm;height:auto}
+.a4c.dense .duo>div{min-height:46mm;height:46mm}
 .a4c.senet-only{padding-top:10mm!important}
 .a4c.senet-only .senet{margin-top:0;min-height:180mm}
 @media print{
@@ -1516,8 +1515,8 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .sig{min-height:32mm!important}
 .a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important}
 .a4c .duo{margin-top:2mm!important}
-.a4c .duo>div{min-height:42mm!important;height:auto!important;overflow:hidden!important}
-.a4c .duo .sigpad{flex:1 1 auto!important;min-height:18mm!important;height:auto!important;max-height:28mm!important;justify-content:flex-end!important}
+.a4c .duo>div{min-height:48mm!important;height:48mm!important}
+.a4c .duo .sigpad{flex:1 1 auto!important;min-height:22mm!important;height:auto!important;max-height:none!important}
 .a4c .grow{margin-top:2mm!important;padding-top:0!important}
 .a4c .senet{height:auto!important;max-height:none!important;overflow:visible!important}
 .a4c .senet .sbody{margin-top:2mm!important;margin-bottom:2mm!important}
@@ -1554,12 +1553,12 @@ function salesCombinedContractSenetA4Html(d){
       <div class="row"><span class="k">İsim</span><span class="v nm">${esc(personName)||'—'}</span></div>
       <div class="row"><span class="k">T.C. Kimlik No</span><span class="v">${esc(personTax||'')||'—'}</span></div>
       <div class="row"><span class="k">Adres</span><span class="v">${esc(addr||'')||'—'}</span></div>
-      <div class="sigpad"><span class="sig-title">Borçlu İmza</span></div></div>
+      <div class="sigpad"><span>Borçlu İmza</span></div></div>
     <div><div class="lab">Müteselsil Borçlu / Kefil</div>
       <div class="row"><span class="k">İsim</span><span class="v nm">${esc(guarantor.name||'')||'—'}</span></div>
       <div class="row"><span class="k">T.C. Kimlik No</span><span class="v">${esc(guarantor.tckn||guarantor.taxNo||'')||'—'}</span></div>
       <div class="row"><span class="k">Adres</span><span class="v">${esc(guarantor.homeAddress||guarantor.address||'')||'—'}</span></div>
-      <div class="sigpad"><span class="sig-title">Kefil İmza</span></div></div>
+      <div class="sigpad"><span>Kefil İmza</span></div></div>
   </div>
   ${moreSenets}</div></div></div>
 </section>`;
@@ -1570,30 +1569,20 @@ function printSalesContractAndNotes(){
   const d=activeSalesDraft||collectSalesDraft();
   if(d.error){stToast(d.error);return}
   if(!d.promissory)stToast('Senet yok — tek A4 sözleşme açılıyor. Senet için ödeme satırına Senet tutarı girin.');
-  const html=`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title></title>
-<style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:13px/1.45 Arial,Helvetica,sans-serif}
+  const w=window.open('','_blank');
+  if(!w){stToast('Açılır pencere engellendi');return}
+  w.document.open();
+  w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atak Pazarlama · Sözleşme + Senet (Tek A4)</title>
+<style>@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:13px/1.45 "Segoe UI",Arial,sans-serif}
 .toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;padding:12px;background:#0b2a55;color:#fff}
 .toolbar button{border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer;background:#fff;color:#0b2a55}
 .toolbar button.primary{background:#dda20c;color:#1a1300}
-.sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:0;box-shadow:0 10px 30px #0002}
-@media print{body{background:#fff}.toolbar{display:none!important}.sheet{margin:0;box-shadow:none;width:auto;min-height:0;height:auto;padding:0;page-break-inside:avoid}}</style></head><body>
-    <div class="toolbar"><b>Atak Pazarlama · Sözleşme + Senet</b><button class="primary" type="button" id="btnPrint">Yazdır / PDF Kaydet</button><button type="button" onclick="window.close()">Kapat</button></div>
+.sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:14mm;box-shadow:0 10px 30px #0002}
+@media print{body{background:#fff}.toolbar{display:none!important}.sheet{margin:0;box-shadow:none;width:auto;min-height:297mm;height:297mm;padding:0}}</style></head><body>
+    <div class="toolbar"><b>Atak Pazarlama · Sözleşme + Senet (Tek A4)</b><button class="primary" onclick="window.print()">Yazdır / PDF Kaydet</button><button onclick="window.close()">Kapat</button></div>
     ${salesCombinedContractSenetA4Html(d)}
-    <script>
-    (function(){
-      function clearHead(){try{document.title='\u00a0'}catch(e){}}
-      window.addEventListener('beforeprint',clearHead);
-      var b=document.getElementById('btnPrint');
-      if(b)b.onclick=function(){clearHead();setTimeout(function(){window.print()},30)};
-      clearHead();
-    })();
-    <\/script>
-  </body></html>`;
-  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const w=window.open(url,'_blank');
-  if(!w){URL.revokeObjectURL(url);stToast('Açılır pencere engellendi');return}
-  setTimeout(()=>{try{URL.revokeObjectURL(url)}catch(_){}},60000);
+  </body></html>`);
+  w.document.close();
   try{w.focus()}catch(_){}
 }
 function salesIssueInvoiceNow(){
