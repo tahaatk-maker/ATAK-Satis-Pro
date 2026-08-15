@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v109 */
+/* ATAK_ADMIN_BUILD=fix-v110 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -99,6 +99,7 @@ function goTab(id,{remember=true}={}){
     setSettingsTab(settingsTabView);
     loadPromissorySettings();
     loadDealerSettings().catch(()=>{});
+    loadMailSettings().catch(()=>{});
     loadFinanceCenter().catch(()=>{});
   },20);
   if(id==='mySalesReport')setTimeout(loadMySalesReport,20);
@@ -894,6 +895,7 @@ function resetUserForm(){
   q('#userId').value='';
   q('#userName').value='';
   q('#userUsername').value='';
+  if(q('#userEmail'))q('#userEmail').value='';
   q('#userRole').value='viewer';
   q('#userPassword').value='';
   q('#userActive').checked=true;
@@ -905,6 +907,7 @@ function fillUserForm(u){
   q('#userId').value=u.id;
   q('#userName').value=u.name;
   q('#userUsername').value=u.username;
+  if(q('#userEmail'))q('#userEmail').value=u.email||'';
   q('#userRole').value=u.role;
   q('#userPassword').value='';
   q('#userActive').checked=u.active!==false;
@@ -920,7 +923,7 @@ async function activateUser(id){
   if(u.active!==false){toast('Kullanıcı zaten aktif');return}
   try{
     await api('/web-api/admin/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      id:u.id,name:u.name,username:u.username,role:u.role,active:true,
+      id:u.id,name:u.name,username:u.username,email:u.email||'',role:u.role,active:true,
       permissions:u.permissions||[],password:''
     })});
     await load();
@@ -958,6 +961,7 @@ function renderUsers(){
     <div style="flex:1;min-width:160px">
       <h3>${u.name}</h3>
       <p>@${u.username} · ${u.roleName||ROLE_LABELS[u.role]}</p>
+      <p style="margin:2px 0 0;font-size:12px;color:#64748b">${u.email?u.email:'<span style="color:#b91c1c">E-posta yok — şifre unuttum çalışmaz</span>'}</p>
       <small style="font-weight:800;color:${u.active!==false?'#15803d':'#b91c1c'}">${u.active!==false?'AKTİF':'PASİF'}</small>
     </div>
     <div class="admin-card-actions" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
@@ -981,6 +985,7 @@ q('#userForm').onsubmit=async e=>{
     id:q('#userId').value||undefined,
     name:q('#userName').value.trim(),
     username:q('#userUsername').value.trim(),
+    email:q('#userEmail')?.value.trim()||'',
     role:q('#userRole').value,
     password:q('#userPassword').value,
     active:q('#userActive').checked,
@@ -3823,7 +3828,7 @@ async function runSystemSelfTest(target='#settingsSelfTestResult'){
 }
 let settingsTabView='accounts';
 function setSettingsTab(name){
-  const allowed=['accounts','promissory','dealer','test'];
+  const allowed=['accounts','promissory','dealer','mail','test'];
   settingsTabView=allowed.includes(name)?name:'accounts';
   qa('#settingsNav [data-settings-tab]').forEach(b=>b.classList.toggle('active',b.dataset.settingsTab===settingsTabView));
   qa('#settings [data-settings-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.settingsPanel!==settingsTabView));
@@ -3836,8 +3841,60 @@ try{
 }catch(_){}
 setSettingsTab(settingsTabView);
 
+async function loadMailSettings(){
+  const st=q('#mailSettingsStatus');
+  try{
+    const d=await api('/web-api/admin/mail-settings');
+    const s=d.settings||{};
+    if(q('#mailEnabled'))q('#mailEnabled').checked=s.enabled===true;
+    if(q('#mailHost'))q('#mailHost').value=s.host||'smtp.gmail.com';
+    if(q('#mailPort'))q('#mailPort').value=s.port||465;
+    if(q('#mailSecure'))q('#mailSecure').checked=s.secure!==false;
+    if(q('#mailUser'))q('#mailUser').value=s.user||'';
+    if(q('#mailPass'))q('#mailPass').value=s.pass||'';
+    if(q('#mailFrom'))q('#mailFrom').value=s.from||'';
+    if(st){st.textContent=s.configured?'SMTP hazır — şifre sıfırlama mailleri gönderilebilir.':'SMTP henüz yapılandırılmadı.';st.className='form-status '+(s.configured?'success':'')}
+  }catch(e){if(st){st.textContent=e.message;st.className='form-status error'}}
+}
+q('#mailSettingsForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#mailSettingsStatus');
+  try{
+    const r=await api('/web-api/admin/mail-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      enabled:q('#mailEnabled')?.checked===true,
+      host:q('#mailHost')?.value,
+      port:q('#mailPort')?.value,
+      secure:q('#mailSecure')?.checked!==false,
+      user:q('#mailUser')?.value,
+      pass:q('#mailPass')?.value,
+      from:q('#mailFrom')?.value
+    })});
+    if(st){st.textContent=r.configured?'E-posta ayarları kaydedildi · SMTP hazır':'Kaydedildi — kullanıcı / şifre eksik olabilir';st.className='form-status success'}
+    await loadMailSettings();
+  }catch(err){if(st){st.textContent=err.message;st.className='form-status error'}}
+});
+q('#mailTestBtn')?.addEventListener('click',async()=>{
+  const st=q('#mailSettingsStatus');
+  try{
+    // save first so test uses latest
+    await api('/web-api/admin/mail-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      enabled:true,
+      host:q('#mailHost')?.value,
+      port:q('#mailPort')?.value,
+      secure:q('#mailSecure')?.checked!==false,
+      user:q('#mailUser')?.value,
+      pass:q('#mailPass')?.value,
+      from:q('#mailFrom')?.value
+    })});
+    const to=q('#mailUser')?.value||'';
+    const r=await api('/web-api/admin/mail-settings/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to})});
+    if(st){st.textContent=`Test maili gönderildi → ${r.to}`;st.className='form-status success'}
+    toast('Test maili gönderildi');
+  }catch(err){if(st){st.textContent=err.message;st.className='form-status error'};toast(err.message||'Test başarısız')}
+});
+
 async function loadPromissorySettings(){try{const d=await api('/web-api/admin/promissory-settings'),s=d.settings||{};q('#noteCreditor').value='ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';q('#notePaymentPlace').value=s.paymentPlace||'';q('#noteIssuePlace').value=s.issuePlace||'';q('#notePrefix').value=s.prefix||'ATAK';q('#noteDefaultInstallments').value=s.defaultInstallments||1;q('#noteFirstDueDays').value=s.firstDueDays??30;q('#noteIntervalMonths').value=s.intervalMonths||1;q('#noteCopies').value=s.copies||1;q('#noteFooter').value=s.footer||''}catch(e){toast(e.message)}}
-q('[data-tab="settings"]')?.addEventListener('click',()=>setTimeout(()=>{setSettingsTab(settingsTabView);loadPromissorySettings();loadDealerSettings().catch(()=>{})},30));
+q('[data-tab="settings"]')?.addEventListener('click',()=>setTimeout(()=>{setSettingsTab(settingsTabView);loadPromissorySettings();loadDealerSettings().catch(()=>{});loadMailSettings().catch(()=>{})},30));
 q('#systemSelfTestBtn')?.addEventListener('click',()=>{goTab('settings');setSettingsTab('test');setTimeout(()=>runSystemSelfTest(),60)});q('#settingsSelfTestBtn')?.addEventListener('click',()=>runSystemSelfTest());
 q('#promissorySettingsForm')?.addEventListener('submit',async e=>{e.preventDefault();const s=q('#promissorySettingsStatus');try{await api('/web-api/admin/promissory-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creditorName:q('#noteCreditor').value,paymentPlace:q('#notePaymentPlace').value,issuePlace:q('#noteIssuePlace').value,prefix:q('#notePrefix').value,defaultInstallments:q('#noteDefaultInstallments').value,firstDueDays:q('#noteFirstDueDays').value,intervalMonths:q('#noteIntervalMonths').value,copies:q('#noteCopies').value,footer:q('#noteFooter').value})});s.textContent='Senet ayarları kaydedildi';s.className='form-status success'}catch(err){s.textContent=err.message;s.className='form-status error'}});
 

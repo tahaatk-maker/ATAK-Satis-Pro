@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v109">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v109">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v110">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v110">
 </head>
 <body>
 
@@ -22,7 +22,31 @@
 <input id="username" autocomplete="username" placeholder="Kullanıcı adı" required>
 <input id="password" autocomplete="current-password" placeholder="Şifre" type="password" required>
 <button type="submit">Giriş Yap</button>
+<button type="button" id="forgotOpenBtn" class="linkish" style="margin-top:10px;background:transparent;border:0;color:#9a3412;font-weight:700;cursor:pointer;text-decoration:underline">Şifremi unuttum</button>
 <div id="loginError"></div>
+</form>
+
+<form id="forgotForm" class="login-card hidden">
+<img class="brand-logo login-logo" src="/assets/atak-pazarlama-full.png?v=logo5" alt="Atak Pazarlama">
+<div class="login-kicker">ATAK PAZARLAMA</div>
+<h1>Şifremi Unuttum</h1>
+<p>Kullanıcı adı veya kayıtlı e-postanızı yazın. Sıfırlama linki mailinize gelir.</p>
+<input id="forgotUser" autocomplete="username" placeholder="Kullanıcı adı veya e-posta" required>
+<button type="submit">Sıfırlama Maili Gönder</button>
+<button type="button" id="forgotBackBtn" class="linkish" style="margin-top:10px;background:transparent;border:0;color:#64748b;font-weight:700;cursor:pointer">← Girişe dön</button>
+<div id="forgotError"></div>
+</form>
+
+<form id="resetForm" class="login-card hidden">
+<img class="brand-logo login-logo" src="/assets/atak-pazarlama-full.png?v=logo5" alt="Atak Pazarlama">
+<div class="login-kicker">ATAK PAZARLAMA</div>
+<h1>Yeni Şifre</h1>
+<p>Maildeki link ile geldiniz. Yeni şifrenizi belirleyin (en az 6 karakter).</p>
+<input id="resetPassword" type="password" autocomplete="new-password" placeholder="Yeni şifre" required minlength="6">
+<input id="resetPassword2" type="password" autocomplete="new-password" placeholder="Yeni şifre (tekrar)" required minlength="6">
+<button type="submit">Şifreyi Kaydet</button>
+<button type="button" id="resetBackBtn" class="linkish" style="margin-top:10px;background:transparent;border:0;color:#64748b;font-weight:700;cursor:pointer">← Girişe dön</button>
+<div id="resetError"></div>
 </form>
 </div>
 
@@ -627,6 +651,6 @@
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/assets/personel.js?v=fix-v109"></script>
+<script src="/assets/personel.js?v=fix-v110"></script>
 </body>
 </html>

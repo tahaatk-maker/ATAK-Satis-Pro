@@ -7,8 +7,8 @@ die(){ log "FAIL: $*"; exit 1; }
 
 log "=== ATAK DEPLOY ==="
 BRANCH="cursor/satis-merkezi-iskonto-prim-bd99"
-EXPECT_V="6.3.109-ayarlar-sekme"
-EXPECT_B="fix-v109"
+EXPECT_V="6.3.110-sifre-unuttum-mail"
+EXPECT_B="fix-v110"
 APP="${APP_DIR:-/root/atak-v10}"
 [ -d /root/atakhome-platform ] && [ ! -f "$APP/server.js" ] && APP=/root/atakhome-platform
 
@@ -51,6 +51,15 @@ for D in "$APP" /root/atak-v10 /root/atakhome-platform; do
   cp -f "$SRC/public/assets/admin.js" "$D/public/assets/admin.js"
   cp -f "$SRC/public/assets/admin.css" "$D/public/assets/admin.css"
   cp -f "$SRC/public/assets/personel.js" "$D/public/assets/personel.js" 2>/dev/null || true
+  cp -f "$SRC/public/personel.html" "$D/public/personel.html" 2>/dev/null || true
+  cp -f "$SRC/public/assets/personel.css" "$D/public/assets/personel.css" 2>/dev/null || true
+  cp -f "$SRC/package.json" "$D/package.json" 2>/dev/null || true
+done
+
+log "4b) npm bagimlilik (nodemailer)"
+for D in "$APP" /root/atak-v10 /root/atakhome-platform; do
+  [ -f "$D/package.json" ] || continue
+  (cd "$D" && npm install --omit=dev --no-audit --no-fund) >>"$OUT" 2>&1 || log "   npm uyarisi: $D"
 done
 
 log "5) disk kontrol"
