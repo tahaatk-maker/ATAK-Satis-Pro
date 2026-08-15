@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v131 */
+/* ATAK_ADMIN_BUILD=fix-v133 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -140,6 +140,7 @@ function goTab(id,{remember=true}={}){
   if(id==='reportsHub')setTimeout(()=>loadReportsHub(),20);
   if(id==='salesTracking')setTimeout(loadSalesTracking,20);
   if(id==='customerPayments')setTimeout(()=>loadCustomerPayments().catch(e=>toast(e.message)),20);
+  if(id==='training')setTimeout(()=>loadTrainingCenter().catch(e=>toast(e.message)),20);
   if(id==='dynamicsExcelImport')setTimeout(()=>loadDynamicsImport(),20);
   if(id==='purchaseInvoices')setTimeout(()=>loadPurchaseInvoices(),20);
   document.body.classList.toggle('inv-full',id==='invoiceCenter');
@@ -925,7 +926,7 @@ const TAB_PERMISSION_MAP={
   products:'products_view',dynamicsExcelImport:'products_manage',purchaseInvoices:'products_manage',stockCenter:'stock_view',prices:'products_manage',
   brands:'products_manage',categories:'products_manage',productImport:'web_manage',campaigns:'web_manage',
   banners:'web_manage',webOrders:'web_manage',foundation:'foundation_manage',revenue:'reports_view',
-  sync:'sync_manage',users:'users_manage',settings:'settings_manage'
+  sync:'sync_manage',users:'users_manage',training:'screen_training',settings:'settings_manage'
 };
 function applyPermissionVisibility(){
   qa('[data-tab]').forEach(el=>{
@@ -5874,5 +5875,164 @@ q('#custPayForm')?.addEventListener('submit',async e=>{
 
 loadPermissionDefinitions();loadCurrentAdminPermissions();
 check().catch(()=>{});
+
+/* ——— Eğitim Merkezi ——— */
+let trainingState={videos:[],categories:[],filter:'all',selectedId:'',canManage:false};
+function trainingCatLabel(id){
+  return (trainingState.categories||[]).find(c=>c.id===id)?.label||id||'Diğer';
+}
+function playTrainingVideo(id){
+  const v=(trainingState.videos||[]).find(x=>String(x.id)===String(id));
+  trainingState.selectedId=v?.id||'';
+  qa('.training-card').forEach(c=>c.classList.toggle('active',c.dataset.trainingId===String(trainingState.selectedId)));
+  const player=q('#trainingPlayer');
+  const wrap=q('.training-player-wrap');
+  const empty=q('#trainingPlayerEmpty');
+  if(!v){
+    if(q('#trainingPlayerTitle'))q('#trainingPlayerTitle').textContent='Video seçin';
+    if(q('#trainingPlayerMeta'))q('#trainingPlayerMeta').textContent='Soldan bir eğitim seçin.';
+    if(q('#trainingPlayerDesc'))q('#trainingPlayerDesc').textContent='';
+    if(q('#trainingPlayerActions'))q('#trainingPlayerActions').innerHTML='';
+    if(player){player.removeAttribute('src');player.load()}
+    wrap?.classList.remove('has-video');
+    return;
+  }
+  if(q('#trainingPlayerTitle'))q('#trainingPlayerTitle').textContent=v.title||'Eğitim';
+  if(q('#trainingPlayerMeta'))q('#trainingPlayerMeta').textContent=[trainingCatLabel(v.category),v.screenLabel,v.duration].filter(Boolean).join(' · ');
+  if(q('#trainingPlayerDesc'))q('#trainingPlayerDesc').textContent=v.description||'';
+  const actions=[];
+  if(v.screen)actions.push(`<button type="button" class="secondary-btn" data-go="${salesEsc(v.screen)}">İlgili ekrana git</button>`);
+  if(trainingState.canManage){
+    actions.push(`<button type="button" class="secondary-btn" id="trainingEditSelected">Düzenle</button>`);
+    if(!v.builtin||v.uploaded)actions.push(`<button type="button" class="secondary-btn" id="trainingDeleteSelected">Sil / Gizle</button>`);
+  }
+  if(q('#trainingPlayerActions'))q('#trainingPlayerActions').innerHTML=actions.join('');
+  q('#trainingEditSelected')?.addEventListener('click',()=>fillTrainingForm(v));
+  q('#trainingDeleteSelected')?.addEventListener('click',async()=>{
+    if(!confirm('Bu eğitim kaydı silinsin / gizlensin mi?'))return;
+    try{
+      await api('/web-api/admin/training/'+encodeURIComponent(v.id),{method:'DELETE'});
+      toast('Eğitim kaydı güncellendi');
+      await loadTrainingCenter();
+    }catch(e){toast(e.message)}
+  });
+  if(v.status==='ready'&&v.url){
+    if(player){player.src=v.url;player.load()}
+    wrap?.classList.add('has-video');
+    empty&&(empty.textContent='');
+  }else{
+    if(player){player.removeAttribute('src');player.load()}
+    wrap?.classList.remove('has-video');
+    if(empty)empty.textContent='Bu modül için video henüz hazır değil. Yönetici Eğitim → Video Yönet ile yükleyebilir.';
+  }
+}
+function renderTrainingCenter(){
+  const vids=(trainingState.videos||[]).filter(v=>trainingState.filter==='all'||v.category===trainingState.filter);
+  const ready=(trainingState.videos||[]).filter(v=>v.status==='ready'&&v.url).length;
+  const planned=(trainingState.videos||[]).length-ready;
+  if(q('#trainingStats')){
+    q('#trainingStats').innerHTML=`
+      <article><small>Toplam konu</small><b>${(trainingState.videos||[]).length}</b></article>
+      <article><small>Hazır video</small><b>${ready}</b></article>
+      <article><small>Yakında</small><b>${planned}</b></article>`;
+  }
+  if(q('#trainingCats')){
+    q('#trainingCats').innerHTML=(trainingState.categories||[]).map(c=>`
+      <button type="button" class="${trainingState.filter===c.id?'active':''}" data-training-cat="${c.id}">${salesEsc(c.label)}</button>`).join('');
+    qa('#trainingCats [data-training-cat]').forEach(btn=>btn.addEventListener('click',()=>{
+      trainingState.filter=btn.dataset.trainingCat||'all';
+      renderTrainingCenter();
+    }));
+  }
+  if(q('#trainingList')){
+    q('#trainingList').innerHTML=vids.length?vids.map(v=>`
+      <button type="button" class="training-card ${v.id===trainingState.selectedId?'active':''}" data-training-id="${v.id}">
+        <b>${salesEsc(v.title||'Eğitim')}</b>
+        <small>${salesEsc(v.screenLabel||trainingCatLabel(v.category))}${v.duration?' · '+salesEsc(v.duration):''}</small>
+        <small>${salesEsc((v.description||'').slice(0,120))}</small>
+        <span class="training-badge ${v.status==='ready'&&v.url?'ready':'planned'}">${v.status==='ready'&&v.url?'Hazır · İzle':'Yakında'}</span>
+      </button>`).join(''):'<div class="note">Bu kategoride kayıt yok.</div>';
+    qa('#trainingList [data-training-id]').forEach(btn=>btn.addEventListener('click',()=>playTrainingVideo(btn.dataset.trainingId)));
+  }
+  if(trainingState.selectedId)playTrainingVideo(trainingState.selectedId);
+  else playTrainingVideo('');
+}
+function fillTrainingForm(v){
+  q('#trainingManagePanel')?.classList.remove('hidden');
+  if(q('#trainingEditId'))q('#trainingEditId').value=v?.id||'';
+  if(q('#trainingTitle'))q('#trainingTitle').value=v?.title||'';
+  if(q('#trainingCategory'))q('#trainingCategory').value=v?.category||'diger';
+  if(q('#trainingScreen'))q('#trainingScreen').value=v?.screen||'';
+  if(q('#trainingScreenLabel'))q('#trainingScreenLabel').value=v?.screenLabel||'';
+  if(q('#trainingDescription'))q('#trainingDescription').value=v?.description||'';
+  if(q('#trainingDuration'))q('#trainingDuration').value=v?.duration||'';
+  if(q('#trainingSort'))q('#trainingSort').value=v?.sort||200;
+  if(q('#trainingUrl'))q('#trainingUrl').value=v?.url||'';
+  if(q('#trainingFile'))q('#trainingFile').value='';
+  q('#trainingManagePanel')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function loadTrainingCenter(){
+  const d=await api('/web-api/admin/training');
+  trainingState.videos=d.videos||[];
+  trainingState.categories=d.categories||[];
+  trainingState.canManage=Boolean(d.canManage);
+  q('#trainingManageToggle')?.classList.toggle('hidden',!trainingState.canManage);
+  renderTrainingCenter();
+}
+q('#trainingRefreshBtn')?.addEventListener('click',()=>loadTrainingCenter().catch(e=>toast(e.message)));
+q('#trainingManageToggle')?.addEventListener('click',()=>{
+  q('#trainingManagePanel')?.classList.toggle('hidden');
+});
+q('#trainingManageClear')?.addEventListener('click',()=>{
+  fillTrainingForm(null);
+  if(q('#trainingEditId'))q('#trainingEditId').value='';
+});
+q('#trainingUploadForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#trainingManageStatus');
+  const file=q('#trainingFile')?.files?.[0];
+  const id=q('#trainingEditId')?.value||'';
+  try{
+    if(file){
+      if(st){st.textContent='Video yükleniyor...';st.className='form-status'}
+      const fd=new FormData();
+      fd.append('file',file);
+      if(id)fd.append('id',id);
+      fd.append('title',q('#trainingTitle')?.value||file.name);
+      fd.append('category',q('#trainingCategory')?.value||'diger');
+      fd.append('screen',q('#trainingScreen')?.value||'');
+      fd.append('screenLabel',q('#trainingScreenLabel')?.value||'');
+      fd.append('description',q('#trainingDescription')?.value||'');
+      fd.append('duration',q('#trainingDuration')?.value||'');
+      fd.append('sort',q('#trainingSort')?.value||'200');
+      const token=localStorage.getItem('atakAdminToken')||'';
+      // api() helper may not support FormData — use fetch with credentials
+      const r=await fetch('/web-api/admin/training/upload',{method:'POST',body:fd,credentials:'same-origin'});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(j.error||'Yükleme başarısız');
+      if(st){st.textContent='Video yüklendi: '+(j.url||'');st.className='form-status success'}
+      toast('Eğitim videosu yüklendi');
+    }else{
+      await api('/web-api/admin/training',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        id:id||undefined,
+        title:q('#trainingTitle')?.value,
+        category:q('#trainingCategory')?.value,
+        screen:q('#trainingScreen')?.value,
+        screenLabel:q('#trainingScreenLabel')?.value,
+        description:q('#trainingDescription')?.value,
+        duration:q('#trainingDuration')?.value,
+        sort:q('#trainingSort')?.value,
+        url:q('#trainingUrl')?.value,
+        status:q('#trainingUrl')?.value?'ready':'planned'
+      })});
+      if(st){st.textContent='Kayıt kaydedildi';st.className='form-status success'}
+      toast('Eğitim kaydı kaydedildi');
+    }
+    await loadTrainingCenter();
+  }catch(err){
+    if(st){st.textContent=err.message;st.className='form-status error'}
+    toast(err.message||'Kayıt başarısız');
+  }
+});
 
 qa('a[href="#"]').forEach(a=>a.addEventListener('click',e=>e.preventDefault()));

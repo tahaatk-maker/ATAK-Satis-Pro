@@ -5,7 +5,39 @@
     "whatsapp": "905433585060",
     "phone": "02122232871",
     "email": "tarabyabeko@gmail.com",
-    "address": "Sarıyer / İstanbul"
+    "address": "Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul",
+    "companyLegalName": "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.",
+    "taxOffice": "Sarıyer",
+    "taxNo": "0940148218",
+    "smtp": {
+      "enabled": false,
+      "host": "smtp.gmail.com",
+      "port": 465,
+      "secure": true,
+      "user": "",
+      "pass": "",
+      "from": ""
+    },
+    "sms": {
+      "enabled": false,
+      "provider": "generic",
+      "endpoint": "",
+      "method": "POST",
+      "contentType": "form",
+      "username": "",
+      "password": "",
+      "originator": "",
+      "phoneFormat": "national10",
+      "successRule": "auto",
+      "fieldUsername": "username",
+      "fieldPassword": "password",
+      "fieldOriginator": "originator",
+      "fieldNumbers": "numbers",
+      "fieldMessage": "message",
+      "extraJson": "",
+      "bodyTemplate": "",
+      "overdueTemplate": "Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71"
+    }
   },
   "categories": [
     {
@@ -139,6 +171,13 @@
       "name": "Ek Garanti",
       "active": true,
       "sort": 18,
+      "description": ""
+    },
+    {
+      "id": "yazar-kasa",
+      "name": "Yazar Kasa",
+      "active": true,
+      "sort": 90,
       "description": ""
     }
   ],
@@ -19709,7 +19748,29 @@
       }
     }
   ],
-  "brands": [],
+  "brands": [
+    {
+      "id": "istikbal",
+      "name": "İstikbal",
+      "active": true,
+      "sort": 0,
+      "logo": ""
+    },
+    {
+      "id": "istikbal",
+      "name": "İstikbal",
+      "active": true,
+      "sort": 1,
+      "logo": ""
+    },
+    {
+      "id": "istikbal",
+      "name": "İstikbal",
+      "active": true,
+      "sort": 2,
+      "logo": ""
+    }
+  ],
   "sales": [],
   "orders": [],
   "users": [
@@ -19941,7 +20002,7 @@
     }
   ],
   "promissorySettings": {
-    "creditorName": "Atak Home",
+    "creditorName": "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.",
     "paymentPlace": "İstanbul",
     "issuePlace": "İstanbul",
     "prefix": "ATAK",
@@ -19949,20 +20010,25 @@
     "firstDueDays": 30,
     "intervalMonths": 1,
     "copies": 1,
-    "footer": ""
+    "footer": "",
+    "nextSenetNo": 1
   },
   "invoiceIntegration": {
     "provider": "qnb-efinans",
     "environment": "test",
     "enabled": false,
-    "companyVkn": "",
-    "companyTitle": "",
+    "companyVkn": "0940148218",
+    "companyTitle": "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.",
     "senderAlias": "",
     "webServiceUrl": "",
     "username": "",
     "password": "",
     "draftMode": true,
-    "autoDetectType": true
+    "autoDetectType": true,
+    "efaturaSeries": "ATK",
+    "earsivSeries": "ATA",
+    "efaturaNext": 1,
+    "earsivNext": 1
   },
   "invoiceQueue": [
     {
@@ -20021,5 +20087,34 @@
       "active": true
     }
   ],
-  "cancellationRequests": []
+  "cancellationRequests": [],
+  "passwordResets": [],
+  "smsLogs": [],
+  "trainingVideos": [],
+  "invoiceInbox": [],
+  "invoiceAppResponses": [],
+  "purchaseInvoices": [],
+  "suppliers": [
+    {
+      "id": "arcelik",
+      "name": "Arçelik A.Ş.",
+      "active": true
+    },
+    {
+      "id": "istikbal-tedarik",
+      "name": "İstikbal / Doğtaş",
+      "active": true
+    },
+    {
+      "id": "diger-tedarik",
+      "name": "Diğer Tedarikçi",
+      "active": true
+    }
+  ],
+  "metaFlags": {
+    "clearMobilyaPurchase_v1": true,
+    "clearMobilyaPurchase_v2": true,
+    "clearMobilyaPurchase_v2_at": "2026-08-15T23:47:27.118Z",
+    "clearMobilyaPurchase_v2_count": 0
+  }
 }

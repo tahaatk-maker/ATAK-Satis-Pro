@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v132" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v132" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v133" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v133" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -621,6 +621,7 @@ body.inv-full #pageTitle{font-size:18px}
 <button data-tab="revenue" type="button">◉ Ciro Kanalları</button>
 <button data-tab="sync" type="button">↻ Veri Aktarımı</button>
 <button data-tab="users" type="button">♙ Kullanıcılar &amp; Yetkiler</button>
+<button data-tab="training" type="button">🎓 Eğitim</button>
 <button data-tab="settings" type="button">⚙ Ayarlar</button>
 </nav><button class="logout" id="logoutBtn" type="button">Çıkış</button></aside>
 <main><header class="v4-topbar"><div class="v4-page-heading"><button aria-label="Menüyü aç" class="v4-icon-btn" id="mobileMenuBtn" type="button">☰</button><div><small>SATIŞ OPERASYON</small><h1 id="pageTitle">Dashboard</h1></div></div><div class="v4-top-actions"><label class="ui-scale-wrap" title="Yazılım ekran boyutu (tarayıcı %100 kalsın)"><span>Boyut</span><select id="uiScaleSelect"><option value="0.75">Küçük</option><option value="0.85" selected>Normal</option><option value="0.95">Büyük</option><option value="1">Tam</option></select></label><div class="v4-search-wrap"><span>⌕</span><input id="globalSearch" placeholder="Müşteri, ürün, sipariş veya fatura ara"/></div><button class="v4-icon-btn" id="refreshBtn" title="Yenile" type="button">↻</button><button class="v4-icon-btn v4-notification" title="Bildirimler" type="button">♧<em>0</em></button><div class="v4-admin-chip"><span>WA</span><div><b>Web Admin</b><small>Süper Admin</small></div></div></div></header>
@@ -2184,6 +2185,72 @@ Bulunamayan → Diğer.
   <div class="form-status" id="reportsStatus"></div>
 </section>
 
+<section class="tab" id="training">
+  <div class="foundation-head panel">
+    <div>
+      <small class="eyebrow">AKADEMİ</small>
+      <h2>Eğitim Merkezi</h2>
+      <p class="note">Ekran kullanım videoları. Hazır olanları izleyin; yönetici yeni video yükleyebilir. Tüm modüller zamanla tamamlanır.</p>
+    </div>
+    <div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="secondary-btn" id="trainingRefreshBtn">Yenile</button>
+      <button type="button" class="primary hidden" id="trainingManageToggle">Video Yönet</button>
+    </div>
+  </div>
+  <div class="training-stats" id="trainingStats"></div>
+  <div class="training-cats" id="trainingCats"></div>
+  <div class="training-layout">
+    <div class="training-list" id="trainingList"></div>
+    <div class="panel training-player-panel">
+      <div class="panel-head"><div><h3 id="trainingPlayerTitle">Video seçin</h3><p class="note" id="trainingPlayerMeta">Soldan bir eğitim seçin.</p></div></div>
+      <div class="training-player-wrap">
+        <video id="trainingPlayer" controls playsinline preload="metadata"></video>
+        <div class="training-player-empty" id="trainingPlayerEmpty">İzlemek için listeden bir video seçin.</div>
+      </div>
+      <p class="note" id="trainingPlayerDesc"></p>
+      <div class="button-row" id="trainingPlayerActions" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+  </div>
+  <div class="panel training-manage hidden" id="trainingManagePanel">
+    <div class="panel-head"><div><h3>Video yükle / kaydet</h3><p class="note">MP4 önerilir (max ~80MB). Hazır kataloğa yeni kayıt ekleyebilir veya mevcut başlığı güncelleyebilirsiniz.</p></div></div>
+    <form id="trainingUploadForm" class="form-stack" enctype="multipart/form-data">
+      <input type="hidden" id="trainingEditId"/>
+      <div class="two-col">
+        <label>Başlık *<input id="trainingTitle" required placeholder="Örn. Satış Merkezi kullanımı"/></label>
+        <label>Kategori
+          <select id="trainingCategory">
+            <option value="iletisim">SMS / İletişim</option>
+            <option value="operasyon">Operasyon</option>
+            <option value="satis">Satış</option>
+            <option value="finans">Finans &amp; Cari</option>
+            <option value="stok">Ürün &amp; Stok</option>
+            <option value="efatura">e-Fatura</option>
+            <option value="yonetim">Yönetim</option>
+            <option value="rapor">Raporlar</option>
+            <option value="diger">Diğer</option>
+          </select>
+        </label>
+      </div>
+      <div class="two-col">
+        <label>İlgili ekran (tab id)<input id="trainingScreen" placeholder="salesCenter"/></label>
+        <label>Ekran etiketi<input id="trainingScreenLabel" placeholder="Satış Merkezi"/></label>
+      </div>
+      <label>Açıklama<textarea id="trainingDescription" rows="2" placeholder="Bu videoda ne gösteriliyor?"></textarea></label>
+      <div class="two-col">
+        <label>Süre metni<input id="trainingDuration" placeholder="~4 dk"/></label>
+        <label>Sıra<input id="trainingSort" type="number" value="200"/></label>
+      </div>
+      <label>Video dosyası (MP4)<input id="trainingFile" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"/></label>
+      <label>veya video URL<input id="trainingUrl" placeholder="/assets/egitim/... veya https://..."/></label>
+      <div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="primary" type="submit">Kaydet / Yükle</button>
+        <button class="secondary-btn" type="button" id="trainingManageClear">Temizle</button>
+      </div>
+      <div class="form-status" id="trainingManageStatus"></div>
+    </form>
+  </div>
+</section>
+
 <section class="tab" id="settings">
 <div class="foundation-head panel">
   <div>
@@ -2500,5 +2567,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v132"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v133"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

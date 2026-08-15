@@ -34,6 +34,7 @@ const PORT = Number(process.env.PORT || 3100);
 const STORE_PATH = path.join(ROOT, 'data', 'store.json');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const trainingUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 80 * 1024 * 1024 } });
 const COMMERCE_SYNC_URL = process.env.COMMERCE_SYNC_URL || 'http://127.0.0.1:3200/api/sync/beko';
 /** Resmi satıcı bilgileri — senet + satış sözleşmesinde sabit */
 const ATAK_COMPANY = {
@@ -156,6 +157,7 @@ function ensureStore(store) {
     store.settings.sms.provider=/corvass/i.test(String(store.settings.sms.endpoint||''))?'corvass':'generic';
   }
   store.smsLogs = Array.isArray(store.smsLogs) ? store.smsLogs : [];
+  store.trainingVideos = Array.isArray(store.trainingVideos) ? store.trainingVideos : [];
   store.brands = Array.isArray(store.brands) ? store.brands : [];
   store.sales = Array.isArray(store.sales) ? store.sales : [];
   store.orders = Array.isArray(store.orders) ? store.orders : [];
@@ -432,10 +434,11 @@ async function fetchImportedBekoProduct(url){
 
 const STAFF_DEFAULT_SCREENS=[
   'screen_finance','screen_uninvoiced','screen_customer_payments','screen_customers',
-  'screen_sales_center','screen_sales_tracking','screen_my_sales','screen_invoice_center'
+  'screen_sales_center','screen_sales_tracking','screen_my_sales','screen_invoice_center','screen_training'
 ];
 const PERMISSION_CATALOG=[
   {id:'dashboard_view',name:'Dashboard görüntüle',group:'Genel'},
+  {id:'screen_training',name:'Eğitim videoları',group:'Genel'},
   {id:'screen_finance',name:'Finans & Cari (ana)',group:'Finans & Cari'},
   {id:'screen_uninvoiced',name:'Kesilmeyen Faturalar',group:'e-Fatura'},
   {id:'screen_customer_payments',name:'Müşteri Ödemeleri',group:'Finans & Cari'},
@@ -1511,11 +1514,20 @@ app.use('/web-admin-assets',express.static(path.join(ROOT,'public','assets'),{
   }
 }));
 app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fallthrough:true}));
+app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
+  maxAge:'1h',etag:true,lastModified:true,fallthrough:true,
+  setHeaders(res,filePath){
+    if(/\.(mp4|webm|mov)$/i.test(filePath)){
+      res.setHeader('Cache-Control','public, max-age=3600');
+      res.setHeader('Accept-Ranges','bytes');
+    }
+  }
+}));
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.132-sms-bulk',
-  build:'fix-v132',
+  version:'6.3.133-egitim',
+  build:'fix-v133',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -1899,6 +1911,215 @@ app.post('/web-api/admin/sms-bulk',requireAdminOrStaffAny('finance_manage','cust
   }catch(e){
     res.status(400).json({error:e.message||'Toplu SMS başarısız'});
   }
+});
+
+function defaultTrainingCatalog(){
+  const row=(o)=>({
+    builtin:true,status:'planned',url:'',duration:'',sort:100,active:true,
+    ...o
+  });
+  return [
+    row({id:'sms-gateway',category:'iletisim',title:'SMS Gateway ve Toplu SMS',screen:'settings',screenLabel:'Ayarlar → SMS · Müşteri Ödemeleri',
+      description:'SMS firması bağlama, test SMS, cari gecikme/özel SMS ve Müşteri Ödemeleri’nden toplu gönderim.',
+      url:'/assets/egitim/sms-gateway.mp4',status:'ready',duration:'~3 dk',sort:10}),
+    row({id:'dashboard',category:'operasyon',title:'Dashboard ve hızlı aksiyonlar',screen:'dashboard',screenLabel:'Dashboard',
+      description:'Günlük özet, satış / müşteri / tahsilat kısayolları.',sort:20}),
+    row({id:'sales-center',category:'satis',title:'Satış Merkezi',screen:'salesCenter',screenLabel:'Satış Merkezi',
+      description:'Müşteri seçimi, ürün ekleme, ödeme dağılımı, senet ve satış kaydı.',sort:30}),
+    row({id:'sales-tracking',category:'satis',title:'Satış Takibi',screen:'salesTracking',screenLabel:'Satış Takibi',
+      description:'Satış durumları, teslimat ve takip ekranı.',sort:40}),
+    row({id:'customers',category:'finans',title:'Müşteri kartı ve cari',screen:'customersPage',screenLabel:'Müşteriler',
+      description:'Müşteri oluşturma, cari bakiye, tahsilat ve SMS aksiyonları.',sort:50}),
+    row({id:'customer-payments',category:'finans',title:'Müşteri Ödemeleri (tahsilat)',screen:'customerPayments',screenLabel:'Müşteri Ödemeleri',
+      description:'Geciken / bu ay filtreleri, senet seçerek tahsilat ve A5 makbuz.',sort:60}),
+    row({id:'finance-center',category:'finans',title:'Finans ve Cari Merkezi',screen:'financeCenter',screenLabel:'Finans & Cari',
+      description:'Kasa/banka, tahsilat operasyonu ve cari işlemler.',sort:70}),
+    row({id:'finance-reports',category:'finans',title:'Finans Raporları',screen:'financeReports',screenLabel:'Finans Raporları',
+      description:'Hesap bakiyeleri, cari listeler ve hareketler.',sort:80}),
+    row({id:'stock-center',category:'stok',title:'Stok Merkezi',screen:'stockCenter',screenLabel:'Stok Merkezi',
+      description:'Depo stokları, sayım ve transfer.',sort:90}),
+    row({id:'purchase-invoices',category:'stok',title:'Alış Faturaları',screen:'purchaseInvoices',screenLabel:'Alış Faturaları',
+      description:'Tedarikçi alış kaydı ve stok girişi.',sort:100}),
+    row({id:'products',category:'stok',title:'Ürün kartları ve fiyatlar',screen:'products',screenLabel:'Tüm Ürünler',
+      description:'Ürün ekleme, fiyat, KDV ve stok alanları.',sort:110}),
+    row({id:'invoice-center',category:'efatura',title:'e-Fatura Merkezi',screen:'invoiceCenter',screenLabel:'e-Fatura Merkezi',
+      description:'QNB kurulum, e-Fatura / e-Arşiv kuyruğu.',sort:120}),
+    row({id:'approvals',category:'yonetim',title:'Yönetici Onayları',screen:'managerApprovals',screenLabel:'Yönetici Onayları',
+      description:'İptal, müşteri silme/düzenleme onayları.',sort:130}),
+    row({id:'users',category:'yonetim',title:'Kullanıcılar ve yetkiler',screen:'users',screenLabel:'Kullanıcılar & Yetkiler',
+      description:'Personel hesabı, rol ve ekran yetkileri.',sort:140}),
+    row({id:'settings-overview',category:'yonetim',title:'Sistem Ayarları genel',screen:'settings',screenLabel:'Ayarlar',
+      description:'Kasa, senet, bayi/prim, e-posta ve SMS ayarları.',sort:150}),
+    row({id:'profit-reports',category:'rapor',title:'Kâr, prim ve raporlar',screen:'profitCenter',screenLabel:'Kâr & Maliyet / Raporlar',
+      description:'Kâr merkezi, personel prim ve rapor hub.',sort:160})
+  ];
+}
+function trainingCategories(){
+  return[
+    {id:'all',label:'Tümü'},
+    {id:'iletisim',label:'SMS / İletişim'},
+    {id:'operasyon',label:'Operasyon'},
+    {id:'satis',label:'Satış'},
+    {id:'finans',label:'Finans & Cari'},
+    {id:'stok',label:'Ürün & Stok'},
+    {id:'efatura',label:'e-Fatura'},
+    {id:'yonetim',label:'Yönetim'},
+    {id:'rapor',label:'Raporlar'},
+    {id:'diger',label:'Diğer'}
+  ];
+}
+function listTrainingVideos(s){
+  const builtins=defaultTrainingCatalog();
+  const custom=Array.isArray(s.trainingVideos)?s.trainingVideos:[];
+  const byId=new Map();
+  for(const b of builtins)byId.set(b.id,{...b});
+  for(const c of custom){
+    if(!c||!c.id)continue;
+    const prev=byId.get(c.id)||{};
+    byId.set(String(c.id),{
+      ...prev,
+      ...c,
+      id:String(c.id),
+      builtin:Boolean(prev.builtin&&!c.uploaded),
+      uploaded:Boolean(c.uploaded||prev.uploaded),
+      active:c.active!==false
+    });
+  }
+  return[...byId.values()]
+    .filter(v=>v.active!==false)
+    .sort((a,b)=>Number(a.sort||999)-Number(b.sort||999)||String(a.title||'').localeCompare(String(b.title||''),'tr'));
+}
+function publicTrainingVideo(v){
+  return{
+    id:v.id,
+    title:v.title||'',
+    category:v.category||'diger',
+    screen:v.screen||'',
+    screenLabel:v.screenLabel||'',
+    description:v.description||'',
+    url:v.url||'',
+    status:v.url? (v.status==='planned'?'ready':(v.status||'ready')) :(v.status||'planned'),
+    duration:v.duration||'',
+    sort:Number(v.sort||999),
+    builtin:Boolean(v.builtin),
+    uploaded:Boolean(v.uploaded),
+    createdAt:v.createdAt||'',
+    updatedAt:v.updatedAt||''
+  };
+}
+
+app.get('/web-api/admin/training',requireAdminOrStaffAny('screen_training','settings_manage','dashboard_view'),(req,res)=>{
+  const s=readStore();
+  const videos=listTrainingVideos(s).map(publicTrainingVideo);
+  res.json({
+    ok:true,
+    categories:trainingCategories(),
+    videos,
+    ready:videos.filter(v=>v.status==='ready'&&v.url).length,
+    planned:videos.filter(v=>v.status!=='ready'||!v.url).length,
+    canManage:Boolean(isSystemManager(req)||hasPermission(req,'settings_manage'))
+  });
+});
+app.post('/web-api/admin/training',requirePermission('settings_manage'),(req,res)=>{
+  const s=readStore(),x=req.body||{};
+  const id=String(x.id||crypto.randomUUID()).trim();
+  if(!String(x.title||'').trim())return res.status(400).json({error:'Başlık zorunlu'});
+  s.trainingVideos=Array.isArray(s.trainingVideos)?s.trainingVideos:[];
+  const idx=s.trainingVideos.findIndex(v=>String(v.id)===id);
+  const prev=idx>=0?s.trainingVideos[idx]:{};
+  const row={
+    ...prev,
+    id,
+    title:String(x.title||'').trim(),
+    category:String(x.category||'diger').trim()||'diger',
+    screen:String(x.screen||'').trim(),
+    screenLabel:String(x.screenLabel||'').trim(),
+    description:String(x.description||'').trim(),
+    url:String(x.url!=null?x.url:(prev.url||'')).trim(),
+    status:String(x.status|| (String(x.url||prev.url||'').trim()?'ready':'planned')),
+    duration:String(x.duration||'').trim(),
+    sort:Number(x.sort!=null?x.sort:(prev.sort||200))||200,
+    active:x.active!==false,
+    uploaded:Boolean(prev.uploaded||x.uploaded),
+    updatedAt:new Date().toISOString(),
+    createdAt:prev.createdAt||new Date().toISOString()
+  };
+  if(idx>=0)s.trainingVideos[idx]=row; else s.trainingVideos.push(row);
+  audit(s,'Eğitim videosu kaydedildi',row.title,{id:row.id,status:row.status});
+  writeStore(s);
+  res.json({ok:true,video:publicTrainingVideo(listTrainingVideos(s).find(v=>v.id===id)||row)});
+});
+app.post('/web-api/admin/training/upload',requirePermission('settings_manage'),trainingUpload.single('file'),(req,res)=>{
+  try{
+    if(!req.file)return res.status(400).json({error:'Video dosyası seçilmedi'});
+    const allowed=new Set(['video/mp4','video/webm','video/quicktime']);
+    if(!allowed.has(req.file.mimetype)&&!/\.(mp4|webm|mov)$/i.test(req.file.originalname||''))
+      return res.status(400).json({error:'Yalnızca MP4 / WEBM / MOV yükleyin'});
+    const ext=/\.webm$/i.test(req.file.originalname||'')?'.webm':(/\.(mov|qt)$/i.test(req.file.originalname||'')?'.mov':'.mp4');
+    const uploadDir=path.join(ROOT,'public','uploads','egitim');
+    fs.mkdirSync(uploadDir,{recursive:true});
+    const filename=`egitim-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+    fs.writeFileSync(path.join(uploadDir,filename),req.file.buffer);
+    const url=`/uploads/egitim/${filename}`;
+    const s=readStore();
+    s.trainingVideos=Array.isArray(s.trainingVideos)?s.trainingVideos:[];
+    const id=String(req.body?.id||crypto.randomUUID());
+    const title=String(req.body?.title||req.file.originalname||'Eğitim videosu').trim();
+    const idx=s.trainingVideos.findIndex(v=>String(v.id)===id);
+    const prev=idx>=0?s.trainingVideos[idx]:{};
+    const row={
+      ...prev,
+      id,
+      title,
+      category:String(req.body?.category||prev.category||'diger'),
+      screen:String(req.body?.screen||prev.screen||''),
+      screenLabel:String(req.body?.screenLabel||prev.screenLabel||''),
+      description:String(req.body?.description||prev.description||''),
+      url,
+      status:'ready',
+      duration:String(req.body?.duration||prev.duration||''),
+      sort:Number(req.body?.sort||prev.sort||200)||200,
+      active:true,
+      uploaded:true,
+      createdAt:prev.createdAt||new Date().toISOString(),
+      updatedAt:new Date().toISOString()
+    };
+    if(idx>=0)s.trainingVideos[idx]=row; else s.trainingVideos.push(row);
+    audit(s,'Eğitim videosu yüklendi',row.title,{id:row.id,url});
+    writeStore(s);
+    res.json({ok:true,url,video:publicTrainingVideo(row)});
+  }catch(e){
+    res.status(400).json({error:e.message||'Video yüklenemedi'});
+  }
+});
+app.delete('/web-api/admin/training/:id',requirePermission('settings_manage'),(req,res)=>{
+  const s=readStore();
+  const id=String(req.params.id||'');
+  const builtins=new Set(defaultTrainingCatalog().map(v=>v.id));
+  s.trainingVideos=Array.isArray(s.trainingVideos)?s.trainingVideos:[];
+  const idx=s.trainingVideos.findIndex(v=>String(v.id)===id);
+  if(idx<0){
+    if(builtins.has(id)){
+      // built-in gizle
+      s.trainingVideos.push({id,active:false,updatedAt:new Date().toISOString(),title:id});
+      writeStore(s);
+      return res.json({ok:true,hidden:true});
+    }
+    return res.status(404).json({error:'Video bulunamadı'});
+  }
+  const row=s.trainingVideos[idx];
+  if(row.uploaded&&row.url&&String(row.url).startsWith('/uploads/egitim/')){
+    const fp=path.join(ROOT,'public',String(row.url).replace(/^\//,''));
+    try{if(fs.existsSync(fp))fs.unlinkSync(fp)}catch(_){}
+  }
+  if(builtins.has(id)){
+    s.trainingVideos[idx]={...row,active:false,url:'',status:'planned',updatedAt:new Date().toISOString()};
+  }else{
+    s.trainingVideos.splice(idx,1);
+  }
+  audit(s,'Eğitim videosu silindi/gizlendi',row.title||id,{id});
+  writeStore(s);
+  res.json({ok:true});
 });
 
 // Personel: şifremi unuttum
