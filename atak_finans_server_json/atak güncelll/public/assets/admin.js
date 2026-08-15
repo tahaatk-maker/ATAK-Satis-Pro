@@ -3601,7 +3601,7 @@ function salesCombinedContractSenetA4Html(d){
   const css=`<style>
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
 .a4c{padding:5mm 6mm 3mm!important;font:8pt/1.25 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible;display:flex;flex-direction:column;min-height:277mm}
-.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;gap:0;margin:0 0 1.2mm}.a4c .logo-top img{height:11mm;width:auto;max-width:118mm;object-fit:contain;object-position:left center}
+.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;gap:0;margin:0 0 1.2mm}.a4c .logo-top img{height:9.5mm;width:auto;max-width:130mm;object-fit:contain;object-position:left center}
 .a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 3px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:10mm;object-fit:contain;object-position:left top}
 .a4c .logo-bottom{display:none}
 .a4c .top{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:start;flex:0 0 auto}
