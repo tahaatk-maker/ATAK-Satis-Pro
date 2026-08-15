@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v111 */
+/* ATAK_PERSONEL_BUILD=fix-v112 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -19,6 +19,7 @@ async function api(url,opt={}){
 }
 
 let currentUser=null;
+let pendingMfaChallengeId='';
 let financeData=null;
 let monthData=null;
 let salesData=null;
@@ -129,9 +130,11 @@ function showLogin(){
 }
 function showLoginPanel(which){
   $('#loginForm')?.classList.toggle('hidden',which!=='login');
+  $('#mfaForm')?.classList.toggle('hidden',which!=='mfa');
   $('#forgotForm')?.classList.toggle('hidden',which!=='forgot');
   $('#resetForm')?.classList.toggle('hidden',which!=='reset');
   if(which==='login')$('#loginError').textContent='';
+  if(which==='mfa'){if($('#mfaError'))$('#mfaError').textContent='';}
   if(which==='forgot')$('#forgotError').textContent='';
   if(which==='reset')$('#resetError').textContent='';
 }
@@ -143,14 +146,37 @@ $('#loginForm').onsubmit=async e=>{
   e.preventDefault();
   $('#loginError').textContent='';
   try{
-    await api('/foundation-api/login',{
+    const r=await api('/foundation-api/login',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({username:$('#username').value,password:$('#password').value})
     });
+    if(r.mfaRequired){
+      pendingMfaChallengeId=r.challengeId||'';
+      const hours=r.trustHours||6;
+      if($('#mfaHint'))$('#mfaHint').textContent=`Kod ${r.emailHint||'e-posta'} adresine gitti. Bu tarayıcı ${hours} saat tanınır.`;
+      showLoginPanel('mfa');
+      $('#mfaCode')?.focus();
+      return;
+    }
     await loadSession();
   }catch(err){$('#loginError').textContent=err.message}
 };
+$('#mfaForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  if($('#mfaError')){$('#mfaError').style.color='#b91c1c';$('#mfaError').textContent=''}
+  try{
+    await api('/foundation-api/login/verify-mfa',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({challengeId:pendingMfaChallengeId,code:$('#mfaCode')?.value||''})
+    });
+    pendingMfaChallengeId='';
+    await loadSession();
+  }catch(err){
+    if($('#mfaError'))$('#mfaError').textContent=err.message;
+  }
+});
+$('#mfaBackBtn')?.addEventListener('click',()=>{pendingMfaChallengeId='';showLoginPanel('login')});
 $('#forgotOpenBtn')?.addEventListener('click',()=>showLoginPanel('forgot'));
 $('#forgotBackBtn')?.addEventListener('click',()=>showLoginPanel('login'));
 $('#resetBackBtn')?.addEventListener('click',()=>{

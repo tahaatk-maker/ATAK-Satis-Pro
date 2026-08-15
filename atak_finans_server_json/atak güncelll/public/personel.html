@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v111">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v111">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v112">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v112">
 </head>
 <body>
 
@@ -24,6 +24,17 @@
 <button type="submit">Giriş Yap</button>
 <button type="button" id="forgotOpenBtn" class="linkish" style="margin-top:10px;background:transparent;border:0;color:#9a3412;font-weight:700;cursor:pointer;text-decoration:underline">Şifremi unuttum</button>
 <div id="loginError"></div>
+</form>
+
+<form id="mfaForm" class="login-card hidden">
+<img class="brand-logo login-logo" src="/assets/atak-pazarlama-full.png?v=logo5" alt="Atak Pazarlama">
+<div class="login-kicker">ATAK PAZARLAMA</div>
+<h1>Giriş kodu</h1>
+<p id="mfaHint">E-postanıza 6 haneli kod gönderildi. Bu tarayıcı 6 saat tanınır.</p>
+<input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6 haneli kod" required>
+<button type="submit">Kodu Doğrula</button>
+<button type="button" id="mfaBackBtn" class="linkish" style="margin-top:10px;background:transparent;border:0;color:#64748b;font-weight:700;cursor:pointer">← Şifreye dön</button>
+<div id="mfaError"></div>
 </form>
 
 <form id="forgotForm" class="login-card hidden">
@@ -651,6 +662,6 @@
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/assets/personel.js?v=fix-v111"></script>
+<script src="/assets/personel.js?v=fix-v112"></script>
 </body>
 </html>

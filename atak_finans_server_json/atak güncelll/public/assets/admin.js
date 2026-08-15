@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v111 */
+/* ATAK_ADMIN_BUILD=fix-v112 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -40,11 +40,41 @@ async function api(url,opt={}){
     // Eski sunucu bilinmeyen API'yi /personel HTML'ine yönlendiriyor
     throw new Error('API bulunamadı (sunucu güncellemesi gerekli)');
   }
-  if(!r.ok){if(r.status===401)throw new Error('Oturum süresi dolmuş. Lütfen tekrar giriş yapın.');throw new Error(d.error||'İşlem başarısız')}
+  if(!r.ok)throw new Error(d.error||(r.status===401?'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.':'İşlem başarısız'));
   return d;
 }
+let pendingMfaChallengeId='';
+function showLoginPassword(){
+  q('#loginForm')?.classList.remove('hidden');
+  q('#mfaForm')?.classList.add('hidden');
+  pendingMfaChallengeId='';
+}
+function showLoginMfa(r){
+  pendingMfaChallengeId=r.challengeId||'';
+  q('#loginForm')?.classList.add('hidden');
+  q('#mfaForm')?.classList.remove('hidden');
+  const hours=r.trustHours||6;
+  if(q('#mfaHint'))q('#mfaHint').textContent=`Kod ${r.emailHint||'e-posta'} adresine gitti. Bu tarayıcı ${hours} saat tanınır; sonra yeniden kod istenir.`;
+  if(q('#mfaCode')){q('#mfaCode').value='';q('#mfaCode').focus()}
+}
 async function check(){const m=await api('/web-api/me');if(m.authenticated){showApp();await load()}else q('#loginView').classList.remove('hidden')}
-q('#loginForm').onsubmit=async e=>{e.preventDefault();try{await api('/web-api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:q('#username').value.trim(),password:q('#password').value})});await loadCurrentAdminPermissions();showApp();await load()}catch(e){toast(e.message)}};
+q('#loginForm').onsubmit=async e=>{
+  e.preventDefault();
+  try{
+    const r=await api('/web-api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:q('#username').value.trim(),password:q('#password').value})});
+    if(r.mfaRequired){showLoginMfa(r);return}
+    await loadCurrentAdminPermissions();showApp();await load();
+  }catch(e){toast(e.message)}
+};
+q('#mfaForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  try{
+    await api('/web-api/login/verify-mfa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({challengeId:pendingMfaChallengeId,code:q('#mfaCode').value.trim()})});
+    pendingMfaChallengeId='';
+    await loadCurrentAdminPermissions();showApp();await load();
+  }catch(err){toast(err.message)}
+});
+q('#mfaBackBtn')?.addEventListener('click',()=>showLoginPassword());
 function isMobileUi(){
   try{return window.matchMedia('(max-width:950px)').matches}catch(_){return false}
 }

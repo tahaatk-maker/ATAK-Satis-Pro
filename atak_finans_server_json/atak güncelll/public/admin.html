@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v111" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v112" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-cockpit.css?v=fix-v111" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -579,7 +579,10 @@ body.inv-full #pageTitle{font-size:18px}
 }
 </style>
 </head><body>
-<div class="login-view" id="loginView"><form class="login-card" id="loginForm"><a class="login-brand-link" href="/web-admin"><img alt="Atak Pazarlama" src="/assets/atak-pazarlama-full.png?v=logo5"/></a><div class="login-kicker">ATAK PAZARLAMA</div><h1>Yönetim Merkezi</h1><p>Satış, finans, stok ve e-Fatura operasyonu</p><input autocomplete="username" id="username" placeholder="Kullanıcı adı (boşsa yönetici)"/><input autocomplete="current-password" id="password" placeholder="Şifre" required="" type="password"/><button type="submit">Giriş Yap</button></form></div>
+<div class="login-view" id="loginView">
+<form class="login-card" id="loginForm"><a class="login-brand-link" href="/web-admin"><img alt="Atak Pazarlama" src="/assets/atak-pazarlama-full.png?v=logo5"/></a><div class="login-kicker">ATAK PAZARLAMA</div><h1>Yönetim Merkezi</h1><p>Satış, finans, stok ve e-Fatura operasyonu</p><input autocomplete="username" id="username" placeholder="Kullanıcı adı (boşsa yönetici)"/><input autocomplete="current-password" id="password" placeholder="Şifre" required="" type="password"/><button type="submit">Giriş Yap</button></form>
+<form class="login-card hidden" id="mfaForm"><a class="login-brand-link" href="/web-admin"><img alt="Atak Pazarlama" src="/assets/atak-pazarlama-full.png?v=logo5"/></a><div class="login-kicker">ATAK PAZARLAMA</div><h1>Giriş kodu</h1><p id="mfaHint">E-postanıza 6 haneli kod gönderildi. Bu tarayıcı 6 saat tanınır.</p><input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6 haneli kod" required/><button type="submit">Kodu Doğrula</button><button type="button" id="mfaBackBtn" style="margin-top:10px;background:transparent;border:0;color:#64748b;font-weight:700;cursor:pointer">← Şifreye dön</button></form>
+</div>
 <div class="app hidden" id="appView"><aside><a aria-label="Dashboard ana sayfasına git" class="aside-brand beta-brand" href="/web-admin">
 <img alt="Satış Operasyon" src="/assets/atak-pazarlama-full.png?v=logo5"/>
 <small>SATIŞ OPERASYON</small>
@@ -2379,5 +2382,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v111"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v112"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
