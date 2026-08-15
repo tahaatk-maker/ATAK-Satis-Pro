@@ -2149,10 +2149,36 @@ Bulunamayan → Diğer.
 </section>
 
 <section class="tab" id="settings">
-<div class="foundation-head panel"><div><small class="eyebrow">SİSTEM AYARLARI</small><h2>Ayarlar</h2><p class="note">Kasa/banka hesapları, senet ve bayi/prim ayarları burada. QNB e-Fatura ayarları <b>e-Fatura Merkezi → Kurulum</b> altındadır.</p></div></div>
-<div class="settings-grid">
-<form class="panel form-stack" id="financeAccountForm">
-<div class="panel-head"><div><h2>💵 Kasa ve Banka Hesapları</h2><p class="note">Hesap ekle / düzenle / sil. Bakiyeler ve hareketler: sol menü <b>📑 Finans Raporları</b> → Hesap Bakiyeleri.</p></div></div>
+<div class="foundation-head panel">
+  <div>
+    <small class="eyebrow">SİSTEM AYARLARI</small>
+    <h2>Ayarlar</h2>
+    <p class="note">Bir konu seçin. QNB e-Fatura ayarları <b>e-Fatura Merkezi → Kurulum</b> altındadır.</p>
+  </div>
+</div>
+
+<div class="settings-nav panel" id="settingsNav" role="tablist" aria-label="Ayar konuları">
+  <button type="button" class="settings-nav-btn active" data-settings-tab="accounts">
+    <b>💵 Kasa &amp; Banka</b>
+    <small>Hesap ekle · düzenle · sil</small>
+  </button>
+  <button type="button" class="settings-nav-btn" data-settings-tab="promissory">
+    <b>📜 Senet</b>
+    <small>Varsayılan senet bilgileri</small>
+  </button>
+  <button type="button" class="settings-nav-btn" data-settings-tab="dealer">
+    <b>🏷️ Bayi / Prim</b>
+    <small>Kâr · prim · iskonto</small>
+  </button>
+  <button type="button" class="settings-nav-btn" data-settings-tab="test">
+    <b>🧪 Test</b>
+    <small>Sistem self-test</small>
+  </button>
+</div>
+
+<div class="settings-panels">
+<form class="panel form-stack settings-panel" id="financeAccountForm" data-settings-panel="accounts">
+<div class="panel-head"><div><h2>Kasa ve Banka Hesapları</h2><p class="note">Hesap ekle / düzenle / sil. Bakiyeler: sol menü <b>Finans Raporları</b>.</p></div></div>
 <input id="financeAccountId" type="hidden"/>
 <label>Hesap adı<input id="financeAccountName" required=""/></label>
 <div class="two-cols">
@@ -2178,7 +2204,8 @@ Bulunamayan → Diğer.
 </div>
 <div class="mini-list" id="financeAccountList"></div>
 </form>
-<form class="panel form-stack" id="promissorySettingsForm">
+
+<form class="panel form-stack settings-panel hidden" id="promissorySettingsForm" data-settings-panel="promissory">
 <div class="panel-head"><div><h2>Senet Ayarları</h2><p class="note">Müşteriye basılan senetlerin varsayılan bilgileri.</p></div></div>
 <div class="two-col"><label>Alacaklı / Firma<input id="noteCreditor" readonly value="ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ." title="Senet/sözleşmede sabit resmi ünvan — Atak Home kullanılamaz"/><small class="field-hint">Sabit resmi ünvan (Atak Home yasak)</small></label><label>Ödeme Yeri<input id="notePaymentPlace" placeholder="İstanbul"/></label></div>
 <div class="two-col"><label>Düzenleme Yeri<input id="noteIssuePlace" placeholder="İstanbul"/></label><label>Senet Seri Ön Eki<input id="notePrefix" placeholder="ATAK"/></label></div>
@@ -2187,8 +2214,9 @@ Bulunamayan → Diğer.
 <label>Senet Alt Notu<textarea id="noteFooter" placeholder="İşbu senet..." rows="3"></textarea></label>
 <button class="primary" type="submit">Senet Ayarlarını Kaydet</button><div class="form-status" id="promissorySettingsStatus"></div>
 </form>
-<form class="panel form-stack dealer-settings-panel" id="dealerSettingsForm">
-<div class="panel-head"><div><h2>Bayi Kâr / Prim / İskonto Ayarları</h2><p class="note">Bölü oranı maliyet/hakediş hesabı içindir. Personel primi net satış tutarı üzerinden hesaplanır.</p></div></div>
+
+<form class="panel form-stack dealer-settings-panel settings-panel hidden" id="dealerSettingsForm" data-settings-panel="dealer">
+<div class="panel-head"><div><h2>Bayi Kâr / Prim / İskonto</h2><p class="note">Bölü oranı maliyet/hakediş içindir. Personel primi net satış üzerinden hesaplanır.</p></div></div>
 <div class="dealer-setting-grid">
 <div class="dealer-setting-card">
 <h3>Atak Beko</h3>
@@ -2210,9 +2238,46 @@ Bulunamayan → Diğer.
 <div class="button-row"><button class="primary" type="submit">Bayi Ayarlarını Kaydet</button></div>
 <div id="dealerSettingsStatus" class="form-status"></div>
 </form>
-<section class="panel"><h2>Test Merkezi</h2><p class="note">Canlı veriyi değiştirmeden sistemin temel satış akışını test eder.</p><button class="primary" id="settingsSelfTestBtn" type="button">Sistem Testini Çalıştır</button><div class="self-test-result" id="settingsSelfTestResult"></div></section>
+
+<section class="panel settings-panel hidden" data-settings-panel="test">
+  <div class="panel-head"><div><h2>Test Merkezi</h2><p class="note">Canlı veriyi değiştirmeden temel satış akışını test eder.</p></div></div>
+  <button class="primary" id="settingsSelfTestBtn" type="button">Sistem Testini Çalıştır</button>
+  <div class="self-test-result" id="settingsSelfTestResult"></div>
+</section>
 </div>
 </section>
+
+<style>
+#settings .settings-nav{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  padding:14px;
+  margin-bottom:14px;
+}
+#settings .settings-nav-btn{
+  appearance:none;border:1.5px solid #e2c9ad;background:#fffaf5;border-radius:14px;
+  padding:16px 14px;text-align:left;cursor:pointer;min-height:88px;
+  transition:border-color .15s,background .15s,transform .12s,box-shadow .15s;
+  font:inherit;color:#1c1917;
+}
+#settings .settings-nav-btn:hover{border-color:#c2410c;transform:translateY(-1px);box-shadow:0 8px 18px rgba(154,52,18,.08)}
+#settings .settings-nav-btn.active{
+  border-color:#9a3412;background:linear-gradient(180deg,#fff7ed,#ffedd5);
+  box-shadow:0 0 0 3px rgba(154,52,18,.12);
+}
+#settings .settings-nav-btn b{display:block;font-size:15px;font-weight:800;margin-bottom:4px}
+#settings .settings-nav-btn small{display:block;font-size:12px;color:#7a5230;font-weight:650;line-height:1.35}
+#settings .settings-panels{display:block}
+#settings .settings-panel{max-width:920px}
+#settings .settings-panel.hidden{display:none!important}
+@media (max-width:950px){
+  #settings .settings-nav{grid-template-columns:1fr 1fr}
+}
+@media (max-width:560px){
+  #settings .settings-nav{grid-template-columns:1fr}
+}
+</style>
 </main></div>
 <div class="modal hidden" id="productModal"><form class="modal-card" id="productForm"><button class="x" id="closeModal" type="button">×</button><h2>Ürün kartı</h2><input id="pId" type="hidden"/><div class="form-grid two"><label>Ürün kodu<input id="pCode" required=""/></label><label>Barkod<input id="pBarcode"/></label><label>Marka<select id="pBrand"></select></label><label class="wide">Ürün adı<input id="pName" required=""/></label><label>Kategori<select id="pCategory" required=""></select></label><label>KDV<input id="pVatRate" readonly="" type="number"/></label><label>Alış fiyatı (KDV dahil)<input id="pPurchasePrice" type="number"/></label><label>Liste fiyatı<input id="pListPrice" type="number"/></label><label>Nakit fiyatı<input id="pCashPrice" type="number"/></label><label>Kart fiyatı<input id="pCardPrice" type="number"/></label><label>Minimum satış fiyatı<input id="pMinimumSalePrice" type="number"/></label><label>Beko fiyatı<input id="pBekoPrice" type="number"/></label><label>Çizili fiyat<input id="pOldPrice" type="number"/></label><label>Fiyat kuralı<select id="pPriceMode"><option value="same">Beko ile aynı</option><option value="percent_down">Yüzde düşür</option><option value="percent_up">Yüzde yükselt</option><option value="fixed_down">Tutar düşür</option><option value="fixed_up">Tutar ekle</option><option value="manual">Manuel</option></select></label><label>Kural değeri / manuel fiyat<input id="pPriceValue" type="number"/></label><label>Stok<input id="pStock" type="number"/></label><label>Etiketler<input id="pTags" placeholder="Fırsat, Yeni, 9 Taksit"/></label><label class="wide">Görsel URL<input id="pImage"/></label><div class="wide profit-preview" id="profitPreview"></div><label class="wide">Açıklama<textarea id="pDescription"></textarea></label><label class="check"><input id="pActive" type="checkbox"/> Yayında</label><label class="check"><input id="pFeatured" type="checkbox"/> Öne çıkan</label></div><button class="primary" type="submit">Kaydet</button></form></div>
 <div id="reasonModal" class="sales-preview-modal hidden" aria-hidden="true">

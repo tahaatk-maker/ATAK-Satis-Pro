@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v108 */
+/* ATAK_ADMIN_BUILD=fix-v109 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -95,7 +95,12 @@ function goTab(id,{remember=true}={}){
   if(id==='customersPage')setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),20);
   if(id==='salesCenter')setTimeout(()=>loadSalesCenter(),20);
   if(id==='webOrders')setTimeout(()=>loadWebOrders(),20);
-  if(id==='settings')setTimeout(()=>{loadPromissorySettings();loadDealerSettings().catch(()=>{});loadFinanceCenter().catch(()=>{})},20);
+  if(id==='settings')setTimeout(()=>{
+    setSettingsTab(settingsTabView);
+    loadPromissorySettings();
+    loadDealerSettings().catch(()=>{});
+    loadFinanceCenter().catch(()=>{});
+  },20);
   if(id==='mySalesReport')setTimeout(loadMySalesReport,20);
   if(id==='staffSalesReport')setTimeout(loadStaffSalesReport,20);
   if(id==='managerApprovals')setTimeout(loadApprovals,20);
@@ -3816,9 +3821,24 @@ async function runSystemSelfTest(target='#settingsSelfTestResult'){
  const box=q(target);if(box)box.innerHTML='<p>Test çalışıyor…</p>';
  try{const r=await api('/web-api/admin/self-test');const html=(r.checks||[]).map(c=>`<div class="self-test-row ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${c.name}</b><small>${c.detail||''}</small></div>`).join('');if(box)box.innerHTML=html;toast(r.ok?'Sistem testi başarılı':'Sistem testinde hata bulundu')}catch(e){if(box)box.innerHTML=`<div class="self-test-row bad"><b>Test çalışmadı</b><small>${e.message}</small></div>`;toast(e.message)}
 }
+let settingsTabView='accounts';
+function setSettingsTab(name){
+  const allowed=['accounts','promissory','dealer','test'];
+  settingsTabView=allowed.includes(name)?name:'accounts';
+  qa('#settingsNav [data-settings-tab]').forEach(b=>b.classList.toggle('active',b.dataset.settingsTab===settingsTabView));
+  qa('#settings [data-settings-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.settingsPanel!==settingsTabView));
+  try{sessionStorage.setItem('atak-settings-tab',settingsTabView)}catch(_){}
+}
+qa('#settingsNav [data-settings-tab]').forEach(b=>b.addEventListener('click',()=>setSettingsTab(b.dataset.settingsTab)));
+try{
+  const saved=sessionStorage.getItem('atak-settings-tab');
+  if(saved)settingsTabView=saved;
+}catch(_){}
+setSettingsTab(settingsTabView);
+
 async function loadPromissorySettings(){try{const d=await api('/web-api/admin/promissory-settings'),s=d.settings||{};q('#noteCreditor').value='ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';q('#notePaymentPlace').value=s.paymentPlace||'';q('#noteIssuePlace').value=s.issuePlace||'';q('#notePrefix').value=s.prefix||'ATAK';q('#noteDefaultInstallments').value=s.defaultInstallments||1;q('#noteFirstDueDays').value=s.firstDueDays??30;q('#noteIntervalMonths').value=s.intervalMonths||1;q('#noteCopies').value=s.copies||1;q('#noteFooter').value=s.footer||''}catch(e){toast(e.message)}}
-q('[data-tab="settings"]')?.addEventListener('click',()=>setTimeout(()=>{loadPromissorySettings();loadDealerSettings().catch(()=>{})},30));
-q('#systemSelfTestBtn')?.addEventListener('click',()=>{goTab('settings');setTimeout(()=>runSystemSelfTest(),60)});q('#settingsSelfTestBtn')?.addEventListener('click',()=>runSystemSelfTest());
+q('[data-tab="settings"]')?.addEventListener('click',()=>setTimeout(()=>{setSettingsTab(settingsTabView);loadPromissorySettings();loadDealerSettings().catch(()=>{})},30));
+q('#systemSelfTestBtn')?.addEventListener('click',()=>{goTab('settings');setSettingsTab('test');setTimeout(()=>runSystemSelfTest(),60)});q('#settingsSelfTestBtn')?.addEventListener('click',()=>runSystemSelfTest());
 q('#promissorySettingsForm')?.addEventListener('submit',async e=>{e.preventDefault();const s=q('#promissorySettingsStatus');try{await api('/web-api/admin/promissory-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creditorName:q('#noteCreditor').value,paymentPlace:q('#notePaymentPlace').value,issuePlace:q('#noteIssuePlace').value,prefix:q('#notePrefix').value,defaultInstallments:q('#noteDefaultInstallments').value,firstDueDays:q('#noteFirstDueDays').value,intervalMonths:q('#noteIntervalMonths').value,copies:q('#noteCopies').value,footer:q('#noteFooter').value})});s.textContent='Senet ayarları kaydedildi';s.className='form-status success'}catch(err){s.textContent=err.message;s.className='form-status error'}});
 
 
