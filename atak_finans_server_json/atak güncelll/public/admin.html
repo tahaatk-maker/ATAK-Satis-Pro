@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v109" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v109" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v110" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v110" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1243,7 +1243,10 @@ body.inv-full #pageTitle{font-size:18px}
 <section class="tab" id="sync"><div class="panel notice"><h2>Veri kaynağı bekleniyor</h2><p>Beko/Rapid tarafına salt okunur erişim talebi gönderildi. Yanıt gelene kadar çalışan site ve ürün yönetimi etkilenmez.</p></div><div class="panel"><h2>CSV yedek aktarımı</h2><form id="importForm"><input accept=".csv,text/csv" id="csvFile" required="" type="file"/><button type="submit">CSV’yi içe aktar</button></form><a class="secondary" href="/web-api/admin/export-csv">Ürünleri CSV indir</a></div></section>
 <section class="tab" id="users">
 <div class="split">
-<form class="panel form-stack" id="userForm"><h2>Kullanıcı kartı</h2><p class="note">Finans &amp; Cari menüsündeki her ekran ayrı yetkidir. Satış Personeli rolünde <b>Personel Satış Raporu</b> ve <b>Yönetici Onayları</b> kapalıdır — isterseniz aşağıdaki listeden açın.</p><input id="userId" type="hidden"/><label>Ad Soyad<input id="userName" required=""/></label><label>Kullanıcı adı<input id="userUsername" required=""/></label><label>Rol<select id="userRole"></select></label>
+<form class="panel form-stack" id="userForm"><h2>Kullanıcı kartı</h2><p class="note">Finans &amp; Cari menüsündeki her ekran ayrı yetkidir. Satış Personeli rolünde <b>Personel Satış Raporu</b> ve <b>Yönetici Onayları</b> kapalıdır — isterseniz aşağıdaki listeden açın.</p><input id="userId" type="hidden"/><label>Ad Soyad<input id="userName" required=""/></label>
+<label>Kullanıcı adı<input id="userUsername" required=""/></label>
+<label>E-posta (şifre unuttum)<input id="userEmail" type="email" placeholder="ornek@mail.com" autocomplete="email"/><small class="field-hint">Personel “şifremi unuttum” için zorunlu</small></label>
+<label>Rol<select id="userRole"></select></label>
 <div class="permission-editor">
   <div class="permission-editor-head"><div><b>Ekran & İşlem Yetkileri</b><small>Rolü seçin, sonra izinleri tek tek açıp kapatın.</small></div><button id="applyRolePermissions" class="secondary-btn" type="button">Rol Varsayılanını Uygula</button></div>
   <div id="userPermissionList" class="permission-grid"></div>
@@ -2170,6 +2173,10 @@ Bulunamayan → Diğer.
     <b>🏷️ Bayi / Prim</b>
     <small>Kâr · prim · iskonto</small>
   </button>
+  <button type="button" class="settings-nav-btn" data-settings-tab="mail">
+    <b>✉️ E-posta</b>
+    <small>SMTP · şifre sıfırlama</small>
+  </button>
   <button type="button" class="settings-nav-btn" data-settings-tab="test">
     <b>🧪 Test</b>
     <small>Sistem self-test</small>
@@ -2239,6 +2246,32 @@ Bulunamayan → Diğer.
 <div id="dealerSettingsStatus" class="form-status"></div>
 </form>
 
+<form class="panel form-stack settings-panel hidden" id="mailSettingsForm" data-settings-panel="mail">
+  <div class="panel-head">
+    <div>
+      <h2>E-posta (SMTP)</h2>
+      <p class="note">Personel “şifremi unuttum” mailleri buradan gider. Gmail için <b>Uygulama şifresi</b> kullanın (normal şifre çalışmaz).</p>
+    </div>
+  </div>
+  <label class="check"><input id="mailEnabled" type="checkbox"/> SMTP açık (şifre sıfırlama mailleri gönderilsin)</label>
+  <div class="two-col">
+    <label>SMTP sunucu<input id="mailHost" placeholder="smtp.gmail.com" value="smtp.gmail.com"/></label>
+    <label>Port<input id="mailPort" type="number" value="465"/></label>
+  </div>
+  <label class="check"><input id="mailSecure" type="checkbox" checked/> SSL / secure (465 için açık)</label>
+  <div class="two-col">
+    <label>SMTP kullanıcı (Gmail)<input id="mailUser" type="email" placeholder="sirket@gmail.com" autocomplete="off"/></label>
+    <label>Uygulama şifresi<input id="mailPass" type="password" placeholder="••••••••" autocomplete="new-password"/></label>
+  </div>
+  <label>Gönderen (From)<input id="mailFrom" placeholder="ATAK &lt;sirket@gmail.com&gt;"/></label>
+  <div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="primary" type="submit">E-posta Ayarlarını Kaydet</button>
+    <button class="secondary-btn" id="mailTestBtn" type="button">Test Maili Gönder</button>
+  </div>
+  <div class="form-status" id="mailSettingsStatus"></div>
+  <p class="note" style="margin-top:10px">1) Her kullanıcıya e-posta yazın (Kullanıcılar &amp; Yetkiler).<br/>2) Personel girişinde “Şifremi unuttum” → maildeki link ile yeni şifre.</p>
+</form>
+
 <section class="panel settings-panel hidden" data-settings-panel="test">
   <div class="panel-head"><div><h2>Test Merkezi</h2><p class="note">Canlı veriyi değiştirmeden temel satış akışını test eder.</p></div></div>
   <button class="primary" id="settingsSelfTestBtn" type="button">Sistem Testini Çalıştır</button>
@@ -2250,7 +2283,7 @@ Bulunamayan → Diğer.
 <style>
 #settings .settings-nav{
   display:grid;
-  grid-template-columns:repeat(4,minmax(0,1fr));
+  grid-template-columns:repeat(5,minmax(0,1fr));
   gap:12px;
   padding:14px;
   margin-bottom:14px;
@@ -2346,5 +2379,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v109"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v110"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

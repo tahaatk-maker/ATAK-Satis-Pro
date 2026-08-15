@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v109 */
+/* ATAK_PERSONEL_BUILD=fix-v110 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -125,6 +125,18 @@ async function loadSession(){
 function showLogin(){
   $('#app').classList.add('hidden');
   $('#login').classList.remove('hidden');
+  showLoginPanel('login');
+}
+function showLoginPanel(which){
+  $('#loginForm')?.classList.toggle('hidden',which!=='login');
+  $('#forgotForm')?.classList.toggle('hidden',which!=='forgot');
+  $('#resetForm')?.classList.toggle('hidden',which!=='reset');
+  if(which==='login')$('#loginError').textContent='';
+  if(which==='forgot')$('#forgotError').textContent='';
+  if(which==='reset')$('#resetError').textContent='';
+}
+function resetTokenFromUrl(){
+  try{return new URLSearchParams(location.search).get('reset')||''}catch(_){return ''}
 }
 
 $('#loginForm').onsubmit=async e=>{
@@ -139,6 +151,55 @@ $('#loginForm').onsubmit=async e=>{
     await loadSession();
   }catch(err){$('#loginError').textContent=err.message}
 };
+$('#forgotOpenBtn')?.addEventListener('click',()=>showLoginPanel('forgot'));
+$('#forgotBackBtn')?.addEventListener('click',()=>showLoginPanel('login'));
+$('#resetBackBtn')?.addEventListener('click',()=>{
+  try{history.replaceState({},'',location.pathname)}catch(_){}
+  showLoginPanel('login');
+});
+$('#forgotForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  $('#forgotError').textContent='';
+  try{
+    const r=await api('/foundation-api/forgot-password',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:$('#forgotUser').value})
+    });
+    $('#forgotError').style.color='#15803d';
+    $('#forgotError').textContent=r.message||'Mail gönderildiyse gelen kutunuzu kontrol edin.';
+  }catch(err){
+    $('#forgotError').style.color='#b91c1c';
+    $('#forgotError').textContent=err.message;
+  }
+});
+$('#resetForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  $('#resetError').textContent='';
+  const p1=$('#resetPassword')?.value||'';
+  const p2=$('#resetPassword2')?.value||'';
+  if(p1!==p2){$('#resetError').textContent='Şifreler uyuşmuyor';return}
+  const token=resetTokenFromUrl();
+  if(!token){$('#resetError').textContent='Geçersiz link';return}
+  try{
+    const r=await api('/foundation-api/reset-password',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token,password:p1})
+    });
+    $('#resetError').style.color='#15803d';
+    $('#resetError').textContent=r.message||'Şifre güncellendi';
+    setTimeout(()=>{
+      try{history.replaceState({},'',location.pathname)}catch(_){}
+      showLoginPanel('login');
+    },900);
+  }catch(err){
+    $('#resetError').style.color='#b91c1c';
+    $('#resetError').textContent=err.message;
+  }
+});
+if(resetTokenFromUrl()){
+  showLogin();
+  showLoginPanel('reset');
+}
 $('#logout').onclick=async()=>{
   await api('/foundation-api/logout',{method:'POST'}).catch(()=>{});
   location.reload();

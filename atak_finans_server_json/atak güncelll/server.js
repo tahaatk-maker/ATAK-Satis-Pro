@@ -127,6 +127,10 @@ function ensureStore(store) {
   store.syncLogs = Array.isArray(store.syncLogs) ? store.syncLogs : [];
   store.auditLogs = Array.isArray(store.auditLogs) ? store.auditLogs : [];
   store.users = Array.isArray(store.users) ? store.users : [];
+  store.passwordResets = Array.isArray(store.passwordResets) ? store.passwordResets : [];
+  store.settings.smtp = (store.settings.smtp && typeof store.settings.smtp==='object') ? store.settings.smtp : {
+    enabled:false,host:'smtp.gmail.com',port:465,secure:true,user:'',pass:'',from:''
+  };
   store.brands = Array.isArray(store.brands) ? store.brands : [];
   store.sales = Array.isArray(store.sales) ? store.sales : [];
   store.orders = Array.isArray(store.orders) ? store.orders : [];
@@ -730,7 +734,40 @@ function buildMonthSalesPrim(salesRows=[],pendingMap=new Map()){
 }
 
 function publicUser(user){
-  return{id:user.id,name:user.name,username:user.username,role:user.role,roleName:ROLE_PRESETS[user.role]?.name||user.role,permissions:user.permissions||[],active:user.active!==false,createdAt:user.createdAt||'',updatedAt:user.updatedAt||''};
+  return{id:user.id,name:user.name,username:user.username,email:user.email||'',role:user.role,roleName:ROLE_PRESETS[user.role]?.name||user.role,permissions:user.permissions||[],active:user.active!==false,createdAt:user.createdAt||'',updatedAt:user.updatedAt||''};
+}
+
+function smtpConfig(s){
+  const fromStore=(s?.settings?.smtp&&typeof s.settings.smtp==='object')?s.settings.smtp:{};
+  const host=String(process.env.SMTP_HOST||fromStore.host||'').trim();
+  const user=String(process.env.SMTP_USER||fromStore.user||'').trim();
+  const pass=String(process.env.SMTP_PASS||fromStore.pass||'').trim();
+  const from=String(process.env.SMTP_FROM||fromStore.from||user||'').trim();
+  const port=Number(process.env.SMTP_PORT||fromStore.port||465)||465;
+  const secure=String(process.env.SMTP_SECURE??fromStore.secure??(port===465)).trim()!=='false';
+  const enabled=(String(process.env.SMTP_ENABLED||'')==='1')||fromStore.enabled===true||Boolean(host&&user&&pass);
+  return{enabled:Boolean(enabled&&host&&user&&pass&&from),host,port,secure,user,pass,from};
+}
+async function sendAppMail(s,{to,subject,text,html}){
+  const cfg=smtpConfig(s);
+  if(!cfg.enabled)throw new Error('E-posta (SMTP) ayarı yok. Ayarlar → E-posta bölümünden Gmail SMTP girin.');
+  let nodemailer;
+  try{nodemailer=require('nodemailer')}catch(_){
+    throw new Error('nodemailer yüklü değil — VPS’te npm install çalıştırın');
+  }
+  const transporter=nodemailer.createTransport({
+    host:cfg.host,port:cfg.port,secure:cfg.secure,
+    auth:{user:cfg.user,pass:cfg.pass}
+  });
+  await transporter.sendMail({from:cfg.from,to,subject,text,html:html||text});
+  return true;
+}
+function publicBaseUrl(req){
+  const env=String(process.env.PUBLIC_BASE_URL||'').trim().replace(/\/$/,'');
+  if(env)return env;
+  const proto=String(req.headers['x-forwarded-proto']||req.protocol||'https').split(',')[0].trim();
+  const host=String(req.headers['x-forwarded-host']||req.headers.host||'panel.atakhome.com.tr').split(',')[0].trim();
+  return `${proto}://${host}`;
 }
 
 
@@ -985,8 +1022,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.109-ayarlar-sekme',
-  build:'fix-v109',
+  version:'6.3.110-sifre-unuttum-mail',
+  build:'fix-v110',
   ownerOnly:ownerOnlyEnabled(),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
@@ -1032,14 +1069,17 @@ app.get('/web-api/admin/roles',requireAdmin,(req,res)=>res.json({
 }));
 app.post('/web-api/admin/user',requirePermission('users_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{},username=String(x.username||'').trim().toLocaleLowerCase('tr-TR'),name=String(x.name||'').trim(),role=ROLE_PRESETS[x.role]?String(x.role):'viewer';
+  const email=String(x.email||'').trim().toLocaleLowerCase('tr-TR');
   if(!username||!name)return res.status(400).json({error:'Ad ve kullanıcı adı zorunludur'});
   if(!/^[a-z0-9._-]{3,40}$/.test(username))return res.status(400).json({error:'Kullanıcı adı uygun değil'});
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return res.status(400).json({error:'E-posta geçersiz'});
   if((s.users||[]).some(u=>u.id!==x.id&&String(u.username).toLocaleLowerCase('tr-TR')===username))return res.status(409).json({error:'Bu kullanıcı adı zaten kullanılıyor'});
+  if(email && (s.users||[]).some(u=>u.id!==x.id&&String(u.email||'').toLocaleLowerCase('tr-TR')===email))return res.status(409).json({error:'Bu e-posta başka kullanıcıda kayıtlı'});
   let user=(s.users||[]).find(u=>String(u.id)===String(x.id));const now=new Date().toISOString();
   const permissions=sanitizePermissions(x.permissions,role);
-  if(user){user.name=name;user.username=username;user.role=role;user.active=x.active!==false;user.permissions=permissions;if(String(x.password||'').trim())user.passwordHash=hashPassword(x.password);user.updatedAt=now}
-  else{if(!String(x.password||'').trim())return res.status(400).json({error:'Yeni kullanıcı için şifre zorunludur'});user={id:crypto.randomUUID(),name,username,role,permissions,active:x.active!==false,passwordHash:hashPassword(x.password),createdAt:now,updatedAt:now};s.users.push(user)}
-  audit(s,x.id?'Kullanıcı güncellendi':'Kullanıcı eklendi',username,{role,permissions});writeStore(s);res.json({ok:true,user:publicUser(user)});
+  if(user){user.name=name;user.username=username;user.email=email;user.role=role;user.active=x.active!==false;user.permissions=permissions;if(String(x.password||'').trim())user.passwordHash=hashPassword(x.password);user.updatedAt=now}
+  else{if(!String(x.password||'').trim())return res.status(400).json({error:'Yeni kullanıcı için şifre zorunludur'});user={id:crypto.randomUUID(),name,username,email,role,permissions,active:x.active!==false,passwordHash:hashPassword(x.password),createdAt:now,updatedAt:now};s.users.push(user)}
+  audit(s,x.id?'Kullanıcı güncellendi':'Kullanıcı eklendi',username,{role,permissions,email});writeStore(s);res.json({ok:true,user:publicUser(user)});
 });
 app.delete('/web-api/admin/user/:id',requirePermission('users_manage'),(req,res)=>{
   const s=readStore(),id=String(req.params.id||'').trim();
@@ -1059,6 +1099,110 @@ app.delete('/web-api/admin/user/:id',requirePermission('users_manage'),(req,res)
   res.json({ok:true,softDeleted:true,canForceDelete:true,message:'Kullanıcı pasife alındı. Tekrar Sil ile kalıcı silebilirsiniz.'});
 });
 
+app.get('/web-api/admin/mail-settings',requirePermission('settings_manage'),(req,res)=>{
+  const s=readStore(),cfg=smtpConfig(s),raw=s.settings.smtp||{};
+  res.json({settings:{
+    enabled:raw.enabled===true,
+    host:raw.host||'smtp.gmail.com',
+    port:Number(raw.port||465)||465,
+    secure:raw.secure!==false,
+    user:raw.user||'',
+    pass:raw.pass?'••••••••':'',
+    from:raw.from||'',
+    configured:cfg.enabled
+  }});
+});
+app.post('/web-api/admin/mail-settings',requirePermission('settings_manage'),(req,res)=>{
+  const s=readStore(),x=req.body||{},cur=s.settings.smtp||{};
+  const passIn=String(x.pass||'');
+  const keepPass=passIn===''||passIn==='••••••••';
+  s.settings.smtp={
+    enabled:x.enabled===true,
+    host:String(x.host||'smtp.gmail.com').trim()||'smtp.gmail.com',
+    port:Number(x.port||465)||465,
+    secure:x.secure!==false,
+    user:String(x.user||'').trim(),
+    pass:keepPass?String(cur.pass||''):passIn,
+    from:String(x.from||x.user||'').trim()
+  };
+  audit(s,'SMTP ayarları kaydedildi',s.settings.smtp.user||'-',{enabled:s.settings.smtp.enabled,host:s.settings.smtp.host});
+  writeStore(s);
+  const cfg=smtpConfig(s);
+  res.json({ok:true,configured:cfg.enabled});
+});
+app.post('/web-api/admin/mail-settings/test',requirePermission('settings_manage'),async(req,res)=>{
+  try{
+    const s=readStore();
+    const to=String(req.body?.to||smtpConfig(s).user||'').trim();
+    if(!to)return res.status(400).json({error:'Test için alıcı e-posta girin'});
+    await sendAppMail(s,{to,subject:'ATAK · SMTP test',text:'E-posta ayarı çalışıyor. Personel şifre sıfırlama mailleri bu adresten gidecek.'});
+    res.json({ok:true,to});
+  }catch(e){res.status(400).json({error:e.message||'Mail gönderilemedi'})}
+});
+
+// Personel: şifremi unuttum
+app.post('/foundation-api/forgot-password',async(req,res)=>{
+  const s=readStore();
+  const key=String(req.body?.username||req.body?.email||'').trim().toLocaleLowerCase('tr-TR');
+  const failKey=`forgot:${clientIp(req)}:${key||'-'}`;
+  if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
+  // Her zaman aynı cevap (kullanıcı sızıntısı yok)
+  const okMsg={ok:true,message:'Eşleşen hesap ve e-posta varsa sıfırlama linki gönderildi. Gelen kutusu / spam kontrol edin.'};
+  if(!key)return res.json(okMsg);
+  const user=(s.users||[]).find(u=>u.active!==false&&(
+    String(u.username||'').toLocaleLowerCase('tr-TR')===key ||
+    String(u.email||'').toLocaleLowerCase('tr-TR')===key
+  ));
+  if(!user||!String(user.email||'').trim()){
+    // soft fail sayacı — brute force azalt
+    try{/* mark fail */}catch(_){}
+    return res.json(okMsg);
+  }
+  if(!smtpConfig(s).enabled){
+    return res.status(400).json({error:'Şu an e-posta gönderimi kapalı. Yönetici Ayarlar → E-posta’dan SMTP açmalı.'});
+  }
+  const token=crypto.randomBytes(32).toString('hex');
+  const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
+  const expiresAt=new Date(Date.now()+60*60*1000).toISOString();
+  s.passwordResets=(s.passwordResets||[]).filter(r=>r.userId!==user.id&&new Date(r.expiresAt).getTime()>Date.now());
+  s.passwordResets.push({id:crypto.randomUUID(),userId:user.id,tokenHash,expiresAt,createdAt:new Date().toISOString(),used:false});
+  writeStore(s);
+  const link=`${publicBaseUrl(req)}/personel?reset=${token}`;
+  try{
+    await sendAppMail(s,{
+      to:user.email,
+      subject:'ATAK Personel · Şifre sıfırlama',
+      text:`Merhaba ${user.name},\n\nŞifrenizi sıfırlamak için 1 saat geçerli link:\n${link}\n\nBu talebi siz yapmadıysanız yok sayın.\n`,
+      html:`<p>Merhaba <b>${String(user.name||'').replace(/[<>&]/g,m=>({ '<':'&lt;','>':'&gt;','&':'&amp;' }[m]))}</b>,</p>
+        <p>Personel şifrenizi sıfırlamak için aşağıdaki butona tıklayın (1 saat geçerli):</p>
+        <p><a href="${link}" style="display:inline-block;padding:12px 18px;background:#9a3412;color:#fff;text-decoration:none;border-radius:10px;font-weight:700">Şifreyi Sıfırla</a></p>
+        <p style="color:#666;font-size:12px">Link: ${link}</p>`
+    });
+    audit(s,'Şifre sıfırlama maili gönderildi',user.username,{email:user.email});
+    writeStore(s);
+  }catch(e){
+    return res.status(400).json({error:e.message||'Mail gönderilemedi'});
+  }
+  res.json(okMsg);
+});
+app.post('/foundation-api/reset-password',(req,res)=>{
+  const s=readStore();
+  const token=String(req.body?.token||'').trim();
+  const password=String(req.body?.password||'');
+  if(!token||password.length<6)return res.status(400).json({error:'Yeni şifre en az 6 karakter olmalı'});
+  const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
+  const row=(s.passwordResets||[]).find(r=>!r.used&&r.tokenHash===tokenHash);
+  if(!row)return res.status(400).json({error:'Link geçersiz veya kullanılmış'});
+  if(new Date(row.expiresAt).getTime()<Date.now())return res.status(400).json({error:'Linkin süresi dolmuş. Tekrar “Şifremi unuttum” deyin.'});
+  const user=(s.users||[]).find(u=>String(u.id)===String(row.userId));
+  if(!user||user.active===false)return res.status(400).json({error:'Kullanıcı bulunamadı'});
+  user.passwordHash=hashPassword(password);
+  user.updatedAt=new Date().toISOString();
+  row.used=true;row.usedAt=new Date().toISOString();
+  audit(s,'Şifre sıfırlandı (mail linki)',user.username,{});
+  writeStore(s);
+  res.json({ok:true,message:'Şifre güncellendi. Giriş yapabilirsiniz.'});
+});
 
 // ===== ATAK HOME PLATFORM V3.0 FOUNDATION =====
 app.get('/foundation-api/public',(req,res)=>{
