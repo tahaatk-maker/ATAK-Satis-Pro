@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v119 */
+/* ATAK_PERSONEL_BUILD=fix-v120 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1391,7 +1391,7 @@ function salesCombinedContractSenetA4Html(d){
   const companyTaxNo='0940148218';
   const address='Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul';
   const companyTaxLine=`VD: ${companyTaxOffice} · Vergi No: ${companyTaxNo}`;
-  const atakLogoSrc='/assets/atak-header-logo.png';
+  const atakLogoSrc='/assets/atak-contract-header-brands.png';
   const atakLogoWhiteSrc='/assets/atak-header-logo-white.png';
   const phone='0212 223 28 71',wa='0543 358 50 60',email='tarabyabeko@gmail.com';
   const personName=d.customer?.name||'';
@@ -1436,7 +1436,7 @@ function salesCombinedContractSenetA4Html(d){
   const css=`<style>
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
 .a4c{padding:5mm 6mm 3mm!important;font:8pt/1.25 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible;display:flex;flex-direction:column;min-height:277mm}
-.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0}.a4c .logo-top img{height:7mm;width:auto;object-fit:contain}
+.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;gap:0;margin:0 0 1.2mm}.a4c .logo-top img{height:11mm;width:auto;max-width:118mm;object-fit:contain;object-position:left center}
 .a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 3px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:10mm;object-fit:contain;object-position:left top}
 .a4c .logo-bottom{display:none}
 .a4c .top{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:start;flex:0 0 auto}
@@ -1476,7 +1476,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .sig .nm{font-weight:700;margin:1px 0 0;font-size:8pt!important;line-height:1.2!important;white-space:normal;word-break:break-word;text-align:center}
 .a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important;margin-top:2px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding-bottom:1px}
 .a4c .sig .sigpad span{color:#666;font-size:7pt!important}
-.a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:2mm!important;padding-top:0;gap:0}
+.a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:5mm!important;padding-top:0;gap:0}
 .a4c .senet{border:1.5px solid #0a2748;border-radius:3px;overflow:visible;display:grid;grid-template-columns:20mm 1fr;flex:0 0 auto;height:auto;min-height:0;color:#000}
 .a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff!important;padding:3px 2px;line-height:1.2;display:flex;flex-direction:column;gap:3px;font-size:7pt!important}
 .a4c .senet-side,.a4c .senet-side *{color:#fff!important;font-size:7pt!important;line-height:1.2!important}
@@ -1517,14 +1517,14 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .duo{margin-top:2mm!important}
 .a4c .duo>div{min-height:48mm!important;height:48mm!important}
 .a4c .duo .sigpad{flex:1 1 auto!important;min-height:22mm!important;height:auto!important;max-height:none!important}
-.a4c .grow{margin-top:2mm!important;padding-top:0!important}
+.a4c .grow{margin-top:5mm!important;padding-top:0!important}
 .a4c .senet{height:auto!important;max-height:none!important;overflow:visible!important}
 .a4c .senet .sbody{margin-top:2mm!important;margin-bottom:2mm!important}
 .a4c.senet-only{page-break-before:always}
 }
 </style>`;
   return `<section class="sheet a4c${denseClass}">${css}
-  <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${esc(companyLegal)}</div><div class="meta">${esc(address)}<br/>${esc(phone)} · ${esc(wa)} · ${esc(email)} · ${esc(companyTaxLine)}</div></div>
+  <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK · Beko · İstikbal"/></div><div class="name">${esc(companyLegal)}</div><div class="meta">${esc(address)}<br/>${esc(phone)} · ${esc(wa)} · ${esc(email)} · ${esc(companyTaxLine)}</div></div>
   <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
   <div class="rule"></div>
   <div class="grid3">
