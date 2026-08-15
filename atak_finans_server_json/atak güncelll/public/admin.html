@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v129" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v129" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v130" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v130" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1950,7 +1950,23 @@ Bulunamayan → Diğer.
 <button data-customer-action="edit" type="button">Bilgileri Düzenle</button>
 <button data-customer-action="pay" type="button" class="customer-pay-btn">Tahsilat Yap</button>
 <button data-customer-action="sale" type="button" class="customer-sale-btn">Satış Merkezi</button>
+<button data-customer-action="sms-overdue" type="button" class="customer-sms-btn">Gecikme SMS</button>
+<button data-customer-action="sms-custom" type="button" class="customer-sms-btn">Özel SMS</button>
 <button data-customer-action="delete" type="button" class="customer-delete-btn">Sil (Onaya)</button>
+</div>
+<div class="customer-sms-panel hidden" id="customerSmsPanel">
+  <div class="panel-head compact" style="margin:0;padding:0;border:0">
+    <h3 id="customerSmsTitle">SMS</h3>
+    <button type="button" class="secondary-btn" id="customerSmsClose">Kapat</button>
+  </div>
+  <p class="note" id="customerSmsHint" style="margin:8px 0">Corvass üzerinden müşteri telefonuna SMS gider.</p>
+  <label>Telefon<input id="customerSmsPhone" inputmode="tel" placeholder="05xx…"/></label>
+  <label>Mesaj<textarea id="customerSmsMessage" rows="4" maxlength="640" placeholder="SMS metni"></textarea></label>
+  <div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button class="primary" type="button" id="customerSmsSendBtn">SMS Gönder</button>
+    <button class="secondary-btn" type="button" id="customerSmsPreviewBtn">Önizle / Yenile</button>
+  </div>
+  <div id="customerSmsStatus" class="form-status"></div>
 </div>
 <div id="customerDebtBox" class="customer-debt-box"></div>
 <div class="customer-action-form" id="customerPayPanel">
@@ -2180,6 +2196,10 @@ Bulunamayan → Diğer.
     <b>✉️ E-posta</b>
     <small>SMTP · şifre sıfırlama</small>
   </button>
+  <button type="button" class="settings-nav-btn" data-settings-tab="sms">
+    <b>📱 SMS</b>
+    <small>Corvass · gecikme / özel</small>
+  </button>
   <button type="button" class="settings-nav-btn" data-settings-tab="test">
     <b>🧪 Test</b>
     <small>Sistem self-test</small>
@@ -2275,6 +2295,45 @@ Bulunamayan → Diğer.
   <p class="note" style="margin-top:10px">1) Her kullanıcıya e-posta yazın (Kullanıcılar &amp; Yetkiler).<br/>2) Personel girişinde “Şifremi unuttum” → maildeki link ile yeni şifre.</p>
 </form>
 
+<form class="panel form-stack settings-panel hidden" id="smsSettingsForm" data-settings-panel="sms">
+  <div class="panel-head">
+    <div>
+      <h2>SMS (Corvass)</h2>
+      <p class="note">Corvass paneli kullanıcı adı, şifre ve onaylı gönderici adını (originator) girin. Müşteri carisinden gecikme / özel SMS atılır.</p>
+    </div>
+  </div>
+  <label class="check"><input id="smsEnabled" type="checkbox"/> SMS açık (Corvass ile gönderilsin)</label>
+  <label>API endpoint<input id="smsEndpoint" placeholder="https://sms.corvass.net/http" value="https://sms.corvass.net/http"/></label>
+  <div class="two-col">
+    <label>Kullanıcı adı<input id="smsUsername" autocomplete="off" placeholder="Corvass kullanıcı"/></label>
+    <label>Şifre<input id="smsPassword" type="password" autocomplete="new-password" placeholder="••••••••"/></label>
+  </div>
+  <div class="two-col">
+    <label>Gönderici adı (originator)<input id="smsOriginator" placeholder="ATAK / onaylı başlık"/></label>
+    <label>Alıcı tipi
+      <select id="smsRecipientType">
+        <option value="BIREYSEL">Bireysel</option>
+        <option value="TACIR">Ticari</option>
+      </select>
+    </label>
+  </div>
+  <label>Gecikme SMS şablonu
+    <textarea id="smsOverdueTemplate" rows="3" placeholder="Sayin {ad}, ..."></textarea>
+    <small class="field-hint">Değişkenler: {ad} {geciken} {bakiye} {acik} {firma} {telefon}</small>
+  </label>
+  <div class="two-col">
+    <label>Test telefonu<input id="smsTestPhone" placeholder="05xx xxx xx xx" inputmode="tel"/></label>
+    <label>Test metni<input id="smsTestMessage" placeholder="ATAK SMS test"/></label>
+  </div>
+  <div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="primary" type="submit">SMS Ayarlarını Kaydet</button>
+    <button class="secondary-btn" id="smsTestBtn" type="button">Test SMS Gönder</button>
+  </div>
+  <div class="form-status" id="smsSettingsStatus"></div>
+  <div class="panel-head compact" style="margin-top:14px"><h3>Son SMS’ler</h3></div>
+  <div id="smsRecentList" class="note">Henüz kayıt yok.</div>
+</form>
+
 <section class="panel settings-panel hidden" data-settings-panel="test">
   <div class="panel-head"><div><h2>Test Merkezi</h2><p class="note">Canlı veriyi değiştirmeden temel satış akışını test eder.</p></div></div>
   <button class="primary" id="settingsSelfTestBtn" type="button">Sistem Testini Çalıştır</button>
@@ -2286,7 +2345,7 @@ Bulunamayan → Diğer.
 <style>
 #settings .settings-nav{
   display:grid;
-  grid-template-columns:repeat(5,minmax(0,1fr));
+  grid-template-columns:repeat(6,minmax(0,1fr));
   gap:12px;
   padding:14px;
   margin-bottom:14px;
@@ -2382,5 +2441,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v129"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v130"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

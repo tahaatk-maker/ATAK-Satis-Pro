@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v129 */
+/* ATAK_ADMIN_BUILD=fix-v130 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -130,6 +130,7 @@ function goTab(id,{remember=true}={}){
     loadPromissorySettings();
     loadDealerSettings().catch(()=>{});
     loadMailSettings().catch(()=>{});
+    loadSmsSettings().catch(()=>{});
     loadFinanceCenter().catch(()=>{});
   },20);
   if(id==='mySalesReport')setTimeout(loadMySalesReport,20);
@@ -2195,12 +2196,70 @@ async function selectCustomerPage(id){
     customersPageData._selected=c;
     customersPageData._canManage=Boolean(d.canManage);
     customersPageData._pendingDelete=d.pendingDelete||null;
+    customersPageData._smsType='';
+    q('#customerSmsPanel')?.classList.add('hidden');
+    if(q('#customerSmsStatus')){q('#customerSmsStatus').textContent='';q('#customerSmsStatus').className='form-status'}
     const delBtn=q('[data-customer-action="delete"]');
     if(delBtn){
       delBtn.disabled=Boolean(d.pendingDelete)||c.active===false;
       delBtn.textContent=d.pendingDelete?'🗑 Silme onayı bekliyor':'🗑 Sil (Onaya)';
     }
   }catch(e){toast(e.message);empty?.classList.remove('hidden');content?.classList.add('hidden')}
+}
+async function openCustomerSmsPanel(type){
+  const c=customersPageData._selected;
+  if(!c?.id){toast('Önce müşteri seçin');return}
+  customersPageData._smsType=type==='overdue'?'overdue':'custom';
+  const panel=q('#customerSmsPanel');
+  panel?.classList.remove('hidden');
+  if(q('#customerSmsTitle'))q('#customerSmsTitle').textContent=type==='overdue'?'Gecikme SMS':'Özel SMS';
+  if(q('#customerSmsHint'))q('#customerSmsHint').textContent=type==='overdue'
+    ?'Geciken senet / cari borca göre şablon doldurulur. İsterseniz metni düzenleyip gönderin.'
+    :'Serbest metin yazın; müşteri telefonuna Corvass ile gider.';
+  if(q('#customerSmsPhone'))q('#customerSmsPhone').value=c.phone||'';
+  if(q('#customerSmsStatus')){q('#customerSmsStatus').textContent='';q('#customerSmsStatus').className='form-status'}
+  if(type==='overdue'){
+    try{
+      const p=await api('/web-api/admin/customer/'+encodeURIComponent(c.id)+'/sms',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({type:'overdue',preview:true,phone:q('#customerSmsPhone')?.value||c.phone||''})
+      });
+      if(q('#customerSmsMessage'))q('#customerSmsMessage').value=p.message||'';
+      if(q('#customerSmsStatus')){
+        q('#customerSmsStatus').textContent=p.configured
+          ?`Önizleme hazır · geciken ${money2(p.overdueAmount||0)} · cari ${money2(p.balance||0)}`
+          :'SMS ayarı eksik — Ayarlar → SMS';
+        q('#customerSmsStatus').className='form-status '+(p.configured?'success':'error');
+      }
+    }catch(err){
+      if(q('#customerSmsMessage'))q('#customerSmsMessage').value='';
+      if(q('#customerSmsStatus')){q('#customerSmsStatus').textContent=err.message;q('#customerSmsStatus').className='form-status error'}
+      toast(err.message);
+    }
+  }else if(q('#customerSmsMessage')){
+    q('#customerSmsMessage').value='';
+    q('#customerSmsMessage').focus();
+  }
+  panel?.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+async function sendCustomerSmsFromPanel(){
+  const c=customersPageData._selected;
+  const st=q('#customerSmsStatus');
+  if(!c?.id){toast('Önce müşteri seçin');return}
+  const type=customersPageData._smsType==='overdue'?'overdue':'custom';
+  const phone=q('#customerSmsPhone')?.value||c.phone||'';
+  const message=q('#customerSmsMessage')?.value||'';
+  try{
+    const r=await api('/web-api/admin/customer/'+encodeURIComponent(c.id)+'/sms',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type,phone,message})
+    });
+    if(st){st.textContent=`SMS gönderildi → ${r.to}`;st.className='form-status success'}
+    toast('SMS gönderildi');
+  }catch(err){
+    if(st){st.textContent=err.message;st.className='form-status error'}
+    toast(err.message||'SMS gönderilemedi');
+  }
 }
 q('#newCustomerBtn')?.addEventListener('click',()=>openCustomerModal(null));
 q('#customerModalClose')?.addEventListener('click',()=>q('#customerModal')?.classList.add('hidden'));
@@ -2237,6 +2296,10 @@ document.addEventListener('click',e=>{
       },80);
     }
   }
+  const smsOver=e.target.closest('[data-customer-action="sms-overdue"]');
+  if(smsOver){e.preventDefault();openCustomerSmsPanel('overdue');return}
+  const smsCust=e.target.closest('[data-customer-action="sms-custom"]');
+  if(smsCust){e.preventDefault();openCustomerSmsPanel('custom');return}
   const del=e.target.closest('[data-customer-action="delete"]');
   if(del){
     e.preventDefault();
@@ -2244,6 +2307,12 @@ document.addEventListener('click',e=>{
   }
   const goCust=e.target.closest('#openCustomersPage');
   if(goCust){e.preventDefault();goTab('customersPage')}
+});
+q('#customerSmsClose')?.addEventListener('click',()=>q('#customerSmsPanel')?.classList.add('hidden'));
+q('#customerSmsSendBtn')?.addEventListener('click',()=>sendCustomerSmsFromPanel());
+q('#customerSmsPreviewBtn')?.addEventListener('click',()=>{
+  if(customersPageData._smsType==='overdue')openCustomerSmsPanel('overdue');
+  else toast('Özel SMS’de metni yazıp Gönder’e basın');
 });
 q('#customerDetailPayForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
@@ -3886,11 +3955,12 @@ async function runSystemSelfTest(target='#settingsSelfTestResult'){
 }
 let settingsTabView='accounts';
 function setSettingsTab(name){
-  const allowed=['accounts','promissory','dealer','mail','test'];
+  const allowed=['accounts','promissory','dealer','mail','sms','test'];
   settingsTabView=allowed.includes(name)?name:'accounts';
   qa('#settingsNav [data-settings-tab]').forEach(b=>b.classList.toggle('active',b.dataset.settingsTab===settingsTabView));
   qa('#settings [data-settings-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.settingsPanel!==settingsTabView));
   try{sessionStorage.setItem('atak-settings-tab',settingsTabView)}catch(_){}
+  if(settingsTabView==='sms')loadSmsSettings().catch(()=>{});
 }
 qa('#settingsNav [data-settings-tab]').forEach(b=>b.addEventListener('click',()=>setSettingsTab(b.dataset.settingsTab)));
 try{
@@ -3951,8 +4021,78 @@ q('#mailTestBtn')?.addEventListener('click',async()=>{
   }catch(err){if(st){st.textContent=err.message;st.className='form-status error'};toast(err.message||'Test başarısız')}
 });
 
+function renderSmsRecent(rows){
+  const box=q('#smsRecentList');
+  if(!box)return;
+  if(!rows?.length){box.textContent='Henüz kayıt yok.';box.className='note';return}
+  box.className='';
+  box.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Zaman</th><th>Tür</th><th>Alıcı</th><th>Durum</th><th>Metin</th></tr></thead><tbody>${rows.map(r=>{
+    const ok=r.ok!==false;
+    const when=String(r.at||'').replace('T',' ').slice(0,16);
+    const typ=r.type==='overdue'?'Gecikme':(r.type==='test'?'Test':'Özel');
+    const who=salesEsc(r.customerName||r.phone||'-');
+    const st=ok?`OK ${salesEsc(r.code||'')}`:`Hata: ${salesEsc(r.error||'')}`;
+    const msg=salesEsc(String(r.message||'').slice(0,80));
+    return `<tr><td>${when}</td><td>${typ}</td><td><b>${who}</b><small>${salesEsc(r.phone||'')}</small></td><td>${st}</td><td>${msg}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+async function loadSmsSettings(){
+  const st=q('#smsSettingsStatus');
+  try{
+    const d=await api('/web-api/admin/sms-settings');
+    const s=d.settings||{};
+    if(q('#smsEnabled'))q('#smsEnabled').checked=s.enabled===true;
+    if(q('#smsEndpoint'))q('#smsEndpoint').value=s.endpoint||'https://sms.corvass.net/http';
+    if(q('#smsUsername'))q('#smsUsername').value=s.username||'';
+    if(q('#smsPassword'))q('#smsPassword').value=s.password||'';
+    if(q('#smsOriginator'))q('#smsOriginator').value=s.originator||'';
+    if(q('#smsRecipientType'))q('#smsRecipientType').value=s.recipientType||'BIREYSEL';
+    if(q('#smsOverdueTemplate'))q('#smsOverdueTemplate').value=s.overdueTemplate||'';
+    if(st){st.textContent=s.configured?'Corvass SMS hazır — cari üzerinden gönderim yapılabilir.':'SMS henüz yapılandırılmadı.';st.className='form-status '+(s.configured?'success':'')}
+    renderSmsRecent(d.recent||[]);
+  }catch(e){if(st){st.textContent=e.message;st.className='form-status error'}}
+}
+q('#smsSettingsForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#smsSettingsStatus');
+  try{
+    const r=await api('/web-api/admin/sms-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      enabled:q('#smsEnabled')?.checked===true,
+      endpoint:q('#smsEndpoint')?.value,
+      username:q('#smsUsername')?.value,
+      password:q('#smsPassword')?.value,
+      originator:q('#smsOriginator')?.value,
+      recipientType:q('#smsRecipientType')?.value,
+      overdueTemplate:q('#smsOverdueTemplate')?.value
+    })});
+    if(st){st.textContent=r.configured?'SMS ayarları kaydedildi · Corvass hazır':'Kaydedildi — kullanıcı / şifre / gönderici eksik olabilir';st.className='form-status success'}
+    await loadSmsSettings();
+  }catch(err){if(st){st.textContent=err.message;st.className='form-status error'}}
+});
+q('#smsTestBtn')?.addEventListener('click',async()=>{
+  const st=q('#smsSettingsStatus');
+  try{
+    await api('/web-api/admin/sms-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      enabled:true,
+      endpoint:q('#smsEndpoint')?.value,
+      username:q('#smsUsername')?.value,
+      password:q('#smsPassword')?.value,
+      originator:q('#smsOriginator')?.value,
+      recipientType:q('#smsRecipientType')?.value,
+      overdueTemplate:q('#smsOverdueTemplate')?.value
+    })});
+    const to=q('#smsTestPhone')?.value||'';
+    const message=q('#smsTestMessage')?.value||'ATAK · Corvass SMS test';
+    if(!to){toast('Test telefonu girin');return}
+    const r=await api('/web-api/admin/sms-settings/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to,message})});
+    if(st){st.textContent=`Test SMS gönderildi → ${r.to}`;st.className='form-status success'}
+    toast('Test SMS gönderildi');
+    await loadSmsSettings();
+  }catch(err){if(st){st.textContent=err.message;st.className='form-status error'};toast(err.message||'Test başarısız')}
+});
+
 async function loadPromissorySettings(){try{const d=await api('/web-api/admin/promissory-settings'),s=d.settings||{};q('#noteCreditor').value='ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';q('#notePaymentPlace').value=s.paymentPlace||'';q('#noteIssuePlace').value=s.issuePlace||'';q('#notePrefix').value=s.prefix||'ATAK';q('#noteDefaultInstallments').value=s.defaultInstallments||1;q('#noteFirstDueDays').value=s.firstDueDays??30;q('#noteIntervalMonths').value=s.intervalMonths||1;q('#noteCopies').value=s.copies||1;q('#noteFooter').value=s.footer||''}catch(e){toast(e.message)}}
-q('[data-tab="settings"]')?.addEventListener('click',()=>setTimeout(()=>{setSettingsTab(settingsTabView);loadPromissorySettings();loadDealerSettings().catch(()=>{});loadMailSettings().catch(()=>{})},30));
+q('[data-tab="settings"]')?.addEventListener('click',()=>setTimeout(()=>{setSettingsTab(settingsTabView);loadPromissorySettings();loadDealerSettings().catch(()=>{});loadMailSettings().catch(()=>{});loadSmsSettings().catch(()=>{})},30));
 q('#systemSelfTestBtn')?.addEventListener('click',()=>{goTab('settings');setSettingsTab('test');setTimeout(()=>runSystemSelfTest(),60)});q('#settingsSelfTestBtn')?.addEventListener('click',()=>runSystemSelfTest());
 q('#promissorySettingsForm')?.addEventListener('submit',async e=>{e.preventDefault();const s=q('#promissorySettingsStatus');try{await api('/web-api/admin/promissory-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creditorName:q('#noteCreditor').value,paymentPlace:q('#notePaymentPlace').value,issuePlace:q('#noteIssuePlace').value,prefix:q('#notePrefix').value,defaultInstallments:q('#noteDefaultInstallments').value,firstDueDays:q('#noteFirstDueDays').value,intervalMonths:q('#noteIntervalMonths').value,copies:q('#noteCopies').value,footer:q('#noteFooter').value})});s.textContent='Senet ayarları kaydedildi';s.className='form-status success'}catch(err){s.textContent=err.message;s.className='form-status error'}});
 

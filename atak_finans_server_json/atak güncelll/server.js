@@ -131,6 +131,17 @@ function ensureStore(store) {
   store.settings.smtp = (store.settings.smtp && typeof store.settings.smtp==='object') ? store.settings.smtp : {
     enabled:false,host:'smtp.gmail.com',port:465,secure:true,user:'',pass:'',from:''
   };
+  store.settings.sms = (store.settings.sms && typeof store.settings.sms==='object') ? store.settings.sms : {
+    enabled:false,
+    provider:'corvass',
+    endpoint:'https://sms.corvass.net/http',
+    username:'',
+    password:'',
+    originator:'',
+    recipientType:'BIREYSEL',
+    overdueTemplate:'Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71'
+  };
+  store.smsLogs = Array.isArray(store.smsLogs) ? store.smsLogs : [];
   store.brands = Array.isArray(store.brands) ? store.brands : [];
   store.sales = Array.isArray(store.sales) ? store.sales : [];
   store.orders = Array.isArray(store.orders) ? store.orders : [];
@@ -762,6 +773,152 @@ async function sendAppMail(s,{to,subject,text,html}){
   await transporter.sendMail({from:cfg.from,to,subject,text,html:html||text});
   return true;
 }
+
+function smsConfig(s){
+  const fromStore=(s?.settings?.sms&&typeof s.settings.sms==='object')?s.settings.sms:{};
+  const endpoint=String(process.env.SMS_ENDPOINT||fromStore.endpoint||'https://sms.corvass.net/http').trim()||'https://sms.corvass.net/http';
+  const username=String(process.env.SMS_USERNAME||fromStore.username||'').trim();
+  const password=String(process.env.SMS_PASSWORD||fromStore.password||'').trim();
+  const originator=String(process.env.SMS_ORIGINATOR||fromStore.originator||'').trim();
+  const recipientType=String(process.env.SMS_RECIPIENT_TYPE||fromStore.recipientType||'BIREYSEL').trim().toUpperCase()||'BIREYSEL';
+  const overdueTemplate=String(fromStore.overdueTemplate||'Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71');
+  const enabled=(String(process.env.SMS_ENABLED||'')==='1')||fromStore.enabled===true;
+  return{
+    enabled:Boolean(enabled&&username&&password&&originator),
+    provider:'corvass',
+    endpoint,username,password,originator,recipientType,overdueTemplate
+  };
+}
+function normalizeTrMobile(phone){
+  let d=String(phone||'').replace(/\D+/g,'');
+  if(!d)return '';
+  if(d.startsWith('00'))d=d.slice(2);
+  if(d.startsWith('90')&&d.length>=12)d=d.slice(2);
+  if(d.startsWith('0')&&d.length===11)d=d.slice(1);
+  if(d.length===10&&d.startsWith('5'))return d;
+  return '';
+}
+function moneySms(v){
+  return Number(v||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
+}
+function customerOverdueSnapshot(s,customerId){
+  const today=todayISO();
+  const notes=(s.promissoryNotes||[])
+    .filter(n=>String(n.customerId)===String(customerId)&&!['paid','cancelled'].includes(String(n.status||'open')))
+    .map(n=>{
+      const remain=Math.round(Math.max(0,Number(n.amount||0)-Number(n.paidAmount||0))*100)/100;
+      const overdue=remain>0.009&&String(n.dueDate||'')<today;
+      return{...n,remain,overdue};
+    });
+  const overdueNotes=notes.filter(n=>n.overdue);
+  const overdueAmount=Math.round(overdueNotes.reduce((a,n)=>a+n.remain,0)*100)/100;
+  const openAmount=Math.round(notes.reduce((a,n)=>a+n.remain,0)*100)/100;
+  const balance=Math.round(Number(customerBalance(s,customerId)||0)*100)/100;
+  return{overdueAmount,overdueCount:overdueNotes.length,openAmount,balance,overdueNotes};
+}
+function renderSmsTemplate(tpl,vars){
+  return String(tpl||'').replace(/\{(ad|geciken|bakiye|acik|firma|telefon)\}/gi,(_,k)=>{
+    const key=String(k||'').toLocaleLowerCase('tr-TR');
+    return vars[key]!=null?String(vars[key]):'';
+  }).replace(/\s+/g,' ').trim();
+}
+function httpFormPost(urlStr,fields,{timeoutMs=25000}={}){
+  return new Promise((resolve,reject)=>{
+    let u;
+    try{u=new URL(urlStr)}catch(e){return reject(new Error('SMS endpoint geçersiz'))}
+    const lib=u.protocol==='http:'?require('http'):require('https');
+    const body=new URLSearchParams();
+    for(const [k,v] of Object.entries(fields||{}))body.append(k,v==null?'':String(v));
+    const payload=body.toString();
+    const req=lib.request({
+      protocol:u.protocol,hostname:u.hostname,port:u.port||(u.protocol==='http:'?80:443),
+      path:u.pathname+(u.search||''),method:'POST',
+      headers:{
+        'Content-Type':'application/x-www-form-urlencoded',
+        'Content-Length':Buffer.byteLength(payload),
+        'Accept':'*/*',
+        'User-Agent':'ATAK-ERP-SMS/1.0'
+      },
+      timeout:timeoutMs
+    },res=>{
+      const chunks=[];
+      res.on('data',c=>chunks.push(c));
+      res.on('end',()=>{
+        resolve({statusCode:Number(res.statusCode||0),body:Buffer.concat(chunks).toString('utf8')});
+      });
+    });
+    req.on('timeout',()=>{req.destroy();reject(new Error('SMS API zaman aşımı'))});
+    req.on('error',err=>reject(err));
+    req.write(payload);
+    req.end();
+  });
+}
+function parseCorvassHttpResponse(raw){
+  const body=String(raw||'').trim();
+  if(!body)return{ok:false,code:'empty',message:'Boş SMS yanıtı',raw:body};
+  // key=value satırları
+  const map={};
+  for(const line of body.split(/\r?\n/)){
+    const i=line.indexOf('=');
+    if(i>0)map[line.slice(0,i).trim().toLowerCase()]=line.slice(i+1).trim();
+  }
+  if(map.statuscode!=null||map.status!=null){
+    const code=String(map.statuscode!=null?map.statuscode:map.status);
+    const ok=code==='0'||Number(code)>=0;
+    return{ok,code,message:map.message||(ok?'Gönderildi':'SMS hatası'),raw:body,messageIds:map.messageids||''};
+  }
+  // JSON
+  if(body.startsWith('{')||body.startsWith('[')){
+    try{
+      const j=JSON.parse(body);
+      const code=String(j.statusCode??j.status??j.code??'');
+      const ok=j.success===true||code==='0'||Number(code)>=0;
+      return{ok,code:code||(ok?'0':'-1'),message:j.message||j.status||(ok?'Gönderildi':'SMS hatası'),raw:body};
+    }catch(_){/* fallthrough */}
+  }
+  // JetSMS/Corvass HTTP: gövde sayısal kod / msgid
+  const m=body.match(/^(-?\d+)/);
+  if(m){
+    const n=Number(m[1]);
+    const ok=n>=0;
+    return{ok,code:String(n),message:ok?'Gönderildi':`SMS hata kodu: ${n}`,raw:body};
+  }
+  const low=body.toLocaleLowerCase('tr-TR');
+  if(/basar|success|ok/.test(low))return{ok:true,code:'0',message:'Gönderildi',raw:body};
+  return{ok:false,code:'unknown',message:body.slice(0,180)||'SMS yanıtı anlaşılamadı',raw:body};
+}
+async function sendCorvassSms(s,{to,message}){
+  const cfg=smsConfig(s);
+  if(!cfg.enabled)throw new Error('SMS kapalı veya Corvass ayarı eksik. Ayarlar → SMS bölümünden kullanıcı / şifre / gönderici adını girin.');
+  const number=normalizeTrMobile(to);
+  if(!number)throw new Error('Geçerli cep telefonu yok (05xx…)');
+  const text=String(message||'').trim();
+  if(!text)throw new Error('SMS metni boş');
+  if(text.length>640)throw new Error('SMS metni çok uzun (max 640 karakter)');
+  const resp=await httpFormPost(cfg.endpoint,{
+    username:cfg.username,
+    password:cfg.password,
+    originator:cfg.originator,
+    numbers:number,
+    message:text,
+    action:'0',
+    messageType:'B',
+    recipientType:cfg.recipientType==='TACIR'?'TACIR':'BIREYSEL'
+  });
+  if(resp.statusCode>=400)throw new Error(`SMS API HTTP ${resp.statusCode}: ${String(resp.body||'').slice(0,120)}`);
+  const parsed=parseCorvassHttpResponse(resp.body);
+  if(!parsed.ok)throw new Error(parsed.message||'SMS gönderilemedi');
+  return{ok:true,to:number,provider:'corvass',code:parsed.code,raw:parsed.raw,messageIds:parsed.messageIds||''};
+}
+function pushSmsLog(s,row){
+  s.smsLogs=Array.isArray(s.smsLogs)?s.smsLogs:[];
+  s.smsLogs.unshift({
+    id:crypto.randomUUID(),
+    at:new Date().toISOString(),
+    ...row
+  });
+  s.smsLogs=s.smsLogs.slice(0,500);
+}
 function publicBaseUrl(req){
   const env=String(process.env.PUBLIC_BASE_URL||'').trim().replace(/\/$/,'');
   if(env)return env;
@@ -1202,8 +1359,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.129-imza-adres',
-  build:'fix-v129',
+  version:'6.3.130-corvass-sms',
+  build:'fix-v130',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -1332,6 +1489,130 @@ app.post('/web-api/admin/mail-settings/test',requirePermission('settings_manage'
     await sendAppMail(s,{to,subject:'ATAK · SMTP test',text:'E-posta ayarı çalışıyor. Personel şifre sıfırlama mailleri bu adresten gidecek.'});
     res.json({ok:true,to});
   }catch(e){res.status(400).json({error:e.message||'Mail gönderilemedi'})}
+});
+
+app.get('/web-api/admin/sms-settings',requirePermission('settings_manage'),(req,res)=>{
+  const s=readStore(),cfg=smsConfig(s),raw=s.settings.sms||{};
+  res.json({settings:{
+    enabled:raw.enabled===true,
+    provider:'corvass',
+    endpoint:raw.endpoint||'https://sms.corvass.net/http',
+    username:raw.username||'',
+    password:raw.password?'••••••••':'',
+    originator:raw.originator||'',
+    recipientType:raw.recipientType||'BIREYSEL',
+    overdueTemplate:raw.overdueTemplate||cfg.overdueTemplate,
+    configured:cfg.enabled
+  },recent:(s.smsLogs||[]).slice(0,20)});
+});
+app.post('/web-api/admin/sms-settings',requirePermission('settings_manage'),(req,res)=>{
+  const s=readStore(),x=req.body||{},cur=s.settings.sms||{};
+  const passIn=String(x.password||'');
+  const keepPass=passIn===''||passIn==='••••••••';
+  const tpl=String(x.overdueTemplate||cur.overdueTemplate||'').trim();
+  s.settings.sms={
+    enabled:x.enabled===true,
+    provider:'corvass',
+    endpoint:String(x.endpoint||'https://sms.corvass.net/http').trim()||'https://sms.corvass.net/http',
+    username:String(x.username||'').trim(),
+    password:keepPass?String(cur.password||''):passIn,
+    originator:String(x.originator||'').trim(),
+    recipientType:String(x.recipientType||'BIREYSEL').trim().toUpperCase()==='TACIR'?'TACIR':'BIREYSEL',
+    overdueTemplate:tpl||'Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71'
+  };
+  audit(s,'SMS ayarları kaydedildi',s.settings.sms.username||'-',{enabled:s.settings.sms.enabled,originator:s.settings.sms.originator});
+  writeStore(s);
+  res.json({ok:true,configured:smsConfig(s).enabled});
+});
+app.post('/web-api/admin/sms-settings/test',requirePermission('settings_manage'),async(req,res)=>{
+  try{
+    const s=readStore();
+    const to=String(req.body?.to||'').trim();
+    if(!to)return res.status(400).json({error:'Test için cep telefonu girin'});
+    const message=String(req.body?.message||'ATAK · Corvass SMS test. Sistem baglantisi calisiyor.').trim();
+    const r=await sendCorvassSms(s,{to,message});
+    pushSmsLog(s,{type:'test',customerId:'',customerName:'',phone:r.to,message,ok:true,code:r.code,actor:'Yönetici'});
+    audit(s,'SMS test gönderildi',r.to,{code:r.code});
+    writeStore(s);
+    res.json({ok:true,to:r.to,code:r.code});
+  }catch(e){
+    try{
+      const s=readStore();
+      pushSmsLog(s,{type:'test',customerId:'',customerName:'',phone:normalizeTrMobile(req.body?.to)||String(req.body?.to||''),message:String(req.body?.message||''),ok:false,error:e.message||'hata',actor:'Yönetici'});
+      writeStore(s);
+    }catch(_){}
+    res.status(400).json({error:e.message||'SMS gönderilemedi'});
+  }
+});
+
+app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manage','customers_manage','orders_manage'),async(req,res)=>{
+  try{
+    const s=readStore();
+    const customer=(s.customers||[]).find(c=>String(c.id)===String(req.params.id));
+    if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
+    const type=String(req.body?.type||'custom').trim().toLowerCase();
+    const phoneOverride=String(req.body?.phone||'').trim();
+    const phone=phoneOverride||customer.phone||'';
+    const snap=customerOverdueSnapshot(s,customer.id);
+    const cfg=smsConfig(s);
+    let message='';
+    if(type==='overdue'){
+      if(snap.overdueAmount<=0.009&&Number(snap.balance||0)<=0.009)
+        return res.status(400).json({error:'Bu müşteride geciken senet / cari borç yok'});
+      const geciken=snap.overdueAmount>0.009?snap.overdueAmount:Math.max(0,snap.balance);
+      message=renderSmsTemplate(cfg.overdueTemplate,{
+        ad:customer.name||'Musteri',
+        geciken:moneySms(geciken),
+        bakiye:moneySms(Math.max(0,snap.balance)),
+        acik:moneySms(snap.openAmount),
+        firma:ATAK_COMPANY.shortName||'Atak Pazarlama',
+        telefon:String(s.settings?.phone||'0212 223 28 71')
+      });
+      if(req.body?.message&&String(req.body.message).trim())message=String(req.body.message).trim();
+    }else{
+      message=String(req.body?.message||'').trim();
+      if(!message)return res.status(400).json({error:'Özel SMS metni zorunlu'});
+    }
+    const previewOnly=req.body?.preview===true;
+    if(previewOnly){
+      return res.json({
+        ok:true,preview:true,type,phone:normalizeTrMobile(phone)||phone,message,
+        overdueAmount:snap.overdueAmount,balance:snap.balance,configured:cfg.enabled
+      });
+    }
+    const r=await sendCorvassSms(s,{to:phone,message});
+    const actor=currentSessionUser(req)||currentActor(req);
+    pushSmsLog(s,{
+      type:type==='overdue'?'overdue':'custom',
+      customerId:customer.id,
+      customerName:customer.name||'',
+      phone:r.to,
+      message,
+      ok:true,
+      code:r.code,
+      actor:actor?.name||actor?.username||'Kullanıcı'
+    });
+    audit(s,type==='overdue'?'Gecikme SMS gönderildi':'Özel SMS gönderildi',customer.name||customer.id,{phone:r.to,code:r.code});
+    writeStore(s);
+    res.json({ok:true,to:r.to,type,message,code:r.code,overdueAmount:snap.overdueAmount,balance:snap.balance});
+  }catch(e){
+    try{
+      const s=readStore();
+      const customer=(s.customers||[]).find(c=>String(c.id)===String(req.params.id));
+      pushSmsLog(s,{
+        type:String(req.body?.type||'custom'),
+        customerId:req.params.id,
+        customerName:customer?.name||'',
+        phone:normalizeTrMobile(req.body?.phone||customer?.phone)||String(req.body?.phone||customer?.phone||''),
+        message:String(req.body?.message||''),
+        ok:false,
+        error:e.message||'hata',
+        actor:(currentSessionUser(req)||currentActor(req))?.name||'Kullanıcı'
+      });
+      writeStore(s);
+    }catch(_){}
+    res.status(400).json({error:e.message||'SMS gönderilemedi'});
+  }
 });
 
 // Personel: şifremi unuttum
