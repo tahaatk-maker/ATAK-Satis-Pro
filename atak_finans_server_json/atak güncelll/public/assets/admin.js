@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v126 */
+/* ATAK_ADMIN_BUILD=fix-v127 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -3663,7 +3663,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .duo .row{display:block;margin:0 0 2px;flex:0 0 auto}
 .a4c .duo .k{display:block;font-size:7pt!important;line-height:1.1!important;font-weight:700;color:#444;margin:0 0 1px}
 .a4c .duo .v,.a4c .duo .v.nm{display:block;font-size:8pt!important;line-height:1.2!important;font-weight:700;color:#000!important;min-height:11px;margin:0;padding:0 0 2px;border-bottom:1px solid #222;white-space:normal!important;overflow:visible!important;text-align:left!important;word-break:break-word}
-.a4c .duo .sigpad{flex:1 1 auto!important;height:auto!important;min-height:22mm!important;max-height:none!important;margin-top:auto;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding:0 2px 2px;color:#666;font-size:7pt!important;position:relative}.a4c .duo .sigpad span{display:block;width:100%;text-align:center;color:#666;font-size:7pt!important}
+.a4c .duo .sigpad{flex:0 0 auto!important;height:auto!important;min-height:16mm!important;max-height:none!important;margin-top:2.5mm!important;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-start;justify-content:center;padding:3px 2px 2px;color:#666;font-size:7pt!important;position:relative}.a4c .duo .sigpad span{display:block;width:100%;text-align:center;color:#666;font-size:7pt!important;margin-top:0}
 .a4c .keside{margin-top:1px;text-align:right;font-weight:700;font-size:8pt!important}
 .a4c .note{display:none}
 .a4c .foot{margin-top:1px;text-align:center;font-size:7pt!important;color:#444;flex:0 0 auto}
@@ -3684,7 +3684,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important}
 .a4c .duo{margin-top:2mm!important}
 .a4c .duo>div{min-height:48mm!important;height:48mm!important}
-.a4c .duo .sigpad{flex:1 1 auto!important;min-height:22mm!important;height:auto!important;max-height:none!important}
+.a4c .duo .sigpad{flex:0 0 auto!important;min-height:16mm!important;height:auto!important;max-height:none!important;margin-top:2.5mm!important;align-items:flex-start!important}
 .a4c .grow{margin-top:5mm!important;padding-top:0!important}
 .a4c .senet{height:auto!important;max-height:none!important;overflow:visible!important}
 .a4c .senet .sbody{margin-top:2mm!important;margin-bottom:2mm!important}
