@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v116 */
+/* ATAK_ADMIN_BUILD=fix-v117 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -3490,7 +3490,7 @@ function salesAmountWords(n){
   return out.replace(/\s+/g,' ').trim();
 }
 function salesPrintCss(){
-  return `@page{size:A4;margin:5mm}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:10pt/1.45 Arial,Helvetica,sans-serif}
+  return `@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#d9e2ec;color:#13233f;font:10pt/1.45 Arial,Helvetica,sans-serif}
 .toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;padding:12px;background:#0b2a55;color:#fff}
 .toolbar button,.toolbar a.btn{border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer;background:#fff;color:#0b2a55;text-decoration:none;display:inline-block;font:inherit}
 .toolbar button.primary,.toolbar a.btn.primary{background:#dda20c;color:#1a1300}
@@ -3512,7 +3512,7 @@ table{width:100%;border-collapse:collapse;margin:14px 0}th,td{border-bottom:1px 
 .senet .top{display:flex;justify-content:space-between;border-bottom:2px solid #0b2a55;padding-bottom:10px}.senet .top b{font-size:26px;color:#0b2a55}
 .senet .amount{font-size:34px;font-weight:900;color:#0b2a55;margin:18px 0 8px}.senet .words{font-size:12px;color:#4b5b73;margin-bottom:14px}
 .footer{font-size:11px;color:#66768d;margin-top:14px}.hint{font-size:11px;color:#8a96a8;margin-top:4px}
-@media print{body{background:#fff}.toolbar{display:none!important}.sheet{margin:0;box-shadow:none;width:auto;min-height:0;height:auto;max-height:287mm;padding:0;overflow:hidden;page-break-inside:avoid}}`;
+@media print{body{background:#fff}.toolbar{display:none!important}.sheet{margin:0;box-shadow:none;width:auto;min-height:0;height:auto;max-height:297mm;padding:0;overflow:hidden;page-break-inside:avoid}}`;
 }
 function salesCustomerPrintTotals(d){
   const pay=(d.payments||[]).map(p=>`<div><span>${salesEsc(p.method)}</span><b>${salesMoney(p.amount)}</b></div>`).join('');
@@ -3599,9 +3599,9 @@ function salesCombinedContractSenetA4Html(d){
   const saleRef=d.reference||'TASLAK';
   const moreSenets=noteList.length>1?`<div class="note">Tek senet tutarı toplam bakiyedir (${salesMoney(senetAmount)}). ${noteList.length} taksitin vade planı yukarıdaki tablodadır.</div>`:'';
   const css=`<style>
-@page{size:A4;margin:5mm}
+@page{size:A4;margin:0}
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
-.a4c{padding:2.5mm 4mm 1.5mm!important;font:7.5pt/1.18 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:0;max-height:287mm;height:auto;page-break-inside:avoid}
+.a4c{padding:5mm 6mm 4mm!important;font:7.5pt/1.18 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:0;max-height:297mm;height:auto;page-break-inside:avoid}
 .a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0}.a4c .logo-top img{height:5mm;width:auto;object-fit:contain}
 .a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 2px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:7mm;object-fit:contain;object-position:left top}
 .a4c .logo-bottom{display:none}
@@ -3670,7 +3670,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c.senet-only .senet{margin-top:0;min-height:0}
 @media print{
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important}
-.a4c{page-break-after:avoid!important;page-break-inside:avoid!important;min-height:0!important;height:auto!important;max-height:287mm!important;overflow:hidden!important;font-size:7.5pt!important;color:#000!important}
+.a4c{page-break-after:avoid!important;page-break-inside:avoid!important;min-height:0!important;height:auto!important;max-height:297mm!important;overflow:hidden!important;font-size:7.5pt!important;color:#000!important}
 .a4c .name,.a4c .title,.a4c th,.a4c td,.a4c .mat,.a4c .pay,.a4c .terms h4,.a4c .sig b,.a4c .sig .nm,.a4c .box td,.a4c .box td.nm,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields b,.a4c .sbody,.a4c .sbody b,.a4c .sbody u,.a4c .duo .lab,.a4c .duo .v,.a4c .duo .v.nm,.a4c .keside{font-size:7.5pt!important;line-height:1.18!important;color:#000!important}
 .a4c .meta,.a4c .terms p,.a4c .fields span,.a4c .duo .k,.a4c .sig .sigpad span,.a4c .duo .sigpad,.a4c .foot{font-size:6.5pt!important;color:#000!important}
 .a4c .duo .k{color:#444!important}
@@ -3732,15 +3732,28 @@ function salesCombinedContractSenetA4Html(d){
 function salesContractSheetHtml(d){return salesCombinedContractSenetA4Html(d)}
 function salesSenetSheetsHtml(){return ''}
 function openSalesPrintWindow(title,bodyHtml,opts={}){
-  const w=window.open('','_blank');
-  if(!w){toast('Tarayıcı yeni sekmeyi engelledi. Açılır pencerelere izin verin.');return null}
   const wa=opts.whatsappUrl?`<a class="btn wa" href="${salesEsc(opts.whatsappUrl)}" target="_blank" rel="noopener">WhatsApp Gönder</a>`:'';
-  w.document.open();
-  w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${salesEsc(title)}</title><style>${salesPrintCss()}</style></head><body>
-    <div class="toolbar"><b>${salesEsc(title)}</b><button class="primary" onclick="window.print()">Yazdır / PDF Kaydet</button>${wa}<button onclick="window.close()">Kapat</button><span class="hint">Önce şablonu yazdırın; dilerseniz WhatsApp ile gönderin</span></div>
+  const html=`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title></title><style>${salesPrintCss()}</style></head><body>
+    <div class="toolbar"><b>${salesEsc(title)}</b><button class="primary" type="button" id="btnPrint">Yazdır / PDF Kaydet</button>${wa}<button type="button" onclick="window.close()">Kapat</button><span class="hint">Yazdırırken üstbilgi/altbilgi kapalı olmalı · Kenar boşluğu yok (tarih / about:blank çıkmaz)</span></div>
     ${bodyHtml}
-  </body></html>`);
-  w.document.close();
+    <script>
+    (function(){
+      var t=${JSON.stringify(String(title||''))};
+      function clearHead(){try{document.title='\u00a0'}catch(e){}}
+      function restoreHead(){try{document.title=t||'\u00a0'}catch(e){}}
+      window.addEventListener('beforeprint',clearHead);
+      window.addEventListener('afterprint',restoreHead);
+      var b=document.getElementById('btnPrint');
+      if(b)b.onclick=function(){clearHead();setTimeout(function(){window.print()},30)};
+      clearHead();
+    })();
+    <\/script>
+  </body></html>`;
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const w=window.open(url,'_blank');
+  if(!w){URL.revokeObjectURL(url);toast('Tarayıcı yeni sekmeyi engelledi. Açılır pencerelere izin verin.');return null}
+  setTimeout(()=>{try{URL.revokeObjectURL(url)}catch(_){}},60000);
   try{w.focus()}catch(_){}
   return w;
 }

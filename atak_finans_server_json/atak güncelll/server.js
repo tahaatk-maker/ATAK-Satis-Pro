@@ -1202,8 +1202,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.116-a4-fit',
-  build:'fix-v116',
+  version:'6.3.117-print-clean',
+  build:'fix-v117',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -4289,9 +4289,9 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const senetAmtHash=senetAmount>0?('#'+Number(senetAmount).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+'#'):'';
   const moreSenets=noteList.length>1?`<div class="note">Tek senet tutarı toplam bakiyedir (${moneyTR(senetAmount)}). ${noteList.length} taksitin vade planı yukarıdaki tablodadır.</div>`:'';
   const css=`<style>
-@page{size:A4;margin:5mm}
+@page{size:A4;margin:0}
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
-.a4c{padding:2.5mm 4mm 1.5mm!important;font:7.5pt/1.18 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:0;max-height:287mm;height:auto;page-break-inside:avoid}
+.a4c{padding:5mm 6mm 4mm!important;font:7.5pt/1.18 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:0;max-height:297mm;height:auto;page-break-inside:avoid}
 .a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0}.a4c .logo-top img{height:5mm;width:auto;object-fit:contain}
 .a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 2px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:7mm;object-fit:contain;object-position:left top}
 .a4c .logo-bottom{display:none}
@@ -4360,7 +4360,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
 .a4c.senet-only .senet{margin-top:0;min-height:0}
 @media print{
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important}
-.a4c{page-break-after:avoid!important;page-break-inside:avoid!important;min-height:0!important;height:auto!important;max-height:287mm!important;overflow:hidden!important;font-size:7.5pt!important;color:#000!important}
+.a4c{page-break-after:avoid!important;page-break-inside:avoid!important;min-height:0!important;height:auto!important;max-height:297mm!important;overflow:hidden!important;font-size:7.5pt!important;color:#000!important}
 .a4c .name,.a4c .title,.a4c th,.a4c td,.a4c .mat,.a4c .pay,.a4c .terms h4,.a4c .sig b,.a4c .sig .nm,.a4c .box td,.a4c .box td.nm,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields b,.a4c .sbody,.a4c .sbody b,.a4c .sbody u,.a4c .duo .lab,.a4c .duo .v,.a4c .duo .v.nm,.a4c .keside{font-size:7.5pt!important;line-height:1.18!important;color:#000!important}
 .a4c .meta,.a4c .terms p,.a4c .fields span,.a4c .duo .k,.a4c .sig .sigpad span,.a4c .duo .sigpad,.a4c .foot{font-size:6.5pt!important;color:#000!important}
 .a4c .duo .k{color:#444!important}
