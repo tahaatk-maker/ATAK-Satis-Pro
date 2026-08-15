@@ -7,8 +7,8 @@ die(){ log "FAIL: $*"; exit 1; }
 
 log "=== ATAK DEPLOY ==="
 BRANCH="cursor/satis-merkezi-iskonto-prim-bd99"
-EXPECT_V="6.3.117-print-clean"
-EXPECT_B="fix-v117"
+EXPECT_V="6.3.118-senet-geri"
+EXPECT_B="fix-v118"
 APP="${APP_DIR:-/root/atak-v10}"
 [ -d /root/atakhome-platform ] && [ ! -f "$APP/server.js" ] && APP=/root/atakhome-platform
 
