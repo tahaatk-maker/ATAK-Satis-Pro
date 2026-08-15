@@ -770,6 +770,179 @@ function publicBaseUrl(req){
   return `${proto}://${host}`;
 }
 
+/** Giriş kodu (e-posta OTP) + tarayıcı tanıma (varsayılan 6 saat) */
+function mfaEnabled(){ return String(process.env.ATAK_MFA_ENABLED ?? '1').trim() !== '0'; }
+function mfaTrustMs(){
+  const h=Number(process.env.ATAK_MFA_TRUST_HOURS || 6);
+  return Math.max(1, Number.isFinite(h)?h:6) * 60 * 60 * 1000;
+}
+const MFA_COOKIE='atak_trusted';
+const MFA_CODE_TTL_MS=10*60*1000;
+const mfaChallenges=new Map();
+function mfaSecret(){ return String(process.env.SESSION_SECRET||'CHANGE-ME-SET-IN-ENV'); }
+function parseCookies(req){
+  const out={};
+  for(const part of String(req.headers.cookie||'').split(';')){
+    const i=part.indexOf('=');
+    if(i<1)continue;
+    const k=part.slice(0,i).trim();
+    let v=part.slice(i+1).trim();
+    try{v=decodeURIComponent(v)}catch(_){}
+    out[k]=v;
+  }
+  return out;
+}
+function safeEqualStr(a,b){
+  const ba=Buffer.from(String(a||''));
+  const bb=Buffer.from(String(b||''));
+  if(ba.length!==bb.length)return false;
+  return crypto.timingSafeEqual(ba,bb);
+}
+function maskEmail(email=''){
+  const s=String(email||'').trim();
+  const at=s.indexOf('@');
+  if(at<1)return '***';
+  const u=s.slice(0,at),d=s.slice(at+1);
+  const show=u.length<=2?u.slice(0,1):u.slice(0,2);
+  return `${show}***@${d}`;
+}
+function resolveLoginEmail(s,username,isOwnerLogin){
+  const envMail=String(process.env.ATAK_OWNER_EMAIL||'').trim();
+  if(envMail && (isOwnerLogin || isOwnerUsername(username)))return envMail;
+  const user=(s.users||[]).find(x=>String(x.username||'').toLocaleLowerCase('tr-TR')===String(username||'').toLocaleLowerCase('tr-TR'));
+  if(user && String(user.email||'').trim())return String(user.email).trim();
+  if(isOwnerLogin){
+    if(envMail)return envMail;
+    const cfg=smtpConfig(s);
+    return String(cfg.from||cfg.user||'').trim();
+  }
+  return '';
+}
+function isTrustedDevice(req,username,portal){
+  const raw=parseCookies(req)[MFA_COOKIE]||'';
+  const dot=raw.lastIndexOf('.');
+  if(dot<1)return false;
+  const payload=raw.slice(0,dot),sig=raw.slice(dot+1);
+  const expect=crypto.createHmac('sha256',mfaSecret()).update(payload).digest('base64url');
+  if(!safeEqualStr(sig,expect))return false;
+  let data;
+  try{data=JSON.parse(Buffer.from(payload,'base64url').toString('utf8'))}catch(_){return false}
+  if(!data||data.p!==portal)return false;
+  if(String(data.u||'').toLocaleLowerCase('tr-TR')!==String(username||'').toLocaleLowerCase('tr-TR'))return false;
+  if(!Number(data.e)||Number(data.e)<Date.now())return false;
+  return true;
+}
+function setTrustedDeviceCookie(res,username,portal){
+  const exp=Date.now()+mfaTrustMs();
+  const payload=Buffer.from(JSON.stringify({u:String(username||'').toLocaleLowerCase('tr-TR'),p:portal,e:exp}),'utf8').toString('base64url');
+  const sig=crypto.createHmac('sha256',mfaSecret()).update(payload).digest('base64url');
+  const value=encodeURIComponent(`${payload}.${sig}`);
+  const maxAge=Math.max(60,Math.floor((exp-Date.now())/1000));
+  const secure=process.env.NODE_ENV==='production'?'; Secure':'';
+  res.append('Set-Cookie',`${MFA_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`);
+}
+function purgeMfaChallenges(){
+  const now=Date.now();
+  for(const [id,row] of mfaChallenges){
+    if(!row||Number(row.expiresAt)<now)mfaChallenges.delete(id);
+  }
+}
+function applyMfaSession(req,data){
+  if(data.type==='admin-owner'){
+    req.session.admin=true;req.session.systemOwner=true;delete req.session.user;delete req.session.staffUser;
+    return currentSessionUser(req);
+  }
+  if(data.type==='admin-user'){
+    req.session.admin=true;
+    req.session.systemOwner=!!data.systemOwner;
+    req.session.user=data.user;
+    delete req.session.staffUser;
+    return data.user;
+  }
+  if(data.type==='staff-owner'){
+    req.session.staffUser=data.user;
+    req.session.admin=true;req.session.systemOwner=true;delete req.session.user;
+    return data.user;
+  }
+  if(data.type==='staff-user'){
+    delete req.session.admin;delete req.session.systemOwner;delete req.session.user;
+    req.session.staffUser=data.user;
+    return data.user;
+  }
+  throw new Error('Oturum tipi geçersiz');
+}
+async function issueMfaOrFinish(req,res,{portal,username,email,sessionData}){
+  const finish=()=>{
+    const user=applyMfaSession(req,sessionData);
+    return res.json({ok:true,user,ownerOnly:ownerOnlyEnabled(),mfaRequired:false,trusted:isTrustedDevice(req,username,portal)});
+  };
+  if(!mfaEnabled())return finish();
+  if(isTrustedDevice(req,username,portal))return finish();
+  const s=readStore();
+  if(!smtpConfig(s).enabled){
+    return res.status(400).json({error:'Giriş kodu için e-posta (SMTP) açık olmalı. Ayarlar → E-posta, veya geçici ATAK_MFA_ENABLED=0'});
+  }
+  const to=String(email||'').trim();
+  if(!to.includes('@')){
+    return res.status(400).json({error:'Bu kullanıcıda e-posta yok. Kullanıcılar’dan e-posta ekleyin veya .env içine ATAK_OWNER_EMAIL=...'});
+  }
+  purgeMfaChallenges();
+  const code=String(100000+crypto.randomInt(900000));
+  const id=crypto.randomBytes(18).toString('hex');
+  const codeHash=crypto.createHash('sha256').update(`${code}:${mfaSecret()}`).digest('hex');
+  const hours=Math.round(mfaTrustMs()/3600000);
+  mfaChallenges.set(id,{
+    id,portal,username:String(username||'').toLocaleLowerCase('tr-TR'),
+    email:to,codeHash,expiresAt:Date.now()+MFA_CODE_TTL_MS,attempts:0,sessionData
+  });
+  try{
+    await sendAppMail(s,{
+      to,
+      subject:`ATAK giriş kodu · ${code}`,
+      text:`Giriş kodunuz: ${code}\n\n10 dakika geçerli. Bu tarayıcı ${hours} saat boyunca tanınır; sonra tekrar kod istenir.\nTalebi siz yapmadıysanız yok sayın.\n`,
+      html:`<p style="font-family:Arial,sans-serif">ATAK giriş kodunuz:</p>
+        <p style="font-size:28px;letter-spacing:6px;font-weight:800;font-family:monospace">${code}</p>
+        <p style="color:#666;font-size:13px">10 dakika geçerli. Bu tarayıcı <b>${hours} saat</b> tanınır; süre dolunca yeniden kod istenir.</p>`
+    });
+  }catch(e){
+    mfaChallenges.delete(id);
+    return res.status(400).json({error:e.message||'Giriş kodu maili gönderilemedi'});
+  }
+  return res.json({
+    ok:true,mfaRequired:true,challengeId:id,
+    emailHint:maskEmail(to),trustHours:hours,
+    message:`Kod ${maskEmail(to)} adresine gönderildi. Bu tarayıcı ${hours} saat hatırlanır.`
+  });
+}
+function verifyMfaChallenge(req,res,{portal,challengeId,code}){
+  purgeMfaChallenges();
+  const failKey=`mfa:${clientIp(req)}:${portal}`;
+  if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
+  const id=String(challengeId||'').trim();
+  const rawCode=String(code||'').trim().replace(/\s/g,'');
+  const row=mfaChallenges.get(id);
+  if(!row||row.portal!==portal){
+    return res.status(400).json({error:'Kod oturumu bulunamadı. Şifreyle tekrar giriş yapın.'});
+  }
+  if(Number(row.expiresAt)<Date.now()){
+    mfaChallenges.delete(id);
+    return res.status(400).json({error:'Kodun süresi doldu. Şifreyle tekrar giriş yapın.'});
+  }
+  row.attempts=(row.attempts||0)+1;
+  if(row.attempts>8){
+    mfaChallenges.delete(id);
+    return res.status(429).json({error:'Çok fazla hatalı kod. Tekrar giriş yapın.'});
+  }
+  const expect=crypto.createHash('sha256').update(`${rawCode}:${mfaSecret()}`).digest('hex');
+  if(!safeEqualStr(expect,row.codeHash)){
+    return res.status(401).json({error:'Kod yanlış'});
+  }
+  mfaChallenges.delete(id);
+  clearLoginFails(failKey);
+  const user=applyMfaSession(req,row.sessionData);
+  setTrustedDeviceCookie(res,row.username,portal);
+  return res.json({ok:true,user,ownerOnly:ownerOnlyEnabled(),mfaRequired:false,trusted:true,trustHours:Math.round(mfaTrustMs()/3600000)});
+}
 
 function staffSession(req){return req.session?.staffUser||null}
 function cleanMoney(v){return Math.max(0,Math.round(normalizeNumber(v)*100)/100)}
@@ -1022,33 +1195,47 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.111-yetki-buton',
-  build:'fix-v111',
+  version:'6.3.112-giris-kod',
+  build:'fix-v112',
   ownerOnly:ownerOnlyEnabled(),
+  mfa:mfaEnabled(),
+  mfaTrustHours:Math.round(mfaTrustMs()/3600000),
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
 }));
 app.get('/web-api/public',(req,res)=>{ const s=readStore(); res.json({settings:s.settings,categories:s.categories.filter(c=>c.active).sort((a,b)=>a.sort-b.sort),products:s.products.filter(p=>p.active).map(p=>({...p,salePrice:calculateSalePrice(p)})),campaigns:s.campaigns.filter(isCampaignLive).sort((a,b)=>a.sort-b.sort),banners:s.banners.filter(b=>b.active).sort((a,b)=>a.sort-b.sort)}); });
-app.post('/web-api/login',(req,res)=>{
-  const username=String(req.body.username||'').trim().toLocaleLowerCase('tr-TR'),password=String(req.body.password||'');
-  const failKey=`admin:${clientIp(req)}:${username||'admin'}`;
-  if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
-  if((!username||username==='admin')&&password===adminPassword()){
+app.post('/web-api/login',async(req,res)=>{
+  try{
+    const username=String(req.body.username||'').trim().toLocaleLowerCase('tr-TR'),password=String(req.body.password||'');
+    const failKey=`admin:${clientIp(req)}:${username||'admin'}`;
+    if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
+    const s=readStore();
+    if((!username||username==='admin')&&password===adminPassword()){
+      clearLoginFails(failKey);
+      const email=resolveLoginEmail(s,'admin',true);
+      return await issueMfaOrFinish(req,res,{
+        portal:'admin',username:'admin',email,
+        sessionData:{type:'admin-owner'}
+      });
+    }
+    const user=(s.users||[]).find(x=>x.active!==false&&String(x.username||'').toLocaleLowerCase('tr-TR')===username);
+    if(!user||!verifyPassword(password,user.passwordHash))return res.status(401).json({error:'Kullanıcı adı veya şifre yanlış'});
+    if(ownerOnlyEnabled() && !isOwnerUsername(user.username) && String(user.role||'').toLowerCase()!=='owner'){
+      return res.status(403).json({error:ownerLockMessage(),ownerOnly:true});
+    }
     clearLoginFails(failKey);
-    req.session.admin=true;req.session.systemOwner=true;delete req.session.user;delete req.session.staffUser;
-    return res.json({ok:true,user:currentSessionUser(req),ownerOnly:ownerOnlyEnabled()});
-  }
-  const s=readStore(),user=(s.users||[]).find(x=>x.active!==false&&String(x.username||'').toLocaleLowerCase('tr-TR')===username);
-  if(!user||!verifyPassword(password,user.passwordHash))return res.status(401).json({error:'Kullanıcı adı veya şifre yanlış'});
-  if(ownerOnlyEnabled() && !isOwnerUsername(user.username) && String(user.role||'').toLowerCase()!=='owner'){
-    return res.status(403).json({error:ownerLockMessage(),ownerOnly:true});
-  }
-  clearLoginFails(failKey);
-  const preset=ROLE_PRESETS[user.role]||ROLE_PRESETS.viewer;
-  req.session.admin=true;req.session.systemOwner=String(user.role||'').toLowerCase()==='owner';
-  req.session.user={...publicUser(user),permissions:user.permissions?.length?user.permissions:preset.permissions};
-  delete req.session.staffUser;
-  res.json({ok:true,user:req.session.user,ownerOnly:ownerOnlyEnabled()});
+    const preset=ROLE_PRESETS[user.role]||ROLE_PRESETS.viewer;
+    const sessionUser={...publicUser(user),permissions:user.permissions?.length?user.permissions:preset.permissions};
+    return await issueMfaOrFinish(req,res,{
+      portal:'admin',username:user.username,email:resolveLoginEmail(s,user.username,isOwnerUsername(user.username)||String(user.role||'').toLowerCase()==='owner'),
+      sessionData:{type:'admin-user',systemOwner:String(user.role||'').toLowerCase()==='owner',user:sessionUser}
+    });
+  }catch(e){res.status(500).json({error:e.message||'Giriş başarısız'})}
+});
+app.post('/web-api/login/verify-mfa',(req,res)=>{
+  try{
+    verifyMfaChallenge(req,res,{portal:'admin',challengeId:req.body?.challengeId,code:req.body?.code});
+  }catch(e){res.status(500).json({error:e.message||'Kod doğrulanamadı'})}
 });
 app.post('/web-api/logout',(req,res)=>req.session.destroy(()=>res.json({ok:true})));
 app.get('/web-api/me',(req,res)=>{
@@ -1209,70 +1396,76 @@ app.get('/foundation-api/public',(req,res)=>{
   const s=readStore();
   res.json({siteName:s.settings.siteName,stores:s.stores.filter(x=>x.active!==false).map(x=>({id:x.id,name:x.name}))});
 });
-app.post('/foundation-api/login',(req,res)=>{
-  const s=readStore(),username=String(req.body?.username||'').trim().toLocaleLowerCase('tr-TR'),password=String(req.body?.password||'');
-  const failKey=`staff:${clientIp(req)}:${username||'admin'}`;
-  if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
+app.post('/foundation-api/login',async(req,res)=>{
+  try{
+    const s=readStore(),username=String(req.body?.username||'').trim().toLocaleLowerCase('tr-TR'),password=String(req.body?.password||'');
+    const failKey=`staff:${clientIp(req)}:${username||'admin'}`;
+    if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
 
-  const user=(s.users||[]).find(x=>
-    x.active!==false &&
-    String(x.username||'').trim().toLocaleLowerCase('tr-TR')===username
-  );
+    const user=(s.users||[]).find(x=>
+      x.active!==false &&
+      String(x.username||'').trim().toLocaleLowerCase('tr-TR')===username
+    );
 
-  // Önce gerçek kullanıcı şifresi; yoksa admin şifresiyle sahip girişi
-  if(user && verifyPassword(password,user.passwordHash)){
-    // aşağıda normal personel oturumu kurulur
-  }else if((!username||username==='admin') && password===adminPassword()){
+    if(user && verifyPassword(password,user.passwordHash)){
+      // aşağıda normal personel oturumu
+    }else if((!username||username==='admin') && password===adminPassword()){
+      clearLoginFails(failKey);
+      const branch=(s.stores||[]).find(x=>x.active!==false)||(s.stores||[])[0];
+      const staffUser={
+        id:'system-owner',name:'Sistem Yöneticisi',username:'admin',role:'owner',roleName:'Sahip / Tam Yetki',
+        permissions:['*'],storeId:branch?.id||'',storeName:branch?.name||'Mağaza',active:true
+      };
+      return await issueMfaOrFinish(req,res,{
+        portal:'staff',username:'admin',email:resolveLoginEmail(s,'admin',true),
+        sessionData:{type:'staff-owner',user:staffUser}
+      });
+    }else if(!user||!verifyPassword(password,user.passwordHash)){
+      return res.status(401).json({error:'Kullanıcı adı veya şifre yanlış'});
+    }
+    if(ownerOnlyEnabled() && !isOwnerUsername(user.username) && String(user.role||'').toLowerCase()!=='owner'){
+      return res.status(403).json({error:ownerLockMessage(),ownerOnly:true});
+    }
+
+    const branch=(s.stores||[]).find(x=>String(x.id)===String(user.storeId||'')) ||
+                 (s.stores||[]).find(x=>x.active!==false) ||
+                 (s.stores||[])[0];
+
     clearLoginFails(failKey);
-    const branch=(s.stores||[]).find(x=>x.active!==false)||(s.stores||[])[0];
-    req.session.staffUser={
-      id:'system-owner',name:'Sistem Yöneticisi',username:'admin',role:'owner',roleName:'Sahip / Tam Yetki',
-      permissions:['*'],storeId:branch?.id||'',storeName:branch?.name||'Mağaza',active:true
+    const role=String(user.role||'staff');
+    const presetPerms=ROLE_PRESETS[role]?.permissions||[];
+    const rawPerms=Array.isArray(user.permissions)?user.permissions:[];
+    let permissions=rawPerms.length?rawPerms.slice():presetPerms.slice();
+    if(permissions.includes('orders_manage') || permissions.includes('screen_sales_center')){
+      if(!permissions.some(p=>String(p).startsWith('sale_'))){
+        permissions=[...new Set([...permissions,'sale_docs','sale_offer'])];
+      }
+      if(!permissions.some(p=>String(p).startsWith('screen_'))){
+        permissions=[...new Set([...permissions, ...STAFF_DEFAULT_SCREENS])];
+      }
+    }
+    const staffUser={
+      id:user.id,
+      name:user.name,
+      username:user.username,
+      role:role||'staff',
+      roleName:(typeof ROLE_PRESETS!=='undefined' && ROLE_PRESETS[role]?.name)||role||'Personel',
+      permissions,
+      storeId:user.storeId||branch?.id||'',
+      storeName:branch?.name||'Mağaza',
+      active:user.active!==false
     };
-    req.session.admin=true;req.session.systemOwner=true;delete req.session.user;
-    return res.json({ok:true,user:req.session.staffUser,ownerOnly:ownerOnlyEnabled()});
-  }else if(!user||!verifyPassword(password,user.passwordHash)){
-    return res.status(401).json({error:'Kullanıcı adı veya şifre yanlış'});
-  }
-  if(ownerOnlyEnabled() && !isOwnerUsername(user.username) && String(user.role||'').toLowerCase()!=='owner'){
-    return res.status(403).json({error:ownerLockMessage(),ownerOnly:true});
-  }
-
-  const branch=(s.stores||[]).find(x=>String(x.id)===String(user.storeId||'')) ||
-               (s.stores||[]).find(x=>x.active!==false) ||
-               (s.stores||[])[0];
-
-  clearLoginFails(failKey);
-  // Personel girişi admin paneli oturum bayraklarını temizler (özet/prim kapsamı bozulmasın)
-  delete req.session.admin;
-  delete req.session.systemOwner;
-  delete req.session.user;
-  const role=String(user.role||'staff');
-  const presetPerms=ROLE_PRESETS[role]?.permissions||[];
-  const rawPerms=Array.isArray(user.permissions)?user.permissions:[];
-  let permissions=rawPerms.length?rawPerms.slice():presetPerms.slice();
-  // Eski personel: ekran/işlem yetkileri yoksa satış personeli varsayılanlarını ekle (rapor+onay hariç)
-  if(permissions.includes('orders_manage') || permissions.includes('screen_sales_center')){
-    if(!permissions.some(p=>String(p).startsWith('sale_'))){
-      permissions=[...new Set([...permissions,'sale_docs','sale_offer'])];
-    }
-    if(!permissions.some(p=>String(p).startsWith('screen_'))){
-      permissions=[...new Set([...permissions, ...STAFF_DEFAULT_SCREENS])];
-    }
-  }
-  req.session.staffUser={
-    id:user.id,
-    name:user.name,
-    username:user.username,
-    role:role||'staff',
-    roleName:(typeof ROLE_PRESETS!=='undefined' && ROLE_PRESETS[role]?.name)||role||'Personel',
-    permissions,
-    storeId:user.storeId||branch?.id||'',
-    storeName:branch?.name||'Mağaza',
-    active:user.active!==false
-  };
-
-  res.json({ok:true,user:req.session.staffUser,ownerOnly:ownerOnlyEnabled()});
+    return await issueMfaOrFinish(req,res,{
+      portal:'staff',username:user.username,
+      email:resolveLoginEmail(s,user.username,isOwnerUsername(user.username)||String(user.role||'').toLowerCase()==='owner'),
+      sessionData:{type:'staff-user',user:staffUser}
+    });
+  }catch(e){res.status(500).json({error:e.message||'Giriş başarısız'})}
+});
+app.post('/foundation-api/login/verify-mfa',(req,res)=>{
+  try{
+    verifyMfaChallenge(req,res,{portal:'staff',challengeId:req.body?.challengeId,code:req.body?.code});
+  }catch(e){res.status(500).json({error:e.message||'Kod doğrulanamadı'})}
 });
 app.post('/foundation-api/logout',(req,res)=>{
   delete req.session.staffUser;
@@ -5675,5 +5868,5 @@ app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'Sun
 ensureStore(readStore()); writeStore(readStore());
 app.listen(PORT,'127.0.0.1',()=>{
   console.log(`Atak Home ERP V2 http://127.0.0.1:${PORT}`);
-  console.log(`[SECURITY] ownerOnly=${ownerOnlyEnabled()} owners=${ownerUsernames().join(',')} ipLock=${allowedIps().length?allowedIps().join(','):'off'}`);
+  console.log(`[SECURITY] ownerOnly=${ownerOnlyEnabled()} owners=${ownerUsernames().join(',')} ipLock=${allowedIps().length?allowedIps().join(','):'off'} mfa=${mfaEnabled()} trustH=${Math.round(mfaTrustMs()/3600000)}`);
 });
