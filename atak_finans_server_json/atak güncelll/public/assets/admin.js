@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v111 */
+/* ATAK_ADMIN_BUILD=fix-v110 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -829,7 +829,8 @@ function renderPermissionEditor(selected=[]){
       }).join('')}</div>
     </details>`;
   }).join('');
-  qa('[data-user-permission]',box).forEach(btn=>{
+  qa('[data-user-permission]').forEach(btn=>{
+    if(!box.contains(btn))return;
     btn.onclick=()=>{
       const on=!btn.classList.contains('on');
       btn.classList.toggle('on',on);
@@ -837,9 +838,9 @@ function renderPermissionEditor(selected=[]){
       const group=btn.closest('.perm-group');
       if(group){
         const total=group.querySelectorAll('[data-user-permission]').length;
-        const open=group.querySelectorAll('[data-user-permission].on').length;
+        const openN=group.querySelectorAll('[data-user-permission].on').length;
         const small=group.querySelector('summary small');
-        if(small)small.textContent=`${open}/${total} açık`;
+        if(small)small.textContent=`${openN}/${total} açık`;
       }
     };
   });
