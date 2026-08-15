@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v119 */
+/* ATAK_PERSONEL_BUILD=fix-v129 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1392,6 +1392,9 @@ function salesCombinedContractSenetA4Html(d){
   const address='Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul';
   const companyTaxLine=`VD: ${companyTaxOffice} · Vergi No: ${companyTaxNo}`;
   const atakLogoSrc='/assets/atak-header-logo.png';
+  const bekoLogoSrc='/assets/beko-logo.png';
+  const istikbalLogoSrc='/assets/istikbal-logo.png';
+  const partnersLogoSrc='/assets/partners-beko-istikbal.png';
   const atakLogoWhiteSrc='/assets/atak-header-logo-white.png';
   const phone='0212 223 28 71',wa='0543 358 50 60',email='tarabyabeko@gmail.com';
   const personName=d.customer?.name||'';
@@ -1435,15 +1438,15 @@ function salesCombinedContractSenetA4Html(d){
   const moreSenets=noteList.length>1?`<div class="note">Tek senet tutarı toplam bakiyedir (${money(senetAmount)}). ${noteList.length} taksitin vade planı yukarıdaki tablodadır.</div>`:'';
   const css=`<style>
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important;box-sizing:border-box}
-.a4c{padding:5mm 6mm 3mm!important;font:8pt/1.25 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible;display:flex;flex-direction:column;min-height:277mm}
-.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;margin:0}.a4c .logo-top img{height:7mm;width:auto;object-fit:contain}
+.a4c{padding:5mm 6mm 3mm!important;font:8pt/1.25 Arial,Helvetica,sans-serif;color:#000;position:relative;overflow:visible!important;display:flex;flex-direction:column;min-height:277mm}
+.a4c .logo-top{display:flex;justify-content:flex-start;align-items:center;gap:0;margin:0 0 1.2mm}.a4c .logo-top img{height:9mm;width:auto;max-width:55mm;object-fit:contain;object-position:left center}.a4c .top{display:grid;grid-template-columns:1fr auto;grid-template-areas:'left title' 'meta meta';gap:2px 6px;align-items:start;flex:0 0 auto}.a4c .head-left{grid-area:left}.a4c .mid-head{grid-area:title;text-align:right;padding-top:1px;align-self:center}.a4c .meta-row{grid-area:meta;display:flex;align-items:center;justify-content:flex-start;gap:2.5mm;margin-top:0;min-height:17mm;overflow:visible!important}.a4c .meta-texts{display:flex;flex-direction:column;justify-content:center;gap:1px;flex:1 1 auto;min-width:0;max-width:95mm;min-height:17mm}.a4c .meta-row .meta,.a4c .meta-texts .meta{margin:0;white-space:normal;overflow:visible;font-size:6.7pt!important;line-height:1.2!important}.a4c .partners{display:block;flex:0 0 auto;overflow:visible!important;margin-left:2.5mm}.a4c .partners img.partners-strip{height:16.5mm;width:auto;max-height:16.5mm;max-width:95mm;object-fit:contain;object-position:left center;display:block}
 .a4c .senet-side .senet-logo{display:block;width:100%;margin:0 0 3px}.a4c .senet-side .senet-logo img{width:100%;height:auto;max-height:10mm;object-fit:contain;object-position:left top}
 .a4c .logo-bottom{display:none}
-.a4c .top{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:start;flex:0 0 auto}
+/* top grid areas */
 .a4c .name,.a4c .meta,.a4c .title,.a4c th,.a4c td,.a4c .mat,.a4c .mmeta td,.a4c tr.more td,.a4c .box h3,.a4c .box td,.a4c .box td.lbl,.a4c .box td.nm,.a4c .pay,.a4c .terms h4,.a4c .terms p,.a4c .sig b,.a4c .sig .nm,.a4c .sig .sigpad span,.a4c .senet,.a4c .senet-side,.a4c .senet-side strong,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields span,.a4c .fields b,.a4c .sbody,.a4c .sbody b,.a4c .sbody u,.a4c .duo .lab,.a4c .duo .v,.a4c .duo .v.nm,.a4c .keside,.a4c .foot,.a4c.dense td,.a4c.dense .mat,.a4c.dense .terms p,.a4c.dense .sbody{font-size:8pt!important;line-height:1.25!important;font-family:Arial,Helvetica,sans-serif!important;color:#000}
 .a4c .name{font-weight:700}
 .a4c .meta{margin-top:1px;font-size:7pt!important;line-height:1.2!important}
-.a4c .mid-head{text-align:right;padding-top:1px;align-self:center}
+/* mid-head area */
 .a4c .title{font-size:11pt!important;line-height:1.1!important;font-weight:700;letter-spacing:.04em}
 .a4c .rule{height:1.5px;background:#000;margin:2px 0 3px;flex:0 0 auto}
 .a4c .grid3{display:grid;grid-template-columns:1.7fr .55fr .6fr;gap:3px;flex:0 0 auto}
@@ -1476,7 +1479,7 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .sig .nm{font-weight:700;margin:1px 0 0;font-size:8pt!important;line-height:1.2!important;white-space:normal;word-break:break-word;text-align:center}
 .a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important;margin-top:2px;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding-bottom:1px}
 .a4c .sig .sigpad span{color:#666;font-size:7pt!important}
-.a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:2mm!important;padding-top:0;gap:0}
+.a4c .grow{flex:0 0 auto;display:flex;flex-direction:column;margin-top:5mm!important;padding-top:0;gap:0}
 .a4c .senet{border:1.5px solid #0a2748;border-radius:3px;overflow:visible;display:grid;grid-template-columns:20mm 1fr;flex:0 0 auto;height:auto;min-height:0;color:#000}
 .a4c .senet-side{background:linear-gradient(180deg,#0a2748,#143a63);color:#fff!important;padding:3px 2px;line-height:1.2;display:flex;flex-direction:column;gap:3px;font-size:7pt!important}
 .a4c .senet-side,.a4c .senet-side *{color:#fff!important;font-size:7pt!important;line-height:1.2!important}
@@ -1490,21 +1493,21 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .sbody{text-align:justify;margin:2mm 0 2mm;flex:0 0 auto;font-size:8pt!important;line-height:1.28!important}
 .a4c .sbody b,.a4c .sbody u{font-size:8pt!important;color:#000!important}
 .a4c .duo{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:0 0 auto;margin-top:2mm}
-.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:3px 5px 2px;min-height:48mm;height:48mm;display:flex;flex-direction:column;background:#fff;overflow:visible}
+.a4c .duo>div{border:1px solid #c5d0dd;border-radius:3px;padding:3px 5px 4px;min-height:0;height:auto;display:flex;flex-direction:column;background:#fff;overflow:visible}
 .a4c .duo .lab{font-size:8pt!important;font-weight:700;margin:0 0 3px;padding:0 0 2px;border-bottom:1px solid #c5d0dd;flex:0 0 auto;line-height:1.15!important}
 .a4c .duo .row{display:block;margin:0 0 2px;flex:0 0 auto}
 .a4c .duo .k{display:block;font-size:7pt!important;line-height:1.1!important;font-weight:700;color:#444;margin:0 0 1px}
 .a4c .duo .v,.a4c .duo .v.nm{display:block;font-size:8pt!important;line-height:1.2!important;font-weight:700;color:#000!important;min-height:11px;margin:0;padding:0 0 2px;border-bottom:1px solid #222;white-space:normal!important;overflow:visible!important;text-align:left!important;word-break:break-word}
-.a4c .duo .sigpad{flex:1 1 auto!important;height:auto!important;min-height:22mm!important;max-height:none!important;margin-top:auto;border-top:1px dashed #9aa8b8;display:flex;align-items:flex-end;justify-content:center;padding:0 2px 2px;color:#666;font-size:7pt!important;position:relative}.a4c .duo .sigpad span{display:block;width:100%;text-align:center;color:#666;font-size:7pt!important}
+.a4c .duo .imza-row{margin-top:2mm!important}.a4c .duo .imza-row .k{margin-bottom:2px!important}.a4c .duo .imza-line{min-height:12mm!important;border-bottom:1px solid #222!important;padding:0!important}.a4c .duo .sigpad{flex:0 0 auto!important;height:14mm!important;min-height:14mm!important;max-height:14mm!important;margin-top:2mm!important;border-top:1px dashed #9aa8b8;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:2px 2px 1px;color:#666;font-size:7pt!important;position:relative;gap:0}.a4c .duo .sigpad span{display:block;width:100%;text-align:center;color:#666;font-size:7pt!important;margin:1px 0 0;order:1}
 .a4c .keside{margin-top:1px;text-align:right;font-weight:700;font-size:8pt!important}
 .a4c .note{display:none}
 .a4c .foot{margin-top:1px;text-align:center;font-size:7pt!important;color:#444;flex:0 0 auto}
-.a4c.dense .duo>div{min-height:46mm;height:46mm}
+.a4c.dense .duo>div{min-height:0;height:auto}
 .a4c.senet-only{padding-top:10mm!important}
 .a4c.senet-only .senet{margin-top:0;min-height:180mm}
 @media print{
 .a4c,.a4c *{font-family:Arial,Helvetica,sans-serif!important}
-.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important;font-size:8pt!important;color:#000!important}
+.a4c{page-break-after:avoid!important;min-height:277mm!important;height:277mm!important;font-size:8pt!important;color:#000!important;overflow:visible!important}
 .a4c .name,.a4c .title,.a4c th,.a4c td,.a4c .mat,.a4c .pay,.a4c .terms h4,.a4c .sig b,.a4c .sig .nm,.a4c .box td,.a4c .box td.nm,.a4c .senet-bar b,.a4c .senet-bar span,.a4c .fields b,.a4c .sbody,.a4c .sbody b,.a4c .sbody u,.a4c .duo .lab,.a4c .duo .v,.a4c .duo .v.nm,.a4c .keside{font-size:8pt!important;line-height:1.25!important;color:#000!important}
 .a4c .meta,.a4c .terms p,.a4c .fields span,.a4c .duo .k,.a4c .sig .sigpad span,.a4c .duo .sigpad,.a4c .foot{font-size:7pt!important;color:#000!important}
 .a4c .duo .k{color:#444!important}
@@ -1515,17 +1518,16 @@ function salesCombinedContractSenetA4Html(d){
 .a4c .sig{min-height:32mm!important}
 .a4c .sig .sigpad{flex:1 1 auto!important;height:22mm!important;min-height:22mm!important;max-height:none!important}
 .a4c .duo{margin-top:2mm!important}
-.a4c .duo>div{min-height:48mm!important;height:48mm!important}
-.a4c .duo .sigpad{flex:1 1 auto!important;min-height:22mm!important;height:auto!important;max-height:none!important}
-.a4c .grow{margin-top:2mm!important;padding-top:0!important}
+.a4c .duo>div{min-height:0!important;height:auto!important}
+.a4c .duo .imza-row{margin-top:2mm!important}.a4c .duo .imza-row .k{margin-bottom:2px!important}.a4c .duo .imza-line{min-height:12mm!important;border-bottom:1px solid #222!important;padding:0!important}.a4c .duo .sigpad{flex:0 0 auto!important;min-height:14mm!important;height:14mm!important;max-height:14mm!important;margin-top:2mm!important;align-items:center!important;justify-content:flex-start!important}
+.a4c .grow{margin-top:5mm!important;padding-top:0!important}
 .a4c .senet{height:auto!important;max-height:none!important;overflow:visible!important}
 .a4c .senet .sbody{margin-top:2mm!important;margin-bottom:2mm!important}
 .a4c.senet-only{page-break-before:always}
 }
 </style>`;
   return `<section class="sheet a4c${denseClass}">${css}
-  <div class="top"><div><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${esc(companyLegal)}</div><div class="meta">${esc(address)}<br/>${esc(phone)} · ${esc(wa)} · ${esc(email)} · ${esc(companyTaxLine)}</div></div>
-  <div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div></div>
+  <div class="top"><div class="head-left"><div class="logo-top"><img src="${atakLogoSrc}" alt="ATAK Pazarlama"/></div><div class="name">${esc(companyLegal)}</div></div><div class="mid-head"><div class="title">SATIŞ SÖZLEŞMESİ</div></div><div class="meta-row"><div class="meta-texts"><div class="meta addr">${esc(address)}</div><div class="meta">${esc(phone)} · ${esc(wa)} · ${esc(email)} · ${esc(companyTaxLine)}</div></div><div class="partners"><img src="${partnersLogoSrc}" alt="beko · istikbal" class="partners-strip"/></div></div></div>
   <div class="rule"></div>
   <div class="grid3">
     <table class="prods"><thead><tr><th class="mat" style="width:58%">Malzeme</th><th style="width:10%">Adet</th><th style="width:16%">Birim</th><th style="width:16%">Tutar</th></tr></thead><tbody>${productRows}</tbody></table>
@@ -1553,12 +1555,12 @@ function salesCombinedContractSenetA4Html(d){
       <div class="row"><span class="k">İsim</span><span class="v nm">${esc(personName)||'—'}</span></div>
       <div class="row"><span class="k">T.C. Kimlik No</span><span class="v">${esc(personTax||'')||'—'}</span></div>
       <div class="row"><span class="k">Adres</span><span class="v">${esc(addr||'')||'—'}</span></div>
-      <div class="sigpad"><span>Borçlu İmza</span></div></div>
+      <div class="row imza-row"><span class="k">Borçlu İmza</span><span class="v imza-line">&nbsp;</span></div></div>
     <div><div class="lab">Müteselsil Borçlu / Kefil</div>
       <div class="row"><span class="k">İsim</span><span class="v nm">${esc(guarantor.name||'')||'—'}</span></div>
       <div class="row"><span class="k">T.C. Kimlik No</span><span class="v">${esc(guarantor.tckn||guarantor.taxNo||'')||'—'}</span></div>
       <div class="row"><span class="k">Adres</span><span class="v">${esc(guarantor.homeAddress||guarantor.address||'')||'—'}</span></div>
-      <div class="sigpad"><span>Kefil İmza</span></div></div>
+      <div class="row imza-row"><span class="k">Kefil İmza</span><span class="v imza-line">&nbsp;</span></div></div>
   </div>
   ${moreSenets}</div></div></div>
 </section>`;
