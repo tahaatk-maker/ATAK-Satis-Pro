@@ -142,6 +142,10 @@
 .customer-sms-panel textarea{width:100%;min-height:96px;resize:vertical}
 .sms-advanced{margin:4px 0 8px;padding:10px 12px;border:1px solid #e8d5bf;border-radius:12px;background:#fffdf9}
 .sms-advanced>summary{cursor:pointer;font-weight:800;color:#7c2d12}
+.cust-pay-sms-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 10px;padding:10px 12px;border:1px solid #e8d5bf;border-radius:12px;background:#fffaf3}
+.cust-pay-sms-custom{margin:0 0 12px;padding:12px;border:1px solid #e8d5bf;border-radius:12px;background:#fff;display:grid;gap:8px}
+.cust-pay-sms-custom.hidden{display:none!important}
+.cust-pay-sms-custom textarea{width:100%;min-height:80px}
 .customer-debt-box{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
 .customer-debt-box article{padding:12px 14px;border:1px solid #e3e9f0;border-radius:12px;background:#fff}
 .customer-debt-box small{display:block;font-size:11px;color:#6b788d;font-weight:800}

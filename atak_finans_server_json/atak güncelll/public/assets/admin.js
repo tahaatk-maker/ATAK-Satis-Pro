@@ -4029,7 +4029,7 @@ function renderSmsRecent(rows){
   box.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Zaman</th><th>Tür</th><th>Alıcı</th><th>Durum</th><th>Metin</th></tr></thead><tbody>${rows.map(r=>{
     const ok=r.ok!==false;
     const when=String(r.at||'').replace('T',' ').slice(0,16);
-    const typ=r.type==='overdue'?'Gecikme':(r.type==='test'?'Test':'Özel');
+    const typ=r.type==='overdue'||r.type==='overdue_bulk'?'Gecikme':(r.type==='test'?'Test':(r.type==='custom_bulk'?'Toplu':'Özel'));
     const who=salesEsc(r.customerName||r.phone||'-');
     const st=ok?`OK ${salesEsc(r.code||'')}${r.provider?' · '+salesEsc(r.provider):''}`:`Hata: ${salesEsc(r.error||'')}`;
     const msg=salesEsc(String(r.message||'').slice(0,80));
@@ -5660,6 +5660,14 @@ let custPayState={filter:'overdue',q:'',rows:[],recentPaid:[],accounts:[],summar
 function custPayBucketLabel(b){
   return({overdue:'Geciken',due:'Bu Ay',open:'Açık',paid:'Kapalı'}[b]||b||'—');
 }
+function custPaySelectedIds(){
+  return [...qa('#custPayRows .cust-pay-sms-cb:checked')].map(x=>String(x.value||'')).filter(Boolean);
+}
+function syncCustPaySmsHint(){
+  const n=custPaySelectedIds().length;
+  const hint=q('#custPaySmsHint');
+  if(hint)hint.textContent=n?`${n} müşteri seçili · en fazla 150`:'Listeden işaretleyin · en fazla 150';
+}
 function renderCustomerPayments(){
   const sum=custPayState.summary||{};
   const box=q('#custPaySummary');
@@ -5671,10 +5679,12 @@ function renderCustomerPayments(){
       <article><small>Liste</small><b>${(custPayState.rows||[]).length}</b><small>${custPayBucketLabel(custPayState.filter)}</small></article>
       <article><small>Son Tahsilat</small><b>${(custPayState.recentPaid||[]).length}</b><small>A5 makbuz</small></article>`;
   }
+  const prevSelected=new Set(custPaySelectedIds());
   const tbody=q('#custPayRows');
   if(tbody){
     tbody.innerHTML=(custPayState.rows||[]).length
       ?(custPayState.rows||[]).map(r=>`<tr data-cust-pay="${r.customerId}" class="${r.customerId===custPayState.selectedId?'active':''}">
+          <td><input type="checkbox" class="cust-pay-sms-cb" value="${r.customerId}" ${prevSelected.has(String(r.customerId))?'checked':''}></td>
           <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small></td>
           <td><span class="pay-bucket ${r.bucket}">${custPayBucketLabel(r.bucket)}</span></td>
           <td>${money2(r.balance)}</td>
@@ -5682,11 +5692,17 @@ function renderCustomerPayments(){
           <td>${money2(r.dueMonthAmount)}</td>
           <td>${r.nextDue||'—'}</td>
         </tr>`).join('')
-      :'<tr><td colspan="6">Bu filtrede kayıt yok.</td></tr>';
+      :'<tr><td colspan="7">Bu filtrede kayıt yok.</td></tr>';
     qa('#custPayRows [data-cust-pay]').forEach(tr=>{
-      tr.onclick=()=>selectCustomerPayment(tr.dataset.custPay);
+      tr.addEventListener('click',e=>{
+        if(e.target.closest('input,button,a,label'))return;
+        selectCustomerPayment(tr.dataset.custPay);
+      });
     });
+    qa('#custPayRows .cust-pay-sms-cb').forEach(cb=>cb.addEventListener('change',syncCustPaySmsHint));
   }
+  if(q('#custPaySelectAll'))q('#custPaySelectAll').checked=false;
+  syncCustPaySmsHint();
   const recent=q('#custPayRecent');
   if(recent){
     recent.innerHTML=(custPayState.recentPaid||[]).length
@@ -5704,6 +5720,41 @@ function renderCustomerPayments(){
     });
   }
   if(custPayState.selectedId)selectCustomerPayment(custPayState.selectedId,true);
+}
+async function sendCustPayBulkSms(type){
+  const st=q('#custPaySmsStatus');
+  const ids=custPaySelectedIds();
+  if(!ids.length){
+    if(st){st.textContent='Önce listeden müşteri işaretleyin (veya Tümünü seç).';st.className='form-status error'}
+    toast('Müşteri seçin');
+    return;
+  }
+  if(ids.length>150){
+    if(st){st.textContent='En fazla 150 müşteri seçilebilir.';st.className='form-status error'}
+    return;
+  }
+  const payload={type,customerIds:ids};
+  if(type==='custom'){
+    const message=String(q('#custPaySmsCustomText')?.value||'').trim();
+    if(!message){
+      if(st){st.textContent='Özel SMS metni yazın.';st.className='form-status error'}
+      return;
+    }
+    payload.message=message;
+  }
+  const label=type==='overdue'?'gecikme':'özel';
+  if(!confirm(`${ids.length} müşteriye toplu ${label} SMS gönderilsin mi?`))return;
+  if(st){st.textContent='Toplu SMS gönderiliyor...';st.className='form-status'}
+  try{
+    const r=await api('/web-api/admin/sms-bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const msg=`Toplu SMS: ${r.sent||0} gitti · ${r.failed||0} hata · ${r.skipped||0} atlandı (toplam ${r.total||ids.length})`;
+    if(st){st.textContent=msg;st.className='form-status '+(r.failed?'error':'success')}
+    toast(msg);
+    if(type==='custom')q('#custPaySmsCustomPanel')?.classList.add('hidden');
+  }catch(err){
+    if(st){st.textContent=err.message;st.className='form-status error'}
+    toast(err.message||'Toplu SMS başarısız');
+  }
 }
 function selectCustomerPayment(customerId,keepAmount=false){
   custPayState.selectedId=String(customerId||'');
@@ -5764,6 +5815,18 @@ async function loadCustomerPayments(){
   renderCustomerPayments();
 }
 q('#custPayRefresh')?.addEventListener('click',()=>loadCustomerPayments().catch(e=>toast(e.message)));
+q('#custPaySelectAll')?.addEventListener('change',()=>{
+  const on=q('#custPaySelectAll')?.checked===true;
+  qa('#custPayRows .cust-pay-sms-cb').forEach(cb=>{cb.checked=on});
+  syncCustPaySmsHint();
+});
+q('#custPaySmsOverdueBtn')?.addEventListener('click',()=>sendCustPayBulkSms('overdue'));
+q('#custPaySmsCustomBtn')?.addEventListener('click',()=>{
+  q('#custPaySmsCustomPanel')?.classList.remove('hidden');
+  q('#custPaySmsCustomText')?.focus();
+});
+q('#custPaySmsCustomCancel')?.addEventListener('click',()=>q('#custPaySmsCustomPanel')?.classList.add('hidden'));
+q('#custPaySmsCustomSend')?.addEventListener('click',()=>sendCustPayBulkSms('custom'));
 q('#custPayFilterToggle')?.addEventListener('click',e=>{
   const btn=e.target.closest('[data-pay-filter]'); if(!btn)return;
   custPayState.filter=btn.dataset.payFilter||'open';

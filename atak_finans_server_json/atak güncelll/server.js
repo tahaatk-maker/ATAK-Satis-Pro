@@ -1514,8 +1514,8 @@ app.use('/docs',express.static(path.join(ROOT,'public','docs'),{maxAge:'1h',fall
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.131-sms-gateway',
-  build:'fix-v131',
+  version:'6.3.132-sms-bulk',
+  build:'fix-v132',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -1746,50 +1746,36 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
     if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
     const type=String(req.body?.type||'custom').trim().toLowerCase();
     const phoneOverride=String(req.body?.phone||'').trim();
-    const phone=phoneOverride||customer.phone||'';
-    const snap=customerOverdueSnapshot(s,customer.id);
+    const prep=prepareCustomerSms(s,customer,{
+      type:type==='overdue'?'overdue':'custom',
+      message:String(req.body?.message||''),
+      phone:phoneOverride
+    });
     const cfg=smsConfig(s);
-    let message='';
-    if(type==='overdue'){
-      if(snap.overdueAmount<=0.009&&Number(snap.balance||0)<=0.009)
-        return res.status(400).json({error:'Bu müşteride geciken senet / cari borç yok'});
-      const geciken=snap.overdueAmount>0.009?snap.overdueAmount:Math.max(0,snap.balance);
-      message=renderSmsTemplate(cfg.overdueTemplate,{
-        ad:customer.name||'Musteri',
-        geciken:moneySms(geciken),
-        bakiye:moneySms(Math.max(0,snap.balance)),
-        acik:moneySms(snap.openAmount),
-        firma:ATAK_COMPANY.shortName||'Atak Pazarlama',
-        telefon:String(s.settings?.phone||'0212 223 28 71')
-      });
-      if(req.body?.message&&String(req.body.message).trim())message=String(req.body.message).trim();
-    }else{
-      message=String(req.body?.message||'').trim();
-      if(!message)return res.status(400).json({error:'Özel SMS metni zorunlu'});
-    }
+    if(!prep.ok)return res.status(400).json({error:prep.error||'SMS hazırlanamadı'});
     const previewOnly=req.body?.preview===true;
     if(previewOnly){
       return res.json({
-        ok:true,preview:true,type,phone:normalizeTrMobile(phone)||phone,message,
-        overdueAmount:snap.overdueAmount,balance:snap.balance,configured:cfg.enabled
+        ok:true,preview:true,type:prep.type,phone:normalizeTrMobile(prep.phone,cfg.phoneFormat)||prep.phone,message:prep.message,
+        overdueAmount:prep.snap.overdueAmount,balance:prep.snap.balance,configured:cfg.enabled
       });
     }
-    const r=await sendProviderSms(s,{to:phone,message});
+    const r=await sendProviderSms(s,{to:prep.phone,message:prep.message});
     const actor=currentSessionUser(req)||currentActor(req);
     pushSmsLog(s,{
-      type:type==='overdue'?'overdue':'custom',
+      type:prep.type==='overdue'?'overdue':'custom',
       customerId:customer.id,
       customerName:customer.name||'',
       phone:r.to,
-      message,
+      message:prep.message,
       ok:true,
       code:r.code,
       provider:r.provider,
       actor:actor?.name||actor?.username||'Kullanıcı'
     });
-    audit(s,type==='overdue'?'Gecikme SMS gönderildi':'Özel SMS gönderildi',customer.name||customer.id,{phone:r.to,code:r.code,provider:r.provider});
+    audit(s,prep.type==='overdue'?'Gecikme SMS gönderildi':'Özel SMS gönderildi',customer.name||customer.id,{phone:r.to,code:r.code,provider:r.provider});
     writeStore(s);
-    res.json({ok:true,to:r.to,type,message,code:r.code,provider:r.provider,overdueAmount:snap.overdueAmount,balance:snap.balance});
+    res.json({ok:true,to:r.to,type:prep.type,message:prep.message,code:r.code,provider:r.provider,overdueAmount:prep.snap.overdueAmount,balance:prep.snap.balance});
   }catch(e){
     try{
       const s=readStore();
@@ -1807,6 +1793,111 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
       writeStore(s);
     }catch(_){}
     res.status(400).json({error:e.message||'SMS gönderilemedi'});
+  }
+});
+
+function prepareCustomerSms(s,customer,{type='custom',message='',phone=''}={}){
+  const cfg=smsConfig(s);
+  const snap=customerOverdueSnapshot(s,customer.id);
+  const to=String(phone||customer.phone||'').trim();
+  let text='';
+  if(type==='overdue'){
+    if(snap.overdueAmount<=0.009&&Number(snap.balance||0)<=0.009)
+      return{ok:false,error:'Geciken senet / cari borç yok',customer,snap,phone:to};
+    const geciken=snap.overdueAmount>0.009?snap.overdueAmount:Math.max(0,snap.balance);
+    text=renderSmsTemplate(cfg.overdueTemplate,{
+      ad:customer.name||'Musteri',
+      geciken:moneySms(geciken),
+      bakiye:moneySms(Math.max(0,snap.balance)),
+      acik:moneySms(snap.openAmount),
+      firma:ATAK_COMPANY.shortName||'Atak Pazarlama',
+      telefon:String(s.settings?.phone||'0212 223 28 71')
+    });
+    if(message&&String(message).trim())text=String(message).trim();
+  }else{
+    text=String(message||'').trim();
+    if(!text)return{ok:false,error:'Özel SMS metni zorunlu',customer,snap,phone:to};
+  }
+  if(!normalizeTrMobile(to,cfg.phoneFormat)&&!normalizeTrMobile(to))
+    return{ok:false,error:'Geçerli cep yok',customer,snap,phone:to,message:text};
+  return{ok:true,customer,snap,phone:to,message:text,type};
+}
+
+app.post('/web-api/admin/sms-bulk',requireAdminOrStaffAny('finance_manage','customers_manage','orders_manage'),async(req,res)=>{
+  try{
+    const s=readStore();
+    const cfg=smsConfig(s);
+    if(!cfg.enabled)return res.status(400).json({error:'SMS kapalı veya ayar eksik. Ayarlar → SMS'});
+    const type=String(req.body?.type||'overdue').trim().toLowerCase()==='custom'?'custom':'overdue';
+    const customMessage=String(req.body?.message||'').trim();
+    if(type==='custom'&&!customMessage)return res.status(400).json({error:'Toplu özel SMS için metin zorunlu'});
+    let ids=[...new Set((Array.isArray(req.body?.customerIds)?req.body.customerIds:[]).map(x=>String(x||'').trim()).filter(Boolean))];
+    if(!ids.length){
+      const filter=String(req.body?.filter||'overdue');
+      const board=buildCustomerPaymentsBoard(s,{filter,q:String(req.body?.q||'')});
+      ids=(board.rows||[]).map(r=>String(r.customerId));
+    }
+    if(!ids.length)return res.status(400).json({error:'Gönderilecek müşteri seçilmedi'});
+    if(ids.length>150)return res.status(400).json({error:'Tek seferde en fazla 150 müşteri (şimdi: '+ids.length+')'});
+    const dryRun=req.body?.preview===true||req.body?.dryRun===true;
+    const actor=currentSessionUser(req)||currentActor(req);
+    const actorName=actor?.name||actor?.username||'Kullanıcı';
+    const results=[];
+    let sent=0,failed=0,skipped=0;
+    for(const id of ids){
+      const customer=(s.customers||[]).find(c=>String(c.id)===id&&c.active!==false);
+      if(!customer){
+        skipped++;
+        results.push({customerId:id,ok:false,skipped:true,error:'Müşteri yok'});
+        continue;
+      }
+      const prep=prepareCustomerSms(s,customer,{type,message:type==='custom'?customMessage:''});
+      if(!prep.ok){
+        skipped++;
+        results.push({customerId:id,customerName:customer.name||'',phone:prep.phone||customer.phone||'',ok:false,skipped:true,error:prep.error});
+        continue;
+      }
+      if(dryRun){
+        results.push({customerId:id,customerName:customer.name||'',phone:prep.phone,ok:true,preview:true,message:prep.message});
+        continue;
+      }
+      try{
+        const r=await sendProviderSms(s,{to:prep.phone,message:prep.message});
+        sent++;
+        pushSmsLog(s,{
+          type:type==='overdue'?'overdue_bulk':'custom_bulk',
+          customerId:customer.id,
+          customerName:customer.name||'',
+          phone:r.to,
+          message:prep.message,
+          ok:true,
+          code:r.code,
+          provider:r.provider,
+          actor:actorName
+        });
+        results.push({customerId:id,customerName:customer.name||'',phone:r.to,ok:true,code:r.code});
+      }catch(err){
+        failed++;
+        pushSmsLog(s,{
+          type:type==='overdue'?'overdue_bulk':'custom_bulk',
+          customerId:customer.id,
+          customerName:customer.name||'',
+          phone:prep.phone,
+          message:prep.message,
+          ok:false,
+          error:err.message||'hata',
+          actor:actorName
+        });
+        results.push({customerId:id,customerName:customer.name||'',phone:prep.phone,ok:false,error:err.message||'hata'});
+      }
+    }
+    if(!dryRun){
+      audit(s,'Toplu SMS',`${type} · ${sent} OK / ${failed} hata / ${skipped} atlandı`,{type,sent,failed,skipped,total:ids.length,provider:cfg.provider});
+      writeStore(s);
+    }
+    res.json({ok:true,preview:dryRun,type,total:ids.length,sent,failed,skipped,results:results.slice(0,150)});
+  }catch(e){
+    res.status(400).json({error:e.message||'Toplu SMS başarısız'});
   }
 });
 

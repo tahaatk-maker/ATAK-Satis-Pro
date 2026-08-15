@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v131" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v131" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v132" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v132" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -1876,10 +1876,24 @@ Bulunamayan → Diğer.
     </div>
     <label>Ara<input id="custPaySearch" placeholder="Müşteri veya telefon"/></label>
   </div>
+  <div class="cust-pay-sms-bar">
+    <label class="check"><input type="checkbox" id="custPaySelectAll"/> Tümünü seç</label>
+    <button type="button" class="secondary-btn" id="custPaySmsOverdueBtn">Toplu Gecikme SMS</button>
+    <button type="button" class="secondary-btn" id="custPaySmsCustomBtn">Toplu Özel SMS</button>
+    <span class="note" id="custPaySmsHint">Listeden işaretleyin · en fazla 150</span>
+  </div>
+  <div id="custPaySmsStatus" class="form-status"></div>
+  <div class="cust-pay-sms-custom hidden" id="custPaySmsCustomPanel">
+    <label>Toplu özel SMS metni<textarea id="custPaySmsCustomText" rows="3" maxlength="640" placeholder="Seçili müşterilere aynı metin gider"></textarea></label>
+    <div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="primary" id="custPaySmsCustomSend">Seçililere Gönder</button>
+      <button type="button" class="secondary-btn" id="custPaySmsCustomCancel">Vazgeç</button>
+    </div>
+  </div>
   <div class="pay-track-layout">
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Müşteri</th><th>Durum</th><th>Cari</th><th>Geciken</th><th>Bu Ay</th><th>Sonraki Vade</th></tr></thead>
+        <thead><tr><th></th><th>Müşteri</th><th>Durum</th><th>Cari</th><th>Geciken</th><th>Bu Ay</th><th>Sonraki Vade</th></tr></thead>
         <tbody id="custPayRows"></tbody>
       </table>
     </div>
@@ -2486,5 +2500,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v131"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v132"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
