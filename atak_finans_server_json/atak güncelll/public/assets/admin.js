@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v142 */
+/* ATAK_ADMIN_BUILD=fix-v143 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2402,6 +2402,77 @@ async function sendCustomerSmsFromPanel(){
   }
 }
 q('#newCustomerBtn')?.addEventListener('click',()=>openCustomerModal(null));
+q('#customerExcelBtn')?.addEventListener('click',()=>q('#customerExcelFile')?.click());
+q('#customerExcelClose')?.addEventListener('click',()=>q('#customerExcelModal')?.classList.add('hidden'));
+function customerExcelEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
+function renderCustomerExcelPreview(d){
+  const c=d.counts||{};
+  if(q('#customerExcelSummary'))q('#customerExcelSummary').innerHTML=
+    `<article><b>${c.ready||0}</b><span>Yeni (telefonlu)</span></article>
+     <article><b>${c.corporate||0}</b><span>Kurumsal VKN</span></article>
+     <article><b>${c.individual||0}</b><span>Bireysel</span></article>
+     <article><b>${c.existing||0}</b><span>Zaten kayıtlı</span></article>
+     <article><b>${c.noPhone||0}</b><span>Telefonsuz atlandı</span></article>`;
+  const map=d.mapping||{};
+  const mapTxt=Object.entries(map).map(([k,v])=>`${k} ← ${v}`).join(' · ');
+  if(q('#customerExcelMap'))q('#customerExcelMap').textContent=
+    `Başlık satır ${d.headerRow||'-'}${d.sheet?` · sayfa ${d.sheet}`:''}${mapTxt?` · ${mapTxt}`:''}`;
+  const label={ready:'Yeni',existing:'Kayıtlı',skip_noname:'Ünvan yok'};
+  const rows=d.preview||[];
+  if(q('#customerExcelPreview'))q('#customerExcelPreview').innerHTML=rows.map(r=>{
+    const fatura=r.invoiceType==='corporate'?'Kurumsal':'Bireysel';
+    const ids=[r.taxNo?`VKN ${r.taxNo}`:'',r.tckn?`TCKN ${r.tckn}`:''].filter(Boolean).join(' · ')||'—';
+    return `<tr>
+      <td>${customerExcelEsc(label[r.status]||r.status)}${r.reason?`<small>${customerExcelEsc(r.reason)}</small>`:''}</td>
+      <td><b>${customerExcelEsc(r.name||'-')}</b></td>
+      <td>${customerExcelEsc(r.phone||'-')}</td>
+      <td>${fatura}</td>
+      <td>${customerExcelEsc(ids)}</td>
+      <td>${customerExcelEsc([r.district,r.city].filter(Boolean).join(' / ')||'-')}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="6">Telefonlu satır yok</td></tr>';
+  const btn=q('#customerExcelImportBtn');
+  if(btn)btn.disabled=!(c.ready>0);
+  q('#customerExcelModal')?.classList.remove('hidden');
+}
+q('#customerExcelFile')?.addEventListener('change',async()=>{
+  const file=q('#customerExcelFile')?.files?.[0];
+  const st=q('#customerExcelStatus');
+  if(!file)return;
+  const fd=new FormData();fd.append('file',file);
+  if(st){st.textContent='Excel okunuyor…';st.className='form-status'}
+  try{
+    const d=await api('/web-api/admin/customers-excel-preview',{method:'POST',body:fd});
+    renderCustomerExcelPreview(d);
+    if(st){st.textContent=d.note||'Önizleme hazır. Aktar’a basınca sadece yeniler eklenir.';st.className='form-status success'}
+  }catch(err){
+    if(st){st.textContent=err.message;st.className='form-status error'}
+    toast(err.message||'Excel okunamadı');
+    q('#customerExcelModal')?.classList.remove('hidden');
+  }
+});
+q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
+  const file=q('#customerExcelFile')?.files?.[0];
+  const st=q('#customerExcelStatus');
+  if(!file){toast('Önce Excel seçin');return}
+  if(!confirm('Telefonu olan yeni müşteriler eklensin mi?\nKayıtlı olanlar ve telefonsuzlar atlanır, mevcut kartlar değişmez.'))return;
+  const fd=new FormData();fd.append('file',file);
+  if(st){st.textContent='Aktarılıyor…';st.className='form-status'}
+  const btn=q('#customerExcelImportBtn');if(btn)btn.disabled=true;
+  try{
+    const d=await api('/web-api/admin/customers-excel-import',{method:'POST',body:fd});
+    const extra=(d.errors||[]).length?` · ${d.errors.slice(0,3).join(' | ')}`:'';
+    if(st){st.textContent=`${d.imported||0} yeni eklendi · ${d.existing||0} kayıtlı atlandı · ${d.noPhone||0} telefonsuz${extra}`;st.className='form-status success'}
+    toast(`${d.imported||0} müşteri aktarıldı`);
+    if(btn)btn.disabled=true;
+    q('#customerExcelFile').value='';
+    await loadCustomersPage().catch(()=>{});
+  }catch(err){
+    if(st){st.textContent=err.message;st.className='form-status error'}
+    if(btn)btn.disabled=false;
+    toast(err.message||'Aktarım başarısız');
+  }
+});
 q('#customerModalClose')?.addEventListener('click',()=>q('#customerModal')?.classList.add('hidden'));
 q('#customerPageSearch')?.addEventListener('input',()=>{clearTimeout(window.__custSearchT);window.__custSearchT=setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),220)});
 q('#customerPageDeliverySame')?.addEventListener('change',()=>syncCustomerFormUI('customerPage'));

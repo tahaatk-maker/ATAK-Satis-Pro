@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { runBekoSync } = require('./lib/beko-sync');
 const qnbSolist = require('./qnb-solist-adapter');
+const customerExcel = require('./customer-excel-import');
 
 const app = express();
 const ROOT = __dirname;
@@ -1684,8 +1685,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.142-vkn-lookup',
-  build:'fix-v142',
+  version:'6.3.143-asistek-musteri',
+  build:'fix-v143',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -3227,6 +3228,96 @@ app.get('/web-api/admin/vkn-lookup',requireAdminOrStaffAny('customers_manage','o
     res.json(out);
   }catch(e){
     res.status(502).json({ok:false,error:e.message||'VKN sorgusu başarısız'});
+  }
+});
+function customerExcelPreviewPayload(req){
+  if(!req.file)throw new Error('Excel dosyası seçilmelidir');
+  const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer);
+  if(!parsed.ok)throw new Error(parsed.error||'Excel okunamadı');
+  const s=readStore();
+  const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
+  const preview=classified.rows
+    .filter(r=>r.status==='ready'||r.status==='existing'||r.status==='skip_noname')
+    .slice(0,80)
+    .map(r=>{
+      const p=r.payload||{};
+      return {
+        status:r.status,
+        reason:r.reason||'',
+        name:p.name||r.source?.unvan||'',
+        phone:p.phone||r.phone||'',
+        invoiceType:p.invoiceType||'individual',
+        taxNo:p.taxNo||'',
+        tckn:p.tckn||'',
+        taxOffice:p.taxOffice||'',
+        city:p.city||'',
+        district:p.district||'',
+        address:p.address||'',
+        email:p.email||'',
+        existingName:r.existingName||''
+      };
+    });
+  const colLabels={
+    unvan:'Ünvan',telefon:'Telefon',vergiNo:'Vergi No',vergiDaire:'Vergi Dairesi',
+    tckn:'TCKN',sehir:'Şehir',ilce:'İlçe',adres:'Adres',email:'E-posta',cariTipi:'Cari Tipi'
+  };
+  const mapping={};
+  Object.entries(classified.header?.cols||{}).forEach(([k,idx])=>{
+    mapping[colLabels[k]||k]=classified.header.headers[idx]||k;
+  });
+  return {
+    ok:true,
+    sheet:parsed.sheet||'',
+    headerRow:(classified.header?.index||0)+1,
+    mapping,
+    counts:classified.counts,
+    preview,
+    truncated:classified.rows.length>80,
+    note:'Sadece telefonu olanlar aktarılır. Kayıtlı telefon / VKN / TCKN ezilmez. 10 haneli vergi no varsa kurumsal (ünvan hem şahıs adı hem firma) yazılır.'
+  };
+}
+app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers_manage'),dynamicsUpload.single('file'),(req,res)=>{
+  try{res.json(customerExcelPreviewPayload(req))}
+  catch(e){res.status(400).json({error:e.message||'Excel okunamadı'})}
+});
+app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_manage'),dynamicsUpload.single('file'),(req,res)=>{
+  try{
+    if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
+    const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer);
+    if(!parsed.ok)return res.status(400).json({error:parsed.error||'Excel okunamadı'});
+    const s=readStore();
+    const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
+    let imported=0,invalid=0;
+    const errors=[];
+    for(const row of classified.rows){
+      if(row.status!=='ready'||!row.payload)continue;
+      let data;
+      try{data=parseCustomerPayload(row.payload)}
+      catch(e){
+        invalid++;
+        if(errors.length<12)errors.push(`${row.payload.name}: ${e.message}`);
+        continue;
+      }
+      s.customers.push({id:crypto.randomUUID(),createdAt:new Date().toISOString(),...data});
+      imported++;
+    }
+    audit(s,'Asistek müşteri Excel aktarıldı',`${imported} yeni`,{
+      imported,existing:classified.counts.existing,noPhone:classified.counts.noPhone,invalid
+    });
+    writeStore(s);
+    res.json({
+      ok:true,
+      imported,
+      existing:classified.counts.existing,
+      noPhone:classified.counts.noPhone,
+      noName:classified.counts.noName,
+      invalid,
+      corporate:classified.counts.corporate,
+      individual:classified.counts.individual,
+      errors
+    });
+  }catch(e){
+    res.status(400).json({error:e.message||'Aktarım başarısız'});
   }
 });
 app.post('/web-api/admin/finance-transaction',requireAdminOrStaff('finance_manage'),(req,res)=>{

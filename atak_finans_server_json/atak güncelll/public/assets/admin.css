@@ -614,7 +614,13 @@ button.primary,.primary,button{font-size:12px}
 .cust-check,.cust-radio{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#13233f;cursor:pointer}
 .cust-check input,.cust-radio input{width:16px;height:16px;margin:0}
 .cust-invoice-type{display:flex;gap:16px;flex-wrap:wrap;padding:4px 0}
-.field-hint{display:block;font-size:11px;color:#7a8aa3;font-weight:650;margin-top:4px}
+.customer-head-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.customer-excel-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:12px 0}
+.customer-excel-summary article{background:#f8fafc;border:1px solid #d7e2ef;border-radius:10px;padding:10px 12px}
+.customer-excel-summary b{display:block;font-size:20px;color:#0b2a4a}
+.customer-excel-summary span{font-size:11px;color:#6d7a90;font-weight:700}
+.customer-excel-table{max-height:360px;overflow:auto;margin-top:10px}
+@media(max-width:900px){.customer-excel-summary{grid-template-columns:1fr 1fr}}
 .vkn-lookup-row{display:flex;gap:8px;align-items:stretch}
 .vkn-lookup-row input{flex:1;min-width:0}
 .vkn-lookup-row button{white-space:nowrap;flex-shrink:0;height:auto}

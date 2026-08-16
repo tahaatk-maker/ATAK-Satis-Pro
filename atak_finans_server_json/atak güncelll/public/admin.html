@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v142" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v142" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v143" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v143" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -2044,7 +2044,11 @@ Bulunamayan → Diğer.
 <h2>Müşteriler</h2>
 <p class="note">Müşteri seç → borçları gör → tahsilat al → makbuz yazdır. Satış için Satış Merkezi butonu.</p>
 </div>
+<div class="customer-head-actions">
+<button class="secondary-btn" id="customerExcelBtn" type="button">Excel Aktar</button>
 <button class="primary" id="newCustomerBtn" type="button">+ Yeni Müşteri</button>
+<input id="customerExcelFile" type="file" accept=".xlsx,.xls,.csv" hidden/>
+</div>
 </div>
 <div class="customer-hub">
 <section class="panel customer-list-panel">
@@ -2136,6 +2140,27 @@ Bulunamayan → Diğer.
 <div class="customer-transaction-list" id="customerTransactionList"></div>
 </div>
 </section>
+</div>
+<div class="customer-modal hidden" id="customerExcelModal">
+<div class="customer-modal-card customer-modal-wide">
+<div class="panel-head">
+<h2>Asistek Excel Aktar</h2>
+<button class="secondary-btn" id="customerExcelClose" type="button">Kapat</button>
+</div>
+<p class="note">Sadece <b>telefonu olan</b> satırlar alınır. 10 haneli vergi no varsa Müşteri Ekle’deki gibi şahıs + kurumsal (VKN) yazılır. Kayıtlı telefon / VKN / TCKN <b>ezilmez</b>.</p>
+<div id="customerExcelSummary" class="customer-excel-summary"></div>
+<div id="customerExcelMap" class="note"></div>
+<div class="table-wrap customer-excel-table">
+<table>
+<thead><tr><th>Durum</th><th>Ünvan / Şahıs</th><th>Telefon</th><th>Fatura</th><th>VKN / TCKN</th><th>İl</th></tr></thead>
+<tbody id="customerExcelPreview"></tbody>
+</table>
+</div>
+<div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+<button class="primary" id="customerExcelImportBtn" type="button" disabled>Telefonluları aktar</button>
+</div>
+<div id="customerExcelStatus" class="form-status"></div>
+</div>
 </div>
 <div class="customer-modal hidden" id="customerModal">
 <div class="customer-modal-card customer-modal-wide">
@@ -2684,5 +2709,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v142"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v143"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
