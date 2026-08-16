@@ -126,19 +126,71 @@ html[data-skin="calm"] th{
 html[data-skin="calm"] td{border-bottom:1px solid #eef1ee;font-size:14px;padding:14px}
 html[data-skin="calm"] tbody tr:hover td{background:var(--calm-surface-2)}
 
-/* ——— Dashboard hızlı aksiyon kutuları: gökkuşağı yerine sakin ——— */
-html[data-skin="calm"] .ck-act{
+/* ——— Dashboard: Örnek 1 düzeni — geniş boşluk, büyük kart, sakin kısayol ——— */
+html[data-skin="calm"] main{padding:28px 32px 44px}
+html[data-skin="calm"] .ck-grid,
+html[data-skin="calm"] .v4-dashboard-grid{gap:18px!important;margin-bottom:18px!important}
+
+/* Hızlı aksiyonlar: renkli gradyan bloklar yerine beyaz kart + yumuşak ikon */
+html[data-skin="calm"] .ck-actions{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:12px!important;margin-bottom:18px!important}
+html[data-skin="calm"] .ck-act,
+html[data-skin="calm"] .ck-act.sale,
+html[data-skin="calm"] .ck-act.customer,
+html[data-skin="calm"] .ck-act.collect,
+html[data-skin="calm"] .ck-act.invoice,
+html[data-skin="calm"] .ck-act.stock{
   background:var(--calm-surface)!important;
   border:1px solid var(--line)!important;
   color:var(--ink)!important;
-  border-radius:16px;min-height:74px;
+  border-radius:16px!important;
+  min-height:86px!important;
+  padding:16px 18px!important;
+  box-shadow:var(--shadow)!important;
 }
-html[data-skin="calm"] .ck-act:hover{border-color:var(--calm-accent)!important;background:var(--calm-accent-soft)!important}
-html[data-skin="calm"] .ck-act small{color:var(--calm-ink-3)!important}
-html[data-skin="calm"] .ck-alert{
-  background:var(--calm-surface)!important;border:1px solid var(--line)!important;border-radius:14px;
+html[data-skin="calm"] .ck-act:hover{
+  transform:none!important;filter:none!important;
+  border-color:var(--calm-accent)!important;background:var(--calm-accent-soft)!important;
+  box-shadow:var(--shadow)!important;
 }
-html[data-skin="calm"] .ck-alert:hover{border-color:var(--calm-accent)!important;transform:none!important}
+html[data-skin="calm"] .ck-act b,
+html[data-skin="calm"] .ck-act strong{color:var(--ink)!important;font-size:15px!important;letter-spacing:-.01em}
+html[data-skin="calm"] .ck-act small,
+html[data-skin="calm"] .ck-act span{color:var(--calm-ink-3)!important}
+html[data-skin="calm"] .ck-act i,
+html[data-skin="calm"] .ck-act svg{color:var(--calm-accent-ink)!important;opacity:1!important}
+html[data-skin="calm"] .ck-act:after,
+html[data-skin="calm"] .ck-act:before{opacity:.06!important;color:var(--calm-accent)!important}
+
+/* Özet kartları: az sayıda, büyük rakam */
+html[data-skin="calm"] .v4-metric-grid,
+html[data-skin="calm"] .stats{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:14px!important;margin-bottom:18px!important;
+}
+html[data-skin="calm"] .v4-metric-grid>*,
+html[data-skin="calm"] .stats>*{padding:18px!important;border-radius:18px!important}
+html[data-skin="calm"] .v4-metric-grid b,
+html[data-skin="calm"] .stats strong,
+html[data-skin="calm"] .stat strong{font-size:27px!important;letter-spacing:-.02em;color:var(--ink)!important;font-variant-numeric:tabular-nums}
+html[data-skin="calm"] .v4-metric-grid small,
+html[data-skin="calm"] .stats small{color:var(--muted)!important;font-size:13px!important;letter-spacing:0!important;text-transform:none!important}
+html[data-skin="calm"] .v4-metric-grid em,
+html[data-skin="calm"] .stat em{color:var(--calm-ink-3)!important;font-size:12px!important}
+
+/* Grafik: ızgara silik, eksen yazıları sakin */
+html[data-skin="calm"] .ck-chart .grid-line{stroke:#eef1ee!important}
+html[data-skin="calm"] .ck-chart .axis-label{fill:var(--calm-ink-3)!important}
+html[data-skin="calm"] .ck-legend span{color:var(--muted)!important;font-weight:600!important}
+
+/* Eski üç sayaçlı kutu: yerini üstteki görev listesi aldı */
+html[data-skin="calm"] .ck-alert-card{display:none!important}
+html[data-skin="calm"] .ck-grid.ck-grid-2{grid-template-columns:minmax(0,1fr)!important}
+
+/* Dashboard'daki Bekleyen İşler bloğu */
+.dash-tasks{padding:0!important;overflow:hidden;margin-bottom:18px}
+.dash-tasks .panel-head{padding:16px 18px;border-bottom:1px solid #eef1ee;margin:0}
+.dash-tasks-head{display:flex;align-items:center;gap:10px}
+html[data-skin="calm"] .dash-tasks{border-radius:18px;box-shadow:var(--shadow)}
 
 /* ——— Bekleyen İşler sekmesi (Örnek 2'deki görev listesi) ——— */
 .task-list{display:grid}

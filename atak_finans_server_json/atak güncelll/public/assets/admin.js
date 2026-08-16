@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v149 */
+/* ATAK_ADMIN_BUILD=fix-v150 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -103,6 +103,7 @@ function initUiScale(){
     });
   }
   q('#taskRefreshBtn')?.addEventListener('click',()=>loadTasksCenter().catch(e=>toast(e.message)));
+  q('#dashTaskRefresh')?.addEventListener('click',()=>loadTasksCenter().catch(e=>toast(e.message)));
   window.addEventListener('resize',()=>{if(isMobileUi())applyUiScale('1')});
 }
 initUiScale();
@@ -482,7 +483,8 @@ qa('[data-reports-range]').forEach(b=>b.addEventListener('click',()=>{
 }));
 
 /* ===== Kokpit: SVG grafikler (harici kütüphane yok) ===== */
-const CK_COLORS={beko:'#1565c0',istikbal:'#c4a15a',other:'#94a3b8'};
+const CK_PALETTES={classic:{beko:'#1565c0',istikbal:'#c4a15a',other:'#94a3b8'},calm:{beko:'#1f6f5c',istikbal:'#a98436',other:'#b8c2bc'}};
+const CK_COLORS=new Proxy({},{get:(_,k)=>{const skin=document.documentElement.getAttribute('data-skin')==='classic'?'classic':'calm';return CK_PALETTES[skin][k]}});
 function ckShortMoney(n){
   const v=Number(n||0);
   if(Math.abs(v)>=1000000)return (v/1000000).toFixed(1).replace('.',',')+'M';
@@ -608,9 +610,9 @@ function ckRenderRecent(rows){
 }
 /* ——— Bekleyen İşler sekmesi: mevcut uçlardan görev listesi ——— */
 async function loadTasksCenter(){
-  const box=q('#taskList');
-  if(!box)return;
-  box.innerHTML='<div class="task-empty">Yükleniyor…</div>';
+  const boxes=[q('#taskList'),q('#dashTaskList')].filter(Boolean);
+  if(!boxes.length)return;
+  boxes.forEach(b=>{b.innerHTML='<div class="task-empty">Yükleniyor…</div>'});
   const tasks=[];
   const safe=async(url)=>{try{return await api(url)}catch(_){return null}};
   const [ck,pay,appr]=await Promise.all([
@@ -649,19 +651,19 @@ async function loadTasksCenter(){
 
   const badge=q('#taskNavBadge');
   if(badge){badge.textContent=String(tasks.length);badge.classList.toggle('hidden',tasks.length===0)}
-  const count=q('#taskCount');
-  if(count)count.textContent=String(tasks.length);
+  [q('#taskCount'),q('#dashTaskCount')].forEach(el=>{if(el)el.textContent=String(tasks.length)});
 
   if(!tasks.length){
-    box.innerHTML='<div class="task-empty">Bekleyen iş yok. Her şey güncel.</div>';
+    boxes.forEach(b=>{b.innerHTML='<div class="task-empty">Bekleyen iş yok. Her şey güncel.</div>'});
     return;
   }
-  box.innerHTML=tasks.map(t=>`
+  const html=tasks.map(t=>`
     <div class="task-row">
       <span class="dot ${t.tone}"></span>
       <span class="txt"><b>${ckEsc(t.title)}</b><small>${ckEsc(t.sub)}</small></span>
       <button type="button" class="go ${t.btn}" data-go="${t.go}">${ckEsc(t.label)}</button>
     </div>`).join('');
+  boxes.forEach(b=>{b.innerHTML=html});
 }
 async function refreshTaskBadge(){
   try{await loadTasksCenter()}catch(_){}
@@ -675,6 +677,7 @@ async function renderCockpit(){
     ckRenderMoney(d.finance);
     ckRenderAlerts(d.alerts);
     ckRenderRecent(d.recent);
+    loadTasksCenter().catch(()=>{});
   }catch(e){
     const box=q('#ckTrendChart');
     if(box)box.innerHTML=`<div class="ck-empty">Grafik yüklenemedi: ${ckEsc(e.message)}</div>`;
