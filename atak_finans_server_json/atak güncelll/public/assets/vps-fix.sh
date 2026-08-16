@@ -1,8 +1,8 @@
 # ATAK VPS kesin deploy (fix-v89) — health 6.3.90-mobilya-alis-v2 olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/satis-merkezi-iskonto-prim-bd99}"
-EXPECT_HEALTH=6.3.141-egitim-tam
-EXPECT_BUILD=fix-v141
+EXPECT_HEALTH=6.3.142-vkn-lookup
+EXPECT_BUILD=fix-v142
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -67,6 +67,9 @@ check "personel odeme plani" grep -q 'id="salesPayPlanToggleBtn"' "$SRC/public/p
 check "e-fatura kesilmeyen sekmesi" grep -q 'data-inv-module="pending"' "$SRC/public/admin.html"
 check "admin cache $EXPECT_BUILD" grep -q "admin.js?v=$EXPECT_BUILD" "$SRC/public/admin.html"
 check "personel cache $EXPECT_BUILD" grep -q "personel.js?v=$EXPECT_BUILD" "$SRC/public/personel.html"
+check "vkn lookup api" grep -q "vkn-lookup" "$SRC/server.js"
+check "vkn lookup admin ui" grep -q 'data-vkn-lookup="customerPage"' "$SRC/public/admin.html"
+check "vkn lookup personel ui" grep -q 'id="qcVknLookupBtn"' "$SRC/public/personel.html"
 check "senet resmi unvan" grep -q "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ." "$SRC/public/assets/admin.js"
 check "senet Ferahevler adres" grep -q "Ferahevler Mah. Adnan Kahveci Cad. No:109" "$SRC/public/assets/admin.js"
 if grep -n "companyLegal=cfg.creditorName\|companyLegal=.*Atak Home\|address='Tarabya" "$SRC/public/assets/admin.js" "$SRC/public/assets/personel.js" "$SRC/server.js" >/dev/null 2>&1; then

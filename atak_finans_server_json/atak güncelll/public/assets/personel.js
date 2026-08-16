@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v141 */
+/* ATAK_PERSONEL_BUILD=fix-v142 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -1729,7 +1729,7 @@ $('#salesDockPreviewBtn')?.addEventListener('click',()=>{
   openSalesPreview();
 });
 
-function syncQcInvoiceUI(){
+function syncQcInvoiceUI(opts={}){
   const corp=document.querySelector('input[name="qcInvoiceTypeRadio"]:checked')?.value==='corporate';
   if($('#qcInvoiceType'))$('#qcInvoiceType').value=corp?'corporate':'individual';
   // Bireysel bilgiler her zaman görünür; kurumsal alanlar sadece seçilince
@@ -1741,13 +1741,85 @@ function syncQcInvoiceUI(){
   if($('#qcCompanyName'))$('#qcCompanyName').required=corp;
   if($('#qcTaxOffice'))$('#qcTaxOffice').required=corp;
   if($('#qcTaxNo'))$('#qcTaxNo').required=corp;
+  if(opts.focus&&corp){
+    $('#qcTaxNo')?.focus();
+    lookupQcVkn();
+  }
 }
-document.querySelectorAll('input[name="qcInvoiceTypeRadio"]').forEach(r=>r.addEventListener('change',syncQcInvoiceUI));
+let qcVknLast='';
+let qcVknSeq=0;
+function setQcVknStatus(text,cls=''){
+  const el=$('#qcVknStatus');
+  if(!el)return;
+  el.textContent=text||'';
+  el.className='muted'+(cls?' '+cls:'');
+}
+function qcVknDigits(v){return String(v||'').replace(/\D/g,'').slice(0,10)}
+async function lookupQcVkn({force=false}={}){
+  const input=$('#qcTaxNo');
+  if(!input)return;
+  const vkn=qcVknDigits(input.value);
+  if(input.value!==vkn)input.value=vkn;
+  if(vkn.length!==10){
+    setQcVknStatus(vkn.length?`${vkn.length}/10 hane`:'10 hane yazınca ünvan otomatik dolar');
+    return;
+  }
+  if(!force&&qcVknLast===vkn)return;
+  const seq=++qcVknSeq;
+  setQcVknStatus('e-Fatura sorgulanıyor…');
+  try{
+    const d=await api('/web-api/admin/vkn-lookup?vkn='+encodeURIComponent(vkn));
+    if(seq!==qcVknSeq)return;
+    if(!d.ok){
+      setQcVknStatus(d.error||'Ünvan alınamadı. e-Fatura Merkezi’nde QNB ayarlarını kaydedin.','vkn-status-err');
+      return;
+    }
+    qcVknLast=vkn;
+    const title=String(d.companyName||d.alias||'').trim();
+    const company=$('#qcCompanyName');
+    if(company&&title&&(!String(company.value||'').trim()||company.dataset.vknAuto==='1')){
+      company.value=title;company.dataset.vknAuto='1';
+    }
+    const office=$('#qcTaxOffice');
+    if(office&&d.taxOffice&&(!String(office.value||'').trim()||office.dataset.vknAuto==='1')){
+      office.value=d.taxOffice;office.dataset.vknAuto='1';
+    }
+    const fillEmpty=(id,val)=>{const el=$(id);if(el&&val&&!String(el.value||'').trim())el.value=val};
+    fillEmpty('#qcCity',d.city);
+    fillEmpty('#qcDistrict',d.district);
+    fillEmpty('#qcAddress',d.address);
+    if(d.alreadyCustomer)setQcVknStatus(d.message||'Bu VKN zaten kayıtlı','vkn-status-warn');
+    else if(title)setQcVknStatus((d.eInvoiceUser?'e-Fatura: ':'')+title+(d.taxOffice?'':' · vergi dairesini yazın'),'vkn-status-ok');
+    else setQcVknStatus('Ünvan gelmedi, firma adını elle yazın','vkn-status-warn');
+  }catch(err){
+    if(seq!==qcVknSeq)return;
+    setQcVknStatus(err.message||'VKN sorgusu başarısız. QNB kullanıcı/şifre kaydedin.','vkn-status-err');
+  }
+}
+function bindQcVknLookup(){
+  const input=$('#qcTaxNo');
+  if(!input||input.dataset.vknBound==='1')return;
+  input.dataset.vknBound='1';
+  input.addEventListener('input',()=>{
+    const d=qcVknDigits(input.value);
+    if(input.value!==d)input.value=d;
+    clearTimeout(window.__qcVknT);
+    window.__qcVknT=setTimeout(()=>lookupQcVkn(),280);
+  });
+  input.addEventListener('blur',()=>lookupQcVkn());
+  $('#qcVknLookupBtn')?.addEventListener('click',()=>lookupQcVkn({force:true}));
+  $('#qcCompanyName')?.addEventListener('input',()=>{const el=$('#qcCompanyName');if(el)el.dataset.vknAuto='0'});
+  $('#qcTaxOffice')?.addEventListener('input',()=>{const el=$('#qcTaxOffice');if(el)el.dataset.vknAuto='0'});
+}
+bindQcVknLookup();
+document.querySelectorAll('input[name="qcInvoiceTypeRadio"]').forEach(r=>r.addEventListener('change',()=>syncQcInvoiceUI({focus:true})));
 $('#salesNewCustomerBtn')?.addEventListener('click',()=>{
   $('#salesQuickCustomerForm')?.reset();
   const ind=document.querySelector('input[name="qcInvoiceTypeRadio"][value="individual"]');
   if(ind)ind.checked=true;
   $('#qcStatus').textContent='';
+  qcVknLast='';
+  setQcVknStatus('10 hane yazınca ünvan otomatik dolar');
   syncQcInvoiceUI();
   $('#salesQuickCustomerModal')?.classList.remove('hidden');
 });

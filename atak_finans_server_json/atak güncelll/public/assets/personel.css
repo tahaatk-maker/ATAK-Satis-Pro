@@ -205,6 +205,12 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .modal-card{width:min(560px,100%);background:#fff;border-radius:16px;padding:18px;max-height:90vh;overflow:auto}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form-grid .wide{grid-column:1/-1}
+.vkn-lookup-row{display:flex;gap:8px;align-items:stretch}
+.vkn-lookup-row input{flex:1;min-width:0}
+.vkn-lookup-row button{white-space:nowrap;flex-shrink:0}
+.vkn-status-ok{color:#047857!important}
+.vkn-status-warn{color:#9a3412!important}
+.vkn-status-err{color:#9f1239!important}
 .month-prim-box,.approvals-box{margin:0 0 18px;padding:14px;border:1px solid #e0e7ef;border-radius:12px;background:#f8fbff}
 .month-stats{grid-template-columns:repeat(5,minmax(0,1fr))}
 .stat.prim{background:linear-gradient(180deg,#fff,#eefbf3);border-color:#b7e4c7}

@@ -1684,8 +1684,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.141-egitim-tam',
-  build:'fix-v141',
+  version:'6.3.142-vkn-lookup',
+  build:'fix-v142',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -3198,6 +3198,36 @@ app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,
   applyCustomerData(row,data);
   audit(s,'Müşteri kaydedildi',row.name);writeStore(s);
   res.json({ok:true,row:{...row,balance:customerBalance(s,row.id)}});
+});
+app.get('/web-api/admin/vkn-lookup',requireAdminOrStaffAny('customers_manage','orders_manage','finance_manage','screen_sales_center'),async(req,res)=>{
+  const vkn=String(req.query.vkn||req.query.taxNo||'').replace(/\D/g,'');
+  if(vkn.length!==10 && vkn.length!==11)return res.status(400).json({ok:false,error:'VKN 10, TCKN 11 hane olmalı'});
+  const s=readStore();
+  const local=(s.customers||[]).find(c=>{
+    if(c.active===false||c.deletedAt)return false;
+    const tax=String(c.taxNo||'').replace(/\D/g,'');
+    const tckn=String(c.tckn||'').replace(/\D/g,'');
+    return tax===vkn||tckn===vkn;
+  });
+  if(local){
+    return res.json({
+      ok:true,vkn,source:'local',alreadyCustomer:true,customerId:local.id,
+      companyName:local.companyName||local.name||'',
+      taxOffice:local.taxOffice||'',
+      city:local.city||'',district:local.district||'',address:local.address||'',
+      email:local.email||'',phone:local.phone||'',
+      name:local.name||'',
+      eInvoiceUser:true,
+      message:`Kayıtlı müşteri: ${local.companyName||local.name}`
+    });
+  }
+  try{
+    const out=await qnbSolist.lookupTaxpayer(vkn,s.invoiceIntegration||{});
+    if(!out.ok)return res.json(out);
+    res.json(out);
+  }catch(e){
+    res.status(502).json({ok:false,error:e.message||'VKN sorgusu başarısız'});
+  }
 });
 app.post('/web-api/admin/finance-transaction',requireAdminOrStaff('finance_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{},kind=String(x.kind||''),amount=cleanMoney(x.amount);

@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v141">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v141">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v142">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v142">
 </head>
 <body>
 
@@ -617,9 +617,15 @@
           <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="corporate"/> Kurumsal fatura</label>
         </div>
       </div>
-      <label class="field hidden" id="qcCompanyWrap">Firma ünvanı *<input id="qcCompanyName" placeholder="Şirket ünvanı"></label>
-      <label class="field hidden" id="qcTaxOfficeWrap">Vergi dairesi *<input id="qcTaxOffice"></label>
-      <label class="field hidden" id="qcTaxNoWrap">VKN *<input id="qcTaxNo" placeholder="10 hane" inputmode="numeric"></label>
+      <label class="field hidden wide" id="qcTaxNoWrap">VKN *
+        <span class="vkn-lookup-row">
+          <input id="qcTaxNo" placeholder="10 haneli VKN" inputmode="numeric" maxlength="11">
+          <button class="ghost-btn" type="button" id="qcVknLookupBtn">Getir</button>
+        </span>
+        <small class="muted" id="qcVknStatus">10 hane yazınca ünvan otomatik dolar</small>
+      </label>
+      <label class="field hidden" id="qcCompanyWrap">Firma ünvanı *<input id="qcCompanyName" placeholder="Otomatik dolar"></label>
+      <label class="field hidden" id="qcTaxOfficeWrap">Vergi dairesi *<input id="qcTaxOffice" placeholder="Varsa otomatik dolar"></label>
       <input type="hidden" id="qcInvoiceType" value="individual"/>
       <button class="primary-btn wide" type="submit">Kaydet ve Seç</button>
       <div id="qcStatus" class="status"></div>
@@ -668,6 +674,6 @@
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/assets/personel.js?v=fix-v141"></script>
+<script src="/assets/personel.js?v=fix-v142"></script>
 </body>
 </html>

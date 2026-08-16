@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v141" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v141" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v142" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v142" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -759,11 +759,16 @@ body.inv-full #pageTitle{font-size:18px}
       </div>
       <div class="cust-form-sec hidden" id="salesQuickCustomerCorporateSec">
         <div class="cust-form-sec-title">Kurumsal fatura</div>
-        <label>Firma ünvanı *<input id="salesQuickCustomerCompanyName" placeholder="Şirket ünvanı"/></label>
-        <div class="two-col">
-          <label>Vergi dairesi *<input id="salesQuickCustomerTaxOffice" placeholder="Vergi dairesi"/></label>
-          <label>VKN *<input id="salesQuickCustomerTaxNo" placeholder="10 haneli VKN" inputmode="numeric"/></label>
-        </div>
+        <p class="field-hint" style="margin:0">Sadece <b>vergi no</b> yazın — ünvan e-Fatura’dan otomatik gelir.</p>
+        <label>VKN *
+          <span class="vkn-lookup-row">
+            <input id="salesQuickCustomerTaxNo" placeholder="10 haneli VKN" inputmode="numeric" maxlength="11"/>
+            <button class="secondary-btn" type="button" data-vkn-lookup="salesQuickCustomer">Getir</button>
+          </span>
+          <small class="field-hint" id="salesQuickCustomerVknStatus">10 hane yazınca ünvan otomatik dolar</small>
+        </label>
+        <label>Firma ünvanı *<input id="salesQuickCustomerCompanyName" placeholder="Otomatik dolar"/></label>
+        <label>Vergi dairesi *<input id="salesQuickCustomerTaxOffice" placeholder="Varsa otomatik dolar"/></label>
       </div>
       <label>Müşteri Notu<textarea id="salesQuickCustomerNote" rows="2"></textarea></label>
       <button class="primary" type="submit">Kaydet ve Satışa Seç</button>
@@ -2174,11 +2179,16 @@ Bulunamayan → Diğer.
 </div>
 <div class="cust-form-sec hidden" id="customerPageCorporateSec">
 <div class="cust-form-sec-title">Kurumsal fatura</div>
-<label>Firma ünvanı *<input id="customerPageCompanyName" placeholder="Şirket ünvanı"/></label>
-<div class="two-col">
-<label>Vergi dairesi *<input id="customerPageTaxOffice" placeholder="Vergi dairesi"/></label>
-<label>VKN *<input id="customerPageTaxNo" placeholder="10 haneli VKN" inputmode="numeric"/></label>
-</div>
+<p class="field-hint" style="margin:0">Sadece <b>vergi no</b> yazın — ünvan e-Fatura’dan otomatik gelir.</p>
+<label>VKN *
+  <span class="vkn-lookup-row">
+    <input id="customerPageTaxNo" placeholder="10 haneli VKN" inputmode="numeric" maxlength="11"/>
+    <button class="secondary-btn" type="button" data-vkn-lookup="customerPage">Getir</button>
+  </span>
+  <small class="field-hint" id="customerPageVknStatus">10 hane yazınca ünvan otomatik dolar</small>
+</label>
+<label>Firma ünvanı *<input id="customerPageCompanyName" placeholder="Otomatik dolar"/></label>
+<label>Vergi dairesi *<input id="customerPageTaxOffice" placeholder="Varsa otomatik dolar"/></label>
 </div>
 <label>Not<textarea id="customerPageNote" rows="2"></textarea></label>
 <button class="primary" id="customerPageSaveBtn" type="button">Müşteriyi Kaydet</button>
@@ -2674,5 +2684,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v141"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v142"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

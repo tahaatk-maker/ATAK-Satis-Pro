@@ -11,16 +11,15 @@ function money2(n){return (Math.round(Number(n||0)*100)/100).toFixed(2)}
 function onlyDigits(v){return String(v||'').replace(/\D/g,'')}
 
 function defaultEndpoints(environment){
-  // QNB canlı/test WSDL adresleri firmaya özel verilir; placeholder bırakıyoruz.
   if(environment==='live'){
     return {
-      einvoiceWsdl:'https://earsivportal.efatura.gov.tr/earsiv-services (QNB WSDL ile değiştirilecek)',
-      note:'Canlı WSDL adresi QNB Solist panelinden / teknik ekipten alınır.'
+      einvoiceWsdl:'https://connector.efinans.com.tr/connector/ws/connectorService?wsdl',
+      note:'Canlı QNB eFinans connector WSDL. Panelde farklı adres verdiyse onu yazın.'
     };
   }
   return {
-    einvoiceWsdl:'https://earsivportaltest.efatura.gov.tr (QNB test WSDL ile değiştirilecek)',
-    note:'Test WSDL adresi QNB Solist aktivasyonu sonrası verilir.'
+    einvoiceWsdl:'https://earsivtest.efinans.com.tr/earsiv/ws/EarsivWebService?wsdl',
+    note:'Test WSDL. QNB panelindeki test adresini yazabilirsiniz.'
   };
 }
 
@@ -121,6 +120,121 @@ function readinessChecks(cfg={}){
   ];
 }
 
+function decodeXml(v){
+  return String(v||'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'");
+}
+function xmlTag(xml,names){
+  const src=String(xml||'');
+  for(const n of names){
+    const re=new RegExp(`<(?:[\\w.-]+:)?${n}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[\\w.-]+:)?${n}>`,'i');
+    const m=src.match(re);
+    if(m && String(m[1]||'').trim())return decodeXml(String(m[1]).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());
+  }
+  return '';
+}
+function parseTaxpayerXml(xml=''){
+  const companyName=xmlTag(xml,['Title','Unvan','unvan','companyName','ticariUnvan','PartyName','name']);
+  const taxOffice=xmlTag(xml,['TaxOffice','vergiDairesi','VergiDairesi','taxOfficeName']);
+  const city=xmlTag(xml,['CityName','Il','il','city','City']);
+  const district=xmlTag(xml,['CitySubdivisionName','Ilce','ilce','district','District']);
+  const address=xmlTag(xml,['StreetName','Adres','adres','address','PostalAddress']);
+  const alias=xmlTag(xml,['Alias','etiket','pkAlias','gbAlias']);
+  const identifier=onlyDigits(xmlTag(xml,['Identifier','identifier','VKN','vkn','vergiTcKimlikNo']));
+  const eInvoiceRaw=xmlTag(xml,['efaturaKullanicisi','isEInvoiceUser','eInvoiceUser','result','return']);
+  const eInvoiceUser=/true|1|evet|yes/i.test(eInvoiceRaw) || Boolean(companyName||alias);
+  return{
+    companyName,taxOffice,city,district,address,alias,identifier,
+    eInvoiceUser:Boolean(eInvoiceUser && (companyName||alias||eInvoiceRaw))
+  };
+}
+async function soapPost(url,body,cfg={}){
+  const ac=new AbortController();
+  const t=setTimeout(()=>ac.abort(),12000);
+  try{
+    const headers={
+      'Content-Type':'text/xml; charset=utf-8',
+      'SOAPAction':'""',
+      Accept:'text/xml, application/xml, */*'
+    };
+    if(cfg.username&&cfg.password){
+      headers.Authorization='Basic '+Buffer.from(`${cfg.username}:${cfg.password}`).toString('base64');
+    }
+    const r=await fetch(url,{method:'POST',headers,body,signal:ac.signal});
+    const text=await r.text();
+    return{ok:r.ok,status:r.status,text};
+  }finally{clearTimeout(t)}
+}
+function soapEnvelope(inner,cfg={}){
+  const user=escXml(cfg.username||'');
+  const pass=escXml(cfg.password||'');
+  const sec=user?`<soapenv:Header><wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+    <wsse:UsernameToken><wsse:Username>${user}</wsse:Username><wsse:Password>${pass}</wsse:Password></wsse:UsernameToken>
+  </wsse:Security></soapenv:Header>`:'<soapenv:Header/>';
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">${sec}
+  <soapenv:Body>${inner}</soapenv:Body>
+</soapenv:Envelope>`;
+}
+function lookupEndpoint(cfg={}){
+  const custom=String(cfg.webServiceUrl||'').trim();
+  if(custom && !/\(QNB|değiştirilecek|degistirilecek/i.test(custom))return custom.replace(/\?wsdl$/i,'');
+  return defaultEndpoints(cfg.environment||'test').einvoiceWsdl.replace(/\?wsdl$/i,'');
+}
+async function lookupViaQnb(vkn,cfg={}){
+  const url=lookupEndpoint(cfg);
+  if(!url)return null;
+  const id=escXml(vkn);
+  const bodies=[
+    soapEnvelope(`<efaturaKullanicisi xmlns="http://service.connector.uut.cs.com.tr/"><vergiTcKimlikNo>${id}</vergiTcKimlikNo></efaturaKullanicisi>`,cfg),
+    soapEnvelope(`<CheckUser xmlns="http://service.connector.uut.cs.com.tr/"><user><identifier>${id}</identifier></user></CheckUser>`,cfg),
+    soapEnvelope(`<ser:CheckUser xmlns:ser="http://service.connector.uut.cs.com.tr/"><user><identifier>${id}</identifier></user></ser:CheckUser>`,cfg)
+  ];
+  let lastErr='';
+  for(const body of bodies){
+    try{
+      const r=await soapPost(url,body,cfg);
+      if(!r.text)continue;
+      if(/faultstring|soap:Fault|SOAP-ENV:Fault/i.test(r.text)){
+        lastErr=xmlTag(r.text,['faultstring','FaultString'])||'QNB SOAP hata';
+        continue;
+      }
+      const parsed=parseTaxpayerXml(r.text);
+      if(parsed.companyName||parsed.alias||parsed.eInvoiceUser){
+        return{...parsed,source:'qnb',rawOk:true};
+      }
+      if(/<(?:[\w.-]+:)?(?:return|result)[^>]*>\s*(true|1)\s*</i.test(r.text)){
+        return{companyName:'',taxOffice:'',city:'',district:'',address:'',alias:'',identifier:vkn,eInvoiceUser:true,source:'qnb',rawOk:true};
+      }
+    }catch(e){lastErr=e.name==='AbortError'?'QNB zaman aşımı':(e.message||'QNB bağlantı hatası')}
+  }
+  if(lastErr)return{error:lastErr,source:'qnb'};
+  return null;
+}
+async function lookupTaxpayer(vkn,cfg={}){
+  const id=onlyDigits(vkn);
+  if(id.length!==10 && id.length!==11){
+    return{ok:false,error:'VKN 10, TCKN 11 hane olmalı'};
+  }
+  if(!String(cfg.username||'').trim()||!String(cfg.password||'').trim()){
+    return{
+      ok:false,
+      vkn:id,
+      eInvoiceUser:false,
+      error:'e-Fatura ünvanı için e-Fatura Merkezi’nde QNB kullanıcı ve şifre kaydedin.'
+    };
+  }
+  const qnb=await lookupViaQnb(id,cfg);
+  if(qnb && (qnb.companyName||qnb.alias||qnb.eInvoiceUser)&&!qnb.error){
+    return{ok:true,vkn:id,...qnb};
+  }
+  return{
+    ok:false,
+    vkn:id,
+    eInvoiceUser:false,
+    error:qnb?.error||'e-Fatura ünvanı alınamadı. e-Fatura Merkezi’nde QNB WSDL / kullanıcı / şifre kaydedin.'
+  };
+}
+
 /**
  * Gerçek SOAP çağrısı burada yapılacak.
  * Şimdilik: hazırlık + UBL üretimi + kuyruk durumu güncelleme.
@@ -158,5 +272,8 @@ module.exports={
   detectDocumentType,
   buildUblInvoiceDraft,
   readinessChecks,
-  sendOrQueueInvoice
+  sendOrQueueInvoice,
+  lookupTaxpayer,
+  parseTaxpayerXml,
+  onlyDigits
 };

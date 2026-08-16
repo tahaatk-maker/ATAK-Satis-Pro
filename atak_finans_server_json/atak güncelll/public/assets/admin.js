@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v141 */
+/* ATAK_ADMIN_BUILD=fix-v142 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1904,13 +1904,102 @@ function fillCustomerForm(prefix,c={}){
   if(q(`#${prefix}DeliveryAddress`))q(`#${prefix}DeliveryAddress`).value=c.deliveryAddress||'';
   const type=c.invoiceType==='corporate'?'corporate':'individual';
   document.querySelectorAll(`input[name="${prefix}InvoiceType"]`).forEach(r=>{r.checked=r.value===type});
-  if(q(`#${prefix}CompanyName`))q(`#${prefix}CompanyName`).value=c.companyName||'';
-  if(q(`#${prefix}TaxOffice`))q(`#${prefix}TaxOffice`).value=c.taxOffice||'';
+  if(q(`#${prefix}CompanyName`)){q(`#${prefix}CompanyName`).value=c.companyName||'';q(`#${prefix}CompanyName`).dataset.vknAuto='0'}
+  if(q(`#${prefix}TaxOffice`)){q(`#${prefix}TaxOffice`).value=c.taxOffice||'';q(`#${prefix}TaxOffice`).dataset.vknAuto='0'}
   if(q(`#${prefix}TaxNo`))q(`#${prefix}TaxNo`).value=c.taxNo||'';
   if(q(`#${prefix}Tckn`))q(`#${prefix}Tckn`).value=c.tckn||(!c.companyName&&String(c.taxNo||'').replace(/\D/g,'').length===11?c.taxNo:'')||'';
   if(q(`#${prefix}Note`))q(`#${prefix}Note`).value=c.note||'';
   if(q(`#${prefix}Active`))q(`#${prefix}Active`).value=c.active===false?'false':'true';
+  const taxDigits=String(c.taxNo||'').replace(/\D/g,'');
+  vknLookupState[prefix]=taxDigits.length===10?taxDigits:'';
+  setVknStatus(prefix, taxDigits.length===10?'Kayıtlı VKN':'10 hane yazınca ünvan otomatik dolar');
   syncCustomerFormUI(prefix);
+}
+const vknLookupState={};
+const vknLookupSeq={};
+function setVknStatus(prefix,text,cls=''){
+  const el=q(`#${prefix}VknStatus`);
+  if(!el)return;
+  el.textContent=text||'';
+  el.className='field-hint'+(cls?' '+cls:'');
+}
+function vknOnlyDigits(v){return String(v||'').replace(/\D/g,'').slice(0,10)}
+function fillFromVknLookup(prefix,data={}){
+  const title=String(data.companyName||data.alias||'').trim();
+  const company=q(`#${prefix}CompanyName`);
+  if(company&&title&&(!String(company.value||'').trim()||company.dataset.vknAuto==='1')){
+    company.value=title;
+    company.dataset.vknAuto='1';
+  }
+  const office=q(`#${prefix}TaxOffice`);
+  const taxOffice=String(data.taxOffice||'').trim();
+  if(office&&taxOffice&&(!String(office.value||'').trim()||office.dataset.vknAuto==='1')){
+    office.value=taxOffice;
+    office.dataset.vknAuto='1';
+  }
+  const fillEmpty=(id,val)=>{
+    const el=q(id); if(!el||!val)return;
+    if(!String(el.value||'').trim())el.value=val;
+  };
+  fillEmpty(`#${prefix}City`,data.city);
+  fillEmpty(`#${prefix}District`,data.district);
+  fillEmpty(`#${prefix}Address`,data.address);
+  fillEmpty(`#${prefix}Email`,data.email);
+}
+async function lookupVkn(prefix,{force=false}={}){
+  const input=q(`#${prefix}TaxNo`);
+  if(!input)return;
+  const vkn=vknOnlyDigits(input.value);
+  if(input.value!==vkn)input.value=vkn;
+  if(vkn.length!==10){
+    setVknStatus(prefix,vkn.length?`${vkn.length}/10 hane`:'10 hane yazınca ünvan otomatik dolar');
+    return;
+  }
+  if(!force&&vknLookupState[prefix]===vkn)return;
+  vknLookupSeq[prefix]=(vknLookupSeq[prefix]||0)+1;
+  const seq=vknLookupSeq[prefix];
+  setVknStatus(prefix,'e-Fatura sorgulanıyor…');
+  try{
+    const d=await api('/web-api/admin/vkn-lookup?vkn='+encodeURIComponent(vkn));
+    if(seq!==vknLookupSeq[prefix])return;
+    if(!d.ok){
+      setVknStatus(prefix,d.error||'Ünvan alınamadı. e-Fatura Merkezi’nde QNB ayarlarını kaydedin.','vkn-status-err');
+      return;
+    }
+    vknLookupState[prefix]=vkn;
+    fillFromVknLookup(prefix,d);
+    const title=String(d.companyName||d.alias||'').trim();
+    if(d.alreadyCustomer){
+      setVknStatus(prefix,d.message||'Bu VKN zaten kayıtlı','vkn-status-warn');
+    }else if(title){
+      setVknStatus(prefix,(d.eInvoiceUser?'e-Fatura: ':'')+title+(d.taxOffice?'':' · vergi dairesini yazın'),'vkn-status-ok');
+    }else{
+      setVknStatus(prefix,'Ünvan gelmedi, firma adını elle yazın','vkn-status-warn');
+    }
+  }catch(err){
+    if(seq!==vknLookupSeq[prefix])return;
+    setVknStatus(prefix,err.message||'VKN sorgusu başarısız. QNB kullanıcı/şifre kaydedin.','vkn-status-err');
+  }
+}
+function bindVknLookup(prefix){
+  const input=q(`#${prefix}TaxNo`);
+  if(!input||input.dataset.vknBound==='1')return;
+  input.dataset.vknBound='1';
+  input.addEventListener('input',()=>{
+    const d=vknOnlyDigits(input.value);
+    if(input.value!==d)input.value=d;
+    clearTimeout(window['__vknT_'+prefix]);
+    window['__vknT_'+prefix]=setTimeout(()=>lookupVkn(prefix),280);
+  });
+  input.addEventListener('blur',()=>lookupVkn(prefix));
+  q(`#${prefix}CompanyName`)?.addEventListener('input',()=>{const el=q(`#${prefix}CompanyName`);if(el)el.dataset.vknAuto='0'});
+  q(`#${prefix}TaxOffice`)?.addEventListener('input',()=>{const el=q(`#${prefix}TaxOffice`);if(el)el.dataset.vknAuto='0'});
+}
+function onCustomerInvoiceTypeChange(prefix){
+  syncCustomerFormUI(prefix);
+  if(customerInvoiceType(prefix)!=='corporate')return;
+  q(`#${prefix}TaxNo`)?.focus();
+  lookupVkn(prefix);
 }
 function openCustomerModal(c=null){
   q('#customerPageForm')?.reset();
@@ -2316,7 +2405,11 @@ q('#newCustomerBtn')?.addEventListener('click',()=>openCustomerModal(null));
 q('#customerModalClose')?.addEventListener('click',()=>q('#customerModal')?.classList.add('hidden'));
 q('#customerPageSearch')?.addEventListener('input',()=>{clearTimeout(window.__custSearchT);window.__custSearchT=setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),220)});
 q('#customerPageDeliverySame')?.addEventListener('change',()=>syncCustomerFormUI('customerPage'));
-document.querySelectorAll('input[name="customerPageInvoiceType"]').forEach(r=>r.addEventListener('change',()=>syncCustomerFormUI('customerPage')));
+document.querySelectorAll('input[name="customerPageInvoiceType"]').forEach(r=>r.addEventListener('change',()=>onCustomerInvoiceTypeChange('customerPage')));
+['customerPage','salesQuickCustomer'].forEach(bindVknLookup);
+document.querySelectorAll('[data-vkn-lookup]').forEach(btn=>{
+  btn.addEventListener('click',()=>lookupVkn(btn.dataset.vknLookup,{force:true}));
+});
 document.addEventListener('click',e=>{
   const edit=e.target.closest('[data-customer-action="edit"]');
   if(edit){e.preventDefault();if(customersPageData._selected)openCustomerModal(customersPageData._selected)}
@@ -3444,7 +3537,7 @@ q('#salesNewCustomerBtn')?.addEventListener('click',()=>{
 });
 q('#salesQuickCustomerClose')?.addEventListener('click',()=>q('#salesQuickCustomerModal')?.classList.add('hidden'));
 q('#salesQuickCustomerDeliverySame')?.addEventListener('change',()=>syncCustomerFormUI('salesQuickCustomer'));
-document.querySelectorAll('input[name="salesQuickCustomerInvoiceType"]').forEach(r=>r.addEventListener('change',()=>syncCustomerFormUI('salesQuickCustomer')));
+document.querySelectorAll('input[name="salesQuickCustomerInvoiceType"]').forEach(r=>r.addEventListener('change',()=>onCustomerInvoiceTypeChange('salesQuickCustomer')));
 q('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
   e.preventDefault();const st=q('#salesQuickCustomerStatus');
   try{

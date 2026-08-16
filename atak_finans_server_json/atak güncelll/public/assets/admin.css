@@ -615,6 +615,12 @@ button.primary,.primary,button{font-size:12px}
 .cust-check input,.cust-radio input{width:16px;height:16px;margin:0}
 .cust-invoice-type{display:flex;gap:16px;flex-wrap:wrap;padding:4px 0}
 .field-hint{display:block;font-size:11px;color:#7a8aa3;font-weight:650;margin-top:4px}
+.vkn-lookup-row{display:flex;gap:8px;align-items:stretch}
+.vkn-lookup-row input{flex:1;min-width:0}
+.vkn-lookup-row button{white-space:nowrap;flex-shrink:0;height:auto}
+.vkn-status-ok{color:#168653!important}
+.vkn-status-warn{color:#9c6b00!important}
+.vkn-status-err{color:#d9342b!important}
 #customerPageDeliveryWrap,#salesQuickCustomerDeliveryWrap{display:grid;gap:8px;margin-top:4px;padding:10px;border:1px solid #c9d7e6;border-radius:10px;background:#fff}
 #customerPageDeliveryWrap.hidden,#salesQuickCustomerDeliveryWrap.hidden{display:none!important}
 .customer-card.active{border-color:#0b4d8a;background:#eef5ff;box-shadow:inset 3px 0 0 #0b4d8a}
