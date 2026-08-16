@@ -1,6 +1,6 @@
 const path=require('path');
 const {
-  normalizePhone,hasPhone,findHeader,parseAsistekMatrix,classifyParsed,buildAddress
+  normalizePhone,hasPhone,extractBestPhone,findHeader,parseAsistekMatrix,classifyParsed,buildAddress
 }=require(path.join(__dirname,'..','customer-excel-import.js'));
 
 function assert(cond,msg){if(!cond)throw new Error(msg)}
@@ -8,6 +8,12 @@ function assert(cond,msg){if(!cond)throw new Error(msg)}
 assert(normalizePhone('532 123 45 67')==='05321234567','10 hane başına 0');
 assert(normalizePhone('905321234567')==='05321234567','90 kırpılır');
 assert(hasPhone('0532 111 22 33')&&!hasPhone('')&&!hasPhone('-'),'telefon filtresi');
+assert(extractBestPhone(['223 33 85'])==='','7 hane alınmaz');
+assert(!hasPhone('223 33 85')&&!hasPhone('2234726'),'7 hane hasPhone false');
+assert(extractBestPhone(['223 33 02 542 635 52 40']).startsWith('0542'),'karışık alandan GSM');
+assert(extractBestPhone(['262 63 67-532 5121702'])==='05325121702','tireli GSM');
+assert(extractBestPhone(['0216 372 73 87'])==='02163727387','11 haneli sabit');
+assert(extractBestPhone(['216 555 44 33'])==='02165554433','10 haneli 216 alınır');
 
 const headerPad=Array.from({length:8},()=>['','','','']);
 const header=['Ünvan','Adres','İlçe','Semt','Şehir','Muhasebe','Cari Tipi','Vergi Daire','Vergi No','Telefon','Tc Kimlik No','Adres Mahalle','Adres Cadde','Adres Sokak','Adres Kap','E-mail'];
@@ -50,5 +56,20 @@ assert(existing.counts.noPhone===1,'telefonsuz sayılır');
 
 const addr=buildAddress({adres:'Barbaros 1',mahalle:'Dikilitaş',cadde:'Barbaros Cad.',sokak:'',kapi:'12',semt:'Levent',ilce:'Beşiktaş'});
 assert(/Barbaros 1/.test(addr)&&/No: 12/.test(addr)&&/Levent/.test(addr),'adres parçaları');
+
+const kartHeader=['Müşteri Kodu','Ünvan','Telefon','İş Yeri Unvanı','İş Telefonu','Fax Numarası','Gsm Numarası','E_Mail','Ev Adresi','İş Adresi','Dogum Tarihi','Evlilik Tarihi','Meslek','Özel Kod','Ev Adresi Mahalle','Ev Adresi Cadde','Ev Adresi Sokak','Ev Adresi Kapı No','İş Adresi Mahalle','İş Adresi Cadde','İş Adresi Sokak','İş Adresi Kapı No','Ev Adresi Şehir','İş Adresi Şehir','Ev Adresi İlçe','İş Adresi İlçe','Ev Adresi Semt','İş Adresi Semt'];
+const kartShort=['00000082','BİLAL YILMAZ','223 33 85','','','','','','KÜLTÜR SK NO:40 FERAHEVLER SARIYER','','','','','','','','','','','','','','İstanbul','','Sarıyer','','Ferahevler',''];
+const kartGsm=['00012916','EVREN YILDIRIM','5306129202','','','','5306129202','','TARABYA MAH. SANATÇILAR SİTESİ SARIYER','','','','','','TARABYA','','','','','','','','İstanbul','İstanbul','Sarıyer','','',''];
+const kartEmpty=['00000018','ATLAS HALI','','','','','','','','','','','','','','','','','','','','','','','','','',''];
+const kart=parseAsistekMatrix([kartHeader,kartShort,kartGsm,kartEmpty]);
+assert(kart.ok,'kart listesi parse');
+assert(kart.rows.find(r=>r.source?.unvan==='BİLAL YILMAZ')?.status==='skip_short','7 hane atlanır');
+assert(kart.rows.find(r=>r.source?.unvan==='ATLAS HALI')?.status==='skip_nophone','telefonsuz atlanır');
+const evren=kart.rows.find(r=>r.source?.unvan==='EVREN YILDIRIM');
+assert(evren?.status==='ready'&&evren.payload.phone==='05306129202','GSM 10 hane alınır');
+assert(evren.payload.address.includes('TARABYA'),'ev adresi');
+assert(evren.payload.city==='İstanbul'&&/sarıyer/i.test(evren.payload.district),'il/ilçe ev adresi');
+assert(evren.payload.invoiceType==='individual','bu listede VKN yok, bireysel');
+assert(/Asistek 00012916/.test(evren.payload.note),'müşteri kodu nota');
 
 console.log('OK customer-excel-import tests passed');

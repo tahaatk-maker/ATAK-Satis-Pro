@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v147 */
+/* ATAK_ADMIN_BUILD=fix-v149 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2481,11 +2481,11 @@ function customerExcelEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({ '&':'
 function renderCustomerExcelPreview(d){
   const c=d.counts||{};
   if(q('#customerExcelSummary'))q('#customerExcelSummary').innerHTML=
-    `<article><b>${c.ready||0}</b><span>Yeni (telefonlu)</span></article>
+    `<article><b>${c.ready||0}</b><span>Yeni (10+ hane)</span></article>
      <article><b>${c.corporate||0}</b><span>Kurumsal VKN</span></article>
      <article><b>${c.individual||0}</b><span>Bireysel</span></article>
      <article><b>${c.existing||0}</b><span>Zaten kayıtlı</span></article>
-     <article><b>${c.noPhone||0}</b><span>Telefonsuz atlandı</span></article>`;
+     <article><b>${(c.noPhone||0)+(c.shortPhone||0)}</b><span>Telefonsuz / 7 hane</span></article>`;
   const map=d.mapping||{};
   const mapTxt=Object.entries(map).map(([k,v])=>`${k} ← ${v}`).join(' · ');
   if(q('#customerExcelMap'))q('#customerExcelMap').textContent=
@@ -2528,14 +2528,14 @@ q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
   const file=q('#customerExcelFile')?.files?.[0];
   const st=q('#customerExcelStatus');
   if(!file){toast('Önce Excel seçin');return}
-  if(!confirm('Telefonu olan yeni müşteriler eklensin mi?\nKayıtlı olanlar ve telefonsuzlar atlanır, mevcut kartlar değişmez.'))return;
+  if(!confirm('10+ haneli telefonu olan yeni müşteriler eklensin mi?\nTelefonsuz, 7 haneli ve kayıtlı kartlar atlanır; mevcutlar değişmez.'))return;
   const fd=new FormData();fd.append('file',file);
   if(st){st.textContent='Aktarılıyor…';st.className='form-status'}
   const btn=q('#customerExcelImportBtn');if(btn)btn.disabled=true;
   try{
     const d=await api('/web-api/admin/customers-excel-import',{method:'POST',body:fd});
     const extra=(d.errors||[]).length?` · ${d.errors.slice(0,3).join(' | ')}`:'';
-    if(st){st.textContent=`${d.imported||0} yeni eklendi · ${d.existing||0} kayıtlı atlandı · ${d.noPhone||0} telefonsuz${extra}`;st.className='form-status success'}
+    if(st){st.textContent=`${d.imported||0} yeni eklendi · ${d.existing||0} kayıtlı · ${d.noPhone||0} telefonsuz · ${d.shortPhone||0} yedi haneli${extra}`;st.className='form-status success'}
     toast(`${d.imported||0} müşteri aktarıldı`);
     if(btn)btn.disabled=true;
     q('#customerExcelFile').value='';

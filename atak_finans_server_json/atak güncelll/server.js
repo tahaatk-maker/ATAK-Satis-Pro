@@ -1685,8 +1685,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.147-sakin-panel',
-  build:'fix-v147',
+  version:'6.3.149-asistek-kart',
+  build:'fix-v149',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -3255,7 +3255,7 @@ app.get('/web-api/admin/vkn-lookup',requireAdminOrStaffAny('customers_manage','o
 });
 function customerExcelPreviewPayload(req){
   if(!req.file)throw new Error('Excel dosyası seçilmelidir');
-  const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer);
+  const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer,req.file.originalname||'');
   if(!parsed.ok)throw new Error(parsed.error||'Excel okunamadı');
   const s=readStore();
   const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
@@ -3296,7 +3296,7 @@ function customerExcelPreviewPayload(req){
     counts:classified.counts,
     preview,
     truncated:classified.rows.length>80,
-    note:'Sadece telefonu olanlar aktarılır. Kayıtlı telefon / VKN / TCKN ezilmez. 10 haneli vergi no varsa kurumsal (ünvan hem şahıs adı hem firma) yazılır.'
+    note:'Sadece 10+ haneli telefon / GSM aktarılır. Telefonsuz ve 7 haneli sabit hatlar atlanır. Kayıtlı telefon / VKN / TCKN ezilmez.'
   };
 }
 app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers_manage'),dynamicsUpload.single('file'),(req,res)=>{
@@ -3306,7 +3306,7 @@ app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers
 app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_manage'),dynamicsUpload.single('file'),(req,res)=>{
   try{
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
-    const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer);
+    const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer,req.file.originalname||'');
     if(!parsed.ok)return res.status(400).json({error:parsed.error||'Excel okunamadı'});
     const s=readStore();
     const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
@@ -3325,7 +3325,7 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
       imported++;
     }
     audit(s,'Asistek müşteri Excel aktarıldı',`${imported} yeni`,{
-      imported,existing:classified.counts.existing,noPhone:classified.counts.noPhone,invalid
+      imported,existing:classified.counts.existing,noPhone:classified.counts.noPhone,shortPhone:classified.counts.shortPhone,invalid
     });
     writeStore(s);
     res.json({
@@ -3333,6 +3333,7 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
       imported,
       existing:classified.counts.existing,
       noPhone:classified.counts.noPhone,
+      shortPhone:classified.counts.shortPhone,
       noName:classified.counts.noName,
       invalid,
       corporate:classified.counts.corporate,
