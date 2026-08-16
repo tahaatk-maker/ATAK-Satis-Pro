@@ -785,6 +785,92 @@ function publicUser(user,store){
     createdAt:user.createdAt||'',updatedAt:user.updatedAt||''
   };
 }
+function normalizeLoginUsername(v){
+  return String(v||'').trim().toLocaleLowerCase('tr-TR');
+}
+function sanitizeUserUsername(raw,fallbackName){
+  let u=normalizeLoginUsername(raw)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/ı/g,'i').replace(/[^a-z0-9._-]+/g,'.')
+    .replace(/^[._-]+|[._-]+$/g,'');
+  if(!u||u.length<3){
+    u=slug(fallbackName||'personel').replace(/-/g,'.')||'personel';
+  }
+  if(u.length<3)u=('per'+u).slice(0,40);
+  return u.slice(0,40);
+}
+function uniqueUserUsername(s,desired,ignoreId){
+  const used=new Set((s.users||[])
+    .filter(x=>String(x.id)!==String(ignoreId||''))
+    .map(x=>normalizeLoginUsername(x.username)));
+  let cand=desired||'personel',i=2;
+  while(used.has(cand)){
+    const suf=String(i++);
+    cand=((desired||'personel').slice(0,Math.max(1,40-suf.length-1))+'.'+suf).slice(0,40);
+  }
+  return cand;
+}
+function findUserForStaff(s,st){
+  const uname=normalizeLoginUsername(st.username);
+  if(uname){
+    const byUser=s.users.find(x=>normalizeLoginUsername(x.username)===uname);
+    if(byUser)return byUser;
+  }
+  if(st.userId){
+    const byLink=s.users.find(x=>String(x.id)===String(st.userId));
+    if(byLink)return byLink;
+  }
+  if(st.id){
+    const byId=s.users.find(x=>String(x.id)===String(st.id));
+    if(byId)return byId;
+  }
+  const nname=String(st.name||'').trim().toLocaleLowerCase('tr-TR');
+  if(nname){
+    const matches=(s.users||[]).filter(x=>String(x.name||'').trim().toLocaleLowerCase('tr-TR')===nname);
+    if(matches.length===1)return matches[0];
+  }
+  return null;
+}
+function promoteStaffToUsers(s){
+  s.users=Array.isArray(s.users)?s.users:[];
+  s.staff=Array.isArray(s.staff)?s.staff:[];
+  let n=0;
+  for(const st of s.staff){
+    if(!st||(!String(st.name||'').trim()&&!String(st.username||'').trim()))continue;
+    let u=findUserForStaff(s,st);
+    if(u){
+      if(!u.storeId && st.storeId)u.storeId=st.storeId;
+      if(!(Number(u.salaryMonthly||0)>0) && Number(st.salaryMonthly||0)>0)u.salaryMonthly=st.salaryMonthly;
+      if(!u.passwordHash && st.passwordHash)u.passwordHash=st.passwordHash;
+      if(u.active===undefined)u.active=st.active!==false;
+      st.userId=u.id;
+      if(!st.username)st.username=u.username;
+      continue;
+    }
+    const username=uniqueUserUsername(s,sanitizeUserUsername(st.username,st.name));
+    const role=ROLE_PRESETS[st.role]?String(st.role):'sales';
+    u={
+      id:String(st.id||crypto.randomUUID()),
+      name:st.name||username,
+      username,
+      email:'',
+      role,
+      permissions:sanitizePermissions(ROLE_PRESETS[role]?.permissions||[],role),
+      active:st.active!==false,
+      passwordHash:st.passwordHash||'',
+      storeId:String(st.storeId||''),
+      salaryMonthly:Math.round(Number(st.salaryMonthly||0)*100)/100,
+      createdAt:st.createdAt||new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+      promotedFromStaff:true
+    };
+    s.users.push(u);
+    st.userId=u.id;
+    if(!st.username)st.username=username;
+    n++;
+  }
+  return n;
+}
 function syncStaffFromUser(s,user){
   if(!user||!user.username)return null;
   const uname=String(user.username).toLocaleLowerCase('tr-TR');
@@ -1336,7 +1422,7 @@ function verifyMfaChallenge(req,res,{portal,challengeId,code}){
 function staffSession(req){return req.session?.staffUser||null}
 function cleanMoney(v){return Math.max(0,Math.round(normalizeNumber(v)*100)/100)}
 function publicStaff(x,store){
-  const branch=store.stores.find(s=>s.id===x.storeId);
+  const branch=(store.stores||[]).find(s=>s.id===x.storeId);
   return{id:x.id,name:x.name,username:x.username,role:x.role||'staff',storeId:x.storeId,storeName:branch?.name||'Mağaza',active:x.active!==false,salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100};
 }
 function todayISO(){return new Date().toISOString().slice(0,10)}
@@ -1598,8 +1684,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.135-para-maas',
-  build:'fix-v135',
+  version:'6.3.136-personel-kullanici',
+  build:'fix-v136',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -1651,8 +1737,10 @@ app.get('/web-api/me',(req,res)=>{
 });
 app.get('/web-api/admin/store',requireAdmin,(req,res)=>{
   const s=readStore();
+  if(promoteStaffToUsers(s)>0)writeStore(s);
   res.json({
     ...s,
+    staff:(s.staff||[]).map(x=>publicStaff(x,s)),
     users:hasPermission(req,'users_manage')?(s.users||[]).map(u=>publicUser(u,s)):[],
     stores:s.stores||[],
     security:{ownerOnly:ownerOnlyEnabled(),ownerUsernames:ownerUsernames()}
@@ -2284,10 +2372,25 @@ app.post('/foundation-api/login',async(req,res)=>{
     const failKey=`staff:${clientIp(req)}:${username||'admin'}`;
     if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
 
-    const user=(s.users||[]).find(x=>
+    let user=(s.users||[]).find(x=>
       x.active!==false &&
       String(x.username||'').trim().toLocaleLowerCase('tr-TR')===username
     );
+    const st=(s.staff||[]).find(x=>
+      x.active!==false &&
+      String(x.username||'').trim().toLocaleLowerCase('tr-TR')===username
+    );
+    if(st && verifyPassword(password,st.passwordHash)){
+      if(!user){
+        promoteStaffToUsers(s);
+        writeStore(s);
+        user=(s.users||[]).find(x=>String(x.id)===String(st.userId||st.id))
+          ||(s.users||[]).find(x=>String(x.username||'').trim().toLocaleLowerCase('tr-TR')===username);
+      }else if(!verifyPassword(password,user.passwordHash)){
+        user.passwordHash=st.passwordHash;
+        writeStore(s);
+      }
+    }
 
     if(user && verifyPassword(password,user.passwordHash)){
       // aşağıda normal personel oturumu
@@ -2389,6 +2492,7 @@ app.post('/foundation-api/announcement/:id/read',requireStaff,(req,res)=>{
 
 app.get('/web-api/admin/foundation',requireAdmin,(req,res)=>{
   const s=readStore();
+  if(promoteStaffToUsers(s)>0)writeStore(s);
   const days=Math.min(180,Math.max(1,Math.round(Number(req.query.days)||30)));
   res.json({
     stores:s.stores,
@@ -2419,6 +2523,15 @@ app.post('/web-api/admin/staff-member',requireAdmin,(req,res)=>{
   if(x.salaryMonthly!=null && x.salaryMonthly!=='')data.salaryMonthly=Math.round(Number(x.salaryMonthly||0)*100)/100;
   if(row){Object.assign(row,data);if(String(x.password||'').trim())row.passwordHash=hashPassword(x.password)}
   else{row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),passwordHash:hashPassword(x.password),salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100,...data};s.staff.push(row)}
+  promoteStaffToUsers(s);
+  const linked=findUserForStaff(s,row);
+  if(linked){
+    linked.name=row.name;linked.username=row.username;linked.storeId=row.storeId;linked.active=row.active!==false;
+    if(row.passwordHash)linked.passwordHash=row.passwordHash;
+    if(row.salaryMonthly!=null)linked.salaryMonthly=row.salaryMonthly;
+    linked.updatedAt=row.updatedAt;
+    row.userId=linked.id;
+  }
   audit(s,'Personel kaydedildi',row.name,{storeId:row.storeId});writeStore(s);res.json({ok:true,row:publicStaff(row,s)});
 });
 app.post('/web-api/admin/announcement',requireAdmin,(req,res)=>{

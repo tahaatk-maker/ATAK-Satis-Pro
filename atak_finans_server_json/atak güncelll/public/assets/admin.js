@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v135 */
+/* ATAK_ADMIN_BUILD=fix-v136 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -117,6 +117,7 @@ function goTab(id,{remember=true}={}){
   if(remember)sessionStorage.setItem('atakAdminTab',id);
   q('#productsNavGroup')?.classList.toggle('active-group',productTabs.has(id));q('#financeNavGroup')?.classList.toggle('active-group',id==='financeDashboard');
   if(productTabs.has(id))setProductsMenu(true);
+  if(id==='users')setTimeout(()=>load().then(()=>renderUsers()).catch(e=>toast(e.message)),20);
   if(id==='foundation')setTimeout(()=>loadFoundation().catch(e=>toast(e.message)),20);
   if(id==='stockCenter')setTimeout(()=>loadStockCenter().catch(e=>toast(e.message)),20);
   if(id==='products')setTimeout(()=>refreshProductsStockWarehouseOptions().catch(()=>{}),20);
@@ -972,16 +973,17 @@ function resetUserForm(){
 }
 function fillUserForm(u){
   if(!u)return;
-  q('#userId').value=u.id;
+  q('#userId').value=u.id||'';
   q('#userName').value=u.name;
-  q('#userUsername').value=u.username;
+  q('#userUsername').value=u.username||String(u.name||'').toLocaleLowerCase('tr-TR').replace(/ı/g,'i').replace(/[^a-z0-9._-]+/g,'.').replace(/^\.+|\.+$/g,'');
   if(q('#userEmail'))q('#userEmail').value=u.email||'';
-  q('#userRole').value=u.role;
+  q('#userRole').value=ROLE_LABELS[u.role]?u.role:'sales';
   q('#userPassword').value='';
   q('#userActive').checked=u.active!==false;
   fillUserStoreOptions(u.storeId||'');
   renderPermissionEditor((u.permissions||[]).includes('*')?permissionDefs.map(p=>p.id):(u.permissions||[]));
   syncUserStatusUi();
+  if(u.fromStaff)setTimeout(applyRoleDefaultPermissions,0);
   goTab('users');
 }
 async function activateUser(id){
@@ -1022,29 +1024,54 @@ async function deleteUser(id){
     else toast(r.message||'Kullanıcı pasife alındı');
   }catch(e){toast(e.message||'Silinemedi')}
 }
+function userKey(x){
+  return String(x?.username||'').trim().toLocaleLowerCase('tr-TR');
+}
+function usersForList(){
+  const users=[...(store?.users||[])];
+  const seen=new Set(users.map(u=>userKey(u)).filter(Boolean));
+  const ids=new Set(users.map(u=>String(u.id)));
+  for(const st of (store?.staff||[])){
+    const key=userKey(st);
+    if(key&&seen.has(key))continue;
+    if(st.userId&&ids.has(String(st.userId)))continue;
+    if(st.id&&ids.has(String(st.id)))continue;
+    const storeName=(store?.stores||[]).find(s=>String(s.id)===String(st.storeId||''))?.name||st.storeName||'';
+    users.push({
+      id:st.id,name:st.name,username:st.username||'',email:'',
+      role:ROLE_LABELS[st.role]?st.role:'sales',
+      roleName:'Personel kaydı',
+      storeId:st.storeId||'',storeName,
+      active:st.active!==false,fromStaff:true
+    });
+    if(key)seen.add(key);
+    if(st.id)ids.add(String(st.id));
+  }
+  return users;
+}
 function renderUsers(){
   if(!q('#userList'))return;
-  const users=store?.users||[];
+  const users=usersForList();
   q('#userRole').innerHTML=Object.entries(ROLE_LABELS).map(([id,name])=>`<option value="${id}">${name}</option>`).join('');
   fillUserStoreOptions(q('#userStore')?.value||'');
   q('#userList').innerHTML=users.length?users.map(u=>`<div class="admin-card user-card" style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap">
     <div style="flex:1;min-width:160px">
       <h3>${u.name}</h3>
-      <p>@${u.username} · ${u.roleName||ROLE_LABELS[u.role]}</p>
+      <p>${u.username?('@'+u.username):'Kullanıcı adı yok'} · ${u.roleName||ROLE_LABELS[u.role]||'Personel'}</p>
       <p style="margin:2px 0 0;font-size:12px;color:#0b4f96;font-weight:750">${u.storeName?('Mağaza: '+u.storeName):'Mağaza seçilmedi'}</p>
       <p style="margin:2px 0 0;font-size:12px;color:#64748b">${u.email?u.email:'<span style="color:#b91c1c">E-posta yok — şifre unuttum çalışmaz</span>'}</p>
-      <small style="font-weight:800;color:${u.active!==false?'#15803d':'#b91c1c'}">${u.active!==false?'AKTİF':'PASİF'}</small>
+      <small style="font-weight:800;color:${u.active!==false?'#15803d':'#b91c1c'}">${u.active!==false?'AKTİF':'PASİF'}${u.fromStaff?' · Personel kartından':''}</small>
     </div>
     <div class="admin-card-actions" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <button type="button" data-user-edit="${u.id}">Düzenle</button>
-      ${u.active===false
+      ${u.fromStaff?'':(u.active===false
         ?`<button type="button" class="primary" data-user-activate="${u.id}">Aktifleştir</button>`
-        :`<button type="button" data-user-disable="${u.id}">Pasife al</button>`}
-      <button type="button" class="secondary-btn" data-user-del="${u.id}">Sil</button>
+        :`<button type="button" data-user-disable="${u.id}">Pasife al</button>`)}
+      ${u.fromStaff?'':`<button type="button" class="secondary-btn" data-user-del="${u.id}">Sil</button>`}
     </div>
   </div>`).join(''):'<p>Henüz ek kullanıcı yok. Soldan ad / kullanıcı adı / şifre girip Kaydet’e basın.</p>';
   qa('[data-user-edit]').forEach(b=>b.onclick=()=>{
-    const u=users.find(x=>x.id===b.dataset.userEdit);if(!u)return;fillUserForm(u);
+    const u=users.find(x=>String(x.id)===String(b.dataset.userEdit));if(!u)return;fillUserForm(u);
   });
   qa('[data-user-activate]').forEach(b=>b.onclick=()=>activateUser(b.dataset.userActivate));
   qa('[data-user-disable]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDisable));
@@ -1127,7 +1154,7 @@ function renderFoundation(){
       : `${activeStores.length} aktif mağaza listelendi.`;
   }
   q('#fStoreList').innerHTML=f.stores.map(x=>`<button type="button" class="${x.active?'':'fnd-passive'}" data-fstore="${x.id}"><b>${x.name}</b><small>${x.code||''} · ${x.active?'Aktif':'Pasif — seçilemez'}</small></button>`).join('')||'<p class="note">Henüz mağaza yok.</p>';
-  q('#fStaffList').innerHTML=(f.staff||[]).map(x=>`<button type="button" data-go-user="${x.id}"><b>${x.name}</b><small>${x.storeName||'Mağaza yok'} · ${x.active!==false?'Aktif':'Pasif'}</small></button>`).join('')||'<p class="note">Kullanıcılar ekranından personel ekleyin.</p>';
+  q('#fStaffList').innerHTML=(f.staff||[]).map(x=>`<button type="button" data-go-user="${x.id}" data-go-user-name="${(x.username||'').replace(/"/g,'&quot;')}" data-go-user-full="${String(x.name||'').replace(/"/g,'&quot;')}"><b>${x.name}</b><small>${x.storeName||'Mağaza yok'} · ${x.active!==false?'Aktif':'Pasif'}</small></button>`).join('')||'<p class="note">Kullanıcılar ekranından personel ekleyin.</p>';
   q('#fAnnouncementList').innerHTML=f.announcements.map(x=>`<div><b>${x.title}</b><small>${x.storeId?f.stores.find(s=>s.id===x.storeId)?.name:'Tüm personel'}</small><button type="button" data-fannouncement-delete="${x.id}">Sil</button></div>`).join('');
   q('#fTurnoverCount').textContent=`${f.turnovers.length} gün · mağaza satırı`;
   const brandPill=x=>{
@@ -1141,11 +1168,18 @@ function renderFoundation(){
     ?`<table><thead><tr><th>Tarih</th><th>Mağaza</th><th>Personel</th><th>Satış</th><th>Bayi Dağılımı</th><th>Net Ciro</th></tr></thead><tbody>${f.turnovers.map(x=>`<tr><td>${x.date}</td><td>${x.storeName}</td><td>${x.staffName}</td><td>${x.orderCount}</td><td>${brandPill(x)}</td><td><b>${money(x.netAmount)}</b></td></tr>`).join('')}</tbody></table>`
     :'<p class="note">Bu dönemde satış yok. Satış girildikçe bu tablo kendiliğinden dolar.</p>';
   qa('[data-fstore]').forEach(b=>b.onclick=()=>{const x=f.stores.find(v=>v.id===b.dataset.fstore);q('#fStoreId').value=x.id;q('#fStoreName').value=x.name;q('#fStoreCode').value=x.code||'';q('#fStoreAddress').value=x.address||'';q('#fStoreActive').checked=x.active});
-  qa('[data-go-user]').forEach(b=>b.onclick=()=>{
+  qa('[data-go-user]').forEach(b=>b.onclick=async()=>{
     const uid=b.dataset.goUser;
-    const u=(store?.users||[]).find(x=>String(x.id)===String(uid));
+    const uname=String(b.dataset.goUserName||'').toLocaleLowerCase('tr-TR');
+    const full=String(b.dataset.goUserFull||'').trim().toLocaleLowerCase('tr-TR');
+    try{await load()}catch(_){}
+    const users=usersForList();
+    const u=users.find(x=>String(x.id)===String(uid))
+      || (uname&&users.find(x=>String(x.username||'').toLocaleLowerCase('tr-TR')===uname))
+      || (full&&users.find(x=>String(x.name||'').trim().toLocaleLowerCase('tr-TR')===full));
     if(u){fillUserForm(u);return}
     goTab('users');
+    toast('Kullanıcı listesi yenilendi — personeli listeden seçin');
   });
   qa('[data-fannouncement-delete]').forEach(b=>b.onclick=async()=>{if(!confirm('Duyuru silinsin mi?'))return;await api('/web-api/admin/announcement/'+b.dataset.fannouncementDelete,{method:'DELETE'});await loadFoundation()});
   if(q('#fndCountStore'))q('#fndCountStore').textContent=`${f.stores.length} kayıt`;
