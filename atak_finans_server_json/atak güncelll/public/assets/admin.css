@@ -518,12 +518,16 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .money-action-btn{border:1px solid var(--line);border-radius:12px;background:#fff;padding:18px 14px;font:inherit;font-weight:800;font-size:15px;cursor:pointer;color:#0b2a4a;text-align:left}
 .money-action-btn:hover{border-color:#0b4f96;background:#f3f7ff}
 .money-action-btn.soft{background:#f8fafc;color:#334155}
+.money-breakdown{margin:0 0 12px;padding:12px;border-radius:10px;background:#f8fafc;border:1px solid var(--line);font-size:13px;line-height:1.55}
+.money-breakdown b{color:var(--navy)}
+.money-breakdown .net{display:block;margin-top:6px;font-size:16px;font-weight:900;color:#0b4f96}
 .money-status{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800}
 .money-status.due{background:#ffe7e7;color:#a52222}
 .money-status.partial{background:#fff4d7;color:#8b6200}
 .money-status.paid{background:#e6f7ee;color:#087c47}
 .money-status.unset{background:#eef2f7;color:#64748b}
 #moneyPeopleRows tr.due td{background:#fff8f8}
+#moneyPeopleRows td small.formula{display:block;color:#64748b;font-size:11px;margin-top:3px;font-weight:600}
 @media(max-width:900px){.money-action-grid{grid-template-columns:1fr 1fr}.money-split{grid-template-columns:1fr}}
 
 /* V6.3.4 kullanıcı bazlı yetkiler */

@@ -6040,7 +6040,7 @@ q('#trainingUploadForm')?.addEventListener('submit',async e=>{
 /* ——— Para & Maaş (tek ekran) ——— */
 let moneyState={month:'',summary:null,accounts:[],people:[],recent:[],expenseCategories:[],selectedStaffId:''};
 function moneyMonthDefault(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}
-function moneyStatusLabel(s){return({due:'Ödenecek',partial:'Kısmi',paid:'Ödendi',unset:'Maaş yok',none:'—'}[s]||s||'—')}
+function moneyStatusLabel(s){return({due:'Ödenecek',partial:'Kısmi / Avanslı',paid:'Kapandı',unset:'Maaş yok',none:'—'}[s]||s||'—')}
 function fillMoneyAccounts(selId,preferCash=true){
   const el=q(selId); if(!el)return;
   const acc=moneyState.accounts||[];
@@ -6051,6 +6051,29 @@ function fillMoneyAccounts(selId,preferCash=true){
     const cash=acc.find(a=>a.type==='cash'); if(cash)el.value=cash.id;
   }
 }
+function moneyAmountForType(p,type){
+  if(!p)return 0;
+  if(type==='advance')return 0;
+  if(type==='commission')return Number(p.commissionDue||0);
+  if(type==='salary')return Number(p.salaryDue||0);
+  return Number(p.netDue||p.dueTotal||0);
+}
+function renderMoneySalaryBreakdown(p,type){
+  const box=q('#moneySalaryBreakdown');
+  if(!box)return;
+  if(!p){box.innerHTML='';return}
+  if(type==='advance'){
+    box.innerHTML=`<div><b>${p.name}</b> için avans vereceksiniz. Avans, ay sonu ödenecekten düşülür.</div>
+      <span class="net">Şu an ödenecek kalan: ${money2(p.netDue)}</span>`;
+    return;
+  }
+  box.innerHTML=`
+    <div><b>${p.name}</b> · ${moneyState.month||''}</div>
+    <div>Maaş: <b>${money2(p.salaryMonthly)}</b> + Prim (satıştan): <b>${money2(p.monthCommission)}</b>${p.saleCount?` <small>(${p.saleCount} satış)</small>`:''}</div>
+    <div>Hak edilen: <b>${money2(p.grossEarned)}</b> − Avans: <b>${money2(p.advances)}</b> − Ödenen: <b>${money2(p.paidTotal)}</b></div>
+    <span class="net">Ödenecek: ${money2(p.netDue)}</span>
+    <small class="formula">${p.formula||''}</small>`;
+}
 function renderMoneyCenter(){
   const sum=moneyState.summary||{};
   const box=q('#moneySummary');
@@ -6058,24 +6081,27 @@ function renderMoneyCenter(){
     box.innerHTML=`
       <article class="net-kpi"><small>Toplam Kasa</small><b>${money2(sum.cash)}</b></article>
       <article><small>Toplam Banka</small><b>${money2(sum.bank)}</b></article>
-      <article class="deduct-kpi"><small>Bu Ay Masraf</small><b>${money2(sum.monthExpense)}</b></article>
-      <article class="commission"><small>Bu Ay Maaş/Prim</small><b>${money2(sum.monthSalaryPaid)}</b></article>
+      <article class="commission"><small>Bu Ay Prim (otomatik)</small><b>${money2(sum.monthCommissionEarned)}</b></article>
+      <article class="deduct-kpi"><small>Bu Ay Avans</small><b>${money2(sum.monthAdvancePaid)}</b></article>
       <article><small>Ödenecek Kalan</small><b>${money2(sum.salaryDueTotal)}</b><small>${sum.unpaidPeople||0} kişi</small></article>`;
   }
-  if(q('#moneyPeopleCount'))q('#moneyPeopleCount').textContent=`${(moneyState.people||[]).length} personel`;
+  if(q('#moneyPeopleCount'))q('#moneyPeopleCount').textContent=`${(moneyState.people||[]).length} personel · ${moneyState.month||''}`;
   const tbody=q('#moneyPeopleRows');
   if(tbody){
     tbody.innerHTML=(moneyState.people||[]).length
       ?(moneyState.people||[]).map(p=>`<tr class="${p.status==='due'||p.status==='partial'?'due':''}">
-          <td><b>${p.name||'—'}</b><br><small>${p.storeName||''}</small></td>
-          <td>${money2(p.salaryMonthly)} <button type="button" class="secondary-btn" data-set-salary="${p.id}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" data-sal="${p.salaryMonthly}">Ayarla</button></td>
-          <td>${money2(p.monthCommission)}</td>
-          <td>${money2(p.paidTotal)}</td>
-          <td><b>${money2(p.dueTotal)}</b></td>
-          <td><span class="money-status ${p.status}">${moneyStatusLabel(p.status)}</span></td>
           <td>
-            ${p.salaryDue>0.009?`<button type="button" class="primary" data-pay-salary="${p.id}" data-amt="${p.salaryDue}">Maaş Öde</button>`:''}
-            ${p.commissionDue>0.009?`<button type="button" class="secondary-btn" data-pay-comm="${p.id}" data-amt="${p.commissionDue}">Prim Öde</button>`:''}
+            <b>${p.name||'—'}</b><br><small>${p.storeName||''}</small>
+            <span class="money-status ${p.status}">${moneyStatusLabel(p.status)}</span>
+          </td>
+          <td>${money2(p.salaryMonthly)} <button type="button" class="secondary-btn" data-set-salary="${p.id}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" data-sal="${p.salaryMonthly}">Ayarla</button></td>
+          <td><b>${money2(p.monthCommission)}</b>${p.saleCount?`<br><small>${p.saleCount} satış · ${money2(p.monthSales)}</small>`:''}</td>
+          <td>${p.advances>0.009?`<b style="color:#a52222">${money2(p.advances)}</b>`:money2(0)}</td>
+          <td>${money2(p.grossEarned)}<br><small>ödenecekten avans düşülür</small></td>
+          <td><b style="font-size:16px">${money2(p.netDue)}</b><small class="formula">${p.formula||''}</small></td>
+          <td>
+            ${p.netDue>0.009?`<button type="button" class="primary" data-pay-payroll="${p.id}" data-amt="${p.netDue}">Ay Sonu Öde</button>`:''}
+            <button type="button" class="secondary-btn" data-pay-advance="${p.id}">Avans</button>
           </td>
         </tr>`).join('')
       :'<tr><td colspan="7">Aktif personel yok. Foundation → Personel ekleyin.</td></tr>';
@@ -6085,14 +6111,16 @@ function renderMoneyCenter(){
       q('#moneySetAmount').value=Number(b.dataset.sal||0)||'';
       q('#moneySetSalaryModal')?.classList.remove('hidden');
     });
-    qa('[data-pay-salary]').forEach(b=>b.onclick=()=>openMoneySalaryModal(b.dataset.paySalary,'salary',Number(b.dataset.amt||0)));
-    qa('[data-pay-comm]').forEach(b=>b.onclick=()=>openMoneySalaryModal(b.dataset.payComm,'commission',Number(b.dataset.amt||0)));
+    qa('[data-pay-payroll]').forEach(b=>b.onclick=()=>openMoneySalaryModal(b.dataset.payPayroll,'payroll',Number(b.dataset.amt||0)));
+    qa('[data-pay-advance]').forEach(b=>b.onclick=()=>openMoneySalaryModal(b.dataset.payAdvance,'advance',0));
   }
   const recent=q('#moneyRecentRows');
   if(recent){
     recent.innerHTML=(moneyState.recent||[]).length
       ?(moneyState.recent||[]).map(t=>{
-        const kind=isMoneySalaryLike(t)?'Maaş/Prim':(t.kind==='expense'?'Masraf':(t.kind==='transfer'?'Transfer':(t.category||t.kind)));
+        const kind=t.paymentFor==='advance'||/avans/i.test(t.category||'')?'Avans'
+          :(t.paymentFor==='payroll'||/ay sonu|bordro/i.test(t.category||'')?'Ay Sonu'
+          :(isMoneySalaryLike(t)?'Maaş/Prim':(t.kind==='expense'?'Masraf':(t.kind==='transfer'?'Transfer':(t.category||t.kind)))));
         const who=t.staffName||t.description||'—';
         return `<tr><td>${t.date||''}</td><td>${kind}</td><td>${who}<br><small>${t.category||''}</small></td><td>${money2(Math.abs(t.amount||0))}</td><td>${t.accountName||'—'}</td></tr>`;
       }).join('')
@@ -6100,23 +6128,38 @@ function renderMoneyCenter(){
   }
 }
 function isMoneySalaryLike(t){
-  return t.paymentFor==='salary'||t.paymentFor==='commission_pay'||/maaş|maas|prim/i.test(String(t.category||''));
+  return ['salary','commission_pay','payroll','advance'].includes(t.paymentFor)||/maaş|maas|prim|avans|bordro|ay sonu/i.test(String(t.category||''));
 }
 function openMoneySalaryModal(staffId,type,amount){
   moneyState.selectedStaffId=String(staffId||'');
   const people=moneyState.people||[];
   q('#moneySalaryStaff').innerHTML=people.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   if(staffId)q('#moneySalaryStaff').value=staffId;
-  q('#moneySalaryType').value=type==='commission'?'commission':'salary';
-  q('#moneySalaryAmount').value=amount>0?Number(amount).toFixed(2):'';
+  const t=type||'payroll';
+  q('#moneySalaryType').value=['payroll','advance','salary','commission'].includes(t)?t:'payroll';
+  const p=people.find(x=>String(x.id)===String(q('#moneySalaryStaff').value));
+  const amt=amount>0?amount:moneyAmountForType(p,q('#moneySalaryType').value);
+  q('#moneySalaryAmount').value=amt>0?Number(amt).toFixed(2):(t==='advance'?'':'');
   q('#moneySalaryDate').value=localDate();
   q('#moneySalaryDesc').value='';
   q('#moneySalaryStatus').textContent='';
   fillMoneyAccounts('#moneySalaryAccount',true);
-  const p=people.find(x=>String(x.id)===String(staffId));
-  q('#moneySalaryTitle').textContent=type==='commission'?'💵 Prim Öde':'💵 Maaş Öde';
-  q('#moneySalaryHint').textContent=p?`${p.name} · kalan ${money2(type==='commission'?p.commissionDue:p.salaryDue)}`:'Personel seçin';
+  const titles={payroll:'💵 Ay Sonu Öde',advance:'💸 Avans Ver',salary:'💵 Maaş Öde',commission:'💵 Prim Öde'};
+  q('#moneySalaryTitle').textContent=titles[q('#moneySalaryType').value]||'Ödeme';
+  q('#moneySalaryHint').textContent=p?`${p.name} · ${moneyState.month}`:'Personel seçin';
+  renderMoneySalaryBreakdown(p,q('#moneySalaryType').value);
   q('#moneySalaryModal')?.classList.remove('hidden');
+}
+function syncMoneySalaryForm(){
+  const p=(moneyState.people||[]).find(x=>String(x.id)===String(q('#moneySalaryStaff').value));
+  const type=q('#moneySalaryType').value;
+  const titles={payroll:'💵 Ay Sonu Öde',advance:'💸 Avans Ver',salary:'💵 Maaş Öde',commission:'💵 Prim Öde'};
+  q('#moneySalaryTitle').textContent=titles[type]||'Ödeme';
+  renderMoneySalaryBreakdown(p,type);
+  if(type!=='advance'){
+    const amt=moneyAmountForType(p,type);
+    q('#moneySalaryAmount').value=amt>0?amt.toFixed(2):'';
+  }
 }
 function openMoneyExpenseModal(){
   const cats=moneyState.expenseCategories||['Diğer'];
@@ -6143,11 +6186,14 @@ q('#moneyRefresh')?.addEventListener('click',()=>loadMoneyCenter().catch(e=>toas
 q('#moneyMonth')?.addEventListener('change',()=>loadMoneyCenter().catch(e=>toast(e.message)));
 q('#moneyOpenExpense')?.addEventListener('click',openMoneyExpenseModal);
 q('#moneyOpenSalary')?.addEventListener('click',()=>{
-  const first=(moneyState.people||[]).find(p=>p.dueTotal>0.009)||(moneyState.people||[])[0];
-  openMoneySalaryModal(first?.id||'','salary',first?.salaryDue||0);
+  const first=(moneyState.people||[]).find(p=>p.netDue>0.009)||(moneyState.people||[])[0];
+  openMoneySalaryModal(first?.id||'','payroll',first?.netDue||0);
+});
+q('#moneyOpenAdvance')?.addEventListener('click',()=>{
+  const first=(moneyState.people||[])[0];
+  openMoneySalaryModal(first?.id||'','advance',0);
 });
 q('#moneyOpenTransfer')?.addEventListener('click',()=>{
-  // mevcut transfer modalını kullan
   if(typeof openFinanceTransfer==='function')openFinanceTransfer();
   else q('#financeTransferOpenBtn')?.click();
 });
@@ -6198,17 +6244,7 @@ q('#moneySetSalaryForm')?.addEventListener('submit',async e=>{
     await loadMoneyCenter();
   }catch(err){toast(err.message)}
 });
-q('#moneySalaryStaff')?.addEventListener('change',()=>{
-  const p=(moneyState.people||[]).find(x=>String(x.id)===String(q('#moneySalaryStaff').value));
-  if(!p)return;
-  const type=q('#moneySalaryType').value;
-  q('#moneySalaryAmount').value=(type==='commission'?p.commissionDue:p.salaryDue).toFixed(2);
-});
-q('#moneySalaryType')?.addEventListener('change',()=>{
-  const p=(moneyState.people||[]).find(x=>String(x.id)===String(q('#moneySalaryStaff').value));
-  if(!p)return;
-  const type=q('#moneySalaryType').value;
-  q('#moneySalaryAmount').value=(type==='commission'?p.commissionDue:p.salaryDue).toFixed(2);
-});
+q('#moneySalaryStaff')?.addEventListener('change',syncMoneySalaryForm);
+q('#moneySalaryType')?.addEventListener('change',syncMoneySalaryForm);
 
 qa('a[href="#"]').forEach(a=>a.addEventListener('click',e=>e.preventDefault()));

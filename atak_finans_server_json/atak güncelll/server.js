@@ -3029,11 +3029,19 @@ function moneyMonthKey(v){
   const s=String(v||'').slice(0,7);
   return /^\d{4}-\d{2}$/.test(s)?s:todayISO().slice(0,7);
 }
+function isAdvanceTx(t){
+  if(!t||t.cancelled)return false;
+  if(String(t.paymentFor||'')==='advance')return true;
+  const cat=String(t.category||'').toLocaleLowerCase('tr-TR');
+  return cat==='avans';
+}
 function isSalaryTx(t){
   if(!t||t.cancelled)return false;
-  if(String(t.paymentFor||'')==='salary'||String(t.paymentFor||'')==='commission_pay')return true;
+  if(isAdvanceTx(t))return false;
+  const pf=String(t.paymentFor||'');
+  if(pf==='salary'||pf==='commission_pay'||pf==='payroll')return true;
   const cat=String(t.category||'').toLocaleLowerCase('tr-TR');
-  return cat==='maaş'||cat==='maas'||cat==='prim ödemesi'||cat==='prim odemesi';
+  return cat==='maaş'||cat==='maas'||cat==='prim ödemesi'||cat==='prim odemesi'||cat==='ay sonu ödeme'||cat==='ay sonu odeme'||cat==='bordro';
 }
 function buildMoneyCenter(s,{month=''}={}){
   const round=n=>Math.round(Number(n||0)*100)/100;
@@ -3041,10 +3049,11 @@ function buildMoneyCenter(s,{month=''}={}){
   const snap=financeSnapshot(s);
   const accounts=(snap.accounts||[]).filter(a=>a.active!==false);
   const monthTx=(s.financeTransactions||[]).filter(t=>String(t.date||'').slice(0,7)===m && !t.cancelled);
-  const monthExpense=round(monthTx.filter(t=>Number(t.amount||0)<0 && t.kind!=='transfer').reduce((a,t)=>a+Math.abs(Number(t.amount||0)),0));
+  const monthExpense=round(monthTx.filter(t=>Number(t.amount||0)<0 && t.kind!=='transfer' && !isSalaryTx(t) && !isAdvanceTx(t)).reduce((a,t)=>a+Math.abs(Number(t.amount||0)),0));
   const monthSalaryPaid=round(monthTx.filter(t=>isSalaryTx(t)&&Number(t.amount||0)<0).reduce((a,t)=>a+Math.abs(Number(t.amount||0)),0));
+  const monthAdvancePaid=round(monthTx.filter(t=>isAdvanceTx(t)&&Number(t.amount||0)<0).reduce((a,t)=>a+Math.abs(Number(t.amount||0)),0));
   const monthIncome=round(monthTx.filter(t=>Number(t.amount||0)>0 && t.kind!=='transfer').reduce((a,t)=>a+Number(t.amount||0),0));
-  // Personel prim (bu ay net satış primleri)
+  // Personel prim — satışlardan otomatik (ay ay)
   const primByStaff=new Map();
   for(const t of (s.financeTransactions||[])){
     if(t.kind!=='sale'||t.cancelled||t.commissionCancelled)continue;
@@ -3052,46 +3061,73 @@ function buildMoneyCenter(s,{month=''}={}){
     const who=resolveSaleStore(s,t);
     const key=String(who.staffId||who.staffName||'');
     if(!key)continue;
-    if(!primByStaff.has(key))primByStaff.set(key,{staffId:who.staffId,staffName:who.staffName,commission:0,sales:0});
+    if(!primByStaff.has(key))primByStaff.set(key,{staffId:who.staffId,staffName:who.staffName,commission:0,sales:0,saleCount:0});
     const row=primByStaff.get(key);
     row.commission=round(row.commission+Number(t.commissionAmount||0));
     row.sales=round(row.sales+Number(t.total!=null?t.total:Math.abs(Number(t.customerDelta||0))));
+    row.saleCount+=1;
   }
   const paidByStaff=new Map();
+  const ensurePaid=sid=>{
+    if(!paidByStaff.has(sid))paidByStaff.set(sid,{salary:0,commission:0,payroll:0,advance:0,total:0,count:0});
+    return paidByStaff.get(sid);
+  };
   for(const t of monthTx){
-    if(!isSalaryTx(t)||!(Number(t.amount||0)<0))continue;
+    if(!(Number(t.amount||0)<0))continue;
     const sid=String(t.staffId||'');
     if(!sid)continue;
-    if(!paidByStaff.has(sid))paidByStaff.set(sid,{salary:0,commission:0,total:0,count:0});
-    const row=paidByStaff.get(sid);
     const amt=Math.abs(Number(t.amount||0));
-    const isComm=String(t.paymentFor||'')==='commission_pay'||/prim/i.test(String(t.category||''));
-    if(isComm)row.commission=round(row.commission+amt); else row.salary=round(row.salary+amt);
-    row.total=round(row.total+amt); row.count+=1;
+    const row=ensurePaid(sid);
+    if(isAdvanceTx(t)){
+      row.advance=round(row.advance+amt);
+      row.count+=1;
+      continue;
+    }
+    if(!isSalaryTx(t))continue;
+    const pf=String(t.paymentFor||'');
+    if(pf==='commission_pay'||/prim/i.test(String(t.category||'')))row.commission=round(row.commission+amt);
+    else if(pf==='payroll'||/bordro|ay sonu/i.test(String(t.category||'')))row.payroll=round(row.payroll+amt);
+    else row.salary=round(row.salary+amt);
+    row.total=round(row.salary+row.commission+row.payroll);
+    row.count+=1;
   }
   const people=[];
   for(const st of (s.staff||[]).filter(x=>x.active!==false)){
     const salary=round(Number(st.salaryMonthly||0));
-    const paid=paidByStaff.get(String(st.id))||{salary:0,commission:0,total:0,count:0};
-    const prim=primByStaff.get(String(st.id))||[...primByStaff.values()].find(p=>String(p.staffName||'').toLocaleLowerCase('tr-TR')===String(st.name||'').toLocaleLowerCase('tr-TR'))||{commission:0,sales:0};
+    const paid=paidByStaff.get(String(st.id))||{salary:0,commission:0,payroll:0,advance:0,total:0,count:0};
+    const prim=primByStaff.get(String(st.id))||[...primByStaff.values()].find(p=>String(p.staffName||'').toLocaleLowerCase('tr-TR')===String(st.name||'').toLocaleLowerCase('tr-TR'))||{commission:0,sales:0,saleCount:0};
+    const monthCommission=round(prim.commission||0);
+    const grossEarned=round(salary+monthCommission);
+    const advances=round(paid.advance||0);
+    const paidTotal=round(paid.total||0);
+    // Avans + yapılan ödemeler hak edişten düşülür
+    const netDue=round(Math.max(0,grossEarned-advances-paidTotal));
+    // Geriye uyum alanları
     const salaryDue=round(Math.max(0,salary-paid.salary));
-    const commissionDue=round(Math.max(0,Number(prim.commission||0)-paid.commission));
-    let status='none';
-    if(salary<=0 && Number(prim.commission||0)<=0)status='unset';
-    else if(salaryDue<=0.009 && commissionDue<=0.009 && (salary>0||Number(prim.commission||0)>0))status='paid';
-    else if(paid.total>0.009)status='partial';
+    const commissionDue=round(Math.max(0,monthCommission-paid.commission));
+    let status='unset';
+    if(grossEarned<=0.009 && advances<=0.009)status='unset';
+    else if(netDue<=0.009)status='paid';
+    else if(paidTotal>0.009||advances>0.009)status='partial';
     else status='due';
+    const formula=`Maaş ${salary.toLocaleString('tr-TR')} + Prim ${monthCommission.toLocaleString('tr-TR')} − Avans ${advances.toLocaleString('tr-TR')} − Ödenen ${paidTotal.toLocaleString('tr-TR')} = ${netDue.toLocaleString('tr-TR')}`;
     people.push({
       id:st.id,name:st.name,username:st.username,storeId:st.storeId,
       storeName:(s.stores||[]).find(v=>v.id===st.storeId)?.name||'',
       salaryMonthly:salary,
-      monthCommission:round(prim.commission||0),
+      monthCommission,
       monthSales:round(prim.sales||0),
+      saleCount:Number(prim.saleCount||0),
+      advances,
+      grossEarned,
       paidSalary:paid.salary,
       paidCommission:paid.commission,
-      paidTotal:paid.total,
+      paidPayroll:paid.payroll,
+      paidTotal,
       salaryDue,commissionDue,
-      dueTotal:round(salaryDue+commissionDue),
+      dueTotal:netDue,
+      netDue,
+      formula,
       status
     });
   }
@@ -3100,7 +3136,7 @@ function buildMoneyCenter(s,{month=''}={}){
     return (rank[a.status]??9)-(rank[b.status]??9)||String(a.name).localeCompare(String(b.name),'tr');
   });
   const recent=(s.financeTransactions||[])
-    .filter(t=>!t.cancelled && (['expense','payment','transfer','income'].includes(t.kind)||isSalaryTx(t)||Number(t.amount||0)<0))
+    .filter(t=>!t.cancelled && (['expense','payment','transfer','income'].includes(t.kind)||isSalaryTx(t)||isAdvanceTx(t)||Number(t.amount||0)<0))
     .slice(0,50)
     .map(t=>({
       id:t.id,date:t.date,kind:t.kind,category:t.category||'',description:t.description||'',
@@ -3114,8 +3150,9 @@ function buildMoneyCenter(s,{month=''}={}){
     summary:{
       cash:round(snap.cash),bank:round(snap.bank),total:round(snap.total),
       receivable:round(snap.receivable),
-      monthIncome,monthExpense,monthSalaryPaid,
-      salaryDueTotal:round(people.reduce((a,p)=>a+p.dueTotal,0)),
+      monthIncome,monthExpense,monthSalaryPaid,monthAdvancePaid,
+      monthCommissionEarned:round(people.reduce((a,p)=>a+p.monthCommission,0)),
+      salaryDueTotal:round(people.reduce((a,p)=>a+p.netDue,0)),
       unpaidPeople:people.filter(p=>p.status==='due'||p.status==='partial').length
     },
     accounts,
@@ -3167,20 +3204,23 @@ app.post('/web-api/admin/salary-pay',requireAdminOrStaffAny('finance_manage','sc
   if(!amount)return res.status(400).json({error:'Ödeme tutarı zorunlu'});
   if(!accountId||!s.financeAccounts.some(a=>a.id===accountId&&a.active!==false))return res.status(400).json({error:'Kasa/banka seçin'});
   if(accountBalance(s,accountId)+0.009<amount)return res.status(400).json({error:'Hesap bakiyesi yetersiz'});
-  const payType=String(x.payType||'salary')==='commission'?'commission':'salary';
+  const rawType=String(x.payType||'salary').toLowerCase();
+  const payType=['commission','advance','payroll'].includes(rawType)?rawType:'salary';
   const month=moneyMonthKey(x.month);
-  const category=payType==='commission'?'Prim Ödemesi':'Maaş';
+  const categoryMap={salary:'Maaş',commission:'Prim Ödemesi',advance:'Avans',payroll:'Ay Sonu Ödeme'};
+  const category=categoryMap[payType];
+  const refPrefix={salary:'MAA',commission:'PRM',advance:'AVN',payroll:'BRD'}[payType];
   const row=financeTx(s,{
     date:x.date||todayISO(),kind:'payment',accountId,amount:-amount,
     category,description:String(x.description||`${staff.name} · ${category} · ${month}`).slice(0,500),
-    reference:`${payType==='commission'?'PRM':'MAA'}-${Date.now()}`,
+    reference:`${refPrefix}-${Date.now()}`,
     createdBy:currentActor(req)?.name||'Admin',createdById:currentActor(req)?.id||''
   });
-  row.paymentFor=payType==='commission'?'commission_pay':'salary';
+  row.paymentFor={salary:'salary',commission:'commission_pay',advance:'advance',payroll:'payroll'}[payType];
   row.staffId=staff.id;
   row.staffName=staff.name;
   row.salaryMonth=month;
-  audit(s,category+' ödendi',staff.name,{amount,accountId,month,payType});
+  audit(s,category+' kaydı',staff.name,{amount,accountId,month,payType});
   writeStore(s);
   res.json({ok:true,row,balance:accountBalance(s,accountId),board:buildMoneyCenter(s,{month})});
 });
