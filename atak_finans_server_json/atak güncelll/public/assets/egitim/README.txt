@@ -1,9 +1,6 @@
-ATAK Eğitim videoları (mouse demosu + Türkçe Emel Neural ses)
-Hazır:
-- dashboard.mp4          — dashboard mouse turu
-- sales-center.mp4       — gerçek satış (müşteri→ürün→nakit→makbuz)
-- customers.mp4          — müşteri cari + SMS alanları
-- customer-payments.mp4  — ödeme listesi / filtreler
-- sms-gateway.mp4        — Ayarlar → SMS gateway
-
-Yeni video: Panel → Eğitim → Video Yönet → MP4 yükle
+ATAK Eğitim videoları (mouse zamanına senkron Emel Neural anlatım)
+- sales-center.mp4       — gerçek satış, tıklama anında anlatım
+- dashboard.mp4
+- customers.mp4
+- customer-payments.mp4
+- sms-gateway.mp4
