@@ -121,6 +121,7 @@ function goTab(id,{remember=true}={}){
   if(id==='stockCenter')setTimeout(()=>loadStockCenter().catch(e=>toast(e.message)),20);
   if(id==='products')setTimeout(()=>refreshProductsStockWarehouseOptions().catch(()=>{}),20);
   if(id==='financeCenter')setTimeout(()=>loadFinanceCenter().catch(e=>toast(e.message)),20);
+  if(id==='moneyCenter')setTimeout(()=>loadMoneyCenter().catch(e=>toast(e.message)),20);
   if(id==='financeReports')setTimeout(()=>loadFinanceCenter().catch(e=>toast(e.message)),20);
   if(id==='customersPage')setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),20);
   if(id==='salesCenter')setTimeout(()=>loadSalesCenter(),20);
@@ -910,6 +911,7 @@ function can(permission,user=window.__currentAdminUser){
 const TAB_PERMISSION_MAP={
   dashboard:'dashboard_view',
   financeCenter:'screen_finance',
+  moneyCenter:'screen_money_center',
   financeReports:'screen_finance',
   customerPayments:'screen_customer_payments',
   customersPage:'screen_customers',
@@ -6033,6 +6035,180 @@ q('#trainingUploadForm')?.addEventListener('submit',async e=>{
     if(st){st.textContent=err.message;st.className='form-status error'}
     toast(err.message||'Kayıt başarısız');
   }
+});
+
+/* ——— Para & Maaş (tek ekran) ——— */
+let moneyState={month:'',summary:null,accounts:[],people:[],recent:[],expenseCategories:[],selectedStaffId:''};
+function moneyMonthDefault(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}
+function moneyStatusLabel(s){return({due:'Ödenecek',partial:'Kısmi',paid:'Ödendi',unset:'Maaş yok',none:'—'}[s]||s||'—')}
+function fillMoneyAccounts(selId,preferCash=true){
+  const el=q(selId); if(!el)return;
+  const acc=moneyState.accounts||[];
+  const cur=el.value;
+  el.innerHTML=acc.map(a=>`<option value="${a.id}">${a.name} (${money2(a.balance)})</option>`).join('')||'<option value="">Hesap yok</option>';
+  if(cur && [...el.options].some(o=>o.value===cur))el.value=cur;
+  else if(preferCash){
+    const cash=acc.find(a=>a.type==='cash'); if(cash)el.value=cash.id;
+  }
+}
+function renderMoneyCenter(){
+  const sum=moneyState.summary||{};
+  const box=q('#moneySummary');
+  if(box){
+    box.innerHTML=`
+      <article class="net-kpi"><small>Toplam Kasa</small><b>${money2(sum.cash)}</b></article>
+      <article><small>Toplam Banka</small><b>${money2(sum.bank)}</b></article>
+      <article class="deduct-kpi"><small>Bu Ay Masraf</small><b>${money2(sum.monthExpense)}</b></article>
+      <article class="commission"><small>Bu Ay Maaş/Prim</small><b>${money2(sum.monthSalaryPaid)}</b></article>
+      <article><small>Ödenecek Kalan</small><b>${money2(sum.salaryDueTotal)}</b><small>${sum.unpaidPeople||0} kişi</small></article>`;
+  }
+  if(q('#moneyPeopleCount'))q('#moneyPeopleCount').textContent=`${(moneyState.people||[]).length} personel`;
+  const tbody=q('#moneyPeopleRows');
+  if(tbody){
+    tbody.innerHTML=(moneyState.people||[]).length
+      ?(moneyState.people||[]).map(p=>`<tr class="${p.status==='due'||p.status==='partial'?'due':''}">
+          <td><b>${p.name||'—'}</b><br><small>${p.storeName||''}</small></td>
+          <td>${money2(p.salaryMonthly)} <button type="button" class="secondary-btn" data-set-salary="${p.id}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" data-sal="${p.salaryMonthly}">Ayarla</button></td>
+          <td>${money2(p.monthCommission)}</td>
+          <td>${money2(p.paidTotal)}</td>
+          <td><b>${money2(p.dueTotal)}</b></td>
+          <td><span class="money-status ${p.status}">${moneyStatusLabel(p.status)}</span></td>
+          <td>
+            ${p.salaryDue>0.009?`<button type="button" class="primary" data-pay-salary="${p.id}" data-amt="${p.salaryDue}">Maaş Öde</button>`:''}
+            ${p.commissionDue>0.009?`<button type="button" class="secondary-btn" data-pay-comm="${p.id}" data-amt="${p.commissionDue}">Prim Öde</button>`:''}
+          </td>
+        </tr>`).join('')
+      :'<tr><td colspan="7">Aktif personel yok. Foundation → Personel ekleyin.</td></tr>';
+    qa('[data-set-salary]').forEach(b=>b.onclick=()=>{
+      q('#moneySetStaffId').value=b.dataset.setSalary;
+      q('#moneySetStaffName').textContent=b.dataset.name||'';
+      q('#moneySetAmount').value=Number(b.dataset.sal||0)||'';
+      q('#moneySetSalaryModal')?.classList.remove('hidden');
+    });
+    qa('[data-pay-salary]').forEach(b=>b.onclick=()=>openMoneySalaryModal(b.dataset.paySalary,'salary',Number(b.dataset.amt||0)));
+    qa('[data-pay-comm]').forEach(b=>b.onclick=()=>openMoneySalaryModal(b.dataset.payComm,'commission',Number(b.dataset.amt||0)));
+  }
+  const recent=q('#moneyRecentRows');
+  if(recent){
+    recent.innerHTML=(moneyState.recent||[]).length
+      ?(moneyState.recent||[]).map(t=>{
+        const kind=isMoneySalaryLike(t)?'Maaş/Prim':(t.kind==='expense'?'Masraf':(t.kind==='transfer'?'Transfer':(t.category||t.kind)));
+        const who=t.staffName||t.description||'—';
+        return `<tr><td>${t.date||''}</td><td>${kind}</td><td>${who}<br><small>${t.category||''}</small></td><td>${money2(Math.abs(t.amount||0))}</td><td>${t.accountName||'—'}</td></tr>`;
+      }).join('')
+      :'<tr><td colspan="5">Henüz para çıkışı yok.</td></tr>';
+  }
+}
+function isMoneySalaryLike(t){
+  return t.paymentFor==='salary'||t.paymentFor==='commission_pay'||/maaş|maas|prim/i.test(String(t.category||''));
+}
+function openMoneySalaryModal(staffId,type,amount){
+  moneyState.selectedStaffId=String(staffId||'');
+  const people=moneyState.people||[];
+  q('#moneySalaryStaff').innerHTML=people.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  if(staffId)q('#moneySalaryStaff').value=staffId;
+  q('#moneySalaryType').value=type==='commission'?'commission':'salary';
+  q('#moneySalaryAmount').value=amount>0?Number(amount).toFixed(2):'';
+  q('#moneySalaryDate').value=localDate();
+  q('#moneySalaryDesc').value='';
+  q('#moneySalaryStatus').textContent='';
+  fillMoneyAccounts('#moneySalaryAccount',true);
+  const p=people.find(x=>String(x.id)===String(staffId));
+  q('#moneySalaryTitle').textContent=type==='commission'?'💵 Prim Öde':'💵 Maaş Öde';
+  q('#moneySalaryHint').textContent=p?`${p.name} · kalan ${money2(type==='commission'?p.commissionDue:p.salaryDue)}`:'Personel seçin';
+  q('#moneySalaryModal')?.classList.remove('hidden');
+}
+function openMoneyExpenseModal(){
+  const cats=moneyState.expenseCategories||['Diğer'];
+  q('#moneyExpenseCategory').innerHTML=cats.map(c=>`<option>${c}</option>`).join('');
+  q('#moneyExpenseAmount').value='';
+  q('#moneyExpenseDate').value=localDate();
+  q('#moneyExpenseDesc').value='';
+  q('#moneyExpenseStatus').textContent='';
+  fillMoneyAccounts('#moneyExpenseAccount',true);
+  q('#moneyExpenseModal')?.classList.remove('hidden');
+}
+async function loadMoneyCenter(){
+  if(q('#moneyMonth') && !q('#moneyMonth').value)q('#moneyMonth').value=moneyMonthDefault();
+  moneyState.month=q('#moneyMonth')?.value||moneyMonthDefault();
+  const d=await api('/web-api/admin/money-center?month='+encodeURIComponent(moneyState.month));
+  moneyState.summary=d.summary||null;
+  moneyState.accounts=d.accounts||[];
+  moneyState.people=d.people||[];
+  moneyState.recent=d.recent||[];
+  moneyState.expenseCategories=d.expenseCategories||[];
+  renderMoneyCenter();
+}
+q('#moneyRefresh')?.addEventListener('click',()=>loadMoneyCenter().catch(e=>toast(e.message)));
+q('#moneyMonth')?.addEventListener('change',()=>loadMoneyCenter().catch(e=>toast(e.message)));
+q('#moneyOpenExpense')?.addEventListener('click',openMoneyExpenseModal);
+q('#moneyOpenSalary')?.addEventListener('click',()=>{
+  const first=(moneyState.people||[]).find(p=>p.dueTotal>0.009)||(moneyState.people||[])[0];
+  openMoneySalaryModal(first?.id||'','salary',first?.salaryDue||0);
+});
+q('#moneyOpenTransfer')?.addEventListener('click',()=>{
+  // mevcut transfer modalını kullan
+  if(typeof openFinanceTransfer==='function')openFinanceTransfer();
+  else q('#financeTransferOpenBtn')?.click();
+});
+q('#moneyExpenseClose')?.addEventListener('click',()=>q('#moneyExpenseModal')?.classList.add('hidden'));
+q('#moneySalaryClose')?.addEventListener('click',()=>q('#moneySalaryModal')?.classList.add('hidden'));
+q('#moneySetSalaryClose')?.addEventListener('click',()=>q('#moneySetSalaryModal')?.classList.add('hidden'));
+q('#moneyExpenseForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#moneyExpenseStatus');
+  st.textContent='Kaydediliyor...';st.className='form-status';
+  try{
+    await api('/web-api/admin/money-expense',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      amount:q('#moneyExpenseAmount').value,accountId:q('#moneyExpenseAccount').value,
+      category:q('#moneyExpenseCategory').value,date:q('#moneyExpenseDate').value||localDate(),
+      description:q('#moneyExpenseDesc').value.trim()
+    })});
+    st.textContent='Masraf kaydedildi';st.className='form-status success';
+    toast('Masraf kaydedildi');
+    q('#moneyExpenseModal')?.classList.add('hidden');
+    await loadMoneyCenter();
+  }catch(err){st.textContent=err.message;st.className='form-status error'}
+});
+q('#moneySalaryForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#moneySalaryStatus');
+  st.textContent='Ödeniyor...';st.className='form-status';
+  try{
+    await api('/web-api/admin/salary-pay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      staffId:q('#moneySalaryStaff').value,amount:q('#moneySalaryAmount').value,
+      accountId:q('#moneySalaryAccount').value,payType:q('#moneySalaryType').value,
+      date:q('#moneySalaryDate').value||localDate(),month:moneyState.month,
+      description:q('#moneySalaryDesc').value.trim()
+    })});
+    st.textContent='Ödeme kaydedildi';st.className='form-status success';
+    toast('Ödeme kaydedildi');
+    q('#moneySalaryModal')?.classList.add('hidden');
+    await loadMoneyCenter();
+  }catch(err){st.textContent=err.message;st.className='form-status error'}
+});
+q('#moneySetSalaryForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  try{
+    await api('/web-api/admin/staff-salary',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      staffId:q('#moneySetStaffId').value,salaryMonthly:q('#moneySetAmount').value
+    })});
+    toast('Maaş kaydedildi');
+    q('#moneySetSalaryModal')?.classList.add('hidden');
+    await loadMoneyCenter();
+  }catch(err){toast(err.message)}
+});
+q('#moneySalaryStaff')?.addEventListener('change',()=>{
+  const p=(moneyState.people||[]).find(x=>String(x.id)===String(q('#moneySalaryStaff').value));
+  if(!p)return;
+  const type=q('#moneySalaryType').value;
+  q('#moneySalaryAmount').value=(type==='commission'?p.commissionDue:p.salaryDue).toFixed(2);
+});
+q('#moneySalaryType')?.addEventListener('change',()=>{
+  const p=(moneyState.people||[]).find(x=>String(x.id)===String(q('#moneySalaryStaff').value));
+  if(!p)return;
+  const type=q('#moneySalaryType').value;
+  q('#moneySalaryAmount').value=(type==='commission'?p.commissionDue:p.salaryDue).toFixed(2);
 });
 
 qa('a[href="#"]').forEach(a=>a.addEventListener('click',e=>e.preventDefault()));
