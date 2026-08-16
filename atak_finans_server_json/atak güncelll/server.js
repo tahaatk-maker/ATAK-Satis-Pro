@@ -289,6 +289,18 @@ function ensureStore(store) {
   }
   store.campaigns = store.campaigns.map((c,i)=>({ id:c.id||crypto.randomUUID(), title:c.title||'Kampanya', subtitle:c.subtitle||'', label:c.label||'FIRSAT', startDate:c.startDate||'', endDate:c.endDate||'', active:c.active!==false, homepage:c.homepage!==false, sort:Number(c.sort??i), productIds:Array.isArray(c.productIds)?c.productIds:[] }));
   if (!store.banners.length) store.banners.push({ id:crypto.randomUUID(), headline:'Evinizi sadece döşemeyin. Yaşatın.', subheadline:'Beko ürünleri, mobilya, klima, TV ve ev yaşam çözümleri Atak Home’da.', ctaText:'Ürünleri keşfet', ctaUrl:'#products', desktopImage:'', mobileImage:'', active:true, sort:0 });
+  // Personel kartı ↔ kullanıcı: aynı kullanıcı adında mağaza/maaş tek kayda taşınır
+  for(const st of (store.staff||[])){
+    const uname=String(st.username||'').toLocaleLowerCase('tr-TR');
+    if(!uname)continue;
+    const u=(store.users||[]).find(x=>String(x.username||'').toLocaleLowerCase('tr-TR')===uname);
+    if(!u)continue;
+    if(!u.storeId && st.storeId)u.storeId=st.storeId;
+    if(!(Number(u.salaryMonthly||0)>0) && Number(st.salaryMonthly||0)>0)u.salaryMonthly=st.salaryMonthly;
+    st.userId=u.id;
+    if(u.storeId)st.storeId=u.storeId;
+    if(Number(u.salaryMonthly||0)>0)st.salaryMonthly=u.salaryMonthly;
+  }
   return store;
 }
 function readStore(){
@@ -762,8 +774,62 @@ function buildMonthSalesPrim(salesRows=[],pendingMap=new Map()){
   };
 }
 
-function publicUser(user){
-  return{id:user.id,name:user.name,username:user.username,email:user.email||'',role:user.role,roleName:ROLE_PRESETS[user.role]?.name||user.role,permissions:user.permissions||[],active:user.active!==false,createdAt:user.createdAt||'',updatedAt:user.updatedAt||''};
+function publicUser(user,store){
+  const branch=(store?.stores||[]).find(s=>String(s.id)===String(user.storeId||''));
+  return{
+    id:user.id,name:user.name,username:user.username,email:user.email||'',
+    role:user.role,roleName:ROLE_PRESETS[user.role]?.name||user.role,
+    permissions:user.permissions||[],active:user.active!==false,
+    storeId:user.storeId||'',storeName:branch?.name||'',
+    salaryMonthly:Math.round(Number(user.salaryMonthly||0)*100)/100,
+    createdAt:user.createdAt||'',updatedAt:user.updatedAt||''
+  };
+}
+function syncStaffFromUser(s,user){
+  if(!user||!user.username)return null;
+  const uname=String(user.username).toLocaleLowerCase('tr-TR');
+  let row=(s.staff||[]).find(v=>String(v.username||'').toLocaleLowerCase('tr-TR')===uname || String(v.userId||'')===String(user.id));
+  const data={
+    userId:user.id,name:user.name,username:uname,
+    storeId:String(user.storeId||''),
+    role:String(user.role||'staff'),
+    active:user.active!==false,
+    salaryMonthly:Math.round(Number(user.salaryMonthly||0)*100)/100,
+    updatedAt:new Date().toISOString()
+  };
+  if(row){
+    Object.assign(row,data);
+    if(user.passwordHash)row.passwordHash=user.passwordHash;
+  }else{
+    row={id:user.id,createdAt:user.createdAt||new Date().toISOString(),passwordHash:user.passwordHash||'',...data};
+    s.staff.push(row);
+  }
+  return row;
+}
+function peopleForPayroll(s){
+  // Tek kaynak: kullanıcılar. Eski staff kaydı (kullanıcısı olmayan) da listede kalır.
+  const out=[],seen=new Set();
+  for(const u of (s.users||[]).filter(x=>x.active!==false)){
+    seen.add(String(u.username||'').toLocaleLowerCase('tr-TR'));
+    const branch=(s.stores||[]).find(st=>String(st.id)===String(u.storeId||''));
+    out.push({
+      id:u.id,name:u.name,username:u.username,storeId:u.storeId||'',
+      storeName:branch?.name||'',active:true,
+      salaryMonthly:Math.round(Number(u.salaryMonthly||0)*100)/100
+    });
+  }
+  for(const st of (s.staff||[]).filter(x=>x.active!==false)){
+    const key=String(st.username||'').toLocaleLowerCase('tr-TR');
+    if(key&&seen.has(key))continue;
+    seen.add(key||String(st.id));
+    const branch=(s.stores||[]).find(v=>String(v.id)===String(st.storeId||''));
+    out.push({
+      id:st.id,name:st.name,username:st.username,storeId:st.storeId||'',
+      storeName:branch?.name||'',active:true,
+      salaryMonthly:Math.round(Number(st.salaryMonthly||0)*100)/100
+    });
+  }
+  return out;
 }
 
 function smtpConfig(s){
@@ -1276,10 +1342,15 @@ function publicStaff(x,store){
 function todayISO(){return new Date().toISOString().slice(0,10)}
 /** Satışı yapan personelden mağazayı bul — ciro artık elle girilmiyor, satıştan türetiliyor */
 function resolveSaleStore(s,tx){
-  const staffList=s.staff||[];
+  const people=peopleForPayroll(s);
   const byId=String(tx.salespersonId||'')||String(tx.createdById||'');
-  let member=byId?staffList.find(x=>String(x.id)===byId):null;
-  if(!member)member=staffList.find(x=>txBelongsToActor(tx,x));
+  let member=byId?people.find(x=>String(x.id)===byId):null;
+  if(!member)member=people.find(x=>txBelongsToActor(tx,x));
+  if(!member){
+    const staffList=s.staff||[];
+    member=byId?staffList.find(x=>String(x.id)===byId):null;
+    if(!member)member=staffList.find(x=>txBelongsToActor(tx,x));
+  }
   if(member){
     const branch=(s.stores||[]).find(v=>String(v.id)===String(member.storeId));
     return{storeId:member.storeId||'',storeName:branch?.name||'Mağaza atanmamış',staffId:member.id,staffName:member.name};
@@ -1557,7 +1628,7 @@ app.post('/web-api/login',async(req,res)=>{
     }
     clearLoginFails(failKey);
     const preset=ROLE_PRESETS[user.role]||ROLE_PRESETS.viewer;
-    const sessionUser={...publicUser(user),permissions:user.permissions?.length?user.permissions:preset.permissions};
+    const sessionUser={...publicUser(user,s),permissions:user.permissions?.length?user.permissions:preset.permissions};
     return await issueMfaOrFinish(req,res,{
       portal:'admin',username:user.username,email:resolveLoginEmail(s,user.username,isOwnerUsername(user.username)||String(user.role||'').toLowerCase()==='owner'),
       sessionData:{type:'admin-user',systemOwner:String(user.role||'').toLowerCase()==='owner',user:sessionUser}
@@ -1578,7 +1649,15 @@ app.get('/web-api/me',(req,res)=>{
   }
   res.json({authenticated:authed,user:currentSessionUser(req),ownerOnly:ownerOnlyEnabled()});
 });
-app.get('/web-api/admin/store',requireAdmin,(req,res)=>{const s=readStore();res.json({...s,users:hasPermission(req,'users_manage')?(s.users||[]).map(publicUser):[],security:{ownerOnly:ownerOnlyEnabled(),ownerUsernames:ownerUsernames()}});});
+app.get('/web-api/admin/store',requireAdmin,(req,res)=>{
+  const s=readStore();
+  res.json({
+    ...s,
+    users:hasPermission(req,'users_manage')?(s.users||[]).map(u=>publicUser(u,s)):[],
+    stores:s.stores||[],
+    security:{ownerOnly:ownerOnlyEnabled(),ownerUsernames:ownerUsernames()}
+  });
+});
 
 
 
@@ -1598,7 +1677,10 @@ app.post('/web-api/admin/user',requirePermission('users_manage'),(req,res)=>{
   const permissions=sanitizePermissions(x.permissions,role);
   if(user){user.name=name;user.username=username;user.email=email;user.role=role;user.active=x.active!==false;user.permissions=permissions;if(String(x.password||'').trim())user.passwordHash=hashPassword(x.password);user.updatedAt=now}
   else{if(!String(x.password||'').trim())return res.status(400).json({error:'Yeni kullanıcı için şifre zorunludur'});user={id:crypto.randomUUID(),name,username,email,role,permissions,active:x.active!==false,passwordHash:hashPassword(x.password),createdAt:now,updatedAt:now};s.users.push(user)}
-  audit(s,x.id?'Kullanıcı güncellendi':'Kullanıcı eklendi',username,{role,permissions,email});writeStore(s);res.json({ok:true,user:publicUser(user)});
+  if(x.storeId!=null)user.storeId=String(x.storeId||'');
+  if(x.salaryMonthly!=null && x.salaryMonthly!=='')user.salaryMonthly=Math.round(Number(x.salaryMonthly||0)*100)/100;
+  syncStaffFromUser(s,user);
+  audit(s,x.id?'Kullanıcı güncellendi':'Kullanıcı eklendi',username,{role,permissions,email,storeId:user.storeId||''});writeStore(s);res.json({ok:true,user:publicUser(user,s)});
 });
 app.delete('/web-api/admin/user/:id',requirePermission('users_manage'),(req,res)=>{
   const s=readStore(),id=String(req.params.id||'').trim();
@@ -2310,7 +2392,7 @@ app.get('/web-api/admin/foundation',requireAdmin,(req,res)=>{
   const days=Math.min(180,Math.max(1,Math.round(Number(req.query.days)||30)));
   res.json({
     stores:s.stores,
-    staff:s.staff.map(x=>publicStaff(x,s)),
+    staff:peopleForPayroll(s).map(x=>({...x,storeName:x.storeName||publicStaff(x,s).storeName})),
     turnovers:buildAutoTurnovers(s,{days}),
     turnoverSource:'auto',
     turnoverDays:days,
@@ -3092,7 +3174,7 @@ function buildMoneyCenter(s,{month=''}={}){
     row.count+=1;
   }
   const people=[];
-  for(const st of (s.staff||[]).filter(x=>x.active!==false)){
+  for(const st of peopleForPayroll(s)){
     const salary=round(Number(st.salaryMonthly||0));
     const paid=paidByStaff.get(String(st.id))||{salary:0,commission:0,payroll:0,advance:0,total:0,count:0};
     const prim=primByStaff.get(String(st.id))||[...primByStaff.values()].find(p=>String(p.staffName||'').toLocaleLowerCase('tr-TR')===String(st.name||'').toLocaleLowerCase('tr-TR'))||{commission:0,sales:0,saleCount:0};
@@ -3169,13 +3251,16 @@ app.get('/web-api/admin/money-center',requireAdminOrStaffAny('finance_manage','f
 
 app.post('/web-api/admin/staff-salary',requireAdminOrStaffAny('finance_manage','users_manage','screen_money_center'),(req,res)=>{
   const s=readStore(),x=req.body||{};
-  const staff=s.staff.find(v=>String(v.id)===String(x.staffId||''));
-  if(!staff)return res.status(404).json({error:'Personel bulunamadı'});
-  staff.salaryMonthly=Math.round(Number(x.salaryMonthly||0)*100)/100;
-  staff.updatedAt=new Date().toISOString();
-  audit(s,'Personel maaşı güncellendi',staff.name,{salaryMonthly:staff.salaryMonthly});
+  const id=String(x.staffId||'');
+  const user=(s.users||[]).find(v=>String(v.id)===id);
+  const staff=(s.staff||[]).find(v=>String(v.id)===id || (user && String(v.username||'').toLocaleLowerCase('tr-TR')===String(user.username||'').toLocaleLowerCase('tr-TR')));
+  if(!user && !staff)return res.status(404).json({error:'Personel bulunamadı'});
+  const salary=Math.round(Number(x.salaryMonthly||0)*100)/100;
+  if(user){user.salaryMonthly=salary;user.updatedAt=new Date().toISOString();syncStaffFromUser(s,user)}
+  if(staff){staff.salaryMonthly=salary;staff.updatedAt=new Date().toISOString()}
+  audit(s,'Personel maaşı güncellendi',(user||staff).name,{salaryMonthly:salary});
   writeStore(s);
-  res.json({ok:true,row:publicStaff(staff,s)});
+  res.json({ok:true,row:user?publicUser(user,s):publicStaff(staff,s)});
 });
 
 app.post('/web-api/admin/money-expense',requireAdminOrStaffAny('finance_manage','screen_money_center'),(req,res)=>{
@@ -3197,8 +3282,11 @@ app.post('/web-api/admin/money-expense',requireAdminOrStaffAny('finance_manage',
 
 app.post('/web-api/admin/salary-pay',requireAdminOrStaffAny('finance_manage','screen_money_center'),(req,res)=>{
   const s=readStore(),x=req.body||{};
-  const staff=s.staff.find(v=>String(v.id)===String(x.staffId||''));
-  if(!staff)return res.status(404).json({error:'Personel bulunamadı'});
+  const id=String(x.staffId||'');
+  const user=(s.users||[]).find(v=>String(v.id)===id);
+  const staff=(s.staff||[]).find(v=>String(v.id)===id || (user && String(v.username||'').toLocaleLowerCase('tr-TR')===String(user.username||'').toLocaleLowerCase('tr-TR')));
+  const person=user||staff;
+  if(!person)return res.status(404).json({error:'Personel bulunamadı'});
   const amount=cleanMoney(x.amount);
   const accountId=String(x.accountId||'');
   if(!amount)return res.status(400).json({error:'Ödeme tutarı zorunlu'});
@@ -3212,15 +3300,15 @@ app.post('/web-api/admin/salary-pay',requireAdminOrStaffAny('finance_manage','sc
   const refPrefix={salary:'MAA',commission:'PRM',advance:'AVN',payroll:'BRD'}[payType];
   const row=financeTx(s,{
     date:x.date||todayISO(),kind:'payment',accountId,amount:-amount,
-    category,description:String(x.description||`${staff.name} · ${category} · ${month}`).slice(0,500),
+    category,description:String(x.description||`${person.name} · ${category} · ${month}`).slice(0,500),
     reference:`${refPrefix}-${Date.now()}`,
     createdBy:currentActor(req)?.name||'Admin',createdById:currentActor(req)?.id||''
   });
   row.paymentFor={salary:'salary',commission:'commission_pay',advance:'advance',payroll:'payroll'}[payType];
-  row.staffId=staff.id;
-  row.staffName=staff.name;
+  row.staffId=person.id;
+  row.staffName=person.name;
   row.salaryMonth=month;
-  audit(s,category+' kaydı',staff.name,{amount,accountId,month,payType});
+  audit(s,category+' kaydı',person.name,{amount,accountId,month,payType});
   writeStore(s);
   res.json({ok:true,row,balance:accountBalance(s,accountId),board:buildMoneyCenter(s,{month})});
 });
@@ -3794,8 +3882,9 @@ function salesPeople(s,req){
     const key=name.toLocaleLowerCase('tr-TR'); if(seen.has(key))return; seen.add(key);
     out.push({id:String(id||key),name,source,storeId:String(storeId||'')});
   };
+  peopleForPayroll(s).forEach(x=>add(x.id,x.name,'user',true,x.storeId));
   (s.staff||[]).forEach(x=>add(x.id,x.name,'staff',x.active!==false,x.storeId));
-  (s.users||[]).forEach(x=>add(x.id,x.name,'user',x.active!==false,''));
+  (s.users||[]).forEach(x=>add(x.id,x.name,'user',x.active!==false,x.storeId||''));
   const current=currentActor(req); if(current)add(current.id,current.name,'session',true,current.storeId||'');
   return out.sort((a,b)=>a.name.localeCompare(b.name,'tr'));
 }

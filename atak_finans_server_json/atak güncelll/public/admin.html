@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=money-v2" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=user-store-v1" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-cockpit.css?v=fix-v134" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1252,6 +1252,10 @@ body.inv-full #pageTitle{font-size:18px}
 <label>Kullanıcı adı<input id="userUsername" required=""/></label>
 <label>E-posta (şifre unuttum)<input id="userEmail" type="email" placeholder="ornek@mail.com" autocomplete="email"/><small class="field-hint">Personel “şifremi unuttum” için zorunlu</small></label>
 <label>Rol<select id="userRole"></select></label>
+<label>Çalıştığı mağaza / bayi
+  <select id="userStore"><option value="">Mağaza seçilmedi</option></select>
+  <small class="field-hint">Personel hangi fiziksel mağazada çalışıyor (BEKO ATAK, Atak İstikbal…). Prim ve ciro buradan bağlanır. İkinci bir Personel Kartı açmanıza gerek yok.</small>
+</label>
 <div class="permission-editor">
   <div class="permission-editor-head"><div><b>Ekran & İşlem Yetkileri</b><small>Butona tıklayarak aç/kapa. Grup başlığına basınca katlanır.</small></div><button id="applyRolePermissions" class="secondary-btn" type="button">Rol Varsayılanını Uygula</button></div>
   <div id="userPermissionList" class="permission-grid"></div>
@@ -1345,19 +1349,14 @@ body.inv-full #pageTitle{font-size:18px}
 
 <div class="fnd-pane" data-fnd-pane="staff">
   <div class="fnd-split">
-    <form class="panel form-stack" id="staffFoundationForm">
-      <div class="panel-head"><div><h2>👥 Personel Kartı</h2><p class="note">Şifre alanı düzenlemede boş bırakılırsa değişmez.</p></div></div>
-      <input id="fStaffId" type="hidden"/>
-      <label>Ad Soyad<input id="fStaffName" required=""/></label>
-      <label>Kullanıcı adı<input id="fStaffUsername" required=""/></label>
-      <label>Şifre<input id="fStaffPassword" placeholder="Düzenlemede boş bırakılabilir" type="password"/></label>
-      <label>Mağaza<select id="fStaffStore"></select><small class="field-hint" id="fStaffStoreHint"></small></label>
-      <div class="fnd-note">Buradaki liste <b>fiziksel mağazalardır</b>. <b>Atak Beko / Atak İstikbal</b> ise <b>bayi</b> tanımıdır; satış ekranında seçilir ve prim/marka ayrımını belirler. Bayi oranları <b>Ayarlar → Bayi Kâr / Prim</b> altındadır.</div>
-      <label class="check"><input checked="" id="fStaffActive" type="checkbox"/> Aktif</label>
-      <div class="button-row"><button class="primary" type="submit">Personeli Kaydet</button><button class="secondary-btn" type="button" data-fnd-reset="staff">Formu Temizle</button></div>
-    </form>
+    <div class="panel form-stack" id="staffFoundationForm">
+      <div class="panel-head"><div><h2>👥 Personel</h2><p class="note">Personel artık <b>Kullanıcılar / Yetkiler</b> ekranından eklenir. Burada sadece kim hangi mağazada çalışıyor görünür.</p></div></div>
+      <div class="fnd-note">Yeni personel için: <b>Kullanıcılar</b> → ad, şifre, yetki ve <b>çalıştığı mağaza</b>. İkinci kart yok.</div>
+      <div class="button-row"><button class="primary" type="button" data-go="users">Kullanıcılar’a Git</button></div>
+      <select id="fStaffStore" class="hidden" aria-hidden="true"></select>
+    </div>
     <div class="panel">
-      <div class="panel-head"><h2>Personel Listesi</h2></div>
+      <div class="panel-head"><h2>Kim Hangi Mağazada</h2></div>
       <div class="mini-list" id="fStaffList"></div>
     </div>
   </div>
@@ -2672,5 +2671,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=money-v2"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=user-store-v1"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
