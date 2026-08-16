@@ -1685,8 +1685,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.144-personel-egitim',
-  build:'fix-v144',
+  version:'6.3.145-panel-ornek',
+  build:'fix-v145',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -7298,6 +7298,8 @@ app.get('/web-api/admin/export-csv',requireAdmin,(req,res)=>{const s=readStore()
 app.get('/web-admin',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
 app.get('/web-admin/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
 app.get('/web-admin-v5',(req,res)=>res.redirect('/web-admin'));
+// Tasarım örneği (sahte veri, sadece görsel önizleme)
+app.get('/panel-ornek',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','panel-v2.html'))});
 app.get('/web-admin-legacy',(req,res)=>res.sendFile(path.join(ROOT,'public','admin-v5.html')));
 app.get('/personel',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','personel.html'))});
 app.get('/personel/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','personel.html'))});
