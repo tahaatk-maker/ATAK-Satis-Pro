@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=money-v1" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=money-v2" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-cockpit.css?v=fix-v134" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1786,7 +1786,7 @@ Bulunamayan → Diğer.
     <div>
       <small class="eyebrow">TEK EKRAN</small>
       <h2>Para &amp; Maaş</h2>
-      <p>Kasayı, masrafı ve personel maaşını buradan yönetin. Karışık menü yok.</p>
+      <p>Maaş + satış primi otomatik · avans düşülür · ay ay ne ödeyeceğiniz görünür.</p>
     </div>
     <div class="money-head-actions">
       <label>Ay<input id="moneyMonth" type="month"/></label>
@@ -1796,18 +1796,18 @@ Bulunamayan → Diğer.
   <div id="moneySummary" class="sales-kpi-grid"></div>
   <div class="money-action-grid">
     <button type="button" class="money-action-btn" id="moneyOpenExpense">🧾 Masraf Yaz</button>
-    <button type="button" class="money-action-btn" id="moneyOpenSalary">💵 Maaş / Prim Öde</button>
+    <button type="button" class="money-action-btn" id="moneyOpenSalary">💵 Ay Sonu Öde</button>
+    <button type="button" class="money-action-btn" id="moneyOpenAdvance">💸 Avans Ver</button>
     <button type="button" class="money-action-btn" id="moneyOpenTransfer">🔄 Transfer</button>
-    <button type="button" class="money-action-btn soft" data-go="customerPayments">💳 Müşteri Tahsilatı</button>
   </div>
 </div>
 <div class="pay-track-layout money-split">
   <div class="panel">
-    <div class="panel-head"><h2>Personel Maaşları</h2><span id="moneyPeopleCount"></span></div>
-    <p class="note">Aylık maaşı kaydedin → bu ay ödenmeyenler kırmızı görünür → Öde ile kasadan düşer.</p>
+    <div class="panel-head"><h2>Aylık Bordro (otomatik)</h2><span id="moneyPeopleCount"></span></div>
+    <p class="note">Formül: <b>Maaş + Bu ay satış primi − Avans − Ödenen = Ödenecek</b>. Prim satışlardan otomatik hesaplanır.</p>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Personel</th><th>Aylık Maaş</th><th>Bu Ay Prim</th><th>Ödenen</th><th>Kalan</th><th>Durum</th><th></th></tr></thead>
+        <thead><tr><th>Personel</th><th>Maaş</th><th>Prim (otomatik)</th><th>Avans</th><th>Hak edilen</th><th>Ödenecek</th><th></th></tr></thead>
         <tbody id="moneyPeopleRows"></tbody>
       </table>
     </div>
@@ -1845,15 +1845,18 @@ Bulunamayan → Diğer.
 <div class="modal hidden" id="moneySalaryModal">
   <form class="modal-card" id="moneySalaryForm">
     <button class="x" id="moneySalaryClose" type="button">×</button>
-    <h2 id="moneySalaryTitle">💵 Maaş / Prim Öde</h2>
-    <p class="note" id="moneySalaryHint">Personel seçin, tutarı kontrol edin, kasadan ödeyin.</p>
+    <h2 id="moneySalaryTitle">💵 Ay Sonu Öde</h2>
+    <p class="note" id="moneySalaryHint">Personel seçin — tutar otomatik hesaplanır (maaş + prim − avans).</p>
+    <div id="moneySalaryBreakdown" class="money-breakdown"></div>
     <input type="hidden" id="moneySalaryStaffId"/>
     <div class="two-cols">
       <label>Personel *<select id="moneySalaryStaff" required></select></label>
       <label>Tür
         <select id="moneySalaryType">
-          <option value="salary">Maaş</option>
-          <option value="commission">Prim</option>
+          <option value="payroll">Ay Sonu (otomatik kalan)</option>
+          <option value="advance">Avans</option>
+          <option value="salary">Sadece Maaş</option>
+          <option value="commission">Sadece Prim</option>
         </select>
       </label>
     </div>
@@ -2669,5 +2672,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=money-v1"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=money-v2"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
