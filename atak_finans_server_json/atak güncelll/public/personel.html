@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v143">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v143">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v144">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v144">
 </head>
 <body>
 
@@ -111,6 +111,12 @@
 <span class="mod-ico">!</span>
 <b>DUYURULAR</b>
 <small>Mağaza duyuruları</small>
+</button>
+
+<button id="trainingCard" class="module-card tile-training" type="button">
+<span class="mod-ico">▶</span>
+<b>EĞİTİM VİDEOSU</b>
+<small>Ekrandaki butonların anlatımı</small>
 </button>
 </div>
 </section>
@@ -659,6 +665,20 @@
 </div>
 <div id="announcementList"></div>
 </section>
+
+<section id="trainingPanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">EĞİTİM</small>
+<h2 id="trainingTitle">Personel ekranı eğitimi</h2>
+<p id="trainingDesc" class="muted">Video yükleniyor…</p>
+</div>
+</div>
+<div class="training-video-wrap">
+<video id="trainingPlayer" controls preload="metadata" playsinline></video>
+</div>
+<div id="trainingStatus" class="status"></div>
+</section>
 </main>
 </div>
 
@@ -674,6 +694,6 @@
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/assets/personel.js?v=fix-v143"></script>
+<script src="/assets/personel.js?v=fix-v144"></script>
 </body>
 </html>

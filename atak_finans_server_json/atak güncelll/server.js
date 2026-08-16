@@ -1685,8 +1685,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.143-egitim-16video',
-  build:'fix-v143',
+  version:'6.3.144-personel-egitim',
+  build:'fix-v144',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -2091,6 +2091,9 @@ function defaultTrainingCatalog(){
     ...o
   });
   return [
+    row({id:'personel-panel',category:'operasyon',title:'Personel ekranı — butonların anlatımı',screen:'personel',screenLabel:'Personel Paneli',
+      description:'Personel girişi, ana sayfadaki kutular, satış adımları, tahsilat, cari ve prim ekranı.',
+      url:'/assets/egitim/personel-panel.mp4',status:'ready',duration:'~78 sn',staff:true,sort:5}),
     row({id:'sms-gateway',category:'iletisim',title:'SMS Gateway ve Toplu SMS',screen:'settings',screenLabel:'Ayarlar → SMS · Müşteri Ödemeleri',
       description:'Adım adım: Netgsm seçimi, API kullanıcı adı ve şifre girişi, kaydetme ve test SMS.',
       url:'/assets/egitim/sms-gateway.mp4',status:'ready',duration:'~74 sn',sort:10}),
@@ -2188,6 +2191,7 @@ function publicTrainingVideo(v){
     status:v.url? (v.status==='planned'?'ready':(v.status||'ready')) :(v.status||'planned'),
     duration:v.duration||'',
     sort:Number(v.sort||999),
+    staff:Boolean(v.staff),
     builtin:Boolean(v.builtin),
     uploaded:Boolean(v.uploaded),
     createdAt:v.createdAt||'',
@@ -2206,6 +2210,14 @@ app.get('/web-api/admin/training',requireAdminOrStaffAny('screen_training','sett
     planned:videos.filter(v=>v.status!=='ready'||!v.url).length,
     canManage:Boolean(isSystemManager(req)||hasPermission(req,'settings_manage'))
   });
+});
+// Personel paneli: sadece personele açılan eğitim videosu
+app.get('/foundation-api/training',requireStaff,(req,res)=>{
+  const s=readStore();
+  const videos=listTrainingVideos(s)
+    .filter(v=>v.staff===true&&v.url)
+    .map(publicTrainingVideo);
+  res.json({ok:true,videos});
 });
 app.post('/web-api/admin/training',requirePermission('settings_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{};

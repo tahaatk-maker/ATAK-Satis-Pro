@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v143 */
+/* ATAK_PERSONEL_BUILD=fix-v144 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -86,9 +86,11 @@ function applyStaffSalePermissions(){
   $('#salesWizardOfferBtn')?.classList.toggle('hidden',!canSaleOffer());
 }
 function hidePanels(){
-  ['#financePanel','#paymentsPanel','#salesPanel','#stockPanel','#announcementPanel'].forEach(x=>$(x)?.classList.add('hidden'));
+  ['#financePanel','#paymentsPanel','#salesPanel','#stockPanel','#announcementPanel','#trainingPanel'].forEach(x=>$(x)?.classList.add('hidden'));
   $('#home')?.classList.add('hidden');
   $('#salesStickyDock')?.classList.add('hidden');
+  const player=$('#trainingPlayer');
+  if(player&&!player.paused)player.pause();
 }
 function showHome(){
   hidePanels();
@@ -1881,6 +1883,25 @@ $('#stockCard').onclick=async()=>{
         <td>${Number(x.quantity||0)}</td>
         <td>${Number(x.available||0)}</td>
       </tr>`).join('')||'<tr><td colspan="4">Stok kaydı bulunamadı.</td></tr>';
+    st.textContent='';
+  }catch(e){st.textContent=e.message}
+};
+
+$('#trainingCard').onclick=async()=>{
+  hidePanels();
+  $('#trainingPanel').classList.remove('hidden');
+  const st=$('#trainingStatus'),player=$('#trainingPlayer');
+  if(player?.dataset.loaded==='1'){st.textContent='';return}
+  st.textContent='Video yükleniyor…';
+  try{
+    const d=await api('/foundation-api/training');
+    const v=(d.videos||[])[0];
+    if(!v?.url)throw new Error('Eğitim videosu henüz yüklenmedi.');
+    $('#trainingTitle').textContent=v.title||'Personel ekranı eğitimi';
+    $('#trainingDesc').textContent=[v.description,v.duration].filter(Boolean).join(' · ');
+    player.src=v.url;
+    player.load();
+    player.dataset.loaded='1';
     st.textContent='';
   }catch(e){st.textContent=e.message}
 };
