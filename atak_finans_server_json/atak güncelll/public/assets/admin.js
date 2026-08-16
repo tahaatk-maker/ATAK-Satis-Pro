@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v146 */
+/* ATAK_ADMIN_BUILD=fix-v147 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -92,10 +92,21 @@ function initUiScale(){
   if(!['0.75','0.85','0.95','1'].includes(scale))scale='0.85';
   applyUiScale(scale);
   q('#uiScaleSelect')?.addEventListener('change',e=>applyUiScale(e.target.value));
+  const skinSel=q('#skinSelect');
+  if(skinSel){
+    const cur=document.documentElement.getAttribute('data-skin')==='classic'?'classic':'calm';
+    skinSel.value=cur;
+    skinSel.addEventListener('change',e=>{
+      const v=e.target.value==='classic'?'classic':'calm';
+      document.documentElement.setAttribute('data-skin',v);
+      try{localStorage.setItem('atak-skin',v)}catch(_){}
+    });
+  }
+  q('#taskRefreshBtn')?.addEventListener('click',()=>loadTasksCenter().catch(e=>toast(e.message)));
   window.addEventListener('resize',()=>{if(isMobileUi())applyUiScale('1')});
 }
 initUiScale();
-function showApp(){q('#loginView').classList.add('hidden');q('#appView').classList.remove('hidden');let saved=sessionStorage.getItem('atakAdminTab');if(saved==='uninvoicedSales')saved='invoiceCenter';if(saved&&q('#'+saved))setTimeout(()=>goTab(saved,{remember:false}),0)}
+function showApp(){q('#loginView').classList.add('hidden');q('#appView').classList.remove('hidden');let saved=sessionStorage.getItem('atakAdminTab');if(saved==='uninvoicedSales')saved='invoiceCenter';if(saved&&q('#'+saved))setTimeout(()=>goTab(saved,{remember:false}),0);setTimeout(()=>refreshTaskBadge(),600)}
 async function load(){store=await api('/web-api/admin/store');renderAll()}
 const productTabs=new Set(['products','productImport','prices']);
 function setProductsMenu(open){
@@ -113,7 +124,7 @@ function goTab(id,{remember=true}={}){
   qa('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===id));
   qa('.tab').forEach(x=>x.classList.toggle('active',x.id===id));
   const btn=q(`[data-tab="${id}"]`);
-  q('#pageTitle').textContent=btn?btn.textContent.replace(/^[^A-Za-zÇĞİÖŞÜ]+/,'').trim():id;
+  q('#pageTitle').textContent=btn?(btn.dataset.title||btn.textContent.replace(/^[^A-Za-zÇĞİÖŞÜ]+/,'').trim()):id;
   if(remember)sessionStorage.setItem('atakAdminTab',id);
   q('#productsNavGroup')?.classList.toggle('active-group',productTabs.has(id));q('#financeNavGroup')?.classList.toggle('active-group',id==='financeDashboard');
   if(productTabs.has(id))setProductsMenu(true);
@@ -147,6 +158,7 @@ function goTab(id,{remember=true}={}){
   if(id==='purchaseInvoices')setTimeout(()=>loadPurchaseInvoices(),20);
   document.body.classList.toggle('inv-full',id==='invoiceCenter');
   if(id==='invoiceCenter')setTimeout(()=>loadInvoiceCenter().catch(e=>toast(e.message)),20);
+  if(id==='tasksCenter')setTimeout(()=>loadTasksCenter().catch(()=>{}),20);
   return true
 }
 document.addEventListener('click',e=>{
@@ -594,6 +606,66 @@ function ckRenderRecent(rows){
     <td class="num">${money(r.total)}</td>
   </tr>`).join('');
 }
+/* ——— Bekleyen İşler sekmesi: mevcut uçlardan görev listesi ——— */
+async function loadTasksCenter(){
+  const box=q('#taskList');
+  if(!box)return;
+  box.innerHTML='<div class="task-empty">Yükleniyor…</div>';
+  const tasks=[];
+  const safe=async(url)=>{try{return await api(url)}catch(_){return null}};
+  const [ck,pay,appr]=await Promise.all([
+    safe('/web-api/admin/dashboard-cockpit?days=14'),
+    can('screen_customer_payments')?safe('/web-api/admin/customer-payments-board?filter=overdue'):null,
+    can('screen_manager_approvals')?safe('/web-api/admin/cancellation-requests'):null
+  ]);
+
+  const overdueCount=Number(pay?.summary?.overdueCustomers||0);
+  const overdueAmount=Number(pay?.summary?.overdueAmount||0);
+  if(overdueCount>0){
+    tasks.push({tone:'bad',title:`${overdueCount} müşterinin taksidi gecikti`,
+      sub:`Toplam ${money(overdueAmount)} · gecikme SMS gönderebilirsiniz`,
+      go:'customerPayments',label:'Ödemeleri aç',btn:'bad'});
+  }
+  const pendingInv=Number(ck?.alerts?.pendingInvoices||0);
+  if(pendingInv>0){
+    tasks.push({tone:'warn',title:`${pendingInv} satışın faturası kesilmedi`,
+      sub:'e-Fatura Merkezi kuyruğunda bekliyor',go:'invoiceCenter',label:'Fatura kes',btn:'warn'});
+  }
+  const overdueNotes=Number(ck?.alerts?.overdueNotes||0);
+  if(overdueNotes>0){
+    tasks.push({tone:'bad',title:`${overdueNotes} senedin vadesi geçti`,
+      sub:'Müşteri Ödemeleri · senet takibi',go:'customerPayments',label:'Senetleri gör',btn:''});
+  }
+  const apprRows=Array.isArray(appr?.rows)?appr.rows.filter(r=>r.status==='pending'):[];
+  if(apprRows.length){
+    tasks.push({tone:'',title:`${apprRows.length} talep onayınızı bekliyor`,
+      sub:'Personelin iptal / düzenleme istekleri',go:'managerApprovals',label:'İncele',btn:'primary'});
+  }
+  const lowStock=Number(ck?.alerts?.lowStock||0);
+  if(lowStock>0){
+    tasks.push({tone:'warn',title:`${lowStock} ürünün stoğu bitti`,
+      sub:'Stok Merkezi · depo miktarları',go:'stockCenter',label:'Stoğu aç',btn:'warn'});
+  }
+
+  const badge=q('#taskNavBadge');
+  if(badge){badge.textContent=String(tasks.length);badge.classList.toggle('hidden',tasks.length===0)}
+  const count=q('#taskCount');
+  if(count)count.textContent=String(tasks.length);
+
+  if(!tasks.length){
+    box.innerHTML='<div class="task-empty">Bekleyen iş yok. Her şey güncel.</div>';
+    return;
+  }
+  box.innerHTML=tasks.map(t=>`
+    <div class="task-row">
+      <span class="dot ${t.tone}"></span>
+      <span class="txt"><b>${ckEsc(t.title)}</b><small>${ckEsc(t.sub)}</small></span>
+      <button type="button" class="go ${t.btn}" data-go="${t.go}">${ckEsc(t.label)}</button>
+    </div>`).join('');
+}
+async function refreshTaskBadge(){
+  try{await loadTasksCenter()}catch(_){}
+}
 async function renderCockpit(){
   if(!q('#ckTrendChart'))return;
   try{
@@ -911,6 +983,7 @@ function can(permission,user=window.__currentAdminUser){
 }
 const TAB_PERMISSION_MAP={
   dashboard:'dashboard_view',
+  tasksCenter:'dashboard_view',
   financeCenter:'screen_finance',
   moneyCenter:'screen_money_center',
   financeReports:'screen_finance',

@@ -3,8 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v146" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v146" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v147" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v147" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v147" rel="stylesheet"/>
+<script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
 /* ===== Satış Merkezi v655 — aynı mantık, daha güzel / kullanışlı ===== */
@@ -589,6 +591,7 @@ body.inv-full #pageTitle{font-size:18px}
 </a><nav>
 <small class="menu-label">OPERASYON</small>
 <button class="active" data-tab="dashboard" type="button">⌂ Dashboard</button>
+<button data-tab="tasksCenter" data-title="Bekleyen İşler" type="button">◎ Bekleyen İşler<em class="task-nav-badge hidden" id="taskNavBadge">0</em></button>
 <button data-tab="foundation" type="button">◆ Foundation Yönetimi</button>
 <button data-tab="financeCenter" type="button">₺ Finans &amp; Cari</button>
 <button data-tab="moneyCenter" type="button">💰 Para &amp; Maaş</button>
@@ -625,7 +628,7 @@ body.inv-full #pageTitle{font-size:18px}
 <button data-tab="training" type="button">🎓 Eğitim</button>
 <button data-tab="settings" type="button">⚙ Ayarlar</button>
 </nav><button class="logout" id="logoutBtn" type="button">Çıkış</button></aside>
-<main><header class="v4-topbar"><div class="v4-page-heading"><button aria-label="Menüyü aç" class="v4-icon-btn" id="mobileMenuBtn" type="button">☰</button><div><small>SATIŞ OPERASYON</small><h1 id="pageTitle">Dashboard</h1></div></div><div class="v4-top-actions"><label class="ui-scale-wrap" title="Yazılım ekran boyutu (tarayıcı %100 kalsın)"><span>Boyut</span><select id="uiScaleSelect"><option value="0.75">Küçük</option><option value="0.85" selected>Normal</option><option value="0.95">Büyük</option><option value="1">Tam</option></select></label><div class="v4-search-wrap"><span>⌕</span><input id="globalSearch" placeholder="Müşteri, ürün, sipariş veya fatura ara"/></div><button class="v4-icon-btn" id="refreshBtn" title="Yenile" type="button">↻</button><button class="v4-icon-btn v4-notification" title="Bildirimler" type="button">♧<em>0</em></button><div class="v4-admin-chip"><span>WA</span><div><b>Web Admin</b><small>Süper Admin</small></div></div></div></header>
+<main><header class="v4-topbar"><div class="v4-page-heading"><button aria-label="Menüyü aç" class="v4-icon-btn" id="mobileMenuBtn" type="button">☰</button><div><small>SATIŞ OPERASYON</small><h1 id="pageTitle">Dashboard</h1></div></div><div class="v4-top-actions"><label class="ui-scale-wrap" title="Yazılım ekran boyutu (tarayıcı %100 kalsın)"><span>Boyut</span><select id="uiScaleSelect"><option value="0.75">Küçük</option><option value="0.85" selected>Normal</option><option value="0.95">Büyük</option><option value="1">Tam</option></select></label><label class="skin-wrap ui-scale-wrap" title="Panel görünümü"><span>Görünüm</span><select id="skinSelect"><option value="calm">Sakin</option><option value="classic">Klasik</option></select></label><div class="v4-search-wrap"><span>⌕</span><input id="globalSearch" placeholder="Müşteri, ürün, sipariş veya fatura ara"/></div><button class="v4-icon-btn" id="refreshBtn" title="Yenile" type="button">↻</button><button class="v4-icon-btn v4-notification" title="Bildirimler" type="button">♧<em>0</em></button><div class="v4-admin-chip"><span>WA</span><div><b>Web Admin</b><small>Süper Admin</small></div></div></div></header>
 <section class="tab active v4-dashboard cockpit" id="dashboard">
 
 <div class="ck-actions" id="ckActions">
@@ -686,7 +689,15 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 
 <div class="hidden"><span id="v4CashPreview"></span><span id="v4BankPreview"></span></div>
-<footer class="v4-footer"><span>© 2026 Atak Pazarlama. Tüm hakları saklıdır.</span><span>ATAK PAZARLAMA ERP V6.3 · <i></i> Sistem Aktif</span></footer></section><section class="tab" id="salesCenter" data-pos-step="1">
+<footer class="v4-footer"><span>© 2026 Atak Pazarlama. Tüm hakları saklıdır.</span><span>ATAK PAZARLAMA ERP V6.3 · <i></i> Sistem Aktif</span></footer></section><section class="tab" id="tasksCenter">
+<div class="panel">
+<div class="panel-head">
+<div><small class="v4-kicker">BUGÜN</small><h2>Bekleyen İşler</h2></div>
+<div style="display:flex;align-items:center;gap:10px"><span class="task-head-count" id="taskCount">0</span><button class="secondary-btn" id="taskRefreshBtn" type="button">Yenile</button></div>
+</div>
+<div class="task-list" id="taskList"><div class="task-empty">Yükleniyor…</div></div>
+</div>
+</section><section class="tab" id="salesCenter" data-pos-step="1">
 <div class="sales-center-head">
 <div><small>SATIŞ OPERASYON · KASA / POS <span class="pos-ver">v659 A4</span></small><h2>Satış Kasası</h2><p>Tek A4 sözleşme+senet · Fatura Kes (QNB) · adım adım</p></div>
 <div class="sales-center-head-actions">
@@ -2709,5 +2720,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v146"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v147"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
