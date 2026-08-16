@@ -8,3 +8,5 @@ uploads/
 **/.env
 !.env.example
 !**/.env.example
+dashboard_training*.mp4
+satis_merkezi_training.mp4

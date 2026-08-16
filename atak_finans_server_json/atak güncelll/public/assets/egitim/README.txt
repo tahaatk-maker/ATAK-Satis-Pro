@@ -1,6 +1,9 @@
-ATAK Eğitim videoları (built-in)
-- sms-gateway.mp4 : SMS ayarları + cari + toplu SMS (~3 dk)
+ATAK Eğitim videoları (Türkçe kadın ses — Emel Neural)
+Hazır:
+- dashboard.mp4
+- sales-center.mp4
+- customers.mp4
+- customer-payments.mp4
+- sms-gateway.mp4
 
-Yeni videolar:
-1) Panel → Eğitim → Video Yönet
-2) MP4 yükle veya URL kaydet
+Yeni video: Panel → Eğitim → Video Yönet → MP4 yükle
