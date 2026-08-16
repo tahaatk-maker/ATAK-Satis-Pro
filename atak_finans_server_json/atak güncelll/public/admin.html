@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v134" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=money-v1" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-cockpit.css?v=fix-v134" rel="stylesheet"/>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -591,6 +591,7 @@ body.inv-full #pageTitle{font-size:18px}
 <button class="active" data-tab="dashboard" type="button">⌂ Dashboard</button>
 <button data-tab="foundation" type="button">◆ Foundation Yönetimi</button>
 <button data-tab="financeCenter" type="button">₺ Finans &amp; Cari</button>
+<button data-tab="moneyCenter" type="button">💰 Para &amp; Maaş</button>
 <button data-tab="financeReports" type="button">📑 Finans Raporları</button>
 <button data-tab="customerPayments" type="button">💳 Müşteri Ödemeleri</button>
 <button data-tab="customersPage" type="button">👥 Müşteriler</button>
@@ -1779,6 +1780,107 @@ Bulunamayan → Diğer.
 </form>
 </div>
 </section>
+<section class="tab" id="moneyCenter">
+<div class="panel money-hero">
+  <div class="panel-head">
+    <div>
+      <small class="eyebrow">TEK EKRAN</small>
+      <h2>Para &amp; Maaş</h2>
+      <p>Kasayı, masrafı ve personel maaşını buradan yönetin. Karışık menü yok.</p>
+    </div>
+    <div class="money-head-actions">
+      <label>Ay<input id="moneyMonth" type="month"/></label>
+      <button id="moneyRefresh" class="secondary-btn" type="button">Yenile</button>
+    </div>
+  </div>
+  <div id="moneySummary" class="sales-kpi-grid"></div>
+  <div class="money-action-grid">
+    <button type="button" class="money-action-btn" id="moneyOpenExpense">🧾 Masraf Yaz</button>
+    <button type="button" class="money-action-btn" id="moneyOpenSalary">💵 Maaş / Prim Öde</button>
+    <button type="button" class="money-action-btn" id="moneyOpenTransfer">🔄 Transfer</button>
+    <button type="button" class="money-action-btn soft" data-go="customerPayments">💳 Müşteri Tahsilatı</button>
+  </div>
+</div>
+<div class="pay-track-layout money-split">
+  <div class="panel">
+    <div class="panel-head"><h2>Personel Maaşları</h2><span id="moneyPeopleCount"></span></div>
+    <p class="note">Aylık maaşı kaydedin → bu ay ödenmeyenler kırmızı görünür → Öde ile kasadan düşer.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Personel</th><th>Aylık Maaş</th><th>Bu Ay Prim</th><th>Ödenen</th><th>Kalan</th><th>Durum</th><th></th></tr></thead>
+        <tbody id="moneyPeopleRows"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h2>Son Para Çıkışları</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tarih</th><th>Ne</th><th>Kime / Açıklama</th><th>Tutar</th><th>Hesap</th></tr></thead>
+        <tbody id="moneyRecentRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="moneyExpenseModal">
+  <form class="modal-card" id="moneyExpenseForm">
+    <button class="x" id="moneyExpenseClose" type="button">×</button>
+    <h2>🧾 Masraf Yaz</h2>
+    <p class="note">Kasadan veya bankadan çıkan para (kira, fatura, yakıt…).</p>
+    <div class="two-cols">
+      <label>Tutar *<input id="moneyExpenseAmount" type="number" min="0.01" step="0.01" required></label>
+      <label>Tarih<input id="moneyExpenseDate" type="date"></label>
+    </div>
+    <div class="two-cols">
+      <label>Tür<select id="moneyExpenseCategory"></select></label>
+      <label>Hesap *<select id="moneyExpenseAccount" required></select></label>
+    </div>
+    <label>Açıklama<input id="moneyExpenseDesc" placeholder="Örn: Ofis elektrik"></label>
+    <button class="primary" type="submit">Masrafı Kaydet</button>
+    <div id="moneyExpenseStatus" class="form-status"></div>
+  </form>
+</div>
+
+<div class="modal hidden" id="moneySalaryModal">
+  <form class="modal-card" id="moneySalaryForm">
+    <button class="x" id="moneySalaryClose" type="button">×</button>
+    <h2 id="moneySalaryTitle">💵 Maaş / Prim Öde</h2>
+    <p class="note" id="moneySalaryHint">Personel seçin, tutarı kontrol edin, kasadan ödeyin.</p>
+    <input type="hidden" id="moneySalaryStaffId"/>
+    <div class="two-cols">
+      <label>Personel *<select id="moneySalaryStaff" required></select></label>
+      <label>Tür
+        <select id="moneySalaryType">
+          <option value="salary">Maaş</option>
+          <option value="commission">Prim</option>
+        </select>
+      </label>
+    </div>
+    <div class="two-cols">
+      <label>Tutar *<input id="moneySalaryAmount" type="number" min="0.01" step="0.01" required></label>
+      <label>Hesap *<select id="moneySalaryAccount" required></select></label>
+    </div>
+    <div class="two-cols">
+      <label>Tarih<input id="moneySalaryDate" type="date"></label>
+      <label>Açıklama<input id="moneySalaryDesc" placeholder="Opsiyonel"></label>
+    </div>
+    <button class="primary" type="submit">Ödemeyi Kaydet</button>
+    <div id="moneySalaryStatus" class="form-status"></div>
+  </form>
+</div>
+
+<div class="modal hidden" id="moneySetSalaryModal">
+  <form class="modal-card" id="moneySetSalaryForm">
+    <button class="x" id="moneySetSalaryClose" type="button">×</button>
+    <h2>Aylık Maaş Belirle</h2>
+    <input type="hidden" id="moneySetStaffId"/>
+    <p id="moneySetStaffName" class="note"></p>
+    <label>Aylık maaş (₺)<input id="moneySetAmount" type="number" min="0" step="0.01" required></label>
+    <button class="primary" type="submit">Kaydet</button>
+  </form>
+</div>
+</section>
 <section class="tab" id="financeReports">
 <div class="foundation-head panel">
   <div>
@@ -2567,5 +2669,5 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/admin.js?v=fix-v134"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=money-v1"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

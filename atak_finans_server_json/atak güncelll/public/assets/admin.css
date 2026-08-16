@@ -510,6 +510,22 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .pay-note-paid td{color:#6a768a}
 @media(max-width:980px){.pay-track-layout{grid-template-columns:1fr}.pay-track-detail{position:static}}
 
+/* Para & Maaş tek ekran */
+.money-hero .panel-head{align-items:end}
+.money-head-actions{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+.money-head-actions label{display:grid;gap:4px;font-size:11px;font-weight:800}
+.money-action-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.money-action-btn{border:1px solid var(--line);border-radius:12px;background:#fff;padding:18px 14px;font:inherit;font-weight:800;font-size:15px;cursor:pointer;color:#0b2a4a;text-align:left}
+.money-action-btn:hover{border-color:#0b4f96;background:#f3f7ff}
+.money-action-btn.soft{background:#f8fafc;color:#334155}
+.money-status{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800}
+.money-status.due{background:#ffe7e7;color:#a52222}
+.money-status.partial{background:#fff4d7;color:#8b6200}
+.money-status.paid{background:#e6f7ee;color:#087c47}
+.money-status.unset{background:#eef2f7;color:#64748b}
+#moneyPeopleRows tr.due td{background:#fff8f8}
+@media(max-width:900px){.money-action-grid{grid-template-columns:1fr 1fr}.money-split{grid-template-columns:1fr}}
+
 /* V6.3.4 kullanıcı bazlı yetkiler */
 .permission-editor{border:1px solid var(--line);border-radius:12px;padding:12px;background:#f8fafc;display:grid;gap:10px}
 .permission-editor-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.permission-editor-head small{display:block;color:var(--muted);margin-top:3px}

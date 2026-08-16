@@ -433,7 +433,7 @@ async function fetchImportedBekoProduct(url){
 
 
 const STAFF_DEFAULT_SCREENS=[
-  'screen_finance','screen_uninvoiced','screen_customer_payments','screen_customers',
+  'screen_finance','screen_uninvoiced','screen_customer_payments','screen_money_center','screen_customers',
   'screen_sales_center','screen_sales_tracking','screen_my_sales','screen_invoice_center','screen_training'
 ];
 const PERMISSION_CATALOG=[
@@ -442,6 +442,7 @@ const PERMISSION_CATALOG=[
   {id:'screen_finance',name:'Finans & Cari (ana)',group:'Finans & Cari'},
   {id:'screen_uninvoiced',name:'Kesilmeyen Faturalar',group:'e-Fatura'},
   {id:'screen_customer_payments',name:'Müşteri Ödemeleri',group:'Finans & Cari'},
+  {id:'screen_money_center',name:'Para & Maaş',group:'Finans & Cari'},
   {id:'screen_customers',name:'Müşteriler',group:'Finans & Cari'},
   {id:'screen_sales_center',name:'Satış Merkezi',group:'Finans & Cari'},
   {id:'screen_sales_tracking',name:'Satış Takibi',group:'Finans & Cari'},
@@ -490,7 +491,7 @@ const ROLE_PRESETS={
   warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','stock_view','orders_view','screen_sales_tracking']},
   accounting:{name:'Muhasebe',permissions:[
     'dashboard_view','finance_manage','finance_view','orders_view','invoices_manage','sale_invoice_qnb',
-    'screen_finance','screen_uninvoiced','screen_customer_payments','screen_customers','screen_invoice_center','screen_my_sales','screen_profit','screen_reports'
+    'screen_finance','screen_uninvoiced','screen_customer_payments','screen_money_center','screen_customers','screen_invoice_center','screen_my_sales','screen_profit','screen_reports'
   ]},
   service:{name:'Servis',permissions:['dashboard_view','orders_view','screen_sales_tracking']},
   viewer:{name:'Sadece Görüntüleme',permissions:['dashboard_view','products_view','orders_view']}
@@ -1270,7 +1271,7 @@ function staffSession(req){return req.session?.staffUser||null}
 function cleanMoney(v){return Math.max(0,Math.round(normalizeNumber(v)*100)/100)}
 function publicStaff(x,store){
   const branch=store.stores.find(s=>s.id===x.storeId);
-  return{id:x.id,name:x.name,username:x.username,role:x.role||'staff',storeId:x.storeId,storeName:branch?.name||'Mağaza',active:x.active!==false};
+  return{id:x.id,name:x.name,username:x.username,role:x.role||'staff',storeId:x.storeId,storeName:branch?.name||'Mağaza',active:x.active!==false,salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100};
 }
 function todayISO(){return new Date().toISOString().slice(0,10)}
 /** Satışı yapan personelden mağazayı bul — ciro artık elle girilmiyor, satıştan türetiliyor */
@@ -2333,8 +2334,9 @@ app.post('/web-api/admin/staff-member',requireAdmin,(req,res)=>{
   let row=s.staff.find(v=>v.id===x.id);
   if(!row&&!String(x.password||'').trim())return res.status(400).json({error:'Yeni personel için şifre zorunludur'});
   const data={name,username,storeId:String(x.storeId),role:String(x.role||'staff'),active:x.active!==false,updatedAt:new Date().toISOString()};
+  if(x.salaryMonthly!=null && x.salaryMonthly!=='')data.salaryMonthly=Math.round(Number(x.salaryMonthly||0)*100)/100;
   if(row){Object.assign(row,data);if(String(x.password||'').trim())row.passwordHash=hashPassword(x.password)}
-  else{row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),passwordHash:hashPassword(x.password),...data};s.staff.push(row)}
+  else{row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),passwordHash:hashPassword(x.password),salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100,...data};s.staff.push(row)}
   audit(s,'Personel kaydedildi',row.name,{storeId:row.storeId});writeStore(s);res.json({ok:true,row:publicStaff(row,s)});
 });
 app.post('/web-api/admin/announcement',requireAdmin,(req,res)=>{
@@ -3021,6 +3023,166 @@ app.post('/web-api/admin/finance-transfer',requireAdminOrStaff('finance_manage')
   const ref=`FT-${Date.now()}`;
   financeTx(s,{date:x.date,kind:'transfer',accountId:to,counterAccountId:from,amount,description:x.description,reference:ref,createdBy:currentActor(req)?.name||'Admin'});
   audit(s,'Hesaplar arası transfer',ref,{from,to,amount});writeStore(s);res.json({ok:true,reference:ref});
+});
+
+function moneyMonthKey(v){
+  const s=String(v||'').slice(0,7);
+  return /^\d{4}-\d{2}$/.test(s)?s:todayISO().slice(0,7);
+}
+function isSalaryTx(t){
+  if(!t||t.cancelled)return false;
+  if(String(t.paymentFor||'')==='salary'||String(t.paymentFor||'')==='commission_pay')return true;
+  const cat=String(t.category||'').toLocaleLowerCase('tr-TR');
+  return cat==='maaş'||cat==='maas'||cat==='prim ödemesi'||cat==='prim odemesi';
+}
+function buildMoneyCenter(s,{month=''}={}){
+  const round=n=>Math.round(Number(n||0)*100)/100;
+  const m=moneyMonthKey(month);
+  const snap=financeSnapshot(s);
+  const accounts=(snap.accounts||[]).filter(a=>a.active!==false);
+  const monthTx=(s.financeTransactions||[]).filter(t=>String(t.date||'').slice(0,7)===m && !t.cancelled);
+  const monthExpense=round(monthTx.filter(t=>Number(t.amount||0)<0 && t.kind!=='transfer').reduce((a,t)=>a+Math.abs(Number(t.amount||0)),0));
+  const monthSalaryPaid=round(monthTx.filter(t=>isSalaryTx(t)&&Number(t.amount||0)<0).reduce((a,t)=>a+Math.abs(Number(t.amount||0)),0));
+  const monthIncome=round(monthTx.filter(t=>Number(t.amount||0)>0 && t.kind!=='transfer').reduce((a,t)=>a+Number(t.amount||0),0));
+  // Personel prim (bu ay net satış primleri)
+  const primByStaff=new Map();
+  for(const t of (s.financeTransactions||[])){
+    if(t.kind!=='sale'||t.cancelled||t.commissionCancelled)continue;
+    if(String(t.date||t.createdAt||'').slice(0,7)!==m)continue;
+    const who=resolveSaleStore(s,t);
+    const key=String(who.staffId||who.staffName||'');
+    if(!key)continue;
+    if(!primByStaff.has(key))primByStaff.set(key,{staffId:who.staffId,staffName:who.staffName,commission:0,sales:0});
+    const row=primByStaff.get(key);
+    row.commission=round(row.commission+Number(t.commissionAmount||0));
+    row.sales=round(row.sales+Number(t.total!=null?t.total:Math.abs(Number(t.customerDelta||0))));
+  }
+  const paidByStaff=new Map();
+  for(const t of monthTx){
+    if(!isSalaryTx(t)||!(Number(t.amount||0)<0))continue;
+    const sid=String(t.staffId||'');
+    if(!sid)continue;
+    if(!paidByStaff.has(sid))paidByStaff.set(sid,{salary:0,commission:0,total:0,count:0});
+    const row=paidByStaff.get(sid);
+    const amt=Math.abs(Number(t.amount||0));
+    const isComm=String(t.paymentFor||'')==='commission_pay'||/prim/i.test(String(t.category||''));
+    if(isComm)row.commission=round(row.commission+amt); else row.salary=round(row.salary+amt);
+    row.total=round(row.total+amt); row.count+=1;
+  }
+  const people=[];
+  for(const st of (s.staff||[]).filter(x=>x.active!==false)){
+    const salary=round(Number(st.salaryMonthly||0));
+    const paid=paidByStaff.get(String(st.id))||{salary:0,commission:0,total:0,count:0};
+    const prim=primByStaff.get(String(st.id))||[...primByStaff.values()].find(p=>String(p.staffName||'').toLocaleLowerCase('tr-TR')===String(st.name||'').toLocaleLowerCase('tr-TR'))||{commission:0,sales:0};
+    const salaryDue=round(Math.max(0,salary-paid.salary));
+    const commissionDue=round(Math.max(0,Number(prim.commission||0)-paid.commission));
+    let status='none';
+    if(salary<=0 && Number(prim.commission||0)<=0)status='unset';
+    else if(salaryDue<=0.009 && commissionDue<=0.009 && (salary>0||Number(prim.commission||0)>0))status='paid';
+    else if(paid.total>0.009)status='partial';
+    else status='due';
+    people.push({
+      id:st.id,name:st.name,username:st.username,storeId:st.storeId,
+      storeName:(s.stores||[]).find(v=>v.id===st.storeId)?.name||'',
+      salaryMonthly:salary,
+      monthCommission:round(prim.commission||0),
+      monthSales:round(prim.sales||0),
+      paidSalary:paid.salary,
+      paidCommission:paid.commission,
+      paidTotal:paid.total,
+      salaryDue,commissionDue,
+      dueTotal:round(salaryDue+commissionDue),
+      status
+    });
+  }
+  people.sort((a,b)=>{
+    const rank={due:0,partial:1,unset:2,paid:3,none:4};
+    return (rank[a.status]??9)-(rank[b.status]??9)||String(a.name).localeCompare(String(b.name),'tr');
+  });
+  const recent=(s.financeTransactions||[])
+    .filter(t=>!t.cancelled && (['expense','payment','transfer','income'].includes(t.kind)||isSalaryTx(t)||Number(t.amount||0)<0))
+    .slice(0,50)
+    .map(t=>({
+      id:t.id,date:t.date,kind:t.kind,category:t.category||'',description:t.description||'',
+      amount:Number(t.amount||0),accountId:t.accountId||'',
+      accountName:accounts.find(a=>a.id===t.accountId)?.name||'',
+      staffId:t.staffId||'',staffName:t.staffName||'',
+      reference:t.reference||'',paymentFor:t.paymentFor||''
+    }));
+  return{
+    ok:true,month:m,
+    summary:{
+      cash:round(snap.cash),bank:round(snap.bank),total:round(snap.total),
+      receivable:round(snap.receivable),
+      monthIncome,monthExpense,monthSalaryPaid,
+      salaryDueTotal:round(people.reduce((a,p)=>a+p.dueTotal,0)),
+      unpaidPeople:people.filter(p=>p.status==='due'||p.status==='partial').length
+    },
+    accounts,
+    people,
+    recent,
+    expenseCategories:['Kira','Fatura','Market','Yakıt','Kargo','Tamir','Vergi','Diğer']
+  };
+}
+
+app.get('/web-api/admin/money-center',requireAdminOrStaffAny('finance_manage','finance_view','screen_finance','screen_money_center'),(req,res)=>{
+  const s=readStore();
+  res.json(buildMoneyCenter(s,{month:String(req.query.month||'')}));
+});
+
+app.post('/web-api/admin/staff-salary',requireAdminOrStaffAny('finance_manage','users_manage','screen_money_center'),(req,res)=>{
+  const s=readStore(),x=req.body||{};
+  const staff=s.staff.find(v=>String(v.id)===String(x.staffId||''));
+  if(!staff)return res.status(404).json({error:'Personel bulunamadı'});
+  staff.salaryMonthly=Math.round(Number(x.salaryMonthly||0)*100)/100;
+  staff.updatedAt=new Date().toISOString();
+  audit(s,'Personel maaşı güncellendi',staff.name,{salaryMonthly:staff.salaryMonthly});
+  writeStore(s);
+  res.json({ok:true,row:publicStaff(staff,s)});
+});
+
+app.post('/web-api/admin/money-expense',requireAdminOrStaffAny('finance_manage','screen_money_center'),(req,res)=>{
+  const s=readStore(),x=req.body||{};
+  const amount=cleanMoney(x.amount);
+  const accountId=String(x.accountId||'');
+  if(!amount)return res.status(400).json({error:'Tutar zorunlu'});
+  if(!accountId||!s.financeAccounts.some(a=>a.id===accountId&&a.active!==false))return res.status(400).json({error:'Kasa/banka seçin'});
+  if(accountBalance(s,accountId)+0.009<amount)return res.status(400).json({error:'Hesap bakiyesi yetersiz'});
+  const category=String(x.category||'Diğer').trim()||'Diğer';
+  const row=financeTx(s,{
+    date:x.date||todayISO(),kind:'expense',accountId,amount:-amount,
+    category,description:String(x.description||category).slice(0,500),
+    reference:`MSR-${Date.now()}`,createdBy:currentActor(req)?.name||'Admin',createdById:currentActor(req)?.id||''
+  });
+  audit(s,'Masraf kaydı',category,{amount,accountId});writeStore(s);
+  res.json({ok:true,row,balance:accountBalance(s,accountId)});
+});
+
+app.post('/web-api/admin/salary-pay',requireAdminOrStaffAny('finance_manage','screen_money_center'),(req,res)=>{
+  const s=readStore(),x=req.body||{};
+  const staff=s.staff.find(v=>String(v.id)===String(x.staffId||''));
+  if(!staff)return res.status(404).json({error:'Personel bulunamadı'});
+  const amount=cleanMoney(x.amount);
+  const accountId=String(x.accountId||'');
+  if(!amount)return res.status(400).json({error:'Ödeme tutarı zorunlu'});
+  if(!accountId||!s.financeAccounts.some(a=>a.id===accountId&&a.active!==false))return res.status(400).json({error:'Kasa/banka seçin'});
+  if(accountBalance(s,accountId)+0.009<amount)return res.status(400).json({error:'Hesap bakiyesi yetersiz'});
+  const payType=String(x.payType||'salary')==='commission'?'commission':'salary';
+  const month=moneyMonthKey(x.month);
+  const category=payType==='commission'?'Prim Ödemesi':'Maaş';
+  const row=financeTx(s,{
+    date:x.date||todayISO(),kind:'payment',accountId,amount:-amount,
+    category,description:String(x.description||`${staff.name} · ${category} · ${month}`).slice(0,500),
+    reference:`${payType==='commission'?'PRM':'MAA'}-${Date.now()}`,
+    createdBy:currentActor(req)?.name||'Admin',createdById:currentActor(req)?.id||''
+  });
+  row.paymentFor=payType==='commission'?'commission_pay':'salary';
+  row.staffId=staff.id;
+  row.staffName=staff.name;
+  row.salaryMonth=month;
+  audit(s,category+' ödendi',staff.name,{amount,accountId,month,payType});
+  writeStore(s);
+  res.json({ok:true,row,balance:accountBalance(s,accountId),board:buildMoneyCenter(s,{month})});
 });
 
 
