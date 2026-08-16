@@ -1,0 +1,12 @@
+node_modules/
+.atak-transfer/
+*.log
+.DS_Store
+uploads/
+*.tmp
+.env
+**/.env
+!.env.example
+!**/.env.example
+dashboard_training*.mp4
+satis_merkezi_training.mp4
