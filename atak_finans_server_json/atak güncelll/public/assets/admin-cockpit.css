@@ -1,0 +1,257 @@
+/* Atak yönetim kokpiti — büyük aksiyonlar (A) + veri paneli (B), fix-v18 */
+.cockpit{--ck-navy:#071a33;--ck-blue:#1565c0;--ck-gold:#c4a15a;--ck-line:#dce4ef;--ck-muted:#667890}
+
+/* ---- Büyük hızlı işlem kartları (kiosk) ---- */
+.ck-actions{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 18px
+}
+.ck-act{
+  position:relative;overflow:hidden;display:grid;gap:6px;align-content:center;
+  min-height:118px;padding:18px 18px 18px 20px;border:0;border-radius:18px;cursor:pointer;
+  text-align:left;color:#fff;font:inherit;
+  box-shadow:0 12px 26px rgba(7,26,51,.16);
+  transition:transform .14s,box-shadow .14s,filter .14s
+}
+.ck-act:hover{transform:translateY(-3px);filter:brightness(1.05);box-shadow:0 18px 34px rgba(7,26,51,.22)}
+.ck-act:active{transform:translateY(-1px)}
+.ck-act b{font-size:19px;font-weight:800;letter-spacing:.01em}
+.ck-act small{font-size:12px;font-weight:650;opacity:.92}
+.ck-act-ico{
+  position:absolute;right:-8px;top:50%;transform:translateY(-50%);
+  font-size:74px;line-height:1;opacity:.16;font-weight:900;pointer-events:none
+}
+.ck-act.sale{background:linear-gradient(135deg,#0d3b6d,#1565c0)}
+.ck-act.customer{background:linear-gradient(135deg,#0f766e,#14b8a6)}
+.ck-act.collect{background:linear-gradient(135deg,#15803d,#22c55e)}
+.ck-act.invoice{background:linear-gradient(135deg,#7c3aed,#a78bfa)}
+.ck-act.stock{background:linear-gradient(135deg,#b45309,#f59e0b)}
+
+/* ---- KPI şeridi ---- */
+.cockpit .stats{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.cockpit .stat{border-radius:18px;padding:18px}
+.cockpit .stat strong{font-size:26px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+
+/* ---- Grafik alanı ---- */
+.ck-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.95fr);gap:16px;margin-bottom:16px}
+.ck-grid.ck-grid-2{grid-template-columns:minmax(0,1.3fr) minmax(280px,.7fr)}
+.ck-chart-card,.ck-donut-card,.ck-money-card,.ck-alert-card,.ck-table-card{border-radius:20px}
+.ck-legend{display:flex;gap:14px;align-items:center;font-size:12px;font-weight:800}
+.ck-legend span{display:inline-flex;align-items:center;gap:6px;color:var(--ck-muted)}
+.ck-legend span::before{content:"";width:10px;height:10px;border-radius:3px}
+.ck-legend .beko::before{background:#1565c0}
+.ck-legend .istikbal::before{background:#c4a15a}
+.ck-chart{width:100%;height:230px}
+.ck-chart svg,.ck-donut-wrap svg{width:100%;height:100%;display:block;overflow:visible}
+.ck-chart .grid-line{stroke:#e8eef6;stroke-width:1}
+.ck-chart .axis-label{fill:#93a1b5;font-size:10px;font-weight:700}
+.ck-bar{transition:opacity .12s}
+.ck-bar:hover{opacity:.82}
+
+.ck-donut-wrap{display:grid;gap:12px;place-items:center;padding:6px 0 2px}
+.ck-donut-wrap svg{max-width:190px;height:190px}
+.ck-donut-legend{display:grid;gap:8px;width:100%}
+.ck-donut-legend div{
+  display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center;
+  padding:9px 12px;border:1px solid var(--ck-line);border-radius:12px;background:#fbfcfe
+}
+.ck-donut-legend i{width:12px;height:12px;border-radius:4px;display:block}
+.ck-donut-legend span{font-size:13px;font-weight:700;color:#0c1a33}
+.ck-donut-legend b{font-size:14px;font-variant-numeric:tabular-nums}
+
+/* ---- Kasa kartları ---- */
+.ck-money-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ck-money-grid article{
+  padding:16px;border-radius:16px;border:1px solid var(--ck-line);
+  background:linear-gradient(180deg,#fff,#f7faff);display:grid;gap:4px
+}
+.ck-money-grid article.cash{border-color:#b7e4c7;background:linear-gradient(180deg,#fff,#f0fdf4)}
+.ck-money-grid article.bank{border-color:#b7d0ef;background:linear-gradient(180deg,#fff,#eff6ff)}
+.ck-money-grid article.debt{border-color:#f0d2a8;background:linear-gradient(180deg,#fff,#fff7ed)}
+.ck-money-grid small{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--ck-muted);text-transform:uppercase}
+.ck-money-grid b{font-size:23px;color:#0c1a33;font-variant-numeric:tabular-nums}
+
+/* ---- Uyarılar ---- */
+.ck-alerts{display:grid;gap:10px}
+.ck-alert{
+  display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;
+  padding:12px 14px;border-radius:14px;border:1px solid var(--ck-line);background:#fff;
+  cursor:pointer;text-align:left;font:inherit;transition:border-color .12s,transform .12s
+}
+.ck-alert:hover{border-color:#9db8d8;transform:translateX(2px)}
+.ck-alert i{
+  display:grid;place-items:center;width:44px;height:44px;border-radius:12px;
+  font-style:normal;font-size:17px;font-weight:900
+}
+.ck-alert b{display:block;font-size:14px;color:#0c1a33}
+.ck-alert small{display:block;font-size:12px;color:var(--ck-muted);font-weight:650}
+.ck-alert em{font-style:normal;font-size:22px;font-weight:900;font-variant-numeric:tabular-nums}
+.ck-alert.warn i{background:#fff7ed;color:#c2410c}
+.ck-alert.warn em{color:#c2410c}
+.ck-alert.bad i{background:#fef2f2;color:#b91c1c}
+.ck-alert.bad em{color:#b91c1c}
+.ck-alert.ok i{background:#f0fdf4;color:#15803d}
+.ck-alert.ok em{color:#15803d}
+
+/* ---- Son satışlar tablosu ---- */
+.ck-table-card{margin-bottom:16px}
+.ck-table-wrap{overflow:auto;border:1px solid var(--ck-line);border-radius:14px}
+.ck-table{width:100%;min-width:640px;border-collapse:collapse}
+.ck-table th{
+  background:#fbfcfe;color:var(--ck-muted);font-size:10px;text-transform:uppercase;
+  letter-spacing:.06em;padding:11px 14px;text-align:left;position:sticky;top:0
+}
+.ck-table td{padding:12px 14px;border-bottom:1px solid #eef2f7;font-size:13px}
+.ck-table tbody tr:last-child td{border-bottom:0}
+.ck-table tbody tr:hover{background:#f7faff}
+.ck-table .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:800}
+.ck-brand-pill{
+  display:inline-block;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800
+}
+.ck-brand-pill.beko{background:#eff6ff;color:#1565c0}
+.ck-brand-pill.istikbal{background:#fdf6e9;color:#8a6220}
+.ck-brand-pill.other{background:#f1f5f9;color:#64748b}
+.ck-empty{padding:26px;text-align:center;color:var(--ck-muted);font-weight:650}
+
+/* ---- Alış Faturaları ---- */
+.purchase-mode-tabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
+.purchase-mode{
+  min-height:42px;padding:0 16px;border-radius:11px;border:1px solid #dce4ef;
+  background:#fff;font:inherit;font-weight:750;color:#667890;cursor:pointer
+}
+.purchase-mode.active{background:#071a33;color:#fff;border-color:#071a33}
+#purchaseInvoices .check-row,#dynamicsExcelImport .check-row{
+  display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;color:#334155;margin:6px 0
+}
+#purchaseInvoices .check-row input,#dynamicsExcelImport .check-row input{width:18px;height:18px}
+#purchaseInvoices .hidden{display:none!important}
+#purchaseManualLines input{
+  width:100%;min-height:40px;border:1px solid #dce4ef;border-radius:10px;padding:0 10px
+}
+#purchaseManualLines .mini-btn.danger{color:#b91c1c}
+
+/* ---- Kâr & Maliyet ---- */
+#profitCenter .warn-banner{
+  margin:0 0 12px;padding:12px 14px;border-radius:12px;
+  background:#fff7ed;border:1px solid #f0d2a8;color:#9a3412;font-size:13px;font-weight:700
+}
+#profitCenter .warn-banner.hidden{display:none}
+.profit-filters{
+  display:flex;gap:12px;align-items:end;flex-wrap:wrap
+}
+.profit-filters label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#667890}
+.profit-filters input,.profit-filters select{
+  min-height:44px;border:1px solid var(--ck-line,#dce4ef);border-radius:11px;padding:0 12px;background:#fff
+}
+.profit-filters .primary{min-height:44px;border-radius:11px;padding:0 18px}
+.profit-quick{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.profit-quick .mini-btn{min-height:38px;padding:0 14px;border-radius:10px}
+.profit-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:16px 0}
+.profit-kpis article{
+  background:#fff;border:1px solid var(--ck-line,#dce4ef);border-radius:18px;padding:18px;
+  display:grid;gap:4px;box-shadow:0 8px 22px rgba(7,26,51,.06)
+}
+.profit-kpis small{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#667890}
+.profit-kpis b{font-size:24px;color:#0c1a33;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.profit-kpis span{font-size:12px;color:#8a97ab;font-weight:650}
+.profit-kpis .profit-gross{border-color:#b7e4c7;background:linear-gradient(180deg,#fff,#f0fdf4)}
+.profit-kpis .profit-gross b{color:#15803d}
+.profit-kpis .profit-net{border-color:#8fb4e5;background:linear-gradient(180deg,#fff,#eef5ff)}
+.profit-kpis .profit-net b{color:#0b4d94}
+#profitCenter .turnover-table table{min-width:640px}
+#profitCenter td small.warn-text{display:block;font-size:11px}
+@media(max-width:1200px){.profit-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){
+  .profit-kpis{grid-template-columns:1fr 1fr}
+  .profit-filters{flex-direction:column;align-items:stretch}
+  .profit-quick{margin-left:0}
+}
+
+.reports-catalog-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px
+}
+.reports-catalog-grid>div{
+  padding:14px 16px;border:1px solid var(--line,#dce4ef);border-radius:14px;background:#f8fafc
+}
+.reports-catalog-grid small{display:block;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#667890;margin-bottom:6px}
+.reports-catalog-grid b{font-size:22px;color:#0c1a33;font-variant-numeric:tabular-nums}
+.reports-links{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px
+}
+.reports-link-card{
+  display:grid;gap:6px;text-align:left;padding:16px 18px;border:1px solid #dce4ef;
+  border-radius:14px;background:#fff;cursor:pointer;transition:.15s ease
+}
+.reports-link-card:hover{border-color:#1769ff;box-shadow:0 8px 24px rgba(23,105,255,.12)}
+.reports-link-card b{font-size:15px;color:#0c1a33}
+.reports-link-card small{font-size:12px;color:#6d7a90;line-height:1.35}
+
+/* ---- Foundation alt sekmeleri ---- */
+.fnd-tabs{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px
+}
+.fnd-tab{
+  display:grid;grid-template-columns:38px 1fr;gap:11px;align-items:center;
+  padding:13px 15px;border:1px solid var(--ck-line,#dce4ef);border-radius:14px;background:#fff;
+  cursor:pointer;font:inherit;text-align:left;color:#667890;
+  transition:border-color .14s,box-shadow .14s,transform .12s,background .14s
+}
+.fnd-tab:hover{border-color:#9db8d8;transform:translateY(-1px)}
+.fnd-tab>span:last-child{display:grid;gap:2px;font-size:14px;font-weight:800;color:#0c1a33}
+.fnd-tab small{font-size:11px;font-weight:650;color:#8a97ab}
+.fnd-tab-ico{
+  display:grid;place-items:center;width:38px;height:38px;border-radius:11px;
+  background:linear-gradient(180deg,#eef5ff,#dcecff);color:#1565c0;font-size:14px;font-weight:900
+}
+.fnd-tab.active{
+  border-color:#8fb4e5;background:linear-gradient(180deg,#fff,#eef5ff);
+  box-shadow:0 8px 18px rgba(21,101,192,.12)
+}
+.fnd-tab.active .fnd-tab-ico{background:linear-gradient(180deg,#1565c0,#0b4d94);color:#fff}
+.fnd-note{
+  margin:2px 0 4px;padding:10px 12px;border-radius:12px;
+  background:#f5f9ff;border:1px solid #cfe0f4;color:#31506f;
+  font-size:12px;font-weight:650;line-height:1.45
+}
+.fnd-note b{color:#0b2a4a}
+.mini-list>button.fnd-passive{opacity:.62;border-style:dashed}
+.mini-list>button.fnd-passive small{color:#b45309;font-weight:800}
+.fnd-pane{display:none}
+.fnd-pane.active{display:block}
+.fnd-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.8fr);gap:16px;align-items:start}
+.fnd-split .mini-list{max-height:min(58vh,540px)}
+@media(max-width:1000px){
+  .fnd-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fnd-split{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .fnd-tabs{grid-template-columns:1fr 1fr;gap:8px}
+  .fnd-tab{padding:11px;grid-template-columns:32px 1fr;gap:8px}
+  .fnd-tab-ico{width:32px;height:32px}
+  .fnd-tab small{display:none}
+}
+
+/* ---- Para transferi modalı ---- */
+.fin-transfer-card{width:min(520px,96vw);display:grid;gap:12px}
+.fin-transfer-card h2{margin:0}
+.fin-transfer-card .note{margin:0 0 4px}
+.fin-transfer-card label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#667890}
+.fin-transfer-card .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fin-transfer-card button[type="submit"]{min-height:48px;border-radius:12px;font-weight:800}
+@media(max-width:520px){.fin-transfer-card .two-cols{grid-template-columns:1fr}}
+
+@media(max-width:1300px){
+  .ck-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .cockpit .stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:1050px){
+  .ck-grid,.ck-grid.ck-grid-2{grid-template-columns:1fr}
+  .ck-chart{height:200px}
+}
+@media(max-width:620px){
+  .ck-actions{grid-template-columns:1fr 1fr}
+  .cockpit .stats{grid-template-columns:1fr 1fr}
+  .ck-act{min-height:100px;padding:14px}
+  .ck-act b{font-size:16px}
+  .ck-act small{display:none}
+  .ck-money-grid{grid-template-columns:1fr}
+}
