@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v137">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v137">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v138">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v138">
 </head>
 <body>
 
@@ -246,7 +246,7 @@
   <div>
     <small class="eyebrow">TAHSİLAT</small>
     <h2>Müşteri Ödemeleri</h2>
-    <p>Eski satışların aylık taksit / senet takibi · ödeme al · A5 makbuz yazdır</p>
+    <p>Taksit / senet · bekleyen banka havalesini tahsil et · A5 makbuz</p>
   </div>
   <button id="payRefresh" class="ghost-btn" type="button">Yenile</button>
 </div>
@@ -256,6 +256,7 @@
     <button type="button" class="period-btn active" data-pay-filter="overdue">Geciken</button>
     <button type="button" class="period-btn" data-pay-filter="due">Bu Ay</button>
     <button type="button" class="period-btn" data-pay-filter="open">Açık</button>
+    <button type="button" class="period-btn" data-pay-filter="havale">Havale</button>
     <button type="button" class="period-btn" data-pay-filter="paid">Ödenenler</button>
     <button type="button" class="period-btn" data-pay-filter="all">Tümü</button>
   </div>
@@ -276,6 +277,11 @@
     <p class="soft-hint" id="payDetailHint">Soldan müşteri seçin.</p>
     <div id="payDetailBody" class="hidden">
       <div class="info-box" id="payCustomerBox"></div>
+      <div class="section-title hidden" id="payHavaleWrap">Bekleyen Havale
+        <div class="table-wrap" style="margin-top:8px">
+          <table><thead><tr><th>Satış</th><th>Banka</th><th>Kalan</th></tr></thead><tbody id="payHavale"></tbody></table>
+        </div>
+      </div>
       <div class="section-title">Taksit Planı <small style="font-weight:500;color:#68758a">(işaret yoksa en yakın vadeden)</small></div>
       <div class="table-wrap">
         <table>
@@ -428,7 +434,7 @@
     <div class="pos-pay-tiles" id="posPayTilesInline">
       <button type="button" class="pos-pay-tile cash" data-pay-fill="payCash"><b>NAKİT</b><small>Kalanı yaz</small></button>
       <button type="button" class="pos-pay-tile card" data-pay-fill="payCard"><b>KART</b><small>Kalanı yaz</small></button>
-      <button type="button" class="pos-pay-tile transfer" data-pay-fill="payTransfer"><b>HAVALE</b><small>Kalanı yaz</small></button>
+      <button type="button" class="pos-pay-tile transfer" data-pay-fill="payTransfer"><b>HAVALE</b><small>Ödemeler’e</small></button>
       <button type="button" class="pos-pay-tile credit" data-pay-fill="payCredit"><b>VADELİ</b><small>Cariye yaz</small></button>
       <button type="button" class="pos-pay-tile note" data-pay-fill="payNote"><b>SENET</b><small>Vade planı</small></button>
     </div>
@@ -539,7 +545,7 @@
     </div>
     <div class="sc-foot-mini">
       <span>Tahsil <b id="salesPaidPreview">₺0,00</b></span>
-      <span>Cari / senet <b id="salesDuePreview">₺0,00</b></span>
+      <span>Cari / senet / havale <b id="salesDuePreview">₺0,00</b></span>
     </div>
     <div class="pos-finish-split pos-finish-3">
       <div class="pos-finish-card docs" data-need-perm="sale_docs">
@@ -662,6 +668,6 @@
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/assets/personel.js?v=fix-v137"></script>
+<script src="/assets/personel.js?v=fix-v138"></script>
 </body>
 </html>

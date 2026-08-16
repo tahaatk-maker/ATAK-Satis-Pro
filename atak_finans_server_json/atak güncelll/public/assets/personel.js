@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v137 */
+/* ATAK_PERSONEL_BUILD=fix-v138 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -922,8 +922,8 @@ function salesRecalcPay(){
   const s=paySplits();
   const allocated=Math.round((s.cash+s.card+s.transfer+s.credit+s.note)*100)/100;
   const remaining=Math.round((net-allocated)*100)/100;
-  const paid=Math.round((s.cash+s.card+s.transfer)*100)/100;
-  const due=Math.round((s.credit+s.note+Math.max(0,remaining))*100)/100;
+  const paid=Math.round((s.cash+s.card)*100)/100;
+  const due=Math.round((s.credit+s.note+s.transfer+Math.max(0,remaining))*100)/100;
   if($('#salesDiscountAmount'))$('#salesDiscountAmount').value=discountAmount.toFixed(2);
   if($('#payGross'))$('#payGross').textContent=money(gross);
   if($('#payDiscount'))$('#payDiscount').textContent=money(discountAmount);
@@ -966,7 +966,7 @@ function salesRecalcPay(){
   if($('#salesCommissionPctLabel'))$('#salesCommissionPctLabel').textContent=`(%${String(commissionPct).replace('.',',')})`;
   const hint=$('#payBalanceHint');
   if(hint){
-    if(Math.abs(remaining)<0.009){hint.className='sales-pay-balance ok';hint.textContent='Ödeme net tutara eşit — kaydedebilirsiniz.';}
+    if(Math.abs(remaining)<0.009){hint.className='sales-pay-balance ok';hint.textContent=s.transfer>0?`Dağılım tamam. Havale ${money(s.transfer)} Ödemeler’e gider — banka gelince tahsil edilir.`:'Ödeme net tutara eşit — kaydedebilirsiniz.';}
     else if(remaining>0){hint.className='sales-pay-balance warn';hint.textContent=`Henüz ${money(remaining)} dağıtılmadı. Nakit/kart/havale/vadeli/senet girin.`;}
     else{hint.className='sales-pay-balance bad';hint.textContent=`Dağıtılan tutar netten ${money(Math.abs(remaining))} fazla.`;}
   }
@@ -1229,8 +1229,8 @@ function collectSalesDraft(){
     salespersonId:currentUser?.id||'',salesperson:{id:currentUser?.id||'',name:currentUser?.name||''},
     discountPct,discountAmount,grossTotal:gross,total:net,
     commissionPct,commissionAmount:Math.round((net*commissionPct/100)*100)/100,
-    paid:Math.round((s.cash+s.card+s.transfer)*100)/100,
-    due:Math.round((s.credit+s.note)*100)/100,
+    paid:Math.round((s.cash+s.card)*100)/100,
+    due:Math.round((s.credit+s.note+s.transfer)*100)/100,
     method:methods.join(' + ')||'Karma',
     payments,items:salesCart.map(r=>({productCode:r.code,itemCode:r.itemCode,materialCode:r.materialCode,productName:r.name,quantity:r.qty,unitPrice:num(r.unitPrice)})),
     promissory:s.note>0?{amount:s.note,installments:num($('#promissoryInstallments')?.value)||1,firstDueDate:$('#promissoryFirstDue')?.value,intervalMonths:num($('#promissoryInterval')?.value)||1,schedule}:null,
@@ -1245,11 +1245,13 @@ function collectSalesDraft(){
 }
 function salesPreviewHtml(d){
   const rows=d.items.map(i=>`<tr><td>${esc(i.itemCode||'-')}</td><td>${esc(i.materialCode||i.productName||i.productCode)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(i.quantity*i.unitPrice)}</td></tr>`).join('');
-  const payRows=(d.payments||[]).map(p=>`<div class="sales-total-line"><span>${esc(p.method)}</span><b>${money(p.amount)}</b></div>`).join('');
+  const payRows=(d.payments||[]).map(p=>`<div class="sales-total-line"><span>${esc(p.method)}${p.method==='Havale'?' · Ödemeler’den tahsil':''}</span><b>${money(p.amount)}</b></div>`).join('');
+  const havaleAmt=Math.round(((d.payments||[]).filter(p=>p.method==='Havale').reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
+  const havaleNote=havaleAmt>0?`<div class="preview-note"><b>Havale:</b> ${money(havaleAmt)} kasa/bankaya yazılmaz. Yönetici Ödemeler’den tahsil eder.</div>`:'';
   const note=d.promissory?`<div class="preview-note"><b>Senet:</b> ${money(d.promissory.amount)} · ${d.promissory.installments} taksit · İlk vade ${esc(d.promissory.firstDueDate)}</div>`:'';
   const inv=d.invoiceStatus==='queue_qnb'?'QNB Solist kuyruğu':(d.invoiceStatus==='pending'?'Daha sonra kesilecek':(d.invoiceStatus==='issued'?`Manuel · ${esc(d.invoiceNumber)}`:'Fatura gerekmiyor'));
   const stockTxt=d.deductStock?`Düşülecek · ${esc(d.warehouse?.name||'')}`:(d.reserveStock?`Rezerve · ${esc(d.warehouse?.name||'')} (teslimde düşülür)`:'Değişmeyecek');
-  return `<div class="preview-cards"><div><small>Müşteri</small><b>${esc(d.customer?.name||'-')}</b><span>${esc(d.customer?.phone||'')}</span></div><div><small>Bayi / Satıcı</small><b>${esc(d.dealer?.name||'-')}</b><span>${esc(d.salesperson?.name||'')}</span></div><div><small>Ödeme</small><b>${esc(d.method)}</b><span>Tahsil: ${money(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt</span><b>${money(d.grossTotal)}</b></div><div><span>İskonto</span><b>-${money(d.discountAmount||0)}</b></div><div><span>Net</span><b>${money(d.total)}</b></div>${payRows}<div><span>Prim</span><b>${money(d.commissionAmount||0)}</b></div></div>${note}<div class="preview-note"><b>Fatura:</b> ${inv}<br><b>Stok:</b> ${stockTxt}<br><b>Açıklama:</b> ${esc(d.description||'-')}</div>`;
+  return `<div class="preview-cards"><div><small>Müşteri</small><b>${esc(d.customer?.name||'-')}</b><span>${esc(d.customer?.phone||'')}</span></div><div><small>Bayi / Satıcı</small><b>${esc(d.dealer?.name||'-')}</b><span>${esc(d.salesperson?.name||'')}</span></div><div><small>Ödeme</small><b>${esc(d.method)}</b><span>Şimdi tahsil: ${money(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt</span><b>${money(d.grossTotal)}</b></div><div><span>İskonto</span><b>-${money(d.discountAmount||0)}</b></div><div><span>Net</span><b>${money(d.total)}</b></div>${payRows}<div><span>Prim</span><b>${money(d.commissionAmount||0)}</b></div></div>${havaleNote}${note}<div class="preview-note"><b>Fatura:</b> ${inv}<br><b>Stok:</b> ${stockTxt}<br><b>Açıklama:</b> ${esc(d.description||'-')}</div>`;
 }
 function openSalesPreview(){
   const d=collectSalesDraft();
@@ -1401,7 +1403,7 @@ function salesCombinedContractSenetA4Html(d){
   const personTax=d.customer?.tckn||d.customer?.taxNo||'';
   const addr=[d.customer?.address,d.customer?.district,d.customer?.city].filter(Boolean).join(', ');
   const guarantor=(d.guarantor&&typeof d.guarantor==='object')?d.guarantor:(d.customer?.guarantor&&typeof d.customer.guarantor==='object'?d.customer.guarantor:{});
-  const cashPaid=Math.round(((d.payments||[]).filter(p=>['Nakit','Kredi Kartı','Havale'].includes(String(p.method||''))).reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
+  const cashPaid=Math.round(((d.payments||[]).filter(p=>['Nakit','Kredi Kartı'].includes(String(p.method||''))).reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
   const sumSchedule=noteList.reduce((a,n)=>a+Number(n.amount||0),0);
   const senetTotal=Math.round((Number(d.promissory?.amount||0)||sumSchedule||0)*100)/100;
   const downPayment=cashPaid>0?cashPaid:Math.max(0,Math.round((net-senetTotal)*100)/100);
@@ -1825,7 +1827,7 @@ $('#announceCard').onclick=async()=>{
 
 /* ——— Müşteri Ödemeleri ——— */
 let payState={filter:'overdue',q:'',rows:[],recentPaid:[],accounts:[],summary:null,selectedId:''};
-function payBucketLabel(b){return({overdue:'Geciken',due:'Bu Ay',open:'Açık',paid:'Kapalı'}[b]||b||'—')}
+function payBucketLabel(b){return({overdue:'Geciken',due:'Bu Ay',havale:'Havale',open:'Açık',paid:'Kapalı'}[b]||b||'—')}
 function todayLocal(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function renderPayments(){
   const sum=payState.summary||{};
@@ -1835,6 +1837,7 @@ function renderPayments(){
       <div class="stat"><small>Geciken</small><b>${sum.overdueCustomers||0}</b><span>${money(sum.overdueAmount||0)}</span></div>
       <div class="stat"><small>Bu Ay</small><b>${sum.dueMonthCustomers||0}</b><span>${money(sum.dueMonthAmount||0)}</span></div>
       <div class="stat"><small>Açık Cari</small><b>${sum.openCustomers||0}</b><span>${money(sum.openBalance||0)}</span></div>
+      <div class="stat"><small>Havale</small><b>${sum.havaleCustomers||0}</b><span>${money(sum.havaleAmount||0)}</span></div>
       <div class="stat"><small>Listede</small><b>${(payState.rows||[]).length}</b><span>${payBucketLabel(payState.filter)}</span></div>`;
   }
   const tbody=$('#payRows');
@@ -1843,7 +1846,7 @@ function renderPayments(){
       ?(payState.rows||[]).map(r=>`<tr data-pay-cust="${r.customerId}" class="${r.customerId===payState.selectedId?'active':''}">
           <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small></td>
           <td><span class="pay-bucket ${r.bucket}">${payBucketLabel(r.bucket)}</span></td>
-          <td>${money(r.balance)}</td>
+          <td>${money(r.balance)}${Number(r.pendingHavaleAmount||0)>0.009?`<br><small>Havale ${money(r.pendingHavaleAmount)}</small>`:''}</td>
           <td>${money(r.overdueAmount)}</td>
           <td>${money(r.dueMonthAmount)}</td>
           <td>${r.nextDue||'—'}</td>
@@ -1882,9 +1885,18 @@ function selectPayCustomer(customerId,keepAmount=false){
   }
   hint?.classList.add('hidden');
   body?.classList.remove('hidden');
-  const suggest=row.overdueAmount>0.009?row.overdueAmount:(row.dueMonthAmount>0.009?row.dueMonthAmount:Math.max(row.balance,0));
+  const havaleAmt=Number(row.pendingHavaleAmount||0);
+  const suggest=havaleAmt>0.009?havaleAmt:(row.overdueAmount>0.009?row.overdueAmount:(row.dueMonthAmount>0.009?row.dueMonthAmount:Math.max(row.balance,0)));
   $('#payCustomerBox').innerHTML=`<b>${row.customerName||''}</b><br><small>${row.customerPhone||''}</small><br>
-    Cari: <b>${money(row.balance)}</b> · Geciken: <b>${money(row.overdueAmount)}</b> · Bu ay: <b>${money(row.dueMonthAmount)}</b>`;
+    Cari: <b>${money(row.balance)}</b> · Havale: <b>${money(havaleAmt)}</b> · Geciken: <b>${money(row.overdueAmount)}</b>`;
+  const havaleBox=$('#payHavale');
+  if(havaleBox){
+    havaleBox.innerHTML=(row.pendingHavale||[]).length
+      ?(row.pendingHavale||[]).map(h=>`<tr><td>${h.saleReference||'—'}</td><td>${h.accountName||'Banka'}</td><td>${money(h.remain)}</td></tr>`).join('')
+      :'<tr><td colspan="3">Bekleyen havale yok.</td></tr>';
+  }
+  const hasHavale=!!(row.pendingHavale||[]).length;
+  $('#payHavaleWrap')?.classList.toggle('hidden',!hasHavale);
   $('#payNotes').innerHTML=(row.notes||[]).map(n=>{
     const open=!['paid','cancelled'].includes(String(n.status||'open'));
     return `<tr class="${n.overdue?'pay-note-overdue':''}">
@@ -1897,10 +1909,14 @@ function selectPayCustomer(customerId,keepAmount=false){
   }).join('')||'<tr><td colspan="5">Senet kaydı yok — ödeme cari bakiyeden düşer.</td></tr>';
   const acc=$('#payAccount');
   if(acc){
-    const cur=acc.value;
-    acc.innerHTML=(payState.accounts||[]).map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Kasa yok</option>';
+    const list=havaleAmt>0.009?(payState.accounts||[]).filter(a=>a.type==='bank'):(payState.accounts||[]);
+    const rows=list.length?list:(payState.accounts||[]);
+    const suggested=(row.pendingHavale||[])[0]?.accountId||'';
+    const cur=suggested||acc.value;
+    acc.innerHTML=rows.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Kasa yok</option>';
     if(cur && [...acc.options].some(o=>o.value===cur))acc.value=cur;
   }
+  if(havaleAmt>0.009 && $('#payMethod'))$('#payMethod').value='Havale';
   if(!keepAmount || !Number($('#custPayAmount')?.value||0)){
     if($('#custPayAmount'))$('#custPayAmount').value=suggest>0?suggest.toFixed(2):'';
   }

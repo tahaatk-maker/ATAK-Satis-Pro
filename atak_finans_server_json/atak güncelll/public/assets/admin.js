@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v137 */
+/* ATAK_ADMIN_BUILD=fix-v138 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2766,7 +2766,7 @@ function salesPaymentSplits(){
 }
 function salesCollectedAmount(splits){
   const p=splits||salesPaymentSplits();
-  return Math.round((p.cash+p.card+p.transfer)*100)/100;
+  return Math.round((p.cash+p.card)*100)/100;
 }
 function salesAllocatedAmount(splits){
   const p=splits||salesPaymentSplits();
@@ -2820,7 +2820,7 @@ function salesCalcState(){
   const paid=salesCollectedAmount(splits);
   const allocated=salesAllocatedAmount(splits);
   const remaining=Math.round((net-allocated)*100)/100;
-  const due=Math.round((splits.credit+splits.note+Math.max(0,remaining))*100)/100;
+  const due=Math.round((splits.credit+splits.note+splits.transfer+Math.max(0,remaining))*100)/100;
   if(q('#salesPaidAmount'))q('#salesPaidAmount').value=String(paid);
   const methods=[];
   if(splits.cash>0)methods.push('Nakit');
@@ -2987,7 +2987,7 @@ function salesCalculate(){
   const bal=q('#payBalanceHint');
   if(bal){
     if(c.net<=0){bal.className='sales-pay-balance ok';bal.textContent='Ödeme dağılımını net tutara eşitleyin.';}
-    else if(Math.abs(c.remaining)<0.009){bal.className='sales-pay-balance ok';bal.textContent=`✓ Ödeme dağılımı net tutara eşit (${salesMoney(c.net)})`;}
+    else if(Math.abs(c.remaining)<0.009){bal.className='sales-pay-balance ok';bal.textContent=c.splits.transfer>0?`✓ Dağılım tamam. Havale ${salesMoney(c.splits.transfer)} Ödemeler’e gider — banka gelince yönetici tahsil eder.`:`✓ Ödeme dağılımı net tutara eşit (${salesMoney(c.net)})`;}
     else if(c.remaining>0){bal.className='sales-pay-balance warn';bal.textContent=`⚠ Henüz ${salesMoney(c.remaining)} dağıtılmadı. Nakit/kart/havale/senet/vadeli girin.`;}
     else{bal.className='sales-pay-balance bad';bal.textContent=`⚠ Dağıtılan tutar netten ${salesMoney(Math.abs(c.remaining))} fazla.`;}
   }
@@ -3558,7 +3558,9 @@ function collectSalesDraft(){
 }
 function salesPreviewHtml(d){
   const rows=d.items.map(i=>`<tr><td>${i.itemCode||'-'}</td><td>${i.materialCode||i.productName||i.productCode}</td><td>${i.quantity}</td><td>${salesMoney(i.unitPrice)}</td><td>${salesMoney(i.quantity*i.unitPrice)}</td></tr>`).join('');
-  const payRows=(d.payments||[]).map(p=>`<div class="sales-total-line"><span>${p.method}${p.accountId?' · hesap seçildi':''}</span><b>${salesMoney(p.amount)}</b></div>`).join('');
+  const payRows=(d.payments||[]).map(p=>`<div class="sales-total-line"><span>${p.method}${p.method==='Havale'?' · Ödemeler’den tahsil':(p.accountId?' · hesap seçildi':'')}</span><b>${salesMoney(p.amount)}</b></div>`).join('');
+  const havaleAmt=Math.round(((d.payments||[]).filter(p=>p.method==='Havale').reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
+  const havaleNote=havaleAmt>0?`<div class="preview-note"><b>Havale:</b> ${salesMoney(havaleAmt)} kasa/bankaya yazılmaz. Yönetici Müşteri Ödemeleri’nden tahsil eder.</div>`:'';
   const note=d.promissory?`<div class="preview-note"><b>⚠ Senet düzenlemesi:</b> ${salesMoney(d.promissory.amount)} · ${d.promissory.installments} taksit · İlk vade ${d.promissory.firstDueDate}<br>${(d.promissory.schedule||[]).map(r=>`${r.no}) ${r.dueDate} → ${salesMoney(r.amount)}`).join(' · ')}</div>`:'';
   const kefilNote=d.guarantor?`<div class="preview-note"><b>Kefil:</b> ${salesEsc(d.guarantor.name||'')}${d.guarantor.tckn?' · TCKN '+salesEsc(d.guarantor.tckn):''}${d.guarantor.phone?' · '+salesEsc(d.guarantor.phone):''}</div>`:'';
   const invLabel=d.invoiceStatus==='issued'
@@ -3573,7 +3575,7 @@ function salesPreviewHtml(d){
     :(d.reserveStock
       ?`Rezerve edilecek · ${d.warehouse?.name||'-'} (teslimde düşülür)`
       :'Stok değişmeyecek');
-  return `<div class="preview-cards"><div><small>Şahıs / Senet</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}${d.customer?.tckn?' · TCKN '+d.customer.tckn:''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Tahsil: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>${payRows}<div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Cariye / Senede Kalacak</span><strong>${salesMoney(d.due)}</strong></div></div>${note}${kefilNote}<div class="preview-note"><b>Fatura tarafı:</b> ${billLabel}<br><b>Fatura durumu:</b> ${invLabel}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${stockLabel}<small>Rezerve: satışta tutulur, teslim edilince fiziksel düşülür.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
+  return `<div class="preview-cards"><div><small>Şahıs / Senet</small><b>${d.customer?.name||'-'}</b><span>${d.customer?.phone||''}${d.customer?.tckn?' · TCKN '+d.customer.tckn:''}</span></div><div><small>Bayi / Satıcı</small><b>${d.dealer?.name||'-'}</b><span>${d.salesperson?.name||'-'}</span></div><div><small>Ödeme</small><b>${d.method}</b><span>Şimdi tahsil: ${salesMoney(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde Kodu</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt Toplam</span><b>${salesMoney(d.grossTotal)}</b></div><div><span>İskonto (%${String(d.discountPct||0).replace('.',',')})</span><b>-${salesMoney(d.discountAmount||0)}</b></div><div><span>Net Satış</span><b>${salesMoney(d.total)}</b></div>${payRows}<div><span>Personel Prim (%${String(d.commissionPct||0).replace('.',',')})</span><b>${salesMoney(d.commissionAmount||0)}</b></div><div><span>Cari / senet / havale</span><strong>${salesMoney(d.due)}</strong></div></div>${havaleNote}${note}${kefilNote}<div class="preview-note"><b>Fatura tarafı:</b> ${billLabel}<br><b>Fatura durumu:</b> ${invLabel}</div><div class="preview-stock-choice"><b>Stok işlemi:</b> ${stockLabel}<small>Rezerve: satışta tutulur, teslim edilince fiziksel düşülür.</small></div><div class="preview-description"><b>Açıklama:</b> ${d.description||'-'}</div>`;
 }
 let activeSalesDraft=null;
 function openSalesPreview(){
@@ -3685,7 +3687,7 @@ function salesCombinedContractSenetA4Html(d){
   const personTax=d.customer?.tckn||d.customer?.taxNo||'';
   const addr=[d.customer?.address,d.customer?.district,d.customer?.city].filter(Boolean).join(', ');
   const guarantor=(d.guarantor&&typeof d.guarantor==='object')?d.guarantor:(d.customer?.guarantor&&typeof d.customer.guarantor==='object'?d.customer.guarantor:{});
-  const cashPaid=Math.round(((d.payments||[]).filter(p=>['Nakit','Kredi Kartı','Havale'].includes(String(p.method||''))).reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
+  const cashPaid=Math.round(((d.payments||[]).filter(p=>['Nakit','Kredi Kartı'].includes(String(p.method||''))).reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
   const sumSchedule=noteList.reduce((a,n)=>a+Number(n.amount||0),0);
   const senetTotal=Math.round((Number(d.promissory?.amount||0)||sumSchedule||0)*100)/100;
   const downPayment=cashPaid>0?cashPaid:Math.max(0,Math.round((net-senetTotal)*100)/100);
@@ -5709,7 +5711,7 @@ q('#salesTrackingSearch')?.addEventListener('input',renderSalesTracking);
 /* ——— Müşteri Ödemeleri (taksit / senet takip + A5 makbuz) ——— */
 let custPayState={filter:'overdue',q:'',rows:[],recentPaid:[],accounts:[],summary:null,selectedId:''};
 function custPayBucketLabel(b){
-  return({overdue:'Geciken',due:'Bu Ay',open:'Açık',paid:'Kapalı'}[b]||b||'—');
+  return({overdue:'Geciken',due:'Bu Ay',havale:'Havale',open:'Açık',paid:'Kapalı'}[b]||b||'—');
 }
 function custPaySelectedIds(){
   return [...qa('#custPayRows .cust-pay-sms-cb:checked')].map(x=>String(x.value||'')).filter(Boolean);
@@ -5727,6 +5729,7 @@ function renderCustomerPayments(){
       <article class="deduct-kpi"><small>Geciken Müşteri</small><b>${sum.overdueCustomers||0}</b><small>${money2(sum.overdueAmount||0)}</small></article>
       <article class="commission"><small>Bu Ay Vadesi</small><b>${sum.dueMonthCustomers||0}</b><small>${money2(sum.dueMonthAmount||0)}</small></article>
       <article class="net-kpi"><small>Açık Cari</small><b>${sum.openCustomers||0}</b><small>${money2(sum.openBalance||0)}</small></article>
+      <article><small>Bekleyen Havale</small><b>${sum.havaleCustomers||0}</b><small>${money2(sum.havaleAmount||0)}</small></article>
       <article><small>Liste</small><b>${(custPayState.rows||[]).length}</b><small>${custPayBucketLabel(custPayState.filter)}</small></article>
       <article><small>Son Tahsilat</small><b>${(custPayState.recentPaid||[]).length}</b><small>A5 makbuz</small></article>`;
   }
@@ -5738,7 +5741,7 @@ function renderCustomerPayments(){
           <td><input type="checkbox" class="cust-pay-sms-cb" value="${r.customerId}" ${prevSelected.has(String(r.customerId))?'checked':''}></td>
           <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small></td>
           <td><span class="pay-bucket ${r.bucket}">${custPayBucketLabel(r.bucket)}</span></td>
-          <td>${money2(r.balance)}</td>
+          <td>${money2(r.balance)}${Number(r.pendingHavaleAmount||0)>0.009?`<br><small style="color:#0b4f96;font-weight:750">Havale ${money2(r.pendingHavaleAmount)}</small>`:''}</td>
           <td>${money2(r.overdueAmount)}</td>
           <td>${money2(r.dueMonthAmount)}</td>
           <td>${r.nextDue||'—'}</td>
@@ -5819,9 +5822,24 @@ function selectCustomerPayment(customerId,keepAmount=false){
   }
   hint?.classList.add('hidden');
   body?.classList.remove('hidden');
-  const suggest=row.overdueAmount>0.009?row.overdueAmount:(row.dueMonthAmount>0.009?row.dueMonthAmount:Math.max(row.balance,0));
+  const havaleAmt=Number(row.pendingHavaleAmount||0);
+  const suggest=havaleAmt>0.009?havaleAmt:(row.overdueAmount>0.009?row.overdueAmount:(row.dueMonthAmount>0.009?row.dueMonthAmount:Math.max(row.balance,0)));
   q('#custPayCustomerBox').innerHTML=`<b>${row.customerName||''}</b><br><small>${row.customerPhone||''}</small><br>
-    Cari: <b>${money2(row.balance)}</b> · Geciken: <b>${money2(row.overdueAmount)}</b> · Bu ay: <b>${money2(row.dueMonthAmount)}</b>`;
+    Cari: <b>${money2(row.balance)}</b> · Havale: <b>${money2(havaleAmt)}</b> · Geciken: <b>${money2(row.overdueAmount)}</b> · Bu ay: <b>${money2(row.dueMonthAmount)}</b>`;
+  const havaleBox=q('#custPayHavale');
+  if(havaleBox){
+    havaleBox.innerHTML=(row.pendingHavale||[]).length
+      ?(row.pendingHavale||[]).map(h=>`<tr>
+          <td>${h.saleReference||h.saleId||'—'}</td>
+          <td>${h.date||'—'}</td>
+          <td>${h.accountName||'Banka'}</td>
+          <td>${money2(h.remain)}</td>
+        </tr>`).join('')
+      :'<tr><td colspan="4">Bekleyen havale yok.</td></tr>';
+  }
+  const hasHavale=!!(row.pendingHavale||[]).length;
+  q('#custPayHavaleWrap')?.classList.toggle('hidden',!hasHavale);
+  q('#custPayHavaleTable')?.classList.toggle('hidden',!hasHavale);
   q('#custPayNotes').innerHTML=(row.notes||[]).map(n=>{
     const open=!['paid','cancelled'].includes(String(n.status||'open'));
     return `<tr class="${n.overdue?'pay-note-overdue':''} ${n.status==='paid'?'pay-note-paid':''}">
@@ -5834,11 +5852,16 @@ function selectCustomerPayment(customerId,keepAmount=false){
     </tr>`;
   }).join('')||'<tr><td colspan="6">Senet / taksit kaydı yok. Ödeme cari bakiyeden düşer.</td></tr>';
   const acc=q('#custPayAccount');
+  const preferBank=havaleAmt>0.009;
   if(acc){
-    const cur=acc.value;
-    acc.innerHTML=(custPayState.accounts||[]).map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Kasa yok</option>';
+    const list=preferBank?(custPayState.accounts||[]).filter(a=>a.type==='bank'):(custPayState.accounts||[]);
+    const rows=list.length?list:(custPayState.accounts||[]);
+    const suggested=(row.pendingHavale||[])[0]?.accountId||'';
+    const cur=suggested||acc.value;
+    acc.innerHTML=rows.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Kasa yok</option>';
     if(cur && [...acc.options].some(o=>o.value===cur))acc.value=cur;
   }
+  if(preferBank && q('#custPayMethod'))q('#custPayMethod').value='Havale';
   if(!keepAmount || !Number(q('#custPayAmount')?.value||0)){
     if(q('#custPayAmount'))q('#custPayAmount').value=suggest>0?suggest.toFixed(2):'';
   }

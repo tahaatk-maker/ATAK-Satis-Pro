@@ -1684,8 +1684,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.137-egitim-mouse',
-  build:'fix-v137',
+  version:'6.3.138-havale-odeme',
+  build:'fix-v138',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -3427,6 +3427,61 @@ app.post('/web-api/admin/salary-pay',requireAdminOrStaffAny('finance_manage','sc
 });
 
 
+function isImmediatePayMethod(method){
+  return ['Nakit','Kredi Kartı'].includes(String(method||'').trim());
+}
+function isHavaleMethod(method){
+  return String(method||'').trim()==='Havale';
+}
+function saleHavaleRemain(s,sale,payment){
+  const amt=Math.round(Number(payment?.amount||0)*100)/100;
+  const marked=Math.round(Number(payment?.collectedAmount||0)*100)/100;
+  const cols=relatedSaleCollections(s,sale).filter(c=>isHavaleMethod(c.category));
+  const legacy=Math.round(cols.reduce((a,c)=>a+Number(c.amount||0),0)*100)/100;
+  return Math.max(0,Math.round((amt-Math.max(marked,legacy))*100)/100);
+}
+function pendingHavaleForCustomer(s,customerId){
+  const cid=String(customerId||'');
+  const out=[];
+  for(const sale of (s.financeTransactions||[])){
+    if(sale.kind!=='sale'||sale.cancelled)continue;
+    if(cid&&String(sale.customerId)!==cid)continue;
+    for(const p of (sale.payments||[])){
+      if(!isHavaleMethod(p.method))continue;
+      const remain=saleHavaleRemain(s,sale,p);
+      if(remain<=0.009)continue;
+      const acc=(s.financeAccounts||[]).find(a=>String(a.id)===String(p.accountId||''));
+      out.push({
+        saleId:sale.id,saleReference:sale.reference||'',date:sale.date||'',
+        amount:Math.round(Number(p.amount||0)*100)/100,
+        collectedAmount:Math.round((Number(p.amount||0)-remain)*100)/100,
+        remain,accountId:p.accountId||'',accountName:acc?.name||''
+      });
+    }
+  }
+  return out.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+}
+function applyPaymentToPendingHavale(s,customerId,amount,collectionId){
+  let left=Math.round(Number(amount||0)*100)/100;
+  const updated=[];
+  const items=pendingHavaleForCustomer(s,customerId);
+  for(const item of items){
+    if(left<=0.009)break;
+    const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(item.saleId));
+    if(!sale)continue;
+    const p=(sale.payments||[]).find(x=>isHavaleMethod(x.method)&&saleHavaleRemain(s,sale,x)>0.009);
+    if(!p)continue;
+    const remain=saleHavaleRemain(s,sale,p);
+    const pay=Math.min(left,remain);
+    p.collectedAmount=Math.round((Number(p.collectedAmount||0)+pay)*100)/100;
+    p.collectedAt=new Date().toISOString();
+    p.lastCollectionId=collectionId;
+    p.pending=p.collectedAmount<Number(p.amount||0)-0.009;
+    left=Math.round((left-pay)*100)/100;
+    updated.push({saleId:sale.id,saleReference:sale.reference||'',applied:pay,remain:Math.round((remain-pay)*100)/100,accountId:p.accountId||''});
+  }
+  return{updated,remaining:left};
+}
 function applyPaymentToNotes(s,customerId,amount,collectionId){
   let left=Math.round(Number(amount||0)*100)/100;
   const notes=(s.promissoryNotes||[])
@@ -3477,13 +3532,17 @@ function buildCustomerPaymentsBoard(s,{filter='open',q=''}={}){
     const overdueAmount=round(overdueNotes.reduce((a,n)=>a+Math.max(0,Number(n.amount||0)-Number(n.paidAmount||0)),0));
     const dueMonthAmount=round(dueMonthNotes.reduce((a,n)=>a+Math.max(0,Number(n.amount||0)-Number(n.paidAmount||0)),0));
     const nextDue=openNotes[0]?.dueDate||'';
+    const pendingHavale=pendingHavaleForCustomer(s,cid);
+    const pendingHavaleAmount=round(pendingHavale.reduce((a,x)=>a+Number(x.remain||0),0));
     let bucket='paid';
     if(overdueAmount>0.009)bucket='overdue';
     else if(dueMonthAmount>0.009||(bal>0.009&&dueMonthNotes.length))bucket='due';
+    else if(pendingHavaleAmount>0.009)bucket='havale';
     else if(bal>0.009||openInstallment>0.009)bucket='open';
     rows.push({
       customerId:cid,customerName:c.name||'',customerPhone:c.phone||'',
       balance:bal,openInstallment,overdueAmount,dueMonthAmount,
+      pendingHavaleAmount,pendingHavale,
       openCount:openNotes.length,overdueCount:overdueNotes.length,paidCount:paidNotes.length,
       nextDue,bucket,
       notes:notes.map(n=>({
@@ -3501,15 +3560,22 @@ function buildCustomerPaymentsBoard(s,{filter='open',q=''}={}){
     const bal=customerBalance(s,c.id);
     if(bal>0.009)pushCustomer(String(c.id));
   }
+  for(const t of (s.financeTransactions||[])){
+    if(t.kind!=='sale'||t.cancelled||!t.customerId)continue;
+    if((t.payments||[]).some(p=>isHavaleMethod(p.method)&&saleHavaleRemain(s,t,p)>0.009)){
+      pushCustomer(String(t.customerId));
+    }
+  }
   const term=String(q||'').trim().toLocaleLowerCase('tr-TR');
   let out=rows;
   if(term)out=out.filter(r=>`${r.customerName} ${r.customerPhone}`.toLocaleLowerCase('tr-TR').includes(term));
   if(filter==='overdue')out=out.filter(r=>r.bucket==='overdue');
   else if(filter==='due')out=out.filter(r=>r.bucket==='due'||r.bucket==='overdue');
-  else if(filter==='open')out=out.filter(r=>r.balance>0.009||r.openInstallment>0.009);
+  else if(filter==='havale')out=out.filter(r=>Number(r.pendingHavaleAmount||0)>0.009);
+  else if(filter==='open')out=out.filter(r=>r.balance>0.009||r.openInstallment>0.009||Number(r.pendingHavaleAmount||0)>0.009);
   else if(filter==='paid')out=out.filter(r=>r.bucket==='paid'&&r.paidCount>0);
   out.sort((a,b)=>{
-    const rank={overdue:0,due:1,open:2,paid:3};
+    const rank={overdue:0,due:1,havale:2,open:3,paid:4};
     const d=(rank[a.bucket]??9)-(rank[b.bucket]??9);
     if(d)return d;
     return String(a.nextDue||'9999').localeCompare(String(b.nextDue||'9999'))||b.balance-a.balance;
@@ -3532,7 +3598,9 @@ function buildCustomerPaymentsBoard(s,{filter='open',q=''}={}){
     dueMonthCustomers:rows.filter(r=>r.dueMonthAmount>0.009).length,
     dueMonthAmount:round(rows.reduce((a,r)=>a+r.dueMonthAmount,0)),
     openBalance:round(rows.reduce((a,r)=>a+Math.max(0,r.balance),0)),
-    openCustomers:rows.filter(r=>r.balance>0.009||r.openInstallment>0.009).length
+    openCustomers:rows.filter(r=>r.balance>0.009||r.openInstallment>0.009||Number(r.pendingHavaleAmount||0)>0.009).length,
+    havaleCustomers:rows.filter(r=>Number(r.pendingHavaleAmount||0)>0.009).length,
+    havaleAmount:round(rows.reduce((a,r)=>a+Number(r.pendingHavaleAmount||0),0))
   };
   return{ok:true,filter,summary,rows:out,recentPaid,accounts:(s.financeAccounts||[]).filter(a=>a.active!==false)};
 }
@@ -3757,11 +3825,11 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     return res.status(400).json({error:`Ödeme dağılımı net tutara eşit olmalı. Net: ${total}, Dağıtılan: ${allocated}`});
   }
   for(const p of normalizedPayments){
-    if(['Nakit','Kredi Kartı','Havale'].includes(p.method)){
+    if(isImmediatePayMethod(p.method)||isHavaleMethod(p.method)){
       if(!p.accountId)return res.status(400).json({error:`${p.method} için kasa/banka seçilmelidir`});
       const acc=s.financeAccounts.find(a=>a.id===p.accountId&&a.active!==false);
       if(!acc)return res.status(400).json({error:`${p.method} hesabı geçersiz`});
-      if((p.method==='Kredi Kartı'||p.method==='Havale')&&acc.type!=='bank'){
+      if((p.method==='Kredi Kartı'||isHavaleMethod(p.method))&&acc.type!=='bank'){
         return res.status(400).json({error:`${p.method} için hesap Türü Banka olmalı (Ayarlar → Kasa ve Banka)`});
       }
     }
@@ -3771,7 +3839,7 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     const first=new Date(String(promissoryIn.firstDueDate)+'T12:00:00');
     if(Number.isNaN(first.getTime()))return res.status(400).json({error:'Senet ilk vade tarihi geçersiz'});
   }
-  const paid=Math.round(normalizedPayments.filter(p=>['Nakit','Kredi Kartı','Havale'].includes(p.method)).reduce((a,p)=>a+p.amount,0)*100)/100;
+  const paid=Math.round(normalizedPayments.filter(p=>isImmediatePayMethod(p.method)).reduce((a,p)=>a+p.amount,0)*100)/100;
   const paymentMethod=normalizedPayments.map(p=>p.method).concat(promissoryAmount>0?['Senet']:[]).join(' + ')||String(x.paymentMethod||'Karma');
 
   let stockMode=String(x.stockMode||'').toLowerCase().trim();
@@ -3824,7 +3892,8 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   sale.deliveryStatus=String(x.deliveryStatus||'order_received');
   sale.deliveryNote=String(x.deliveryNote||'');
   sale.paymentMethod=paymentMethod;
-  sale.payments=normalizedPayments.concat(promissoryAmount>0?[{method:'Senet',amount:promissoryAmount,accountId:''}]:[]);
+  sale.payments=normalizedPayments.map(p=>isHavaleMethod(p.method)?{...p,pending:true,collectedAmount:0}:p)
+    .concat(promissoryAmount>0?[{method:'Senet',amount:promissoryAmount,accountId:''}]:[]);
   sale.warehouseId=(deductStock||reserveStock)?warehouseId:'';
   sale.deductStock=deductStock;
   sale.reserveStock=reserveStock;
@@ -3874,7 +3943,7 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   }
   const collections=[];
   for(const p of normalizedPayments){
-    if(!['Nakit','Kredi Kartı','Havale'].includes(p.method))continue;
+    if(!isImmediatePayMethod(p.method))continue;
     const collection=financeTx(s,{
       date:x.date,kind:'collection',accountId:p.accountId,customerId:customer.id,amount:p.amount,customerDelta:-p.amount,
       category:p.method,description:`${ref} satış tahsilatı · ${p.method}`,reference:`TAH-${Date.now()}-${collections.length+1}`,
@@ -3941,17 +4010,25 @@ app.post('/web-api/admin/customer-collection',requireAdminOrStaffAny('finance_ma
   const amount=cleanMoney(x.amount);
   if(!amount)return res.status(400).json({error:'Tahsilat tutarı zorunludur'});
   if(!x.accountId)return res.status(400).json({error:'Kasa veya banka seçilmelidir'});
-  if(!s.financeAccounts.some(a=>a.id===x.accountId&&a.active!==false))return res.status(400).json({error:'Geçersiz kasa/banka'});
+  const acc=s.financeAccounts.find(a=>a.id===x.accountId&&a.active!==false);
+  if(!acc)return res.status(400).json({error:'Geçersiz kasa/banka'});
   const method=String(x.paymentMethod||'Nakit').trim()||'Nakit';
-  const desc=String(x.description||`Aylık ödeme tahsilatı · ${method}`).slice(0,500);
+  if((method==='Kredi Kartı'||isHavaleMethod(method))&&acc.type!=='bank'){
+    return res.status(400).json({error:`${method} için hesap Türü Banka olmalı`});
+  }
+  const desc=String(x.description||(isHavaleMethod(method)?'Banka havalesi tahsilatı':`Aylık ödeme tahsilatı · ${method}`)).slice(0,500);
   const row=financeTx(s,{
     date:x.date||todayISO(),kind:'collection',accountId:String(x.accountId),customerId:customer.id,amount,customerDelta:-amount,
     category:method,description:desc,reference:`TAH-${Date.now()}`,createdBy:currentActor(req)?.name||'Personel'
   });
-  row.paymentFor='customer_installment';
-  // Seçili senetlere veya FIFO açık taksitlere uygula
+  row.paymentFor=isHavaleMethod(method)?'pending_havale':'customer_installment';
   let allocation;
-  if(Array.isArray(x.noteIds)&&x.noteIds.length){
+  let havaleAlloc={updated:[],remaining:amount};
+  const selectedNotes=Array.isArray(x.noteIds)&&x.noteIds.length;
+  if(isHavaleMethod(method)&&!selectedNotes){
+    havaleAlloc=applyPaymentToPendingHavale(s,customer.id,amount,row.id);
+    allocation=havaleAlloc.remaining>0.009?applyPaymentToNotes(s,customer.id,havaleAlloc.remaining,row.id):{updated:[],remaining:0};
+  }else if(selectedNotes){
     let left=amount;
     const updated=[];
     for(const nid of x.noteIds.map(String)){
@@ -3968,16 +4045,21 @@ app.post('/web-api/admin/customer-collection',requireAdminOrStaffAny('finance_ma
       updated.push({id:n.id,serial:n.serial,dueDate:n.dueDate,amount:noteAmt,paidAmount:n.paidAmount,status:n.status,applied:pay});
     }
     allocation={updated,remaining:left};
+    if(allocation.remaining>0.009)havaleAlloc=applyPaymentToPendingHavale(s,customer.id,allocation.remaining,row.id);
   }else{
     allocation=applyPaymentToNotes(s,customer.id,amount,row.id);
+    if(allocation.remaining>0.009)havaleAlloc=applyPaymentToPendingHavale(s,customer.id,allocation.remaining,row.id);
   }
   row.appliedNotes=allocation.updated;
-  audit(s,'Müşteri tahsilatı',customer.name,{amount,accountId:x.accountId,method,notes:allocation.updated.length});
+  row.appliedHavale=havaleAlloc.updated;
+  row.saleIds=(havaleAlloc.updated||[]).map(x=>x.saleId);
+  audit(s,'Müşteri tahsilatı',customer.name,{amount,accountId:x.accountId,method,notes:allocation.updated.length,havale:(havaleAlloc.updated||[]).length});
   writeStore(s);
   res.json({
     ok:true,row,
     balance:customerBalance(s,customer.id),
     appliedNotes:allocation.updated,
+    appliedHavale:havaleAlloc.updated,
     receiptUrl:`/web-api/admin/receipt/${row.id}?size=a5`
   });
 });
@@ -4184,11 +4266,11 @@ function applySaleEditInStore(s,sale,patch={},actor='Yönetici',reason=''){
     throw new Error(`Ödeme dağılımı net tutara eşit olmalı. Net: ${total}, Dağıtılan: ${allocated}`);
   }
   for(const p of payments){
-    if(['Nakit','Kredi Kartı','Havale'].includes(p.method)){
+    if(isImmediatePayMethod(p.method)||isHavaleMethod(p.method)){
       if(!p.accountId)throw new Error(`${p.method} için kasa/banka seçilmelidir`);
       const acc=s.financeAccounts.find(a=>a.id===p.accountId&&a.active!==false);
       if(!acc)throw new Error(`${p.method} hesabı geçersiz`);
-      if((p.method==='Kredi Kartı'||p.method==='Havale')&&acc.type!=='bank'){
+      if((p.method==='Kredi Kartı'||isHavaleMethod(p.method))&&acc.type!=='bank'){
         throw new Error(`${p.method} için hesap Türü Banka olmalı (Ayarlar → Kasa ve Banka)`);
       }
     }
@@ -4214,12 +4296,24 @@ function applySaleEditInStore(s,sale,patch={},actor='Yönetici',reason=''){
     }
   }
 
-  // Eski tahsilatları iptal et, yeni nakit/kart/havale tahsilatlarını oluştur
+  // Eski nakit/kart tahsilatlarını iptal et; havale Ödemeler ekranından tahsil edilir
   const oldCollections=relatedSaleCollections(s,sale);
   oldCollections.forEach(c=>cancelCollectionInStore(s,c,actor,`Satış düzenleme: ${reason}`));
+  const oldHavale=(sale.payments||[]).filter(p=>isHavaleMethod(p.method));
+  for(const p of payments){
+    if(!isHavaleMethod(p.method))continue;
+    const prev=oldHavale.find(x=>String(x.accountId||'')===String(p.accountId||''))||oldHavale[0];
+    if(prev){
+      p.collectedAmount=Math.min(p.amount,Math.round(Number(prev.collectedAmount||0)*100)/100);
+      p.lastCollectionId=prev.lastCollectionId||'';
+      p.pending=p.collectedAmount<p.amount-0.009;
+    }else{
+      p.pending=true;p.collectedAmount=0;
+    }
+  }
   const collections=[];
   for(const p of payments){
-    if(!['Nakit','Kredi Kartı','Havale'].includes(p.method))continue;
+    if(!isImmediatePayMethod(p.method))continue;
     const collection=financeTx(s,{
       date:sale.date||todayISO(),kind:'collection',accountId:p.accountId,customerId:sale.customerId,
       amount:p.amount,customerDelta:-p.amount,category:p.method,
@@ -5452,7 +5546,7 @@ function buildCombinedContractSenetA4Html(sale,customer,cfg,settings,notes){
   const personTax=customer?.tckn||customer?.taxNo||'';
   const addr=[customer?.address,customer?.district,customer?.city].filter(Boolean).join(', ');
   const guarantor=(sale.guarantor&&typeof sale.guarantor==='object')?sale.guarantor:(customer?.guarantor&&typeof customer.guarantor==='object'?customer.guarantor:{});
-  const cashPaid=Math.round(((sale.payments||[]).filter(p=>['Nakit','Kredi Kartı','Havale'].includes(String(p.method||''))).reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
+  const cashPaid=Math.round(((sale.payments||[]).filter(p=>isImmediatePayMethod(p.method)).reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
   const sumSchedule=noteList.reduce((a,n)=>a+Number(n.amount||0),0);
   const senetTotal=Math.round((Number(sale.promissoryAmount||0)||sumSchedule||0)*100)/100;
   const downPayment=cashPaid>0?cashPaid:Math.max(0,Math.round((net-senetTotal)*100)/100);

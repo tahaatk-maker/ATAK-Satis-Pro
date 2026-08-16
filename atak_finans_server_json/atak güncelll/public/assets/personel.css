@@ -240,6 +240,7 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .pay-bucket.overdue{background:#ffe7e7;color:#a52222}
 .pay-bucket.due{background:#fff4d7;color:#8b6200}
 .pay-bucket.open{background:#e8f1ff;color:#0b4f96}
+.pay-bucket.havale{background:#efe7ff;color:#5b21b6}
 .pay-bucket.paid{background:#e6f7ee;color:#087c47}
 .pay-note-overdue td{background:#fff5f5}
 .button-row{display:flex;gap:8px;flex-wrap:wrap}
