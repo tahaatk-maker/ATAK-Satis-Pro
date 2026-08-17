@@ -1,0 +1,106 @@
+{
+  "info": {
+    "name": "ATAK Satis Pro - Mobildev SMS JSON API v3.0",
+    "description": "Mobildev SMS Entegrasyon Kılavuzu (https://postman.mobildev.com/#e1dbff4d-fa75-45e8-986e-0eb005fd2556) içinden JSON API v3.0 istekleri.\n\nGateway: POST https://xmlapi.mobildev.com\nCollection variables: apikey, apisecret, originator",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "apikey", "value": "" },
+    { "key": "apisecret", "value": "" },
+    { "key": "originator", "value": "" },
+    { "key": "gateway", "value": "https://xmlapi.mobildev.com" }
+  ],
+  "item": [
+    {
+      "name": "Kullanıcı Bilgileri Kontrolü",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{gateway}}",
+        "description": "Action 4 — kredi ve originator listesi döner.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"UserName\": \"{{apikey}}\",\n  \"PassWord\": \"{{apisecret}}\",\n  \"Action\": 4\n}\n"
+        }
+      }
+    },
+    {
+      "name": "Hesap Bilgileri Sorgulama",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{gateway}}",
+        "description": "Action 5 — tanımlı operatör hesapları (accountId) döner.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"UserName\": \"{{apikey}}\",\n  \"PassWord\": \"{{apisecret}}\",\n  \"Action\": 5\n}\n"
+        }
+      }
+    },
+    {
+      "name": "SMS ToMany",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{gateway}}",
+        "description": "Action 0 — aynı mesajı birden fazla GSM numarasına gönderir. Önerilen paket boyutu 10.000.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"UserName\": \"{{apikey}}\",\n  \"PassWord\": \"{{apisecret}}\",\n  \"Action\": 0,\n  \"Mesgbody\": \"ATAK Satis Pro test mesaji\",\n  \"Numbers\": [\"5XXXXXXXXX\"],\n  \"AccountId\": \"\",\n  \"Originator\": \"{{originator}}\",\n  \"SDate\": \"\",\n  \"EDate\": \"\",\n  \"Encoding\": 0,\n  \"MessageType\": \"N\",\n  \"RecipientType\": \"\",\n  \"Tags\": \"\"\n}\n"
+        }
+      }
+    },
+    {
+      "name": "SMS Multisender",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{gateway}}",
+        "description": "Action 1 — numara başına farklı içerik gönderir.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"UserName\": \"{{apikey}}\",\n  \"PassWord\": \"{{apisecret}}\",\n  \"Action\": 1,\n  \"Message\": [\n    { \"Mesgbody\": \"1. test mesaji\",\n      \"Number\": \"5XXXXXXXXX\" }\n  ],\n  \"AccountId\": \"\",\n  \"Originator\": \"{{originator}}\",\n  \"SDate\": \"\",\n  \"EDate\": \"\",\n  \"Encoding\": 0,\n  \"MessageType\": \"N\",\n  \"RecipientType\": \"\",\n  \"Tags\": \"\"\n}\n"
+        }
+      }
+    },
+    {
+      "name": "Rapor - TimerID",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{gateway}}",
+        "description": "Action 3 — gönderim yanıtındaki packet/timer ID ile rapor. Tek istekte en fazla 25 ID.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"UserName\": \"{{apikey}}\",\n  \"PassWord\": \"{{apisecret}}\",\n  \"Action\": 3,\n  \"MsgID\": [0]\n}\n"
+        }
+      }
+    },
+    {
+      "name": "Rapor - Tarih aralığı",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{gateway}}",
+        "description": "Action 2 — tarih aralığı raporu. En fazla 72 saat.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"UserName\": \"{{apikey}}\",\n  \"PassWord\": \"{{apisecret}}\",\n  \"Action\": 2,\n  \"FDate\": \"2026-08-16\",\n  \"LDate\": \"2026-08-17\"\n}\n"
+        }
+      }
+    },
+    {
+      "name": "İleri tarihli gönderim iptali",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{gateway}}",
+        "description": "Action 6 — başarılı yanıt 00.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"UserName\": \"{{apikey}}\",\n  \"PassWord\": \"{{apisecret}}\",\n  \"Action\": 6,\n  \"MsgID\": 0\n}\n"
+        }
+      }
+    }
+  ]
+}
