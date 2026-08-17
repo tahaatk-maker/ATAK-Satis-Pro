@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v150 */
+/* ATAK_ADMIN_BUILD=fix-v151 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2493,15 +2493,16 @@ function renderCustomerExcelPreview(d){
   const mapTxt=Object.entries(map).map(([k,v])=>`${k} ← ${v}`).join(' · ');
   if(q('#customerExcelMap'))q('#customerExcelMap').textContent=
     `Başlık satır ${d.headerRow||'-'}${d.sheet?` · sayfa ${d.sheet}`:''}${mapTxt?` · ${mapTxt}`:''}`;
-  const label={ready:'Yeni',existing:'Kayıtlı',skip_noname:'Ünvan yok'};
+  const label={ready:'Yeni',existing:'Kayıtlı',skip_noname:'Ünvan yok',skip_short:'7 hane atlandı',skip_nophone:'Telefonsuz'};
   const rows=d.preview||[];
   if(q('#customerExcelPreview'))q('#customerExcelPreview').innerHTML=rows.map(r=>{
     const fatura=r.invoiceType==='corporate'?'Kurumsal':'Bireysel';
     const ids=[r.taxNo?`VKN ${r.taxNo}`:'',r.tckn?`TCKN ${r.tckn}`:''].filter(Boolean).join(' · ')||'—';
+    const phoneTxt=r.phone||r.rawPhone||'-';
     return `<tr>
       <td>${customerExcelEsc(label[r.status]||r.status)}${r.reason?`<small>${customerExcelEsc(r.reason)}</small>`:''}</td>
       <td><b>${customerExcelEsc(r.name||'-')}</b></td>
-      <td>${customerExcelEsc(r.phone||'-')}</td>
+      <td>${customerExcelEsc(phoneTxt)}</td>
       <td>${fatura}</td>
       <td>${customerExcelEsc(ids)}</td>
       <td>${customerExcelEsc([r.district,r.city].filter(Boolean).join(' / ')||'-')}</td>

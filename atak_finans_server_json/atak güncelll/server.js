@@ -1685,8 +1685,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.150-dashboard-isler',
-  build:'fix-v150',
+  version:'6.3.151-asistek-kart',
+  build:'fix-v151',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -3259,30 +3259,39 @@ function customerExcelPreviewPayload(req){
   if(!parsed.ok)throw new Error(parsed.error||'Excel okunamadı');
   const s=readStore();
   const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
-  const preview=classified.rows
-    .filter(r=>r.status==='ready'||r.status==='existing'||r.status==='skip_noname')
-    .slice(0,80)
-    .map(r=>{
-      const p=r.payload||{};
-      return {
-        status:r.status,
-        reason:r.reason||'',
-        name:p.name||r.source?.unvan||'',
-        phone:p.phone||r.phone||'',
-        invoiceType:p.invoiceType||'individual',
-        taxNo:p.taxNo||'',
-        tckn:p.tckn||'',
-        taxOffice:p.taxOffice||'',
-        city:p.city||'',
-        district:p.district||'',
-        address:p.address||'',
-        email:p.email||'',
-        existingName:r.existingName||''
-      };
-    });
+  const previewRow=r=>{
+    const p=r.payload||{};
+    return {
+      status:r.status,
+      reason:r.reason||'',
+      name:p.name||r.source?.unvan||'',
+      phone:p.phone||r.phone||'',
+      rawPhone:r.source?.telefonRaw||'',
+      invoiceType:p.invoiceType||'individual',
+      taxNo:p.taxNo||'',
+      tckn:p.tckn||'',
+      taxOffice:p.taxOffice||'',
+      city:p.city||'',
+      district:p.district||'',
+      address:p.address||'',
+      email:p.email||'',
+      existingName:r.existingName||''
+    };
+  };
+  const by=st=>classified.rows.filter(r=>r.status===st);
+  const preview=[
+    ...by('ready').slice(0,50),
+    ...by('existing').slice(0,10),
+    ...by('skip_short').slice(0,12),
+    ...by('skip_nophone').slice(0,8),
+    ...by('skip_noname').slice(0,5)
+  ].map(previewRow);
   const colLabels={
-    unvan:'Ünvan',telefon:'Telefon',vergiNo:'Vergi No',vergiDaire:'Vergi Dairesi',
-    tckn:'TCKN',sehir:'Şehir',ilce:'İlçe',adres:'Adres',email:'E-posta',cariTipi:'Cari Tipi'
+    unvan:'Ünvan',telefon:'Telefon',gsm:'GSM',isTel:'İş telefonu',evTel:'Ev telefonu',
+    vergiNo:'Vergi No',vergiDaire:'Vergi Dairesi',tckn:'TCKN',
+    sehir:'Şehir',ilce:'İlçe',adres:'Adres',evAdres:'Ev adresi',isAdres:'İş adresi',
+    evSehir:'Ev şehir',evIlce:'Ev ilçe',email:'E-posta',cariTipi:'Cari Tipi',
+    isUnvan:'İş yeri ünvanı',musteriKodu:'Müşteri kodu'
   };
   const mapping={};
   Object.entries(classified.header?.cols||{}).forEach(([k,idx])=>{
@@ -3295,7 +3304,7 @@ function customerExcelPreviewPayload(req){
     mapping,
     counts:classified.counts,
     preview,
-    truncated:classified.rows.length>80,
+    truncated:classified.counts.ready>50,
     note:'Sadece 10+ haneli telefon / GSM aktarılır. Telefonsuz ve 7 haneli sabit hatlar atlanır. Kayıtlı telefon / VKN / TCKN ezilmez.'
   };
 }
