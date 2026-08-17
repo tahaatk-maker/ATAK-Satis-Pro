@@ -7,8 +7,12 @@ die(){ log "FAIL: $*"; exit 1; }
 
 log "=== ATAK DEPLOY ==="
 BRANCH="cursor/satis-merkezi-iskonto-prim-bd99"
-EXPECT_V="6.3.151-asistek-kart"
-EXPECT_B="fix-v151"
+<<<<<<< HEAD
+EXPECT_V="6.3.152-personel-logo"
+=======
+EXPECT_V="6.3.151-personel-logo"
+>>>>>>> faf043d (fix-v152: personel panelinde logoya basınca ana sayfa)
+EXPECT_B="fix-v152"
 APP="${APP_DIR:-/root/atak-v10}"
 [ -d /root/atakhome-platform ] && [ ! -f "$APP/server.js" ] && APP=/root/atakhome-platform
 

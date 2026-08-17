@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v151 */
+/* ATAK_PERSONEL_BUILD=fix-v152 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -233,6 +233,7 @@ $('#logout').onclick=async()=>{
   location.reload();
 };
 $('#homeBtn').onclick=showHome;
+$('#brandHomeBtn')?.addEventListener('click',showHome);
 
 function kindLabel(k){
   return({sale:'Satış',collection:'Tahsilat',expense:'Masraf',transfer:'Transfer',sale_cancel:'Satış İptal',collection_cancel:'Tahsilat İptal'}[k]||k||'—');

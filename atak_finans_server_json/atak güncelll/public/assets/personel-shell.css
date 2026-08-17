@@ -67,6 +67,9 @@ header{
   box-shadow:0 8px 24px rgba(7,26,51,.04)
 }
 header img,.brand-logo.header-logo{width:200px;height:64px;object-fit:contain}
+.brand-home{padding:0;border:0;background:transparent;cursor:pointer;border-radius:12px;display:inline-flex;align-items:center;line-height:0}
+.brand-home:hover{opacity:.85}
+.brand-home:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(31,111,92,.35)}
 header .user{display:grid;margin-right:auto;gap:2px}
 header .user b{font-size:15px;color:var(--navy)}
 header .user small{color:var(--muted);font-weight:650}
