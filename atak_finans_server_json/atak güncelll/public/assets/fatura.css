@@ -154,4 +154,7 @@ a{color:inherit;text-decoration:none}
   #invoiceCenter .inv-mod-btn{font-size:13px;padding:10px;min-height:44px}
   #invoiceCenter #invoiceIntegrationForm{grid-template-columns:1fr}
   #invoiceCenter .inv-checks{grid-template-columns:1fr}
+  #invoiceCenter .inv-toolbar{flex-wrap:wrap}
+  #invoiceCenter .inv-toolbar input[type="search"]{min-width:0;flex:1 1 100%}
+  #invoiceCenter .inv-table-wrap, #invoiceCenter .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 }

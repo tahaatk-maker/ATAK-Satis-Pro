@@ -743,3 +743,29 @@ aside nav button.active{
 .training-player-wrap.has-video .training-player-empty{display:none}
 .training-manage{margin-top:14px}
 @media(max-width:1000px){.training-layout{grid-template-columns:1fr}.training-stats{grid-template-columns:1fr}}
+
+/* Telefon: hamburger, 16px input (iOS zoom yok), güvenli kenar */
+#mobileMenuBtn{display:none}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+input,select,textarea,button{touch-action:manipulation}
+@media(max-width:950px){
+  html{font-size:16px}
+  #mobileMenuBtn{display:inline-grid;place-items:center;min-width:44px;min-height:44px;font-size:20px}
+  .login-view{padding:16px;padding-top:max(16px,env(safe-area-inset-top))}
+  .login-card{padding:24px 18px;width:min(420px,94vw)}
+  .login-card input,.login-card button{font-size:16px!important;min-height:48px;padding:12px!important}
+  input,select,textarea{font-size:16px!important;min-height:44px;padding:10px 12px!important}
+  aside{padding-top:max(18px,env(safe-area-inset-top))}
+  aside nav{display:flex;flex-direction:column}
+  aside nav button,aside nav a,.logout{min-height:44px;font-size:15px!important;padding:12px 14px}
+  .v4-icon-btn{min-width:44px;min-height:44px}
+  .v4-topbar,header{padding-top:max(10px,env(safe-area-inset-top))!important}
+  .v4-page-heading h1,header h1{font-size:18px}
+  main{padding-bottom:max(18px,env(safe-area-inset-bottom))}
+  .stats,.v4-metric-grid,.cockpit .stats,.health-cards,.revenue-cards,.v4-quick-actions{
+    grid-template-columns:1fr 1fr!important;
+  }
+  .stat,.revenue-card{min-width:0;min-height:92px;overflow:hidden}
+  .stat strong,.stat b,.revenue-card b{font-size:18px;overflow-wrap:anywhere;word-break:break-word}
+  .stat small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
