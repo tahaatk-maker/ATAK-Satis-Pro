@@ -1,8 +1,8 @@
 # ATAK VPS kesin deploy (fix-v89) — health 6.3.90-mobilya-alis-v2 olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.157-sube-kasa-kilit
-EXPECT_BUILD=fix-v157
+EXPECT_HEALTH=6.3.158-personel-acik
+EXPECT_BUILD=fix-v158
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -170,17 +170,33 @@ for P in 3000 3100 "$PORT_NOW"; do
 done
 sleep 1
 
+step "personel girisi aciliyor (ATAK_OWNER_ONLY=0)"
+ensure_env_kv(){
+  local file="$1" key="$2" val="$3"
+  [ -n "$file" ] || return 0
+  mkdir -p "$(dirname "$file")" 2>/dev/null || true
+  if [ -f "$file" ] && grep -qE "^${key}=" "$file"; then
+    sed -i "s/^${key}=.*/${key}=${val}/" "$file"
+  else
+    printf '%s=%s\n' "$key" "$val" >> "$file"
+  fi
+}
+ensure_env_kv "$ENVF" ATAK_OWNER_ONLY 0
+export ATAK_OWNER_ONLY=0
+echo "   $ENVF ATAK_OWNER_ONLY=0"
+
 cd "$APP"
 if [ ! -d "$APP/node_modules" ] && [ -f "$APP/package.json" ]; then
   npm install --omit=dev || npm install || true
 fi
-pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env
+ATAK_OWNER_ONLY=0 pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env
 pm2 save || true
 
 step "saglik kontrolu"
 HEALTH=""
 HEALTH_PORT=""
 SEARCH_HTTP=""
+FAIL_MSG=""
 ok=0
 for i in 1 2 3 4 5 6 7 8 9 10; do
   sleep 1
@@ -196,11 +212,19 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   echo "   WAIT_$i health=$HEALTH"
 done
 
+if echo "$HEALTH" | grep -q '"ownerOnly":true'; then
+  echo "FAIL_OWNER_ONLY_HALA_ACIK"
+  FAIL_MSG="ownerOnly=true — personel girisi kapali"
+  ok=0
+fi
+
 if [ "$ok" != "1" ]; then
-  echo "FAIL_HEALTH_NOT_$EXPECT_HEALTH"
+  if [ -z "$FAIL_MSG" ]; then
+    echo "FAIL_HEALTH_NOT_$EXPECT_HEALTH"
+    FAIL_MSG="health_mismatch want=$EXPECT_HEALTH got=$HEALTH"
+  fi
   pm2 describe atak || true
   pm2 logs atak --lines 40 --nostream || true
-  FAIL_MSG="health_mismatch want=$EXPECT_HEALTH got=$HEALTH"
 else
   FAIL_MSG=""
 fi
@@ -214,6 +238,7 @@ PROOF="$APP/public/assets/_deploy-check.txt"
   echo "health_port=$HEALTH_PORT"
   echo "health=$HEALTH"
   echo "search_http=$SEARCH_HTTP"
+  echo "owner_only=$(echo "$HEALTH" | grep -o '"ownerOnly":[^,}]*' || true)"
   echo "admin_js_has_build=$(grep -c "ATAK_ADMIN_BUILD=$EXPECT_BUILD" "$APP/public/assets/admin.js" || true)"
   echo "admin_html_cache=$(grep -o "admin.js?v=[^\"]*" "$APP/public/admin.html" | head -1)"
   echo "finance_has_kesilmeyen=$(grep -c 'data-finance-jump=\"uninvoiced\"' "$APP/public/admin.html" || true)"

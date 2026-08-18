@@ -47,8 +47,8 @@ const ATAK_COMPANY = {
   taxNo: '0940148218',
   address: 'Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul'
 };
-/** Varsayılan: sadece sahip erişir. Personeli açmak için .env içinde ATAK_OWNER_ONLY=0 */
-function ownerOnlyEnabled(){ return String(process.env.ATAK_OWNER_ONLY ?? '1').trim() !== '0'; }
+/** Varsayılan: personel girişi açık. Sadece yönetici için ATAK_OWNER_ONLY=1 */
+function ownerOnlyEnabled(){ return String(process.env.ATAK_OWNER_ONLY ?? '0').trim() === '1'; }
 function ownerUsernames(){
   return String(process.env.ATAK_OWNER_USERNAMES || 'admin,taha')
     .split(/[,;\s]+/).map(x=>x.trim().toLocaleLowerCase('tr-TR')).filter(Boolean);
@@ -1720,8 +1720,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.157-sube-kasa-kilit',
-  build:'fix-v157',
+  version:'6.3.158-personel-acik',
+  build:'fix-v158',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
