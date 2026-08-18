@@ -1,15 +1,34 @@
-/* ATAK_FATURA_BUILD=fix-v155 */
+/* ATAK_FATURA_BUILD=fix-v156 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
-let state={view:'pending',data:null,selected:new Set(),step:1,portal:'admin',canSetup:true,canIssue:true};
+let state={module:'efatura',view:'ef_out_pending',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
 
-function toast(t){const el=q('#toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
-function money(n){return new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(n||0))}
-function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function badge(st){
+const INV_VIEW_META={
+  ef_out_pending:{title:'e-Fatura · Gönderilecek',hint:'Giden e-Fatura kuyruğu. Satıştan Fatura Kes ile düşer; WSDL bağlanınca portala gider. Satıra tıklayınca belge açılır.'},
+  ef_out_sent:{title:'e-Fatura · Gönderilen',hint:'Kuyruğa alınan / taslak / kesilmiş e-Faturalar.'},
+  ef_out_error:{title:'e-Fatura · Hatalı',hint:'Gönderim veya doğrulama hatası. Tekrar deneyebilirsiniz.'},
+  ef_out_archive:{title:'e-Fatura · Giden Arşiv',hint:'İptal / arşivlenmiş giden e-Faturalar.'},
+  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Portal senkronu bağlanınca gelen e-Faturalar.'},
+  ef_in_responses:{title:'e-Fatura · Uygulama Yanıtları',hint:'Ticari fatura kabul/red yanıtları.'},
+  ef_in_archive:{title:'e-Fatura · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Faturalar.'},
+  ea_out_pending:{title:'e-Arşiv · Gönderilecek',hint:'Giden e-Arşiv kuyruğu.'},
+  ea_out_sent:{title:'e-Arşiv · Gönderilen',hint:'Gönderilmiş / kuyruğa alınmış e-Arşiv faturaları.'},
+  ea_out_error:{title:'e-Arşiv · Hatalı',hint:'Hatalı e-Arşiv kayıtları.'},
+  ea_out_archive:{title:'e-Arşiv · Giden Arşiv',hint:'Arşivlenmiş giden e-Arşiv.'},
+  ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv (portal bağlanınca).'},
+  ea_in_archive:{title:'e-Arşiv · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Arşiv.'},
+  pending_sales:{title:'Kesilmeyen Faturalar',hint:'Geç kesilen satışlar. Manuel kesebilir veya QNB kuyruğuna alabilirsiniz. Satıra tıklayınca belge açılır.'},
+  setup_ready:{title:'Kurulum / Hazırlık',hint:'QNB checklist. Senet ve bayi ayarları Ayarlar menüsünde.'},
+  setup_settings:{title:'QNB Ayarları',hint:'Yalnız e-Fatura / QNB Solist entegrasyonu. Form tam genişliktedir.'}
+};
+
+function toast(t){const el=q('#toast');if(!el)return;el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
+function salesMoney(n){return new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0))}
+function invEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function invStatusBadge(st){
   const s=String(st||'pending');
-  const label={pending:'Bekliyor',ready:'Hazır',queued:'Kuyruk',draft_sent:'Taslak',queued_remote:'Portal',issued:'Kesildi',error:'Hatalı',cancelled:'İptal',not_required:'Yok'}[s]||s;
-  return `<span class="badge ${esc(s)}">${esc(label)}</span>`;
+  const label={pending:'Bekliyor',ready:'Hazır',queued:'Kuyruk',draft_sent:'Taslak',queued_remote:'Portal kuyruk',issued:'Kesildi',error:'Hatalı',cancelled:'İptal',archived:'Arşiv'}[s]||s;
+  return `<span class="inv-badge ${invEsc(s)}">${invEsc(label)}</span>`;
 }
 async function api(url,opt={}){
   const r=await fetch(url,{credentials:'same-origin',...opt});
@@ -18,6 +37,13 @@ async function api(url,opt={}){
   if(r.status===401)throw new Error('Oturum yok');
   if(!r.ok)throw new Error(d.error||'İşlem başarısız');
   return d;
+}
+
+function applyAccessUi(){
+  q('#invSetupModBtn')?.classList.toggle('hidden',!state.canSetup);
+  q('#invIssueSelectedBtn')?.classList.toggle('hidden',!state.canIssue);
+  q('#invRetrySelectedBtn')?.classList.toggle('hidden',!state.canIssue);
+  if(q('#backLink'))q('#backLink').href=state.portal==='staff'?'/personel':'/web-admin';
 }
 
 async function boot(){
@@ -42,244 +68,408 @@ async function boot(){
         return;
       }
     }
-    if(q('#backLink'))q('#backLink').href=state.portal==='staff'?'/personel':'/web-admin';
-    q('[data-view="setup"]')?.classList.toggle('hidden',!state.canSetup);
-    q('#issueSelectedBtn')?.classList.toggle('hidden',!state.canIssue);
+    applyAccessUi();
     q('#app').classList.remove('hidden');
-    q('#app').style.display='flex';
-    await load();
+    await loadInvoiceCenter();
   }catch(_){
     q('#gate').classList.remove('hidden');
   }
 }
 
-async function load(){
-  const d=await api('/web-api/admin/invoice-center');
-  state.data=d;
-  if(d.canSetup!=null)state.canSetup=!!d.canSetup;
-  if(d.canIssue!=null)state.canIssue=!!d.canIssue;
-  if(state.view==='setup'&&!state.canSetup)state.view='pending';
-  q('[data-view="setup"]')?.classList.toggle('hidden',!state.canSetup);
-  q('#issueSelectedBtn')?.classList.toggle('hidden',!state.canIssue);
-  paintEnv(d.settings||{});
-  q('#cPending').textContent=`${d.counts?.sales_pending||0} satış bekliyor`;
-  q('#cQueue').textContent=`${(d.counts?.ef_out_pending||0)+(d.counts?.ea_out_pending||0)} gönderilecek`;
-  paint();
+function invIsEf(r){const t=String(r.docType||r.invoiceType||r.profile||'').toLowerCase();return t==='efatura'||t==='temelfatura'||t==='ticarifatura'||!t||t==='auto'}
+function invIsEa(r){return String(r.docType||r.invoiceType||r.profile||'').toLowerCase()==='earsiv'}
+function invStatusBucket(view){
+  if(view.endsWith('_pending'))return 'pending';
+  if(view.endsWith('_sent'))return 'sent';
+  if(view.endsWith('_error'))return 'error';
+  if(view.endsWith('_archive'))return 'archive';
+  return '';
 }
-
-function paintEnv(s){
-  const el=q('#envBadge');
-  if(!s.enabled){el.textContent='Bağlantı kapalı — önce Firma kurulumu';el.className='env off';return}
-  if(s.environment==='live'){el.textContent='Canlı ortam';el.className='env live';return}
-  el.textContent='Test ortamı';el.className='env';
+function invFilterQueue(rows,view){
+  const list=rows||[];
+  const type=view.startsWith('ea_')?'earsiv':'efatura';
+  const typed=list.filter(r=>type==='earsiv'?invIsEa(r):invIsEf(r));
+  const bucket=invStatusBucket(view);
+  if(bucket==='pending')return typed.filter(r=>['pending','ready'].includes(String(r.status||'pending')));
+  if(bucket==='sent')return typed.filter(r=>['issued','draft_sent','queued_remote','queued'].includes(String(r.status||'')));
+  if(bucket==='error')return typed.filter(r=>String(r.status||'')==='error');
+  if(bucket==='archive')return typed.filter(r=>['cancelled','archived'].includes(String(r.status||'')));
+  return typed;
 }
-
-function currentRows(){
-  const d=state.data||{};
-  const term=String(q('#search')?.value||'').toLocaleLowerCase('tr-TR').trim();
-  let rows=[];
-  if(state.view==='pending')rows=d.salesPending||[];
-  else if(state.view==='sent')rows=(d.queue||[]).filter(r=>['issued','draft_sent','queued_remote','queued'].includes(String(r.status||'')));
-  else rows=(d.queue||[]).filter(r=>['pending','ready','error','queued'].includes(String(r.status||'pending')));
-  return rows.filter(r=>{
+function invApplySearch(rows){
+  const term=String(q('#invSearch')?.value||'').toLocaleLowerCase('tr-TR').trim();
+  const unreadOnly=!!q('#invUnreadOnly')?.checked;
+  return (rows||[]).filter(r=>{
+    if(unreadOnly&&r.read===true)return false;
     if(!term)return true;
-    const hay=`${r.invoiceNumber||''} ${r.reference||''} ${r.customerName||r.customer?.name||''}`.toLocaleLowerCase('tr-TR');
+    const hay=`${r.invoiceNumber||''} ${r.reference||''} ${r.customer?.name||r.customerName||r.supplierName||''} ${r.uuid||''}`.toLocaleLowerCase('tr-TR');
     return hay.includes(term);
   });
 }
-
-function invoiceUrl(row){
-  if(state.view==='pending')return `/web-api/admin/sale/${encodeURIComponent(row.id)}/invoice-print`;
+function invSetCounts(c={}){
+  const map={
+    invCountEfOutPending:'ef_out_pending',invCountEfOutSent:'ef_out_sent',invCountEfOutError:'ef_out_error',invCountEfOutArchive:'ef_out_archive',
+    invCountEfInIncoming:'ef_in_incoming',invCountEfInResponses:'ef_in_responses',invCountEfInArchive:'ef_in_archive',
+    invCountEaOutPending:'ea_out_pending',invCountEaOutSent:'ea_out_sent',invCountEaOutError:'ea_out_error',invCountEaOutArchive:'ea_out_archive',
+    invCountEaInIncoming:'ea_in_incoming',invCountEaInArchive:'ea_in_archive',
+    invCountPendingSales:'sales_pending',invCountPendingMod:'sales_pending'
+  };
+  Object.entries(map).forEach(([id,key])=>{if(q('#'+id))q('#'+id).textContent=String(c[key]||0)});
+}
+function invUpdateEnvBadge(settings={}){
+  const el=q('#invEnvBadge');if(!el)return;
+  if(!settings.enabled){el.textContent='Bağlantı Kapalı';el.className='inv-env off';return}
+  if(settings.environment==='live'){el.textContent='Canlı Ortam';el.className='inv-env';return}
+  el.textContent='Test Ortamı';el.className='inv-env test';
+}
+function invoicePrintUrl(row,view){
+  if(view==='pending_sales')return `/web-api/admin/sale/${encodeURIComponent(row.id)}/invoice-print`;
   return `/web-api/admin/invoice-queue/${encodeURIComponent(row.id)}/print`;
 }
-function openInvoice(row){
-  const w=window.open(invoiceUrl(row),'_blank','noopener');
+function openInvoiceDoc(row,view){
+  const w=window.open(invoicePrintUrl(row,view),'_blank','noopener');
   if(!w)toast('Tarayıcı yeni sekmeyi engelledi');
 }
-
-function paint(){
-  const setup=state.view==='setup';
-  q('#setupBox').classList.toggle('hidden',!setup);
-  q('#tablePanel').classList.toggle('hidden',setup);
-  q('#toolbar').classList.toggle('hidden',setup);
-  const titles={
-    pending:['Kesilmeyen faturalar','Satış yapıldı, fatura henüz kesilmedi. Satıra tıklayınca belge yeni sekmede açılır.'],
-    queue:['Giden kutu','QNB kuyruğundaki taslaklar. Satıra tıklayınca e-Fatura / e-Arşiv belgesi açılır.'],
-    sent:['Kesilen / gönderilen','Portal veya taslak olarak işlenmiş faturalar.'],
-    setup:['Firma kurulumu','Başka firmalar da aynı adımlarla kendi VKN, seri ve QNB bilgilerini girer.']
-  };
-  const t=titles[state.view];
-  q('#viewTitle').textContent=t[0];
-  q('#viewHint').textContent=t[1];
-  qa('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
-  if(setup){loadSetup();return}
-  const rows=currentRows();
-  const pending=state.view==='pending';
-  q('#thead').innerHTML=pending
-    ?`<tr><th></th><th>Satış</th><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Durum</th><th></th></tr>`
-    :`<tr><th></th><th>Durum</th><th>Fatura no</th><th>Tarih</th><th>Müşteri</th><th>Tip</th><th>Tutar</th><th></th></tr>`;
-  q('#tbody').innerHTML=rows.map(r=>{
-    const id=esc(r.id);
-    if(pending){
-      return `<tr class="clickable" data-open="${id}">
-        <td><input type="checkbox" data-check="${id}"/></td>
-        <td><b>${esc(r.reference||'-')}</b></td>
-        <td>${esc(r.date||'-')}</td>
-        <td>${esc(r.customerName||'-')}</td>
-        <td>${money(r.total)}</td>
-        <td>${badge(r.invoiceStatus)}</td>
-        <td><button type="button" class="btn light" data-open-btn="${id}">Belgeyi aç</button></td>
-      </tr>`;
-    }
-    return `<tr class="clickable" data-open="${id}">
-      <td><input type="checkbox" data-check="${id}"/></td>
-      <td>${badge(r.status)}</td>
-      <td><b>${esc(r.invoiceNumber||r.reference||'-')}</b></td>
-      <td>${esc((r.invoiceDate||r.createdAt||'').slice(0,10)||'-')}</td>
-      <td>${esc(r.customer?.name||r.customerName||'-')}</td>
-      <td>${esc(r.docType||r.invoiceType||'auto')}</td>
-      <td>${money(r.total)}</td>
-      <td><button type="button" class="btn light" data-open-btn="${id}">Belgeyi aç</button></td>
-    </tr>`;
-  }).join('');
-  q('#empty').classList.toggle('hidden',rows.length>0);
-  state.selected=new Set();
-  qa('[data-check]').forEach(chk=>chk.onclick=e=>e.stopPropagation());
-  qa('tr[data-open]').forEach(tr=>tr.onclick=()=>{
-    const id=tr.dataset.open;
-    const row=rows.find(x=>String(x.id)===String(id));
-    if(row)openInvoice(row);
+function bindRowOpen(rows,view){
+  qa('#invTableBody tr[data-inv-id]').forEach(tr=>{
+    tr.classList.add('clickable');
+    tr.addEventListener('click',e=>{
+      if(e.target.closest('button,input,a,label'))return;
+      const row=rows.find(x=>String(x.id||x.uuid||'')===String(tr.dataset.invId));
+      if(row)openInvoiceDoc(row,view);
+    });
   });
-  qa('[data-open-btn]').forEach(btn=>btn.onclick=e=>{
+  qa('[data-inv-print]').forEach(btn=>btn.onclick=e=>{
     e.stopPropagation();
-    const row=rows.find(x=>String(x.id)===String(btn.dataset.openBtn));
-    if(row)openInvoice(row);
+    const row=rows.find(x=>String(x.id||x.uuid||'')===String(btn.dataset.invPrint));
+    if(row)openInvoiceDoc(row,view);
   });
 }
 
-function formVal(name){return q(`[name="${name}"]`)?.value||''}
-function setForm(name,v){const el=q(`[name="${name}"]`);if(el)el.value=v??''}
-function setCheck(name,v){const el=q(`[name="${name}"]`);if(el)el.checked=!!v}
-
-async function loadSetup(){
+function invRenderSetup(checks=[]){
+  q('#invTableWrap')?.classList.add('hidden');
+  q('#invToolbar')?.classList.add('hidden');
+  q('#invSetupBox')?.classList.remove('hidden');
+  loadInvoiceIntegration().catch(()=>{});
+  if(q('#invReadyChecks')){
+    q('#invReadyChecks').innerHTML=(checks||[]).map(c=>`<div class="inv-check ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${invEsc(c.name)}</b><span>${invEsc(c.detail||'')}</span></div>`).join('')||'<div class="inv-empty">Test çalıştırılmadı — “Altyapıyı Test Et”e basın</div>';
+  }
+  q('#invFootCount').textContent=(checks||[]).length?`${(checks||[]).filter(c=>c.ok).length}/${(checks||[]).length} hazır`:'QNB kurulum';
+}
+function invRenderTable(rows){
+  q('#invSetupBox')?.classList.add('hidden');
+  q('#invTableWrap')?.classList.remove('hidden');
+  q('#invToolbar')?.classList.remove('hidden');
+  const view=state.view;
+  const head=q('#invTableHead'),body=q('#invTableBody'),empty=q('#invEmpty');
+  const issueBtns=state.canIssue;
+  if(view==='pending_sales'){
+    head.innerHTML=`<tr><th></th><th>Satış No</th><th>Tarih</th><th>Müşteri</th><th>Tutar</th><th>Ödeme</th><th>Durum</th><th>İşlem</th></tr>`;
+    body.innerHTML=rows.map(r=>`<tr data-inv-id="${invEsc(r.id)}">
+      <td><input type="checkbox" data-inv-check="${invEsc(r.id)}"/></td>
+      <td><b>${invEsc(r.reference||'-')}</b></td>
+      <td>${invEsc(r.date||'-')}</td>
+      <td>${invEsc(r.customerName||'-')}</td>
+      <td>${salesMoney(r.total)}</td>
+      <td>${invEsc(r.paymentMethod||'-')}</td>
+      <td>${invStatusBadge(r.invoiceStatus)}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        ${issueBtns?`<button type="button" class="inv-btn" data-inv-qnb="${invEsc(r.id)}">QNB’ye Al</button>
+        <button type="button" class="inv-btn" data-mark-invoiced="${invEsc(r.id)}">Manuel Kes</button>`:''}
+        <button type="button" class="inv-btn" data-inv-print="${invEsc(r.id)}">Belgeyi aç</button>
+      </td>
+    </tr>`).join('');
+    empty?.classList.toggle('hidden',rows.length>0);
+    q('#invFootCount').textContent=`${rows.length} kesilmeyen`;
+    state.selected=new Set();
+    qa('[data-inv-check]').forEach(chk=>chk.onchange=()=>{
+      const id=chk.dataset.invCheck;
+      if(chk.checked)state.selected.add(id);else state.selected.delete(id);
+      chk.closest('tr')?.classList.toggle('selected',chk.checked);
+    });
+    qa('[data-inv-qnb]').forEach(btn=>btn.onclick=async()=>{
+      try{
+        const out=await api('/web-api/admin/sale/'+encodeURIComponent(btn.dataset.invQnb)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+        toast(`QNB kuyruk: ${out.result?.docType||''}`);await loadInvoiceCenter();
+      }catch(e){toast(e.message)}
+    });
+    qa('[data-mark-invoiced]').forEach(btn=>btn.onclick=async()=>{
+      const row=(state.data?.salesPending||[]).find(x=>String(x.id)===String(btn.dataset.markInvoiced));if(!row)return;
+      const invoiceNumber=prompt(`${row.reference} için fatura numarası:`,'');if(!invoiceNumber)return;
+      const invoiceDate=prompt('Fatura tarihi (YYYY-MM-DD):',new Date().toISOString().slice(0,10));if(!invoiceDate)return;
+      try{
+        await api('/web-api/admin/sale/'+encodeURIComponent(row.id)+'/mark-invoiced',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoiceNumber,invoiceDate})});
+        toast('Manuel fatura işlendi');await loadInvoiceCenter();
+      }catch(e){toast(e.message)}
+    });
+    bindRowOpen(rows,view);
+    return;
+  }
+  const isInbox=view.includes('_in_');
+  if(isInbox){
+    head.innerHTML=`<tr><th></th><th>Okundu</th><th>Fatura Tarihi</th><th>Fatura No</th><th>Müşteri / Tedarikçi</th><th>Profil</th><th>Tutar</th><th>ERP</th></tr>`;
+    body.innerHTML=rows.map(r=>`<tr data-inv-id="${invEsc(r.id||r.uuid||'')}">
+      <td><input type="checkbox" data-inv-check="${invEsc(r.id||r.uuid||'')}"/></td>
+      <td>${r.read?'✓':'✉'}</td>
+      <td>${invEsc(r.invoiceDate||r.date||'-')}</td>
+      <td><b>${invEsc(r.invoiceNumber||'-')}</b></td>
+      <td>${invEsc(r.supplierName||r.customerName||r.customer?.name||'-')}</td>
+      <td>${invEsc(r.profile||r.docType||'-')}</td>
+      <td>${salesMoney(r.total)}</td>
+      <td>${r.erpImported?'EVET':'HAYIR'}</td>
+    </tr>`).join('');
+  }else{
+    head.innerHTML=`<tr><th></th><th>Durum</th><th>Tarih</th><th>Fatura / Satış</th><th>Müşteri</th><th>Tip</th><th>Tutar</th><th>Mesaj</th><th>İşlem</th></tr>`;
+    body.innerHTML=rows.map(r=>`<tr data-inv-id="${invEsc(r.id)}">
+      <td><input type="checkbox" data-inv-check="${invEsc(r.id)}"/></td>
+      <td>${invStatusBadge(r.status)}</td>
+      <td>${invEsc(r.invoiceDate||(r.createdAt||'').slice(0,10)||'-')}</td>
+      <td><b>${invEsc(r.invoiceNumber||r.reference||'-')}</b><div style="color:#667890;font-size:11px">${invEsc(r.uuid?String(r.uuid).slice(0,13)+'…':'')}</div></td>
+      <td>${invEsc(r.customer?.name||r.customerName||'-')}</td>
+      <td>${invEsc(r.docType||r.invoiceType||'auto')}</td>
+      <td>${salesMoney(r.total)}</td>
+      <td style="max-width:220px;white-space:normal;color:#667890">${invEsc(r.providerMessage||r.error||'')}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        ${issueBtns?`<button type="button" class="inv-btn" data-inv-retry="${invEsc(r.id)}">Tekrar</button>`:''}
+        ${r.ublXml?`<button type="button" class="inv-btn" data-inv-ubl="${invEsc(r.id)}">UBL</button>`:''}
+        <button type="button" class="inv-btn" data-inv-print="${invEsc(r.id)}">Belgeyi aç</button>
+      </td>
+    </tr>`).join('');
+  }
+  empty?.classList.toggle('hidden',rows.length>0);
+  q('#invFootCount').textContent=`${rows.length} kayıt`;
+  state.selected=new Set();
+  qa('[data-inv-check]').forEach(chk=>chk.onchange=()=>{
+    const id=chk.dataset.invCheck;
+    if(chk.checked)state.selected.add(id);else state.selected.delete(id);
+    chk.closest('tr')?.classList.toggle('selected',chk.checked);
+  });
+  qa('[data-inv-retry]').forEach(btn=>btn.onclick=async()=>{
+    try{await api('/web-api/admin/invoice-queue/'+encodeURIComponent(btn.dataset.invRetry)+'/retry',{method:'POST',body:'{}'});toast('Tekrar denendi');await loadInvoiceCenter()}catch(e){toast(e.message)}
+  });
+  qa('[data-inv-ubl]').forEach(btn=>btn.onclick=()=>{
+    const row=(state.data?.queue||[]).find(x=>String(x.id)===String(btn.dataset.invUbl));
+    if(!row?.ublXml)return toast('UBL yok');
+    const w=window.open('','_blank');if(!w)return toast('Popup engellendi');
+    w.document.write(`<pre style="white-space:pre-wrap;font:12px/1.4 monospace;padding:16px">${invEsc(row.ublXml)}</pre>`);
+  });
+  bindRowOpen(rows,view);
+}
+function invSetModule(mod,{keepView=false}={}){
+  if(mod==='setup'&&!state.canSetup){toast('Kurulum yetkiniz yok');return}
+  state.module=mod;
+  qa('[data-inv-module]').forEach(b=>b.classList.toggle('active',b.dataset.invModule===mod));
+  qa('[data-inv-pane]').forEach(p=>p.classList.toggle('active',p.dataset.invPane===mod));
+  if(!keepView){
+    if(mod==='efatura')state.view='ef_out_pending';
+    else if(mod==='earsiv')state.view='ea_out_pending';
+    else if(mod==='pending')state.view='pending_sales';
+    else state.view='setup_settings';
+  }
+  invPaintCurrentView();
+}
+function invPaintCurrentView(){
+  const view=state.view;
+  const meta=INV_VIEW_META[view]||{title:view,hint:''};
+  if(q('#invViewTitle'))q('#invViewTitle').textContent=meta.title;
+  if(q('#invViewHint'))q('#invViewHint').textContent=meta.hint;
+  qa('[data-inv-view]').forEach(b=>b.classList.toggle('active',b.dataset.invView===view));
+  if(q('#invDocTypeFilter')){
+    q('#invDocTypeFilter').value=view.startsWith('ea_')?'earsiv':(view.startsWith('ef_')?'efatura':'all');
+    q('#invDocTypeFilter').style.display='none';
+  }
+  if(view==='setup_settings'||view==='setup_ready'){
+    if(!state.canSetup){invSetModule('efatura');return}
+    invRenderSetup([]);
+    q('#invFootStatus').textContent=view==='setup_ready'?'Hazırlık kontrolü':'QNB ayarları';
+    if(view==='setup_ready')invoiceConnectionTestForCenter();
+    else setTimeout(()=>q('#invoiceIntegrationForm')?.scrollIntoView({behavior:'smooth',block:'start'}),40);
+    return;
+  }
+  const d=state.data||{};
+  let rows=[];
+  if(view==='pending_sales')rows=d.salesPending||[];
+  else if(view==='ef_in_incoming')rows=(d.inbox||[]).filter(r=>!invIsEa(r)&&r.status!=='archived');
+  else if(view==='ef_in_responses')rows=d.responses||[];
+  else if(view==='ef_in_archive')rows=(d.inbox||[]).filter(r=>!invIsEa(r)&&r.status==='archived');
+  else if(view==='ea_in_incoming')rows=(d.inbox||[]).filter(r=>invIsEa(r)&&r.status!=='archived');
+  else if(view==='ea_in_archive')rows=(d.inbox||[]).filter(r=>invIsEa(r)&&r.status==='archived');
+  else rows=invFilterQueue(d.queue||[],view);
+  rows=invApplySearch(rows);
+  invRenderTable(rows);
+  q('#invFootStatus').textContent=d.note||'Yerel kuyruk aktif · Kesilmeyen faturalar bu merkezde';
+}
+async function invoiceConnectionTestForCenter(){
   try{
-    const r=await api('/web-api/admin/invoice-integration');
-    const s=r.settings||{};
-    setForm('companyTitle',s.companyTitle);
-    setForm('companyVkn',s.companyVkn);
-    setForm('companyTaxOffice',s.companyTaxOffice);
-    setForm('mersisNo',s.mersisNo);
-    setForm('companyPhone',s.companyPhone);
-    setForm('companyEmail',s.companyEmail);
-    setForm('companyAddress',s.companyAddress);
-    setForm('companyDistrict',s.companyDistrict);
-    setForm('companyCity',s.companyCity);
-    setForm('efaturaSeries',s.efaturaSeries||'ATK');
-    setForm('efaturaNext',s.efaturaNext||1);
-    setForm('earsivSeries',s.earsivSeries||'ATA');
-    setForm('earsivNext',s.earsivNext||1);
-    setForm('provider',s.provider||'qnb-solist');
-    setForm('senderAlias',s.senderAlias||s.gbAlias);
-    setForm('pkAlias',s.pkAlias);
-    setForm('webServiceUrl',s.webServiceUrl);
-    setForm('username',s.username);
-    setForm('password','');
-    setForm('environment',s.environment||'test');
-    setCheck('enabled',s.enabled);
-    setCheck('draftMode',s.draftMode!==false);
-    setCheck('autoDetectType',s.autoDetectType!==false);
-    previewSeries();
-    renderChecks([]);
+    const r=await api('/web-api/admin/invoice-integration/test',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    invRenderSetup(r.checks||[]);
+    q('#invFootStatus').textContent=r.note||'Altyapı testi tamam';
+  }catch(e){invRenderSetup([{name:'Test',ok:false,detail:e.message}]);}
+}
+async function loadInvoiceCenter(){
+  try{
+    const d=await api('/web-api/admin/invoice-center');
+    state.data=d;
+    if(d.canSetup!=null)state.canSetup=!!d.canSetup;
+    if(d.canIssue!=null)state.canIssue=!!d.canIssue;
+    applyAccessUi();
+    invSetCounts(d.counts||{});
+    invUpdateEnvBadge(d.settings||{});
+    invPaintCurrentView();
+  }catch(e){
+    if(q('#invFootStatus'))q('#invFootStatus').textContent=e.message;
+    toast(e.message);
+  }
+}
+function invSetView(view){
+  if(view.startsWith('setup')&&!state.canSetup){toast('Kurulum yetkiniz yok');return}
+  state.view=view;
+  if(view.startsWith('ef_'))state.module='efatura';
+  else if(view.startsWith('ea_'))state.module='earsiv';
+  else if(view==='pending_sales')state.module='pending';
+  else if(view.startsWith('setup'))state.module='setup';
+  qa('[data-inv-module]').forEach(b=>b.classList.toggle('active',b.dataset.invModule===state.module));
+  qa('[data-inv-pane]').forEach(p=>p.classList.toggle('active',p.dataset.invPane===state.module));
+  const folderKey=view.startsWith('ef_out')?'ef_out':view.startsWith('ef_in')?'ef_in':view.startsWith('ea_out')?'ea_out':view.startsWith('ea_in')?'ea_in':view==='pending_sales'?'pending':view.startsWith('setup')?'setup':'';
+  if(folderKey){const f=q(`[data-inv-folder="${folderKey}"]`);f?.classList.add('open');const t=f?.querySelector('[data-inv-toggle] span:last-child');if(t)t.textContent='▾'}
+  invPaintCurrentView();
+}
+
+function gibSeriesPreview(series,next){
+  const ser=String(series||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)||'???';
+  const seq=Math.max(1,Math.min(999999999,Math.round(Number(next)||1)));
+  return `${ser}${new Date().getFullYear()}${String(seq).padStart(9,'0')}`;
+}
+function refreshInvoiceSeriesPreview(){
+  if(q('#invoiceEfaturaPreview'))q('#invoiceEfaturaPreview').textContent='Önizleme: '+gibSeriesPreview(q('#invoiceEfaturaSeries')?.value||'ATK',q('#invoiceEfaturaNext')?.value||1);
+  if(q('#invoiceEarsivPreview'))q('#invoiceEarsivPreview').textContent='Önizleme: '+gibSeriesPreview(q('#invoiceEarsivSeries')?.value||'ATA',q('#invoiceEarsivNext')?.value||1);
+}
+function setVal(id,v){const el=q('#'+id);if(el)el.value=v??''}
+async function loadInvoiceIntegration(){
+  try{
+    const d=await api('/web-api/admin/invoice-integration'),s=d.settings||{};
+    if(q('#invoiceProvider'))q('#invoiceProvider').value=s.provider||'qnb-solist';
+    setVal('invoiceEnvironment',s.environment||'test');
+    setVal('invoiceCompanyVkn',s.companyVkn||'');
+    setVal('invoiceCompanyTitle',s.companyTitle||'');
+    setVal('invoiceCompanyTaxOffice',s.companyTaxOffice||'');
+    setVal('invoiceMersisNo',s.mersisNo||'');
+    setVal('invoiceCompanyPhone',s.companyPhone||'');
+    setVal('invoiceCompanyEmail',s.companyEmail||'');
+    setVal('invoiceCompanyAddress',s.companyAddress||'');
+    setVal('invoiceCompanyDistrict',s.companyDistrict||'');
+    setVal('invoiceCompanyCity',s.companyCity||'');
+    if(q('#invoiceEfaturaSeries'))q('#invoiceEfaturaSeries').value=(s.efaturaSeries||'ATK').toUpperCase();
+    if(q('#invoiceEarsivSeries'))q('#invoiceEarsivSeries').value=(s.earsivSeries||'ATA').toUpperCase();
+    if(q('#invoiceEfaturaNext'))q('#invoiceEfaturaNext').value=s.efaturaNext||1;
+    if(q('#invoiceEarsivNext'))q('#invoiceEarsivNext').value=s.earsivNext||1;
+    setVal('invoiceSenderAlias',s.senderAlias||s.gbAlias||'');
+    setVal('invoicePkAlias',s.pkAlias||'');
+    setVal('invoiceServiceUrl',s.webServiceUrl||'');
+    setVal('invoiceUsername',s.username||'');
+    setVal('invoicePassword',s.password||'');
+    if(q('#invoiceEnabled'))q('#invoiceEnabled').checked=!!s.enabled;
+    if(q('#invoiceDraftMode'))q('#invoiceDraftMode').checked=s.draftMode!==false;
+    if(q('#invoiceAutoDetect'))q('#invoiceAutoDetect').checked=s.autoDetectType!==false;
+    refreshInvoiceSeriesPreview();
   }catch(e){toast(e.message)}
 }
 
-function previewSeries(){
-  const y=new Date().getFullYear();
-  const pad=n=>String(Math.max(1,Number(n)||1)).padStart(9,'0');
-  const ef=String(formVal('efaturaSeries')||'ATK').toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)||'ATK';
-  const ea=String(formVal('earsivSeries')||'ATA').toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)||'ATA';
-  if(q('#efPrev'))q('#efPrev').textContent=`Önizleme: ${ef}${y}${pad(formVal('efaturaNext'))}`;
-  if(q('#eaPrev'))q('#eaPrev').textContent=`Önizleme: ${ea}${y}${pad(formVal('earsivNext'))}`;
-}
-
-function showStep(n){
-  state.step=Math.min(5,Math.max(1,n));
-  qa('[data-step]').forEach(b=>b.classList.toggle('active',Number(b.dataset.step)===state.step));
-  qa('[data-step-pane]').forEach(p=>p.classList.toggle('hidden',Number(p.dataset.stepPane)!==state.step));
-}
-
-function setupPayload(){
-  return{
-    companyTitle:formVal('companyTitle'),
-    companyVkn:formVal('companyVkn'),
-    companyTaxOffice:formVal('companyTaxOffice'),
-    mersisNo:formVal('mersisNo'),
-    companyPhone:formVal('companyPhone'),
-    companyEmail:formVal('companyEmail'),
-    companyAddress:formVal('companyAddress'),
-    companyDistrict:formVal('companyDistrict'),
-    companyCity:formVal('companyCity'),
-    efaturaSeries:formVal('efaturaSeries'),
-    efaturaNext:formVal('efaturaNext'),
-    earsivSeries:formVal('earsivSeries'),
-    earsivNext:formVal('earsivNext'),
-    provider:formVal('provider'),
-    senderAlias:formVal('senderAlias'),
-    gbAlias:formVal('senderAlias'),
-    pkAlias:formVal('pkAlias'),
-    webServiceUrl:formVal('webServiceUrl'),
-    username:formVal('username'),
-    password:formVal('password')||'********',
-    environment:formVal('environment'),
-    enabled:q('[name="enabled"]')?.checked===true,
-    draftMode:q('[name="draftMode"]')?.checked===true,
-    autoDetectType:q('[name="autoDetectType"]')?.checked===true
-  };
-}
-
-function renderChecks(checks){
-  q('#readyChecks').innerHTML=(checks||[]).map(c=>`<div class="checkrow ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${esc(c.name)}</b><span>${esc(c.detail||'')}</span></div>`).join('')||'<div class="empty">Henüz test edilmedi.</div>';
-}
-
-qa('[data-view]').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;paint()});
-q('#refreshBtn').onclick=()=>load().catch(e=>toast(e.message));
-q('#search').oninput=()=>paint();
-q('#prevStep').onclick=()=>showStep(state.step-1);
-q('#nextStep').onclick=()=>showStep(state.step+1);
-qa('[data-step]').forEach(b=>b.onclick=()=>showStep(Number(b.dataset.step)));
-['efaturaSeries','efaturaNext','earsivSeries','earsivNext'].forEach(n=>q(`[name="${n}"]`)?.addEventListener('input',previewSeries));
-q('#setupForm').onsubmit=async e=>{
-  e.preventDefault();
-  const st=q('#setupStatus');
-  st.textContent='Kaydediliyor…';
+qa('[data-inv-module]').forEach(btn=>btn.addEventListener('click',()=>invSetModule(btn.dataset.invModule)));
+qa('[data-inv-toggle]').forEach(btn=>btn.addEventListener('click',()=>{
+  const folder=btn.closest('.inv-folder');
+  folder?.classList.toggle('open');
+  const mark=btn.querySelector('span:last-child');
+  if(mark)mark.textContent=folder?.classList.contains('open')?'▾':'▸';
+}));
+qa('[data-inv-view]').forEach(btn=>btn.addEventListener('click',()=>invSetView(btn.dataset.invView)));
+q('#invRefreshBtn')?.addEventListener('click',()=>loadInvoiceCenter());
+q('#invSearch')?.addEventListener('input',()=>invPaintCurrentView());
+q('#invUnreadOnly')?.addEventListener('change',()=>invPaintCurrentView());
+q('#invPortalQueryBtn')?.addEventListener('click',async()=>{
+  q('#invFootStatus').textContent='Portal sorgulanıyor…';
   try{
-    await api('/web-api/admin/invoice-integration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(setupPayload())});
-    const test=await api('/web-api/admin/invoice-integration/test',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    renderChecks(test.checks||[]);
-    st.textContent=test.ok?'Kurulum kaydedildi. Altyapı hazır.':'Kaydedildi. Kırmızı satırları tamamlayın.';
-    toast('Kurulum kaydedildi');
-    await load();
-  }catch(err){st.textContent=err.message}
-};
-q('#testBtn').onclick=async()=>{
-  try{
-    const test=await api('/web-api/admin/invoice-integration/test',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    renderChecks(test.checks||[]);
-    q('#setupStatus').textContent=test.note||'Test tamam';
-  }catch(e){toast(e.message)}
-};
-q('#issueSelectedBtn').onclick=async()=>{
-  if(!state.canIssue)return toast('Fatura kesme yetkiniz yok');
-  const ids=[...qa('[data-check]:checked')].map(x=>x.dataset.check);
+    const r=await api('/web-api/admin/invoice-center/portal-query',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    toast(r.message||'Portal sorgu tamam');
+    q('#invFootStatus').textContent=r.message||'Tamam';
+    await loadInvoiceCenter();
+  }catch(e){toast(e.message);q('#invFootStatus').textContent=e.message}
+});
+q('#invRetrySelectedBtn')?.addEventListener('click',async()=>{
+  const ids=[...state.selected];
   if(!ids.length)return toast('Önce satır seçin');
   for(const id of ids){
-    try{
-      if(state.view==='pending')await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-      else await api('/web-api/admin/invoice-queue/'+encodeURIComponent(id)+'/retry',{method:'POST',body:'{}'});
-    }catch(_){}
+    try{await api('/web-api/admin/invoice-queue/'+encodeURIComponent(id)+'/retry',{method:'POST',body:'{}'})}catch(_){}
   }
-  toast('Seçilenler işlendi');
-  await load();
-};
+  toast(`${ids.length} kayıt tekrar denendi`);
+  await loadInvoiceCenter();
+});
+q('#invIssueSelectedBtn')?.addEventListener('click',async()=>{
+  if(!state.canIssue)return toast('Fatura kesme yetkiniz yok');
+  const ids=[...state.selected];
+  if(!ids.length)return toast('Önce satır seçin');
+  if(state.view==='pending_sales'){
+    for(const id of ids){
+      try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})}catch(_){}
+    }
+    toast(`${ids.length} satış QNB kuyruğuna alındı`);
+  }else{
+    for(const id of ids){
+      try{await api('/web-api/admin/invoice-queue/'+encodeURIComponent(id)+'/retry',{method:'POST',body:'{}'})}catch(_){}
+    }
+    toast(`${ids.length} fatura işlendi`);
+  }
+  await loadInvoiceCenter();
+});
+q('#invRunReadyTestBtn')?.addEventListener('click',()=>invoiceConnectionTestForCenter());
+['invoiceEfaturaSeries','invoiceEarsivSeries','invoiceEfaturaNext','invoiceEarsivNext'].forEach(id=>{
+  q('#'+id)?.addEventListener('input',refreshInvoiceSeriesPreview);
+});
+q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(!state.canSetup)return toast('Kurulum yetkiniz yok');
+  const st=q('#invoiceIntegrationStatus');
+  try{
+    await api('/web-api/admin/invoice-integration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      provider:q('#invoiceProvider')?.value||'qnb-solist',
+      environment:q('#invoiceEnvironment').value,
+      companyVkn:q('#invoiceCompanyVkn').value,
+      companyTitle:q('#invoiceCompanyTitle').value,
+      companyTaxOffice:q('#invoiceCompanyTaxOffice')?.value||'',
+      mersisNo:q('#invoiceMersisNo')?.value||'',
+      companyPhone:q('#invoiceCompanyPhone')?.value||'',
+      companyEmail:q('#invoiceCompanyEmail')?.value||'',
+      companyAddress:q('#invoiceCompanyAddress')?.value||'',
+      companyDistrict:q('#invoiceCompanyDistrict')?.value||'',
+      companyCity:q('#invoiceCompanyCity')?.value||'',
+      efaturaSeries:q('#invoiceEfaturaSeries')?.value||'ATK',
+      earsivSeries:q('#invoiceEarsivSeries')?.value||'ATA',
+      efaturaNext:q('#invoiceEfaturaNext')?.value||1,
+      earsivNext:q('#invoiceEarsivNext')?.value||1,
+      senderAlias:q('#invoiceSenderAlias').value,
+      gbAlias:q('#invoiceSenderAlias').value,
+      pkAlias:q('#invoicePkAlias')?.value||'',
+      webServiceUrl:q('#invoiceServiceUrl').value,
+      username:q('#invoiceUsername').value,
+      password:q('#invoicePassword').value,
+      enabled:q('#invoiceEnabled').checked,
+      draftMode:q('#invoiceDraftMode').checked,
+      autoDetectType:q('#invoiceAutoDetect').checked
+    })});
+    st.textContent='QNB ayarları kaydedildi · e-Fatura ATK / e-Arşiv ATA.';
+    st.className='form-status success';
+    await loadInvoiceIntegration();
+    invoiceConnectionTestForCenter();
+    await loadInvoiceCenter();
+  }catch(err){st.textContent=err.message;st.className='form-status error'}
+});
+q('#invoiceConnectionTestBtn')?.addEventListener('click',async()=>{
+  const box=q('#invoiceConnectionTestResult');
+  box.innerHTML='<p>Kontrol ediliyor…</p>';
+  try{
+    const r=await api('/web-api/admin/invoice-integration/test',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    box.innerHTML=(r.checks||[]).map(c=>`<div class="self-test-row ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${c.name}</b><small>${c.detail}</small></div>`).join('')+`<div class="self-test-row"><small>${r.note||''}</small></div>`;
+  }catch(e){box.innerHTML=`<div class="self-test-row bad"><b>Test çalışmadı</b><small>${e.message}</small></div>`}
+});
 
 boot();

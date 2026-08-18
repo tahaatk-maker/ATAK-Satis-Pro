@@ -1718,8 +1718,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.155-personel-fatura',
-  build:'fix-v155',
+  version:'6.3.156-personel-fatura',
+  build:'fix-v156',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),

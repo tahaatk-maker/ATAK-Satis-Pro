@@ -1,74 +1,157 @@
 :root{
-  --navy:#071a33;--blue:#0d3b6d;--ink:#15233a;--muted:#5b6d86;--line:#d5e0ee;--soft:#eef2f7;--gold:#dda20c;
+  --navy:#0b2a4a;--ink:#15233a;--muted:#667890;--line:#d5e0ee;--soft:#eef2f7;--blue:#1d4ed8;
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--soft);color:var(--ink);font:14px/1.45 "Segoe UI","Helvetica Neue",Arial,sans-serif}
-body{display:flex;flex-direction:column}
-a{color:inherit}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;background:linear-gradient(115deg,#071a33,#0d3b6d 60%,#125ea3);color:#fff}
-.topbar .brand{display:flex;align-items:center;gap:12px}
-.topbar img{height:36px;background:#fff;border-radius:8px;padding:3px}
-.topbar small{display:block;letter-spacing:.12em;font-size:10px;color:#9ec0ef;font-weight:800}
-.topbar h1{margin:0;font-size:18px}
-.topbar .acts{display:flex;gap:8px;flex-wrap:wrap}
-.btn{border:0;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-.btn.gold{background:var(--gold);color:#1a1300}
-.btn.ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.22)}
-.btn.navy{background:#0b2a4a;color:#fff}
-.btn.light{background:#e8eef7;color:#0b2a4a}
-.shell{flex:1;display:grid;grid-template-columns:280px 1fr;min-height:0}
-.side{background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
-.env{margin:12px;padding:10px 12px;border-radius:10px;font-weight:800;font-size:12px;border:1px solid #fdba74;background:#fff7ed;color:#c2410c}
-.env.live{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
-.env.off{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
-.nav{padding:8px;display:grid;gap:6px;overflow:auto}
-.nav button{text-align:left;border:1px solid var(--line);background:#f8fafc;border-radius:10px;padding:10px 12px;font-weight:800;cursor:pointer}
-.nav button.active{background:#0b2a4a;color:#fff;border-color:#0b2a4a}
-.nav button span{display:block;font-size:11px;font-weight:600;opacity:.8;margin-top:2px}
-.main{display:flex;flex-direction:column;min-width:0;min-height:0}
-.head{padding:16px 20px 10px}
-.head h2{margin:0;font-size:22px}
-.head p{margin:6px 0 0;color:var(--muted);max-width:820px}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:0 20px 12px}
-.toolbar input,.toolbar select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:180px}
-.panel{flex:1;overflow:auto;background:#fff;margin:0 20px 16px;border:1px solid var(--line);border-radius:12px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{position:sticky;top:0;background:#f4f7fb;text-align:left;padding:10px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.04em;color:#5b6d86}
-td{padding:10px;border-bottom:1px solid #eef2f7;vertical-align:middle}
-tr:hover td{background:#f8fbff}
-tr.clickable{cursor:pointer}
-.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid #dbe5f0;background:#f8fafc}
-.badge.issued,.badge.queued,.badge.draft_sent{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
-.badge.error{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
-.badge.pending,.badge.ready{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
-.empty{padding:48px 20px;text-align:center;color:var(--muted);font-weight:700}
-.gate{max-width:480px;margin:12vh auto;background:#fff;padding:28px;border-radius:16px;box-shadow:0 18px 40px rgba(7,26,51,.12);text-align:center}
-.gate a{display:inline-block;margin-top:12px}
-.wiz{padding:18px 20px 40px;max-width:980px}
-.steps{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
-.steps button{flex:1;min-width:140px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px;text-align:left;cursor:pointer}
-.steps button b{display:block;font-size:11px;color:var(--muted)}
-.steps button.active{border-color:#1d4ed8;background:#eff6ff}
-.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
-.card h3{margin:0 0 6px}
-.card p{margin:0 0 12px;color:var(--muted);font-size:13px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-label{display:grid;gap:6px;font-weight:700;font-size:13px;color:#334155}
-input,select,textarea{border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit}
-textarea{min-height:70px;resize:vertical}
-.check{display:flex;align-items:center;gap:8px;font-weight:700}
-.hint{font-weight:600;color:var(--muted);font-size:12px}
-.row-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-.checks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.checkrow{display:flex;justify-content:space-between;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;font-size:13px}
-.checkrow.ok{background:#f0fdf4;border-color:#bbf7d0}
-.checkrow.bad{background:#fef2f2;border-color:#fecaca}
-.status{margin-top:10px;font-weight:700}
+html,body{margin:0;height:100%;background:#dce4ee;color:var(--ink);font:14px/1.45 "Segoe UI","Helvetica Neue",Arial,sans-serif}
+a{color:inherit;text-decoration:none}
+.hidden{display:none!important}
 .toast{position:fixed;right:16px;bottom:16px;background:#0b2a4a;color:#fff;padding:10px 14px;border-radius:10px;display:none;z-index:9}
 .toast.show{display:block}
-.hidden{display:none!important}
-@media(max-width:900px){
-  .shell{grid-template-columns:1fr}
-  .side{border-right:0;border-bottom:1px solid var(--line)}
-  .grid2,.checks{grid-template-columns:1fr}
+.gate{max-width:480px;margin:12vh auto;background:#fff;padding:28px;border-radius:16px;box-shadow:0 18px 40px rgba(7,26,51,.12);text-align:center}
+.gate small{display:block;letter-spacing:.12em;font-size:11px;font-weight:800;color:#9ec0ef}
+.gate h1{margin:8px 0}
+.gate a{display:inline-flex;margin:8px 6px 0;padding:10px 14px}
+
+#app{height:100%}
+#invoiceCenter{
+  --navy:#0b2a4a;--ink:#15233a;--muted:#667890;--line:#d5e0ee;--soft:#eef2f7;--blue:#1d4ed8;
+  margin:0;padding:0;width:100%;min-height:100vh;background:#dce4ee;
+  font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif;
+}
+#invoiceCenter .inv-shell{
+  display:grid;grid-template-columns:minmax(280px,22vw) minmax(0,1fr);gap:0;min-height:100vh;
+}
+#invoiceCenter .inv-side{
+  background:#f4f7fb;border-right:1px solid #c9d5e4;padding:0;display:flex;flex-direction:column;min-height:100%;
+}
+#invoiceCenter .inv-side-brand{padding:16px 16px 14px;background:linear-gradient(135deg,#071a33,#0d3b6d);color:#fff}
+#invoiceCenter .inv-side-brand small{display:block;color:#9ec0ef;font-size:11px;font-weight:800;letter-spacing:.1em}
+#invoiceCenter .inv-side-brand b{display:block;margin-top:6px;font-size:20px;letter-spacing:-.02em}
+#invoiceCenter .inv-env{
+  display:inline-flex;margin-top:10px;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:800;
+  background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;
+}
+#invoiceCenter .inv-env.test{background:#fff7ed;color:#c2410c;border-color:#fdba74}
+#invoiceCenter .inv-env.off{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+#invoiceCenter .inv-modules{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;border-bottom:1px solid #d5e0ee;background:#eaf0f7}
+#invoiceCenter .inv-mod-btn{
+  border:1.5px solid #c5d3e4;background:#fff;border-radius:12px;padding:14px 12px;cursor:pointer;min-height:52px;
+  font:inherit;font-size:14px;font-weight:800;color:#334155;text-align:left;display:flex;justify-content:space-between;align-items:center;
+}
+#invoiceCenter .inv-mod-btn[data-inv-module="pending"],
+#invoiceCenter .inv-mod-btn[data-inv-module="setup"]{grid-column:1/-1}
+#invoiceCenter .inv-mod-btn:hover{border-color:#93c5fd;background:#f8fbff}
+#invoiceCenter .inv-mod-btn.active{background:#0b2a4a;border-color:#0b2a4a;color:#fff;box-shadow:0 8px 18px rgba(11,42,74,.18)}
+#invoiceCenter .inv-tree{flex:1;overflow:auto;padding:10px 10px 24px}
+#invoiceCenter .inv-mod-pane{display:none}
+#invoiceCenter .inv-mod-pane.active{display:block}
+#invoiceCenter .inv-folder{margin:0 0 8px;background:#fff;border:1px solid #d5e0ee;border-radius:12px;overflow:hidden}
+#invoiceCenter .inv-folder>button{
+  width:100%;text-align:left;border:0;background:#f8fafc;padding:12px 14px;
+  font:inherit;font-weight:800;font-size:14px;color:var(--navy);cursor:pointer;display:flex;justify-content:space-between;gap:8px;
+}
+#invoiceCenter .inv-folder.open>button{background:#e8f1fb;border-bottom:1px solid #d5e0ee}
+#invoiceCenter .inv-sub{display:none;padding:6px}
+#invoiceCenter .inv-folder.open .inv-sub{display:grid;gap:4px}
+#invoiceCenter .inv-sub button{
+  border:0;background:transparent;text-align:left;padding:11px 12px;border-radius:10px;cursor:pointer;
+  font:inherit;font-size:13px;font-weight:750;color:#3b4d66;display:flex;justify-content:space-between;align-items:center;gap:8px;
+}
+#invoiceCenter .inv-sub button:hover{background:#f1f5f9}
+#invoiceCenter .inv-sub button.active{background:#1d4ed8;color:#fff}
+#invoiceCenter .inv-count{
+  min-width:26px;padding:2px 8px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:11px;font-weight:800;text-align:center;
+}
+#invoiceCenter .inv-sub button.active .inv-count{background:rgba(255,255,255,.22);color:#fff}
+#invoiceCenter .inv-main{display:grid;grid-template-rows:auto auto 1fr auto;gap:0;min-width:0;background:#eef2f7}
+#invoiceCenter .inv-head{
+  background:linear-gradient(115deg,#071a33,#0d3b6d 55%,#125ea3);color:#fff;padding:18px 20px;
+  display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;
+}
+#invoiceCenter .inv-head small{display:block;color:#9ec0ef;font-size:11px;font-weight:800;letter-spacing:.1em}
+#invoiceCenter .inv-head h2{margin:4px 0 0;font-size:24px}
+#invoiceCenter .inv-head p{margin:6px 0 0;color:#d5e6fb;font-size:13px;font-weight:600;max-width:none}
+#invoiceCenter .inv-head-actions{display:flex;gap:8px;flex-wrap:wrap}
+#invoiceCenter .inv-btn{
+  border:0;border-radius:10px;padding:11px 14px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;
+  background:#fff;color:#0b2a4a;display:inline-flex;align-items:center;
+}
+#invoiceCenter .inv-btn.primary{background:#dda20c;color:#1a1300}
+#invoiceCenter .inv-btn.ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25)}
+#invoiceCenter .inv-toolbar{
+  background:#fff;border-bottom:1px solid #d5e0ee;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+}
+#invoiceCenter .inv-toolbar input,#invoiceCenter .inv-toolbar select{
+  border:1px solid var(--line);border-radius:9px;padding:10px 12px;font:inherit;font-size:13px;min-width:0;
+}
+#invoiceCenter .inv-toolbar input[type="search"]{flex:1;min-width:220px}
+#invoiceCenter .inv-toolbar .inv-btn{background:#eef4fb}
+#invoiceCenter .inv-toolbar .inv-btn.primary{background:#1d4ed8;color:#fff}
+#invoiceCenter .inv-panel{background:#fff;overflow:auto;min-height:0}
+#invoiceCenter .inv-panel table{width:100%;border-collapse:collapse;font-size:13px}
+#invoiceCenter .inv-panel th{
+  position:sticky;top:0;background:#f1f5f9;color:#334155;text-align:left;padding:12px 10px;border-bottom:1px solid var(--line);
+  font-size:12px;font-weight:800;white-space:nowrap;
+}
+#invoiceCenter .inv-panel td{padding:11px 10px;border-bottom:1px solid #eef2f7;color:var(--ink);vertical-align:middle}
+#invoiceCenter .inv-panel tr:hover td{background:#f8fafc}
+#invoiceCenter .inv-panel tr.selected td{background:#fff7ed}
+#invoiceCenter .inv-panel tr.clickable{cursor:pointer}
+#invoiceCenter .inv-badge{
+  display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid transparent;
+}
+#invoiceCenter .inv-badge.pending,#invoiceCenter .inv-badge.ready{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+#invoiceCenter .inv-badge.queued,#invoiceCenter .inv-badge.draft_sent,#invoiceCenter .inv-badge.queued_remote{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+#invoiceCenter .inv-badge.issued{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
+#invoiceCenter .inv-badge.error{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+#invoiceCenter .inv-badge.cancelled{background:#f8fafc;color:#64748b;border-color:#e2e8f0}
+#invoiceCenter .inv-empty{padding:64px 24px;text-align:center;color:var(--muted);font-weight:700;font-size:15px}
+#invoiceCenter .inv-foot{
+  background:#f8fafc;border-top:1px solid #d5e0ee;padding:10px 16px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  font-size:12px;font-weight:700;color:#475569;
+}
+#invoiceCenter .inv-settings-box{padding:20px 24px 40px;display:grid;gap:12px;width:100%;max-width:none;box-sizing:border-box}
+#invoiceCenter .inv-settings-box .note{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+#invoiceCenter #invoiceIntegrationForm{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;align-content:start;width:100%;
+}
+#invoiceCenter #invoiceIntegrationForm .panel-head,
+#invoiceCenter #invoiceIntegrationForm>label:not(.check),
+#invoiceCenter #invoiceIntegrationForm .button-row,
+#invoiceCenter #invoiceIntegrationForm .form-status,
+#invoiceCenter #invoiceIntegrationForm .self-test-result{grid-column:1/-1}
+#invoiceCenter #invoiceIntegrationForm .two-col{display:contents}
+#invoiceCenter #invoiceIntegrationForm .two-col>label{display:grid;gap:6px}
+#invoiceCenter #invoiceIntegrationForm label{display:grid;gap:6px;font-weight:700;color:#334155;font-size:13px}
+#invoiceCenter #invoiceIntegrationForm input,#invoiceCenter #invoiceIntegrationForm select,#invoiceCenter #invoiceIntegrationForm textarea{
+  min-height:44px;border:1px solid #d5e0ee;border-radius:10px;padding:0 12px;font:inherit;background:#fff;
+}
+#invoiceCenter #invoiceIntegrationForm textarea{min-height:72px;padding:10px 12px;resize:vertical}
+#invoiceCenter #invoiceIntegrationForm label.check{display:flex;align-items:center;gap:8px;grid-column:span 1}
+#invoiceCenter #invoiceIntegrationForm .button-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+#invoiceCenter #invoiceIntegrationForm .button-row .primary,#invoiceCenter #invoiceIntegrationForm .button-row .secondary-btn{
+  min-height:46px;padding:0 18px;border-radius:10px;font-weight:800;border:0;cursor:pointer;
+}
+#invoiceCenter #invoiceIntegrationForm .button-row .primary{background:#1d4ed8;color:#fff}
+#invoiceCenter #invoiceIntegrationForm .button-row .secondary-btn{background:#eef4fb;color:#0b2a4a}
+#invoiceCenter .inv-checks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#invoiceCenter .inv-check{display:flex;justify-content:space-between;gap:10px;padding:12px 14px;border-radius:10px;background:#f8fafc;border:1px solid #eef2f7;font-size:13px}
+#invoiceCenter .inv-check.ok{border-color:#bbf7d0;background:#f0fdf4}
+#invoiceCenter .inv-check.bad{border-color:#fecaca;background:#fef2f2}
+#invoiceCenter #invRunReadyTestBtn{display:none}
+#invoiceCenter .form-status{font-weight:800;font-size:13px}
+#invoiceCenter .form-status.success{color:#047857}
+#invoiceCenter .form-status.error{color:#b91c1c}
+#invoiceCenter .self-test-result{display:grid;gap:6px}
+#invoiceCenter .self-test-row{padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #eef2f7;display:flex;justify-content:space-between;gap:8px}
+#invoiceCenter .self-test-row.ok{background:#f0fdf4;border-color:#bbf7d0}
+#invoiceCenter .self-test-row.bad{background:#fef2f2;border-color:#fecaca}
+#invoiceCenter .field-hint{font-weight:600;color:var(--muted);font-size:12px}
+@media(max-width:980px){
+  #invoiceCenter .inv-shell{grid-template-columns:1fr;min-height:auto}
+  #invoiceCenter .inv-side{border-right:0;border-bottom:1px solid #c9d5e4}
+  #invoiceCenter .inv-modules{grid-template-columns:1fr 1fr}
+  #invoiceCenter .inv-mod-btn{font-size:13px;padding:10px;min-height:44px}
+  #invoiceCenter #invoiceIntegrationForm{grid-template-columns:1fr}
+  #invoiceCenter .inv-checks{grid-template-columns:1fr}
 }
