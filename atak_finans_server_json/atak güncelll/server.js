@@ -21,20 +21,30 @@ const ROOT = __dirname;
 function loadEnvFile(){
   const p=path.join(ROOT,'.env');
   if(!fs.existsSync(p))return;
-  for(const line of fs.readFileSync(p,'utf8').split(/\n/)){
-    const t=String(line||'').trim();
+  // ATAK_OWNER_ONLY / MFA: .env son değer kazanır (PM2 dump'taki 1'i ezmek için)
+  const forceKeys=new Set(['ATAK_OWNER_ONLY','ATAK_MFA_ENABLED']);
+  for(const rawLine of fs.readFileSync(p,'utf8').replace(/^\uFEFF/,'').split(/\n/)){
+    let t=String(rawLine||'').trim();
     if(!t||t.startsWith('#'))continue;
-    const i=t.indexOf('='); if(i<1)continue;
-    const key=t.slice(0,i).trim();
-    if(!/^[A-Z0-9_]+$/.test(key) || process.env[key]!=null)continue;
-    let val=t.slice(i+1).trim();
+    t=t.replace(/^export\s+/,'');
+    const m=t.match(/^([A-Z0-9_]+)\s*=\s*(.*)$/);
+    if(!m)continue;
+    const key=m[1];
+    let val=String(m[2]||'').trim();
     if((val.startsWith('"')&&val.endsWith('"'))||(val.startsWith("'")&&val.endsWith("'")))val=val.slice(1,-1);
+    if(process.env[key]!=null && !forceKeys.has(key))continue;
     process.env[key]=val;
   }
 }
 loadEnvFile();
 const PORT = Number(process.env.PORT || 3100);
-const STORE_PATH = path.join(ROOT, 'data', 'store.json');
+const STORE_FILE = 'store.json';
+const STORE_PATH = path.join(ROOT, 'data', STORE_FILE);
+const STORE_SEARCH_DIRS = Array.from(new Set([
+  path.join(ROOT, 'data'),
+  '/root/atak-v10/data',
+  '/root/atakhome-platform/data',
+]));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const trainingUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 80 * 1024 * 1024 } });
@@ -306,7 +316,55 @@ function ensureStore(store) {
   }
   return store;
 }
+function storeFileSize(p){
+  try{
+    const st=fs.statSync(p);
+    return st.isFile()?st.size:0;
+  }catch{ return 0; }
+}
+function listStoreCandidates(){
+  const out=[];
+  for(const dir of STORE_SEARCH_DIRS){
+    if(!fs.existsSync(dir))continue;
+    let names=[];
+    try{ names=fs.readdirSync(dir); }catch{ continue; }
+    for(const name of names){
+      if(name===STORE_FILE || name.startsWith(STORE_FILE+'.bak-')) out.push(path.join(dir,name));
+    }
+  }
+  return out;
+}
+function bestExistingStorePath(){
+  let best='';
+  let bestSize=-1;
+  let bestMtime=0;
+  for(const p of listStoreCandidates()){
+    try{
+      const st=fs.statSync(p);
+      if(!st.isFile() || st.size<200)continue;
+      if(st.size>bestSize || (st.size===bestSize && st.mtimeMs>bestMtime)){
+        best=p; bestSize=st.size; bestMtime=st.mtimeMs;
+      }
+    }catch{}
+  }
+  return best;
+}
+function recoverStoreFile(){
+  if(storeFileSize(STORE_PATH)>=200)return true;
+  const src=bestExistingStorePath();
+  if(!src)return false;
+  fs.mkdirSync(path.dirname(STORE_PATH),{recursive:true});
+  if(path.resolve(src)!==path.resolve(STORE_PATH)){
+    fs.copyFileSync(src,STORE_PATH);
+    console.warn('[store] recovered from',src,'->',STORE_PATH);
+  }
+  return storeFileSize(STORE_PATH)>=200;
+}
 function readStore(){
+  if(storeFileSize(STORE_PATH)<200) recoverStoreFile();
+  if(storeFileSize(STORE_PATH)<200){
+    throw new Error('store.json eksik: '+STORE_PATH+' (yedek kopya da bulunamadi)');
+  }
   const s=ensureStore(JSON.parse(fs.readFileSync(STORE_PATH,'utf8')));
   if(s.__istikbalCategoryFixed){
     const n=s.__istikbalCategoryFixed;
@@ -1720,9 +1778,10 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.159-mobil-ui',
-  build:'fix-v159',
+  version:'6.3.160-store-owner',
+  build:'fix-v160',
   ownerOnly:ownerOnlyEnabled(),
+  storeOk:storeFileSize(STORE_PATH)>=200,
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
   company:ATAK_COMPANY.legalName,
@@ -7471,6 +7530,7 @@ app.get('/web-api/*',(req,res)=>res.status(404).json({error:'Bulunamadı'}));
 app.get('/foundation-api/*',(req,res)=>res.status(404).json({error:'Bulunamadı'}));
 app.get('*',(req,res)=>res.redirect('/personel'));
 app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'Sunucu hatası'});});
+recoverStoreFile();
 ensureStore(readStore()); writeStore(readStore());
 app.listen(PORT,'127.0.0.1',()=>{
   console.log(`Atak Home ERP V2 http://127.0.0.1:${PORT}`);

@@ -1,8 +1,8 @@
 # ATAK VPS kesin deploy (fix-v89) — health 6.3.90-mobilya-alis-v2 olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.159-mobil-ui
-EXPECT_BUILD=fix-v159
+EXPECT_HEALTH=6.3.160-store-owner
+EXPECT_BUILD=fix-v160
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -92,6 +92,8 @@ check "yeni personel arayuzu" grep -q 'personel-shell.css' "$SRC/public/personel
 check "kokpit css" test -f "$SRC/public/assets/admin-cockpit.css"
 check "kokpit api" grep -q 'dashboard-cockpit' "$SRC/server.js"
 check "kiosk personel kartlari" grep -q 'modules kiosk' "$SRC/public/personel.html"
+check "personel girisi .env son deger" grep -q "forceKeys" "$SRC/server.js"
+check "store.json yedek kurtarma" grep -q "recoverStoreFile" "$SRC/server.js"
 if grep -q 'data-finance-jump="uninvoiced"' "$SRC/public/admin.html"; then
   echo "   HATALI: Finans menusunde Kesilmeyen hala var"; exit 1
 fi
@@ -149,6 +151,61 @@ for D in "${DIRS[@]}"; do
 done
 [ "$SYNCED" -gt 0 ] || { echo "NO_DIRS"; exit 1; }
 
+step "store.json yedekleniyor / kurtariliyor"
+recover_store_file(){
+  local dest_dir="$1"
+  mkdir -p "$dest_dir/data"
+  local dest="$dest_dir/data/store.json"
+  local dest_sz=0
+  if [ -f "$dest" ]; then
+    dest_sz=$(stat -c%s "$dest" 2>/dev/null || echo 0)
+  fi
+  if [ "${dest_sz:-0}" -ge 200 ]; then
+    echo "   store=ok $dest bytes=$dest_sz"
+    return 0
+  fi
+  local best="" bestsz=0
+  local f sz
+  shopt -s nullglob
+  for f in \
+    /root/atak-v10/data/store.json \
+    /root/atakhome-platform/data/store.json \
+    /root/atak-v10/data/store.json.bak-* \
+    /root/atakhome-platform/data/store.json.bak-* \
+    "$dest_dir/data/store.json.bak-"*
+  do
+    [ -f "$f" ] || continue
+    sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
+    [ "${sz:-0}" -ge 200 ] || continue
+    if [ "$sz" -gt "$bestsz" ]; then
+      best="$f"
+      bestsz="$sz"
+    fi
+  done
+  shopt -u nullglob
+  if [ -z "$best" ]; then
+    echo "   store=MISSING $dest — yedek bulunamadi"
+    return 1
+  fi
+  cp -a "$best" "$dest"
+  echo "   store=recovered from=$best bytes=$bestsz dest=$dest"
+}
+STORE_OK=0
+for D in "${DIRS[@]}"; do
+  [ -d "$D" ] || continue
+  if recover_store_file "$D"; then STORE_OK=1; fi
+done
+if ! recover_store_file "$APP"; then
+  echo "FAIL_STORE_JSON_EKSIK"
+  echo "   /root/atak-v10/data/store.json yok. Canli veri /root/atakhome-platform/data veya .bak- dosyasindan kopyalanamadi."
+  echo "   Bos store.json OLUSTURULMADI (musteri/satis verisi silinmesin diye)."
+  FAIL_STORE=1
+else
+  FAIL_STORE=""
+  STORE_OK=1
+fi
+echo "STORE_OK=$STORE_OK APP_STORE_BYTES=$(stat -c%s "$APP/data/store.json" 2>/dev/null || echo 0)"
+
 step "servis yeniden baslatiliyor"
 ENVF="$APP/.env"
 [ -f "$ENVF" ] || ENVF=/root/atak-v10/.env
@@ -171,19 +228,24 @@ done
 sleep 1
 
 step "personel girisi aciliyor (ATAK_OWNER_ONLY=0)"
-ensure_env_kv(){
+force_env_kv(){
   local file="$1" key="$2" val="$3"
   [ -n "$file" ] || return 0
   mkdir -p "$(dirname "$file")" 2>/dev/null || true
-  if [ -f "$file" ] && grep -qE "^${key}=" "$file"; then
-    sed -i "s/^${key}=.*/${key}=${val}/" "$file"
-  else
-    printf '%s=%s\n' "$key" "$val" >> "$file"
-  fi
+  touch "$file"
+  # export KEY=, bosluklu KEY =, CRLF, tekrarlayan satirlar — hepsini sil, tek satir yaz
+  sed -i -E "/^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=/d" "$file"
+  printf '%s=%s\n' "$key" "$val" >> "$file"
 }
-ensure_env_kv "$ENVF" ATAK_OWNER_ONLY 0
+for D in "${DIRS[@]}" "$APP" /root/atak-v10 /root/atakhome-platform; do
+  [ -d "$D" ] || continue
+  force_env_kv "$D/.env" ATAK_OWNER_ONLY 0
+  force_env_kv "$D/.env" ATAK_MFA_ENABLED 0
+done
+force_env_kv "$ENVF" ATAK_OWNER_ONLY 0
+unset ATAK_OWNER_ONLY || true
 export ATAK_OWNER_ONLY=0
-echo "   $ENVF ATAK_OWNER_ONLY=0"
+echo "   .env ATAK_OWNER_ONLY=0 (PM2 env ezilecek)"
 
 cd "$APP"
 if [ ! -d "$APP/node_modules" ] && [ -f "$APP/package.json" ]; then
@@ -217,6 +279,15 @@ if echo "$HEALTH" | grep -q '"ownerOnly":true'; then
   FAIL_MSG="ownerOnly=true — personel girisi kapali"
   ok=0
 fi
+if echo "$HEALTH" | grep -q '"storeOk":false'; then
+  echo "FAIL_STORE_JSON"
+  FAIL_MSG="store.json eksik"
+  ok=0
+fi
+if [ -n "${FAIL_STORE:-}" ]; then
+  FAIL_MSG="store.json eksik — yedek kopya da bulunamadi"
+  ok=0
+fi
 
 if [ "$ok" != "1" ]; then
   if [ -z "$FAIL_MSG" ]; then
@@ -239,6 +310,8 @@ PROOF="$APP/public/assets/_deploy-check.txt"
   echo "health=$HEALTH"
   echo "search_http=$SEARCH_HTTP"
   echo "owner_only=$(echo "$HEALTH" | grep -o '"ownerOnly":[^,}]*' || true)"
+  echo "store_ok=$(echo "$HEALTH" | grep -o '"storeOk":[^,}]*' || true)"
+  echo "store_bytes=$(stat -c%s "$APP/data/store.json" 2>/dev/null || echo 0)"
   echo "admin_js_has_build=$(grep -c "ATAK_ADMIN_BUILD=$EXPECT_BUILD" "$APP/public/assets/admin.js" || true)"
   echo "admin_html_cache=$(grep -o "admin.js?v=[^\"]*" "$APP/public/admin.html" | head -1)"
   echo "finance_has_kesilmeyen=$(grep -c 'data-finance-jump=\"uninvoiced\"' "$APP/public/admin.html" || true)"
