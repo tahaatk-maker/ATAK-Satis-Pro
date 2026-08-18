@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>e-Fatura Merkezi · ATAK Pazarlama</title>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v153"/>
+</head>
+<body>
+  <div class="gate hidden" id="gate">
+    <small>ATAK PAZARLAMA</small>
+    <h1>e-Fatura Merkezi</h1>
+    <p>Bu ekran yönetim girişi ister. Önce panele girin, sonra fatura ayrı sekmede açılır.</p>
+    <a class="btn navy" href="/web-admin">Yönetim paneline git</a>
+  </div>
+
+  <div id="app" class="hidden" style="display:flex;flex-direction:column;height:100%">
+    <header class="topbar">
+      <div class="brand">
+        <img src="/assets/atak-pazarlama-full.png?v=logo5" alt="ATAK"/>
+        <div>
+          <small>QNB SOLIST · GİB UYUMLU</small>
+          <h1>e-Fatura Merkezi</h1>
+        </div>
+      </div>
+      <div class="acts">
+        <a class="btn ghost" href="/web-admin">← Panele dön</a>
+        <button class="btn gold" id="refreshBtn" type="button">Yenile</button>
+      </div>
+    </header>
+    <div class="shell">
+      <aside class="side">
+        <div class="env off" id="envBadge">Bağlantı kapalı</div>
+        <nav class="nav">
+          <button type="button" class="active" data-view="pending"><b>Kesilmeyen faturalar</b><span id="cPending">0 satış bekliyor</span></button>
+          <button type="button" data-view="queue"><b>Giden kutu</b><span id="cQueue">QNB kuyruğu</span></button>
+          <button type="button" data-view="sent"><b>Kesilen / gönderilen</b><span>Arşiv ve portal</span></button>
+          <button type="button" data-view="setup"><b>Firma kurulumu</b><span>VKN, seri, QNB — adım adım</span></button>
+        </nav>
+      </aside>
+      <section class="main">
+        <div class="head">
+          <h2 id="viewTitle">Kesilmeyen faturalar</h2>
+          <p id="viewHint">Satırın üzerine tıklayınca fatura belgesi yeni sekmede açılır. Kurulum ayrı menüdedir.</p>
+        </div>
+        <div class="toolbar" id="toolbar">
+          <input id="search" type="search" placeholder="Fatura no, müşteri, satış no"/>
+          <button class="btn light" id="issueSelectedBtn" type="button">Seçilenleri QNB kuyruğuna al</button>
+        </div>
+        <div class="panel" id="tablePanel">
+          <table>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div class="empty hidden" id="empty">Kayıt yok.</div>
+        </div>
+        <div class="wiz hidden" id="setupBox">
+          <div class="steps" id="setupSteps">
+            <button type="button" class="active" data-step="1"><b>ADIM 1</b>Firma bilgileri</button>
+            <button type="button" data-step="2"><b>ADIM 2</b>Fatura serileri</button>
+            <button type="button" data-step="3"><b>ADIM 3</b>QNB bağlantısı</button>
+            <button type="button" data-step="4"><b>ADIM 4</b>Çalışma şekli</button>
+            <button type="button" data-step="5"><b>ADIM 5</b>Kontrol ve kayıt</button>
+          </div>
+          <form id="setupForm">
+            <div class="card step" data-step-pane="1">
+              <h3>Firmanın resmi bilgileri</h3>
+              <p>GİB ve QNB’de kayıtlı olan bilgilerle birebir aynı yazın. Yanlış VKN / unvan faturanın reddedilmesine yol açar.</p>
+              <div class="grid2">
+                <label>Firma ünvanı<input name="companyTitle" required placeholder="ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ."/></label>
+                <label>VKN (10 hane)<input name="companyVkn" required maxlength="11" placeholder="0940148218"/><span class="hint">Mali mühür / e-fatura kaydındaki vergi kimlik no</span></label>
+                <label>Vergi dairesi<input name="companyTaxOffice" placeholder="Sarıyer"/></label>
+                <label>MERSİS no<input name="mersisNo" placeholder="Opsiyonel"/></label>
+                <label>Telefon<input name="companyPhone" placeholder="0212…"/></label>
+                <label>E-posta<input name="companyEmail" type="email" placeholder="fatura@firma.com"/></label>
+              </div>
+              <label style="margin-top:12px">Açık adres<textarea name="companyAddress" placeholder="Mahalle, cadde, no, ilçe / il"></textarea></label>
+              <div class="grid2" style="margin-top:12px">
+                <label>İlçe<input name="companyDistrict" placeholder="Sarıyer"/></label>
+                <label>İl<input name="companyCity" placeholder="İstanbul"/></label>
+              </div>
+            </div>
+            <div class="card step hidden" data-step-pane="2">
+              <h3>Fatura seri numaraları</h3>
+              <p>GİB formatı: <b>3 harf + yıl + 9 hane</b>. Örnek: ATK2026000000001. e-Fatura ve e-Arşiv serileri farklı olmalıdır.</p>
+              <div class="grid2">
+                <label>e-Fatura seri (3 harf)<input name="efaturaSeries" maxlength="3" value="ATK"/><span class="hint" id="efPrev">Önizleme: ATK…</span></label>
+                <label>e-Fatura sonraki no<input name="efaturaNext" type="number" min="1" value="1"/></label>
+                <label>e-Arşiv seri (3 harf)<input name="earsivSeries" maxlength="3" value="ATA"/><span class="hint" id="eaPrev">Önizleme: ATA…</span></label>
+                <label>e-Arşiv sonraki no<input name="earsivNext" type="number" min="1" value="1"/></label>
+              </div>
+            </div>
+            <div class="card step hidden" data-step-pane="3">
+              <h3>QNB e-Fatura / e-Arşiv bağlantısı</h3>
+              <p>Bu bilgileri QNB eFinans / Solist çözüm merkezinden alın. WSDL adresi test ve canlıda farklıdır. Kullanıcı adı ve şifre mali mühür operatörünün verdiği entegrasyon hesabıdır.</p>
+              <div class="grid2">
+                <label>Sağlayıcı<select name="provider"><option value="qnb-solist">QNB Solist</option><option value="qnb-esolutions">QNB eSolutions</option><option value="qnb-efinans">QNB eFinans</option></select></label>
+                <label>Gönderici birim (GB alias)<input name="senderAlias" placeholder="urn:mail:firma@hs.efatura"/></label>
+                <label>Posta kutusu (PK alias)<input name="pkAlias" placeholder="Opsiyonel PK"/></label>
+                <label>WSDL / web servis adresi<input name="webServiceUrl" placeholder="https://…?wsdl"/></label>
+                <label>Kullanıcı adı<input name="username" autocomplete="off"/></label>
+                <label>Şifre<input name="password" type="password" autocomplete="new-password" placeholder="Kayıtlıysa boş bırakın"/></label>
+              </div>
+            </div>
+            <div class="card step hidden" data-step-pane="4">
+              <h3>Nasıl çalışsın?</h3>
+              <p>İlk kurulumda mutlaka <b>Test</b> ortamında başlayın. Canlıya geçmeden önce “Altyapıyı test et” yeşil olmalıdır. Taslak modu, faturayı önce QNB taslağına düşürür; GİB’e hemen gitmez.</p>
+              <label>Ortam<select name="environment"><option value="test">Test (önerilen ilk adım)</option><option value="live">Canlı (GİB’e gider)</option></select></label>
+              <label class="check" style="margin-top:12px"><input name="enabled" type="checkbox"/> QNB bağlantısını etkinleştir</label>
+              <label class="check"><input name="draftMode" type="checkbox" checked/> Önce taslak olarak hazırla (önerilir)</label>
+              <label class="check"><input name="autoDetectType" type="checkbox" checked/> VKN varsa e-Fatura, TCKN varsa e-Arşiv seç</label>
+            </div>
+            <div class="card step hidden" data-step-pane="5">
+              <h3>Kayıt ve hazırlık kontrolü</h3>
+              <p>Kaydettikten sonra test çalışır. Kırmızı kalan satırlar QNB’den eksik bilgidir; fatura kesilmez, belge yine de yeni sekmede önizlenir.</p>
+              <div class="checks" id="readyChecks"></div>
+              <div class="row-acts">
+                <button class="btn navy" type="submit">Kurulumu kaydet</button>
+                <button class="btn light" id="testBtn" type="button">Altyapıyı test et</button>
+              </div>
+              <div class="status" id="setupStatus"></div>
+            </div>
+            <div class="row-acts">
+              <button class="btn light" id="prevStep" type="button">← Önceki</button>
+              <button class="btn navy" id="nextStep" type="button">Sonraki adım →</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="/assets/fatura.js?v=fix-v153"></script>
+</body>
+</html>

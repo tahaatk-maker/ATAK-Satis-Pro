@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v152 */
+/* ATAK_ADMIN_BUILD=fix-v153 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -107,7 +107,7 @@ function initUiScale(){
   window.addEventListener('resize',()=>{if(isMobileUi())applyUiScale('1')});
 }
 initUiScale();
-function showApp(){q('#loginView').classList.add('hidden');q('#appView').classList.remove('hidden');let saved=sessionStorage.getItem('atakAdminTab');if(saved==='uninvoicedSales')saved='invoiceCenter';if(saved&&q('#'+saved))setTimeout(()=>goTab(saved,{remember:false}),0);setTimeout(()=>refreshTaskBadge(),600)}
+function showApp(){q('#loginView').classList.add('hidden');q('#appView').classList.remove('hidden');let saved=sessionStorage.getItem('atakAdminTab');if(saved==='uninvoicedSales'||saved==='invoiceCenter')saved='dashboard';if(saved&&q('#'+saved))setTimeout(()=>goTab(saved,{remember:false}),0);setTimeout(()=>refreshTaskBadge(),600)}
 async function load(){store=await api('/web-api/admin/store');renderAll()}
 const productTabs=new Set(['products','productImport','prices']);
 function setProductsMenu(open){
@@ -119,6 +119,11 @@ function setProductsMenu(open){
 }
 function goTab(id,{remember=true}={}){
   if(id==='uninvoicedSales')id='invoiceCenter';
+  if(id==='invoiceCenter'){
+    const needed=TAB_PERMISSION_MAP.invoiceCenter;if(needed&&!can(needed)){toast('Bu ekran için yetkiniz yok.');return false}
+    window.open('/e-fatura','_blank','noopener');
+    return true;
+  }
   const needed=TAB_PERMISSION_MAP[id];if(needed&&!can(needed)){toast('Bu ekran için yetkiniz yok.');return false}
   const target=q('#'+id);
   if(!target){toast('Bu ekran henüz bağlı değil: '+id);return false}

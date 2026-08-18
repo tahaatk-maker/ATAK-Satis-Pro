@@ -110,6 +110,8 @@ function readinessChecks(cfg={}){
     {name:'Ortam',ok:['test','live'].includes(String(cfg.environment||'')),detail:cfg.environment||'-'},
     {name:'Firma VKN',ok:onlyDigits(cfg.companyVkn).length>=10,detail:cfg.companyVkn||'QNB’den / mali mühür VKN'},
     {name:'Firma ünvanı',ok:!!String(cfg.companyTitle||'').trim(),detail:cfg.companyTitle||'Eksik'},
+    {name:'Vergi dairesi',ok:!!String(cfg.companyTaxOffice||'').trim(),detail:cfg.companyTaxOffice||'Fatura belgesinde görünür'},
+    {name:'Firma adresi',ok:!!String(cfg.companyAddress||'').trim(),detail:cfg.companyAddress||'Açık adres yazın'},
     {name:'e-Fatura seri',ok:ef.length===3,detail:`${ef} (örn. ${ef}${new Date().getFullYear()}000000001)`},
     {name:'e-Arşiv seri',ok:ea.length===3,detail:`${ea} (örn. ${ea}${new Date().getFullYear()}000000001)`},
     {name:'Gönderici alias',ok:!!String(cfg.senderAlias||'').trim(),detail:cfg.senderAlias||'QNB Solist birim etiketi'},

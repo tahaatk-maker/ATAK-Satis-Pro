@@ -1,8 +1,8 @@
 # ATAK VPS kesin deploy (fix-v89) — health 6.3.90-mobilya-alis-v2 olmadan DONE yazmaz
 set -euo pipefail
-BRANCH="${ATAK_BRANCH:-cursor/satis-merkezi-iskonto-prim-bd99}"
-EXPECT_HEALTH=6.3.152-personel-logo
-EXPECT_BUILD=fix-v152
+BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
+EXPECT_HEALTH=6.3.153-fatura-sekme
+EXPECT_BUILD=fix-v153
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 

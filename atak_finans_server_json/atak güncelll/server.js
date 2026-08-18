@@ -13,6 +13,7 @@ const path = require('path');
 const { runBekoSync } = require('./lib/beko-sync');
 const qnbSolist = require('./qnb-solist-adapter');
 const customerExcel = require('./customer-excel-import');
+const invoicePrint = require('./lib/invoice-print');
 
 const app = express();
 const ROOT = __dirname;
@@ -179,7 +180,7 @@ function ensureStore(store) {
   // Senet/sözleşmede "Atak Home" yasak — her zaman resmi ünvan
   store.promissorySettings.creditorName = ATAK_COMPANY.legalName;
   if(!Number.isFinite(Number(store.promissorySettings.nextSenetNo))||Number(store.promissorySettings.nextSenetNo)<1)store.promissorySettings.nextSenetNo=1;
-  store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:ATAK_COMPANY.taxNo,companyTitle:ATAK_COMPANY.legalName,senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:'',efaturaSeries:'ATK',earsivSeries:'ATA',efaturaNext:1,earsivNext:1};
+  store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:ATAK_COMPANY.taxNo,companyTitle:ATAK_COMPANY.legalName,companyTaxOffice:ATAK_COMPANY.taxOffice,companyAddress:ATAK_COMPANY.address,companyCity:'İstanbul',companyDistrict:'Sarıyer',companyPhone:'',companyEmail:'',mersisNo:'',senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:'',efaturaSeries:'ATK',earsivSeries:'ATA',efaturaNext:1,earsivNext:1};
   if(store.invoiceIntegration && !store.invoiceIntegration.provider)store.invoiceIntegration.provider='qnb-solist';
   if(!String(store.invoiceIntegration.companyVkn||'').trim())store.invoiceIntegration.companyVkn=ATAK_COMPANY.taxNo;
   if(!String(store.invoiceIntegration.companyTitle||'').trim())store.invoiceIntegration.companyTitle=ATAK_COMPANY.legalName;
@@ -1685,8 +1686,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.152-personel-logo',
-  build:'fix-v152',
+  version:'6.3.153-fatura-sekme',
+  build:'fix-v153',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -5408,10 +5409,18 @@ app.post('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
   const env=['test','live'].includes(String(x.environment))?String(x.environment):'test';
   const provider=['qnb-solist','qnb-esolutions','qnb-efinans'].includes(String(x.provider))?String(x.provider):'qnb-solist';
   s.invoiceIntegration={
+    ...old,
     provider,environment:env,
     enabled:x.enabled===true||String(x.enabled)==='true',
     companyVkn:String(x.companyVkn||'').trim(),
     companyTitle:String(x.companyTitle||'').trim(),
+    companyTaxOffice:String(x.companyTaxOffice!=null?x.companyTaxOffice:old.companyTaxOffice||ATAK_COMPANY.taxOffice).trim(),
+    companyAddress:String(x.companyAddress!=null?x.companyAddress:old.companyAddress||ATAK_COMPANY.address).trim(),
+    companyCity:String(x.companyCity!=null?x.companyCity:old.companyCity||'').trim(),
+    companyDistrict:String(x.companyDistrict!=null?x.companyDistrict:old.companyDistrict||'').trim(),
+    companyPhone:String(x.companyPhone!=null?x.companyPhone:old.companyPhone||'').trim(),
+    companyEmail:String(x.companyEmail!=null?x.companyEmail:old.companyEmail||'').trim(),
+    mersisNo:String(x.mersisNo!=null?x.mersisNo:old.mersisNo||'').trim(),
     senderAlias:String(x.senderAlias||'').trim(),
     gbAlias:String(x.gbAlias||x.senderAlias||'').trim(),
     pkAlias:String(x.pkAlias||'').trim(),
@@ -5521,6 +5530,36 @@ app.post('/web-api/admin/invoice-queue/:id/retry',requireAdmin,async(req,res)=>{
     r.status='error';r.error=e.message;r.updatedAt=new Date().toISOString();writeStore(s);
     res.status(500).json({error:e.message});
   }
+});
+function sendInvoicePrint(res, {record, sale, customer, cfg, settings}){
+  const html=invoicePrint.buildInvoicePrintHtml({
+    company:cfg||{},
+    customer:customer||record?.customer||{},
+    record:record||{},
+    sale:sale||{},
+    settings:settings||{}
+  });
+  res.type('html').send(html);
+}
+app.get('/web-api/admin/invoice-queue/:id/print',requireAdmin,(req,res)=>{
+  const s=readStore();
+  const record=(s.invoiceQueue||[]).find(x=>String(x.id)===String(req.params.id));
+  if(!record)return res.status(404).send('Fatura kaydı bulunamadı');
+  const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(record.saleId)&&t.kind==='sale')||{};
+  const customer=(s.customers||[]).find(c=>String(c.id)===String(record.customerId||sale.customerId))||record.customer||{};
+  sendInvoicePrint(res,{record,sale,customer,cfg:s.invoiceIntegration||{},settings:s.settings||{}});
+});
+app.get('/web-api/admin/sale/:id/invoice-print',requireAdminOrStaff('orders_manage'),(req,res)=>{
+  const s=readStore();
+  const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
+  if(!sale)return res.status(404).send('Satış bulunamadı');
+  const record=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id))||{
+    invoiceNumber:sale.invoiceNumber||sale.reference,invoiceDate:sale.invoiceDate||sale.date,
+    reference:sale.reference,status:sale.invoiceStatus||'pending',docType:sale.invoiceType||'auto',
+    total:sale.total,items:sale.items||[],uuid:sale.uuid||''
+  };
+  const customer=(s.customers||[]).find(c=>String(c.id)===String(sale.customerId))||{};
+  sendInvoicePrint(res,{record,sale,customer,cfg:s.invoiceIntegration||{},settings:s.settings||{}});
 });
 app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_manage'),async(req,res)=>{
   if(isStaffPortalReq(req) && !staffCanInvoice(req)){
@@ -7307,6 +7346,8 @@ app.get('/web-api/admin/export-csv',requireAdmin,(req,res)=>{const s=readStore()
 
 app.get('/web-admin',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
 app.get('/web-admin/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
+app.get('/e-fatura',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','fatura.html'))});
+app.get('/e-fatura/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','fatura.html'))});
 app.get('/web-admin-v5',(req,res)=>res.redirect('/web-admin'));
 // Tasarım örnekleri (sahte veri, sadece görsel önizleme)
 app.get('/panel-ornek',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','panel-v2.html'))});
