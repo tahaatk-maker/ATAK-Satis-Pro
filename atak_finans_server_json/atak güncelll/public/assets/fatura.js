@@ -1,7 +1,7 @@
-/* ATAK_FATURA_BUILD=fix-v153 */
+/* ATAK_FATURA_BUILD=fix-v154 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
-let state={view:'pending',data:null,selected:new Set(),step:1};
+let state={view:'pending',data:null,selected:new Set(),step:1,portal:'admin',canSetup:true,canIssue:true};
 
 function toast(t){const el=q('#toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
 function money(n){return new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(n||0))}
@@ -22,8 +22,29 @@ async function api(url,opt={}){
 
 async function boot(){
   try{
-    const me=await api('/web-api/me');
-    if(!me.authenticated){q('#gate').classList.remove('hidden');return}
+    let me=null;
+    try{me=await api('/web-api/me')}catch(_){me=null}
+    if(me?.authenticated){
+      state.portal='admin';
+      state.canSetup=true;
+      state.canIssue=true;
+    }else{
+      const staff=await api('/foundation-api/me');
+      if(!staff.authenticated){q('#gate').classList.remove('hidden');return}
+      const p=staff.user?.permissions||[];
+      const has=(id)=>p.includes('*')||p.includes(id);
+      state.portal='staff';
+      state.canSetup=has('settings_manage')||has('invoices_manage');
+      state.canIssue=has('sale_invoice_qnb')||has('invoices_manage')||has('finance_manage');
+      if(!(has('screen_invoice_center')||has('invoices_manage')||has('sale_invoice_qnb')||has('screen_uninvoiced')||has('finance_manage'))){
+        q('#gate').classList.remove('hidden');
+        q('#gate p').textContent='e-Fatura ekranı yetkiniz kapalı. Yöneticiden “e-Fatura Merkezi” yetkisini açın.';
+        return;
+      }
+    }
+    if(q('#backLink'))q('#backLink').href=state.portal==='staff'?'/personel':'/web-admin';
+    q('[data-view="setup"]')?.classList.toggle('hidden',!state.canSetup);
+    q('#issueSelectedBtn')?.classList.toggle('hidden',!state.canIssue);
     q('#app').classList.remove('hidden');
     q('#app').style.display='flex';
     await load();
@@ -35,6 +56,11 @@ async function boot(){
 async function load(){
   const d=await api('/web-api/admin/invoice-center');
   state.data=d;
+  if(d.canSetup!=null)state.canSetup=!!d.canSetup;
+  if(d.canIssue!=null)state.canIssue=!!d.canIssue;
+  if(state.view==='setup'&&!state.canSetup)state.view='pending';
+  q('[data-view="setup"]')?.classList.toggle('hidden',!state.canSetup);
+  q('#issueSelectedBtn')?.classList.toggle('hidden',!state.canIssue);
   paintEnv(d.settings||{});
   q('#cPending').textContent=`${d.counts?.sales_pending||0} satış bekliyor`;
   q('#cQueue').textContent=`${(d.counts?.ef_out_pending||0)+(d.counts?.ea_out_pending||0)} gönderilecek`;
@@ -243,6 +269,7 @@ q('#testBtn').onclick=async()=>{
   }catch(e){toast(e.message)}
 };
 q('#issueSelectedBtn').onclick=async()=>{
+  if(!state.canIssue)return toast('Fatura kesme yetkiniz yok');
   const ids=[...qa('[data-check]:checked')].map(x=>x.dataset.check);
   if(!ids.length)return toast('Önce satır seçin');
   for(const id of ids){

@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v152 */
+/* ATAK_PERSONEL_BUILD=fix-v154 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -60,6 +60,7 @@ function canScreen(id){return has(id)}
 function canSaleDocs(){return has('sale_docs')||has('*')}
 function canSaleOffer(){return has('sale_offer')||has('*')}
 function canSaleInvoice(){return has('sale_invoice_qnb')||has('finance_manage')||has('invoices_manage')||has('*')}
+function canInvoiceCenter(){return canScreen('screen_invoice_center')||canSaleInvoice()||has('screen_uninvoiced')}
 function canDeductStock(){return has('sale_deduct_stock')||has('stock_manage')||has('*')}
 function applyStaffSalePermissions(){
   $$('[data-need-perm]').forEach(el=>{
@@ -108,6 +109,7 @@ async function loadSession(){
     $('#roleName').textContent=currentUser.roleName||currentUser.role||'Personel';
     // Finans & Cari ekranları — her biri ayrı yetki
     if(canScreen('screen_sales_center')||has('orders_manage'))$('#salesCard').classList.remove('hidden');
+    if(canInvoiceCenter())$('#invoiceCard')?.classList.remove('hidden');
     if(canScreen('screen_finance')||canFinance())$('#financeCard').classList.remove('hidden');
     if(canScreen('screen_customer_payments')||canFinance())$('#paymentsCard').classList.remove('hidden');
     if(has('stock_manage')||has('stock_view'))$('#stockCard').classList.remove('hidden');
@@ -115,6 +117,7 @@ async function loadSession(){
     const closed=[];
     if(!canScreen('screen_staff_sales_report'))closed.push('Personel Satış Raporu');
     if(!canScreen('screen_manager_approvals'))closed.push('Yönetici Onayları');
+    if(!canInvoiceCenter())closed.push('e-Fatura Merkezi');
     if(!canSaleInvoice())closed.push('Fatura Kes (QNB)');
     if(!canDeductStock())closed.push('Stok düş');
     if($('#permissionText')){
@@ -625,6 +628,11 @@ $('#salesCard').onclick=async()=>{
   applyStaffSalePermissions();
   await loadSales();
 };
+function openPersonelInvoiceCenter(){
+  const w=window.open('/e-fatura','_blank','noopener');
+  if(!w)stToast('Tarayıcı yeni sekmeyi engelledi — e-Fatura ekranı açılamadı');
+}
+$('#invoiceCard')?.addEventListener('click',openPersonelInvoiceCenter);
 function filterCustomersLocal(list,term){
   const q=String(term||'').trim().toLocaleLowerCase('tr-TR');
   if(!q)return [];
@@ -1707,6 +1715,7 @@ $('#salesJumpPreviewBtn')?.addEventListener('click',()=>openSalesPreview());
 $('#salesWizardDocsBtn')?.addEventListener('click',()=>printSalesContractAndNotes());
 $('#salesWizardOfferBtn')?.addEventListener('click',()=>sendSalesOffer());
 $('#salesWizardInvoiceBtn')?.addEventListener('click',()=>salesIssueInvoiceNow());
+$('#salesOpenInvoiceCenterBtn')?.addEventListener('click',openPersonelInvoiceCenter);
 $('#salesPreviewClose')?.addEventListener('click',closeSalesPreview);
 $('#salesPreviewConfirmBtn')?.addEventListener('click',confirmSalesDraft);
 $('#salesPreviewOfferBtn')?.addEventListener('click',sendSalesOfferWhatsAppOnly);

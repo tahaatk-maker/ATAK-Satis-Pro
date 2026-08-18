@@ -4,14 +4,15 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>e-Fatura Merkezi · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v153"/>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v154"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
     <small>ATAK PAZARLAMA</small>
     <h1>e-Fatura Merkezi</h1>
-    <p>Bu ekran yönetim girişi ister. Önce panele girin, sonra fatura ayrı sekmede açılır.</p>
-    <a class="btn navy" href="/web-admin">Yönetim paneline git</a>
+    <p>Personel veya yönetim girişi gerekir. Önce panele girin; fatura yine ayrı sekmede açılır.</p>
+    <a class="btn navy" href="/personel">Personel girişi</a>
+    <a class="btn light" href="/web-admin">Yönetim paneli</a>
   </div>
 
   <div id="app" class="hidden" style="display:flex;flex-direction:column;height:100%">
@@ -24,7 +25,7 @@
         </div>
       </div>
       <div class="acts">
-        <a class="btn ghost" href="/web-admin">← Panele dön</a>
+        <a class="btn ghost" href="/personel" id="backLink">← Panele dön</a>
         <button class="btn gold" id="refreshBtn" type="button">Yenile</button>
       </div>
     </header>
@@ -130,6 +131,6 @@
     </div>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v153"></script>
+  <script src="/assets/fatura.js?v=fix-v154"></script>
 </body>
 </html>

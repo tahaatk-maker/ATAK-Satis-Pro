@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v152">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v152">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v154">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v154">
 </head>
 <body>
 
@@ -87,6 +87,12 @@
 <span class="mod-ico">₺</span>
 <b>SATIŞ YAP</b>
 <small>Müşteri → ürün → ödeme</small>
+</button>
+
+<button id="invoiceCard" class="module-card hidden tile-invoice" type="button">
+<span class="mod-ico">📄</span>
+<b>e-FATURA</b>
+<small>Kesilmeyenler, belge, QNB kuyruğu</small>
 </button>
 
 <button id="paymentsCard" class="module-card hidden tile-collect" type="button">
@@ -569,6 +575,7 @@
         <h4>Fatura Kes</h4>
         <p>QNB Solist e-Fatura / e-Arşiv kuyruğuna al.</p>
         <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button">FATURA KES (QNB)</button>
+        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">e-FATURA EKRANINI AÇ</button>
       </div>
     </div>
     <div class="pos-nav">
@@ -694,6 +701,6 @@
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/assets/personel.js?v=fix-v152"></script>
+<script src="/assets/personel.js?v=fix-v154"></script>
 </body>
 </html>

@@ -521,6 +521,17 @@ function sanitizePermissions(list,role){
 function staffCanInvoice(req){
   return actorHasPermission(req,'sale_invoice_qnb')||actorHasPermission(req,'finance_manage')||actorHasPermission(req,'invoices_manage');
 }
+function staffCanViewInvoiceCenter(req){
+  return actorHasPermission(req,'screen_invoice_center')
+    ||actorHasPermission(req,'invoices_manage')
+    ||actorHasPermission(req,'sale_invoice_qnb')
+    ||actorHasPermission(req,'screen_uninvoiced')
+    ||actorHasPermission(req,'finance_manage');
+}
+function staffSeesAllInvoices(req){
+  if(!isStaffPortalReq(req))return true;
+  return actorIsManager(req)||actorHasPermission(req,'invoices_manage')||actorHasPermission(req,'finance_manage');
+}
 function staffCanDeductStock(req){
   return actorHasPermission(req,'sale_deduct_stock')||actorHasPermission(req,'stock_manage');
 }
@@ -1686,8 +1697,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.153-fatura-sekme',
-  build:'fix-v153',
+  version:'6.3.154-personel-fatura',
+  build:'fix-v154',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -5385,7 +5396,7 @@ function allocateInvoiceNumber(cfg,docType,existing=''){
   return{number,cfg,allocated:true,docType:earsiv?'earsiv':'efatura',series,seq};
 }
 
-app.get('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
+app.get('/web-api/admin/invoice-integration',requireAdminOrStaffAny('screen_invoice_center','invoices_manage','sale_invoice_qnb','screen_uninvoiced','finance_manage','settings_manage'),(req,res)=>{
   const s=readStore(),cfg=s.invoiceIntegration||{};
   const year=new Date().getFullYear();
   const efSeries=normalizeInvoiceSeries(cfg.efaturaSeries,'ATK');
@@ -5404,7 +5415,7 @@ app.get('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
     queueCount:(s.invoiceQueue||[]).filter(x=>!['issued','cancelled'].includes(x.status)).length
   });
 });
-app.post('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
+app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_manage','invoices_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{},old=s.invoiceIntegration||{};
   const env=['test','live'].includes(String(x.environment))?String(x.environment):'test';
   const provider=['qnb-solist','qnb-esolutions','qnb-efinans'].includes(String(x.provider))?String(x.provider):'qnb-solist';
@@ -5436,23 +5447,29 @@ app.post('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
   };
   audit(s,'QNB Solist entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider,efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries});writeStore(s);res.json({ok:true,settings:{efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries,efaturaNext:s.invoiceIntegration.efaturaNext,earsivNext:s.invoiceIntegration.earsivNext}});
 });
-app.post('/web-api/admin/invoice-integration/test',requireAdmin,(req,res)=>{
+app.post('/web-api/admin/invoice-integration/test',requireAdminOrStaffAny('screen_invoice_center','invoices_manage','sale_invoice_qnb','screen_uninvoiced','finance_manage','settings_manage'),(req,res)=>{
   const s=readStore(),c=s.invoiceIntegration||{};
   const checks=qnbSolist.readinessChecks(c);
   const ep=qnbSolist.defaultEndpoints(c.environment||'test');
   res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,endpoints:ep,note:'Dış servise belge göndermez. QNB Solist WSDL/kullanıcı gelince SOAP gönderim açılır.'});
 });
-app.get('/web-api/admin/invoice-queue',requireAdmin,(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
+app.get('/web-api/admin/invoice-queue',requireAdminOrStaffAny('screen_invoice_center','invoices_manage','sale_invoice_qnb','screen_uninvoiced','finance_manage'),(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
 /** e-Fatura Merkezi özet: QNB kutusu klasör sayıları + kuyruk + gelen (placeholder) */
-app.get('/web-api/admin/invoice-center',requireAdmin,(req,res)=>{
+app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny('screen_invoice_center','invoices_manage','sale_invoice_qnb','screen_uninvoiced','finance_manage'),(req,res)=>{
   const s=readStore();
   const cfg=s.invoiceIntegration||{};
-  const queue=(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  let queue=(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  if(!staffSeesAllInvoices(req)){
+    const actor=currentActor(req);
+    const salesById=new Map((s.financeTransactions||[]).filter(t=>t.kind==='sale').map(t=>[String(t.id),t]));
+    queue=queue.filter(r=>txBelongsToActor(salesById.get(String(r.saleId||''))||r,actor));
+  }
   const inbox=(s.invoiceInbox||[]).slice().sort((a,b)=>String(b.invoiceDate||b.createdAt||'').localeCompare(String(a.invoiceDate||a.createdAt||'')));
   const responses=(s.invoiceAppResponses||[]).slice();
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
   const salesPending=(s.financeTransactions||[])
     .filter(t=>t.kind==='sale'&&!t.cancelled&&saleNeedsInvoice(t.invoiceStatus))
+    .filter(t=>staffSeesAllInvoices(req)||txBelongsToActor(t,currentActor(req)))
     .map(t=>({
       id:t.id,reference:t.reference||'',date:t.date||'',customerId:t.customerId||'',
       customerName:customerMap.get(String(t.customerId))?.name||'',total:Number(t.total||0),
@@ -5489,10 +5506,13 @@ app.get('/web-api/admin/invoice-center',requireAdmin,(req,res)=>{
     ok:true,
     settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext)},
     counts,queue,inbox,responses,salesPending,
+    portal:isStaffPortalReq(req)?'staff':'admin',
+    canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),
+    canIssue:req.session?.admin===true||staffCanInvoice(req),
     note:'Gelen kutusu QNB portal senkronu bağlanınca dolar. Giden kutu yerel kuyruk + UBL taslağıdır.'
   });
 });
-app.post('/web-api/admin/invoice-center/portal-query',requireAdmin,async(req,res)=>{
+app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny('screen_invoice_center','invoices_manage','sale_invoice_qnb','finance_manage'),async(req,res)=>{
   const s=readStore(),cfg=s.invoiceIntegration||{};
   const checks=qnbSolist.readinessChecks(cfg);
   const ready=checks.filter(c=>['Firma VKN','WSDL / servis URL','Kullanıcı','Şifre'].includes(c.name)).every(c=>c.ok)&&cfg.enabled;
@@ -5510,7 +5530,10 @@ app.post('/web-api/admin/invoice-center/portal-query',requireAdmin,async(req,res
     checks
   });
 });
-app.post('/web-api/admin/invoice-queue/:id/retry',requireAdmin,async(req,res)=>{
+app.post('/web-api/admin/invoice-queue/:id/retry',requireAdminOrStaffAny('invoices_manage','sale_invoice_qnb','orders_manage'),async(req,res)=>{
+  if(isStaffPortalReq(req) && !staffCanInvoice(req)){
+    return res.status(403).json({error:'Fatura kesme yetkiniz yok — yöneticiden sale_invoice_qnb açın'});
+  }
   const s=readStore(),r=(s.invoiceQueue||[]).find(x=>x.id===req.params.id);
   if(!r)return res.status(404).json({error:'Fatura kaydı bulunamadı'});
   const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(r.saleId)&&t.kind==='sale');
@@ -5541,18 +5564,24 @@ function sendInvoicePrint(res, {record, sale, customer, cfg, settings}){
   });
   res.type('html').send(html);
 }
-app.get('/web-api/admin/invoice-queue/:id/print',requireAdmin,(req,res)=>{
+app.get('/web-api/admin/invoice-queue/:id/print',requireAdminOrStaffAny('screen_invoice_center','invoices_manage','sale_invoice_qnb','screen_uninvoiced','orders_manage','finance_manage'),(req,res)=>{
   const s=readStore();
   const record=(s.invoiceQueue||[]).find(x=>String(x.id)===String(req.params.id));
   if(!record)return res.status(404).send('Fatura kaydı bulunamadı');
   const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(record.saleId)&&t.kind==='sale')||{};
+  if(!staffSeesAllInvoices(req) && !txBelongsToActor(sale,currentActor(req))){
+    return res.status(403).send('Bu faturayı görme yetkiniz yok');
+  }
   const customer=(s.customers||[]).find(c=>String(c.id)===String(record.customerId||sale.customerId))||record.customer||{};
   sendInvoicePrint(res,{record,sale,customer,cfg:s.invoiceIntegration||{},settings:s.settings||{}});
 });
-app.get('/web-api/admin/sale/:id/invoice-print',requireAdminOrStaff('orders_manage'),(req,res)=>{
+app.get('/web-api/admin/sale/:id/invoice-print',requireAdminOrStaffAny('orders_manage','screen_invoice_center','invoices_manage','sale_invoice_qnb'),(req,res)=>{
   const s=readStore();
   const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
   if(!sale)return res.status(404).send('Satış bulunamadı');
+  if(!staffSeesAllInvoices(req) && !txBelongsToActor(sale,currentActor(req))){
+    return res.status(403).send('Bu faturayı görme yetkiniz yok');
+  }
   const record=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id))||{
     invoiceNumber:sale.invoiceNumber||sale.reference,invoiceDate:sale.invoiceDate||sale.date,
     reference:sale.reference,status:sale.invoiceStatus||'pending',docType:sale.invoiceType||'auto',

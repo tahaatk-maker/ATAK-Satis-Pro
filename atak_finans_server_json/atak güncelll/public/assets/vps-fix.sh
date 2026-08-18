@@ -1,8 +1,8 @@
 # ATAK VPS kesin deploy (fix-v89) — health 6.3.90-mobilya-alis-v2 olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.153-fatura-sekme
-EXPECT_BUILD=fix-v153
+EXPECT_HEALTH=6.3.154-personel-fatura
+EXPECT_BUILD=fix-v154
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -67,6 +67,8 @@ check "personel odeme plani" grep -q 'id="salesPayPlanToggleBtn"' "$SRC/public/p
 check "e-fatura kesilmeyen sekmesi" grep -q 'data-inv-module="pending"' "$SRC/public/admin.html"
 check "admin cache $EXPECT_BUILD" grep -q "admin.js?v=$EXPECT_BUILD" "$SRC/public/admin.html"
 check "personel cache $EXPECT_BUILD" grep -q "personel.js?v=$EXPECT_BUILD" "$SRC/public/personel.html"
+check "personel e-fatura karti" grep -q 'id="invoiceCard"' "$SRC/public/personel.html"
+check "e-fatura sayfasi" grep -q 'e-Fatura Merkezi' "$SRC/public/fatura.html"
 check "vkn lookup api" grep -q "vkn-lookup" "$SRC/server.js"
 check "vkn lookup admin ui" grep -q 'data-vkn-lookup="customerPage"' "$SRC/public/admin.html"
 check "vkn lookup personel ui" grep -q 'id="qcVknLookupBtn"' "$SRC/public/personel.html"
