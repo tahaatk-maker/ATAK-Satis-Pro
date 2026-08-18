@@ -14,6 +14,7 @@ const { runBekoSync } = require('./lib/beko-sync');
 const qnbSolist = require('./qnb-solist-adapter');
 const customerExcel = require('./customer-excel-import');
 const invoicePrint = require('./lib/invoice-print');
+const branchLock = require('./lib/branch-lock');
 
 const app = express();
 const ROOT = __dirname;
@@ -815,6 +816,7 @@ function publicUser(user,store){
     role:user.role,roleName:ROLE_PRESETS[user.role]?.name||user.role,
     permissions:user.permissions||[],active:user.active!==false,
     storeId:user.storeId||'',storeName:branch?.name||'',
+    brand:branchLock.personBrand({id:user.id,role:user.role,storeId:user.storeId},store?.stores||[]),
     salaryMonthly:Math.round(Number(user.salaryMonthly||0)*100)/100,
     createdAt:user.createdAt||'',updatedAt:user.updatedAt||''
   };
@@ -934,7 +936,7 @@ function peopleForPayroll(s){
     const branch=(s.stores||[]).find(st=>String(st.id)===String(u.storeId||''));
     out.push({
       id:u.id,name:u.name,username:u.username,storeId:u.storeId||'',
-      storeName:branch?.name||'',active:true,
+      storeName:branch?.name||'',active:true,role:u.role||'',
       salaryMonthly:Math.round(Number(u.salaryMonthly||0)*100)/100
     });
   }
@@ -945,7 +947,7 @@ function peopleForPayroll(s){
     const branch=(s.stores||[]).find(v=>String(v.id)===String(st.storeId||''));
     out.push({
       id:st.id,name:st.name,username:st.username,storeId:st.storeId||'',
-      storeName:branch?.name||'',active:true,
+      storeName:branch?.name||'',active:true,role:st.role||'',
       salaryMonthly:Math.round(Number(st.salaryMonthly||0)*100)/100
     });
   }
@@ -1718,8 +1720,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.156-personel-fatura',
-  build:'fix-v156',
+  version:'6.3.157-sube-kasa-kilit',
+  build:'fix-v157',
   ownerOnly:ownerOnlyEnabled(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -2501,6 +2503,7 @@ app.post('/foundation-api/login',async(req,res)=>{
       permissions,
       storeId:user.storeId||branch?.id||'',
       storeName:branch?.name||'Mağaza',
+      brand:branchLock.lockBrandForActor(s,user),
       active:user.active!==false
     };
     return await issueMfaOrFinish(req,res,{
@@ -2529,7 +2532,16 @@ app.get('/foundation-api/me',(req,res)=>{
   }
   const u=staffSession(req);
   if(u)grantStaffInvoiceScreenInPlace(u);
-  res.json({authenticated:Boolean(u),user:u,ownerOnly:ownerOnlyEnabled()});
+  let user=u;
+  if(u){
+    const s=readStore();
+    user={...u,brand:branchLock.lockBrandForActor(s,u)};
+    if(!user.storeName){
+      const branch=(s.stores||[]).find(st=>String(st.id)===String(u.storeId||''));
+      if(branch)user.storeName=branch.name||'';
+    }
+  }
+  res.json({authenticated:Boolean(u),user,ownerOnly:ownerOnlyEnabled()});
 });
 app.get('/foundation-api/dashboard',requireStaff,(req,res)=>{
   const s=readStore(),u=staffSession(req),date=todayISO();
@@ -2670,9 +2682,14 @@ app.get('/web-api/admin/sales-catalog',requireAdminOrStaff('orders_manage'),(req
     guarantor:normalizeGuarantor(c.guarantor)
   })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr')):[];
   const accounts=(s.financeAccounts||[]).filter(a=>a.active!==false).map(a=>({
-    id:a.id,name:a.name,type:a.type,storeId:a.storeId||'',active:true
+    id:a.id,name:a.name,type:a.type,storeId:a.storeId||'',active:true,brand:branchLock.accountBrand(a,s.stores||[])
   }));
-  res.json({ok:true,products,categories,dealerSettings:s.dealerSettings||[],customers,customerTotal:allCustomers.length,accounts});
+  const warehouses=(s.warehouses||[]).filter(w=>w.active!==false).map(w=>({
+    id:w.id,name:w.name,code:w.code||'',storeId:w.storeId||'',active:true,brand:branchLock.warehouseBrand(w,s.stores||[])
+  }));
+  const dealerSettings=(s.dealerSettings||[]).map(d=>({...d,brand:branchLock.dealerBrand(d)}));
+  const stores=(s.stores||[]).map(st=>({id:st.id,name:st.name,code:st.code||'',active:st.active!==false,brand:branchLock.storeBrand(st)}));
+  res.json({ok:true,products,categories,dealerSettings,customers,customerTotal:allCustomers.length,accounts,warehouses,stores});
 });
 
 app.get('/web-api/admin/stock-center',requireAdminOrStaff('stock_manage'),(req,res)=>{
@@ -2937,7 +2954,8 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
   const staffPortal=isStaffPortalReq(req);
   const salespersonId=String(req.query.salespersonId||'');
   const dealerFilter=String(req.query.dealerId||'');
-  const accounts=s.financeAccounts.map(x=>({...x,balance:accountBalance(s,x.id)}));
+  const allAccounts=s.financeAccounts.map(x=>({...x,balance:accountBalance(s,x.id),brand:branchLock.accountBrand(x,s.stores||[])}));
+  const accounts=branchLock.filterAccountsForActor(s,actor,allAccounts,{staffPortal});
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
 
   let sales=(s.financeTransactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled);
@@ -2980,8 +2998,8 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
 
   const transactions=txs.slice(0,1000).map(x=>({
     ...x,
-    accountName:accounts.find(a=>a.id===x.accountId)?.name||'',
-    counterAccountName:accounts.find(a=>a.id===x.counterAccountId)?.name||'',
+    accountName:allAccounts.find(a=>a.id===x.accountId)?.name||'',
+    counterAccountName:allAccounts.find(a=>a.id===x.counterAccountId)?.name||'',
     customerName:customerMap.get(String(x.customerId||''))?.name||''
   }));
 
@@ -3554,7 +3572,9 @@ function buildMoneyCenter(s,{month=''}={}){
 
 app.get('/web-api/admin/money-center',requireAdminOrStaffAny('finance_manage','finance_view','screen_finance','screen_money_center'),(req,res)=>{
   const s=readStore();
-  res.json(buildMoneyCenter(s,{month:String(req.query.month||'')}));
+  const data=buildMoneyCenter(s,{month:String(req.query.month||'')});
+  data.accounts=branchLock.filterAccountsForActor(s,currentActor(req),data.accounts||[],{staffPortal:isStaffPortalReq(req)});
+  res.json(data);
 });
 
 app.post('/web-api/admin/staff-salary',requireAdminOrStaffAny('finance_manage','users_manage','screen_money_center'),(req,res)=>{
@@ -3802,7 +3822,9 @@ function buildCustomerPaymentsBoard(s,{filter='open',q=''}={}){
 
 app.get('/web-api/admin/customer-payments-board',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
   const s=readStore();
-  res.json(buildCustomerPaymentsBoard(s,{filter:String(req.query.filter||'open'),q:String(req.query.q||'')}));
+  const board=buildCustomerPaymentsBoard(s,{filter:String(req.query.filter||'open'),q:String(req.query.q||'')});
+  board.accounts=branchLock.filterAccountsForActor(s,currentActor(req),board.accounts||[],{staffPortal:isStaffPortalReq(req)});
+  res.json(board);
 });
 
 app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
@@ -3966,8 +3988,13 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   const dealer=(s.dealerSettings||[]).find(d=>String(d.id)===String(x.dealerId)&&d.active!==false);
   if(!dealer)return res.status(400).json({error:'Geçerli satış bayisi seçilmelidir'});
   const people=salesPeople(s,req);
-  const salesperson=people.find(p=>String(p.id)===String(x.salespersonId)) || people.find(p=>String(p.name).toLocaleLowerCase('tr-TR')===String(x.salespersonName||'').toLocaleLowerCase('tr-TR')) || (actor?{id:actor.id,name:actor.name}:null);
+  const salesperson=people.find(p=>String(p.id)===String(x.salespersonId)) || people.find(p=>String(p.name).toLocaleLowerCase('tr-TR')===String(x.salespersonName||'').toLocaleLowerCase('tr-TR')) || (actor?{id:actor.id,name:actor.name,storeId:actor.storeId||'',role:actor.role||''}:null);
   if(!salesperson)return res.status(400).json({error:'Satış personeli seçilmelidir'});
+  const userRow=(s.users||[]).find(u=>String(u.id)===String(salesperson.id))
+    ||(s.users||[]).find(u=>String(u.username||'').toLocaleLowerCase('tr-TR')===String(salesperson.username||'').toLocaleLowerCase('tr-TR'));
+  const staffRow=(s.staff||[]).find(st=>String(st.id)===String(salesperson.id));
+  salesperson.storeId=String(userRow?.storeId||staffRow?.storeId||salesperson.storeId||'');
+  salesperson.role=userRow?.role||salesperson.role||'';
   const customer=s.customers.find(c=>c.id===x.customerId);
   if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
   const items=Array.isArray(x.items)?x.items.filter(i=>String(i.productCode||'').trim()&&Number(i.quantity)>0):[];
@@ -4028,6 +4055,20 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
         return res.status(400).json({error:`${p.method} için hesap Türü Banka olmalı (Ayarlar → Kasa ve Banka)`});
       }
     }
+  }
+  try{
+    branchLock.assertSaleBranchLock({
+      stores:s.stores||[],
+      accounts:s.financeAccounts||[],
+      dealers:s.dealerSettings||[],
+      warehouses:s.warehouses||[],
+      salesperson,
+      dealer,
+      payments:normalizedPayments,
+      warehouseId:String(x.warehouseId||'')
+    });
+  }catch(err){
+    return res.status(400).json({error:err.message||'Şube kilidi'});
   }
   if(promissoryAmount>0){
     if(!promissoryIn.firstDueDate)return res.status(400).json({error:'Senet için ilk vade tarihi zorunludur'});
@@ -4207,6 +4248,11 @@ app.post('/web-api/admin/customer-collection',requireAdminOrStaffAny('finance_ma
   if(!x.accountId)return res.status(400).json({error:'Kasa veya banka seçilmelidir'});
   const acc=s.financeAccounts.find(a=>a.id===x.accountId&&a.active!==false);
   if(!acc)return res.status(400).json({error:'Geçersiz kasa/banka'});
+  try{
+    branchLock.assertAccountBrandLock(s,currentActor(req),acc,{staffPortal:isStaffPortalReq(req)});
+  }catch(err){
+    return res.status(400).json({error:err.message||'Şube kilidi'});
+  }
   const method=String(x.paymentMethod||'Nakit').trim()||'Nakit';
   if((method==='Kredi Kartı'||isHavaleMethod(method))&&acc.type!=='bank'){
     return res.status(400).json({error:`${method} için hesap Türü Banka olmalı`});
@@ -4267,15 +4313,20 @@ function isSystemManager(req){
 }
 function salesPeople(s,req){
   const out=[],seen=new Set();
-  const add=(id,name,source,active=true,storeId='')=>{
+  const add=(id,name,source,active=true,storeId='',role='')=>{
     name=String(name||'').trim(); if(!active||!name)return;
     const key=name.toLocaleLowerCase('tr-TR'); if(seen.has(key))return; seen.add(key);
-    out.push({id:String(id||key),name,source,storeId:String(storeId||'')});
+    const sid=String(storeId||'');
+    const branch=(s.stores||[]).find(st=>String(st.id)===sid);
+    out.push({
+      id:String(id||key),name,source,storeId:sid,storeName:branch?.name||'',
+      brand:branchLock.personBrand({id,role,storeId:sid},s.stores||[])
+    });
   };
-  peopleForPayroll(s).forEach(x=>add(x.id,x.name,'user',true,x.storeId));
-  (s.staff||[]).forEach(x=>add(x.id,x.name,'staff',x.active!==false,x.storeId));
-  (s.users||[]).forEach(x=>add(x.id,x.name,'user',x.active!==false,x.storeId||''));
-  const current=currentActor(req); if(current)add(current.id,current.name,'session',true,current.storeId||'');
+  peopleForPayroll(s).forEach(x=>add(x.id,x.name,'user',true,x.storeId,x.role));
+  (s.staff||[]).forEach(x=>add(x.id,x.name,'staff',x.active!==false,x.storeId,x.role));
+  (s.users||[]).forEach(x=>add(x.id,x.name,'user',x.active!==false,x.storeId||'',x.role));
+  const current=currentActor(req); if(current)add(current.id,current.name,'session',true,current.storeId||'',current.role);
   return out.sort((a,b)=>a.name.localeCompare(b.name,'tr'));
 }
 function cancelCollectionInStore(s,collection,actor,reason=''){

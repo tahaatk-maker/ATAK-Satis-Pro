@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v156 */
+/* ATAK_ADMIN_BUILD=fix-v157 */
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -2781,14 +2781,21 @@ async function loadSalesCenter(){
     salesCenterData.products=cat.products||[];
     salesCenterData.categories=cat.categories||[];
     salesCenterData.dealerSettings=cat.dealerSettings||[];
-    if(!salesCenterData.accounts?.length)salesCenterData.accounts=cat.accounts||[];
-    salesCenterData.warehouses=stock.warehouses||[];
+    const catAcc=cat.accounts||[];
+    if(!salesCenterData.accounts?.length)salesCenterData.accounts=catAcc;
+    else salesCenterData.accounts=salesCenterData.accounts.map(a=>{
+      const tagged=catAcc.find(x=>String(x.id)===String(a.id));
+      return Object.assign({},a,{brand:tagged?.brand||a.brand||''});
+    });
+    salesCenterData.warehouses=(stock.warehouses||cat.warehouses||[]).map(w=>{
+      const tagged=(cat.warehouses||[]).find(x=>String(x.id)===String(w.id));
+      return Object.assign({},w,{brand:tagged?.brand||w.brand||''});
+    });
     salesCenterData.stocks=stock.stocks||[];
     salesCenterData.salespeople=people.rows||[];
     salesCenterData.currentUser=people.currentUser||null;
     salesCenterData.canManage=Boolean(people.canManage);
     if(q('#salesCategoryFilter'))q('#salesCategoryFilter').innerHTML='<option value="">Tüm kategoriler</option>'+salesCenterData.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-    if(q('#salesDealer'))q('#salesDealer').innerHTML=salesCenterData.dealerSettings.filter(d=>d.active!==false).map(d=>`<option value="${d.id}">${d.name}</option>`).join('')||'<option value="">Bayi tanımlı değil</option>';
     if(q('#salesSalesperson')){
       const cur=salesCenterData.currentUser;
       q('#salesSalesperson').innerHTML='<option value="">Satıcı seçin</option>'+salesCenterData.salespeople.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
@@ -2797,8 +2804,7 @@ async function loadSalesCenter(){
         if(match)q('#salesSalesperson').value=match.id;
       }
     }
-    syncSalesPayAccounts();
-    if(q('#salesWarehouse'))q('#salesWarehouse').innerHTML=salesCenterData.warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('');
+    salesApplyBranchLock();
     salesFillCustomerSelect(list||salesCenterData.customers||[]);
     if(typeof refreshSalesProductSelects==='function')refreshSalesProductSelects();
     if(typeof loadSalesPromissoryDefaults==='function')loadSalesPromissoryDefaults();
@@ -2960,10 +2966,65 @@ function salesReset(){
   salesSetWizardStep(1);
   toast('Yeni satış formu hazır');
 }
+function salesPersonBrand(){
+  const id=q('#salesSalesperson')?.value||'';
+  const p=(salesCenterData.salespeople||[]).find(x=>String(x.id)===String(id));
+  return p?.brand||'';
+}
+function salesBrandLabel(brand){
+  return brand==='istikbal'?'İstikbal':brand==='beko'?'Beko':'';
+}
+function salesLockCash(list,brand){
+  const cash=(list||[]).filter(a=>a&&a.active!==false&&a.type==='cash');
+  if(!brand)return cash;
+  const m=cash.filter(a=>a.brand===brand);
+  return m.length?m:cash.filter(a=>!a.brand);
+}
+function salesLockBank(list,brand){
+  const bank=(list||[]).filter(a=>a&&a.active!==false&&a.type==='bank');
+  if(!brand)return bank;
+  const m=bank.filter(a=>!a.brand||a.brand===brand);
+  return m.length?m:bank.filter(a=>!a.brand);
+}
+function salesLockDealers(list,brand){
+  const d=(list||[]).filter(x=>x&&x.active!==false);
+  if(!brand)return d;
+  const m=d.filter(x=>x.brand===brand);
+  return m.length?m:d;
+}
+function salesLockWarehouses(list,brand){
+  const w=(list||[]).filter(x=>x&&x.active!==false);
+  if(!brand)return w;
+  const m=w.filter(x=>x.brand===brand);
+  return m.length?m:w;
+}
+function salesApplyBranchLock(){
+  const brand=salesPersonBrand();
+  const label=salesBrandLabel(brand);
+  const hint=q('#salesBranchLockHint');
+  if(hint)hint.textContent=brand?`${label} personeli — kasa, bayi ve depo ${label} şubesine kilitli.`: '';
+  const dealers=salesLockDealers(salesCenterData.dealerSettings||[],brand);
+  const dealerSel=q('#salesDealer');
+  if(dealerSel){
+    const cur=dealerSel.value;
+    dealerSel.innerHTML=dealers.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')||'<option value="">Bayi tanımlı değil</option>';
+    if(cur&&[...dealerSel.options].some(o=>o.value===cur))dealerSel.value=cur;
+  }
+  const warehouses=salesLockWarehouses(salesCenterData.warehouses||[],brand);
+  const whSel=q('#salesWarehouse');
+  if(whSel){
+    const cur=whSel.value;
+    whSel.innerHTML=warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('');
+    if(cur&&[...whSel.options].some(o=>o.value===cur))whSel.value=cur;
+  }
+  syncSalesPayAccounts();
+  if(typeof salesCalculate==='function')salesCalculate();
+}
 function syncSalesPayAccounts(){
   const all=(salesCenterData?.accounts||[]).filter(a=>a&&a.active!==false);
-  const cash=all.filter(a=>a.type==='cash');
-  const bank=all.filter(a=>a.type==='bank');
+  const brand=salesPersonBrand();
+  const cash=salesLockCash(all,brand);
+  const bank=salesLockBank(all,brand);
   const fill=(sel,rows,emptyLabel)=>{
     if(!sel)return;
     const cur=sel.value;
@@ -2980,7 +3041,8 @@ function syncSalesPayAccounts(){
   fill(q('#payTransferAccount'),bank,'Banka hesabı yok — Ayarlar → Tür: Banka');
   if(q('#salesAccount')){
     const cur=q('#salesAccount').value;
-    q('#salesAccount').innerHTML=all.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Hesap yok</option>';
+    const locked=cash.concat(bank);
+    q('#salesAccount').innerHTML=locked.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')||'<option value="">Hesap yok</option>';
     if(cur&&[...q('#salesAccount').options].some(o=>o.value===cur))q('#salesAccount').value=cur;
   }
 }
@@ -3657,7 +3719,9 @@ q('#salesPayPlanCloseBtn')?.addEventListener('click',()=>setSalesPayPlanOpen(fal
   q(id)?.addEventListener('input',salesRenderPromissorySchedule);
   q(id)?.addEventListener('change',salesRenderPromissorySchedule);
 });
-q('#salesDealer')?.addEventListener('change',salesCalculate);q('#salesDiscountPct')?.addEventListener('input',salesCalculate);q('#salesDiscountPct')?.addEventListener('change',salesCalculate);
+q('#salesDealer')?.addEventListener('change',salesCalculate);
+q('#salesSalesperson')?.addEventListener('change',()=>{salesApplyBranchLock();salesCalculate()});
+q('#salesDiscountPct')?.addEventListener('input',salesCalculate);q('#salesDiscountPct')?.addEventListener('change',salesCalculate);
 q('#salesCustomerSearchBtn')?.addEventListener('click',salesSearchCustomers);
 q('#salesCustomerSearch')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();salesSearchCustomers()}});
 q('#salesCustomerSearch')?.addEventListener('input',()=>{

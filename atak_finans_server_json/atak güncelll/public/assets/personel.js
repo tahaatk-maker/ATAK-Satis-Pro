@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v156 */
+/* ATAK_PERSONEL_BUILD=fix-v157 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -679,9 +679,9 @@ async function loadSales(){
       const wh=(cat.warehouses||fin.warehouses||[]).filter(w=>w.active!==false);
       $('#salesWarehouse').innerHTML=wh.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')||'<option value="">Depo yok</option>';
     }
-    syncPayAccounts();
+    applyStaffBranchLock();
     applyStaffSalePermissions();
-    $('#salesScopeHint').textContent=`Satışlar sizin adınıza kaydedilir · ${(cat.products||[]).length} ürün · ${salesCustomerTotal} müşteri`;
+    $('#salesScopeHint').textContent=`Satışlar sizin adınıza kaydedilir · ${(cat.products||[]).length} ürün · ${salesCustomerTotal} müşteri${staffBrand()?` · ${staffBrandLabel(staffBrand())} kasası kilitli`:''}`;
     salesReset();
     if(salesCustomers.length && $('#salesCustomerSelect')){
       $('#salesCustomerSelect').innerHTML='<option value="">Müşteri seçin</option>'+
@@ -824,9 +824,60 @@ function addToCart(code){
     try{priceInput.select()}catch(_){}
   }
 }
+function staffBrand(){
+  return currentUser?.brand||'';
+}
+function staffBrandLabel(brand){
+  return brand==='istikbal'?'İstikbal':brand==='beko'?'Beko':'';
+}
+function lockCashAccounts(list,brand){
+  const cash=(list||[]).filter(a=>a&&a.active!==false&&a.type==='cash');
+  if(!brand)return cash;
+  const m=cash.filter(a=>a.brand===brand);
+  return m.length?m:cash.filter(a=>!a.brand);
+}
+function lockBankAccounts(list,brand){
+  const bank=(list||[]).filter(a=>a&&a.active!==false&&a.type==='bank');
+  if(!brand)return bank;
+  const m=bank.filter(a=>!a.brand||a.brand===brand);
+  return m.length?m:bank.filter(a=>!a.brand);
+}
+function lockDealers(list,brand){
+  const d=(list||[]).filter(x=>x&&x.active!==false);
+  if(!brand)return d;
+  const m=d.filter(x=>x.brand===brand);
+  return m.length?m:d;
+}
+function lockWarehouses(list,brand){
+  const w=(list||[]).filter(x=>x&&x.active!==false);
+  if(!brand)return w;
+  const m=w.filter(x=>x.brand===brand);
+  return m.length?m:w;
+}
+function applyStaffBranchLock(){
+  const brand=staffBrand();
+  const label=staffBrandLabel(brand);
+  const hint=$('#salesBranchLockHint');
+  if(hint)hint.textContent=brand?`${label} şubesi — kasa, bayi ve depo ${label}’e kilitli.`:'';
+  const dealers=lockDealers(salesData?.dealerSettings||[],brand);
+  if($('#salesDealer')){
+    const cur=$('#salesDealer').value;
+    $('#salesDealer').innerHTML=dealers.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')||'<option value="">Bayi yok</option>';
+    if(cur&&[...$('#salesDealer').options].some(o=>o.value===cur))$('#salesDealer').value=cur;
+  }
+  const whSource=(salesData?.warehouses||[]).length?salesData.warehouses:(financeData?.warehouses||[]);
+  const warehouses=lockWarehouses(whSource,brand);
+  if($('#salesWarehouse')){
+    const cur=$('#salesWarehouse').value;
+    $('#salesWarehouse').innerHTML=warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')||'<option value="">Depo yok</option>';
+    if(cur&&[...$('#salesWarehouse').options].some(o=>o.value===cur))$('#salesWarehouse').value=cur;
+  }
+  syncPayAccounts();
+}
 function syncPayAccounts(){
-  const cashOpts=salesAccounts.filter(a=>a.type==='cash'&&a.active!==false);
-  const bankOpts=salesAccounts.filter(a=>a.type==='bank'&&a.active!==false);
+  const brand=staffBrand();
+  const cashOpts=lockCashAccounts(salesAccounts,brand);
+  const bankOpts=lockBankAccounts(salesAccounts,brand);
   const fill=(sel,rows,emptyLabel)=>{
     if(!sel)return;
     const cur=sel.value;
