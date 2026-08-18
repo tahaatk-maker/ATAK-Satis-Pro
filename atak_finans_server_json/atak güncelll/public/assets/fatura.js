@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v154 */
+/* ATAK_FATURA_BUILD=fix-v155 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={view:'pending',data:null,selected:new Set(),step:1,portal:'admin',canSetup:true,canIssue:true};
@@ -36,7 +36,7 @@ async function boot(){
       state.portal='staff';
       state.canSetup=has('settings_manage')||has('invoices_manage');
       state.canIssue=has('sale_invoice_qnb')||has('invoices_manage')||has('finance_manage');
-      if(!(has('screen_invoice_center')||has('invoices_manage')||has('sale_invoice_qnb')||has('screen_uninvoiced')||has('finance_manage'))){
+      if(!(has('screen_invoice_center')||has('invoices_manage')||has('sale_invoice_qnb')||has('screen_uninvoiced')||has('finance_manage')||has('orders_manage')||has('screen_sales_center'))){
         q('#gate').classList.remove('hidden');
         q('#gate p').textContent='e-Fatura ekranı yetkiniz kapalı. Yöneticiden “e-Fatura Merkezi” yetkisini açın.';
         return;

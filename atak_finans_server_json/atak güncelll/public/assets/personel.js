@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v154 */
+/* ATAK_PERSONEL_BUILD=fix-v155 */
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -60,7 +60,10 @@ function canScreen(id){return has(id)}
 function canSaleDocs(){return has('sale_docs')||has('*')}
 function canSaleOffer(){return has('sale_offer')||has('*')}
 function canSaleInvoice(){return has('sale_invoice_qnb')||has('finance_manage')||has('invoices_manage')||has('*')}
-function canInvoiceCenter(){return canScreen('screen_invoice_center')||canSaleInvoice()||has('screen_uninvoiced')}
+function canInvoiceCenter(){
+  return canScreen('screen_invoice_center')||canSaleInvoice()||has('screen_uninvoiced')
+    ||canScreen('screen_sales_center')||has('orders_manage');
+}
 function canDeductStock(){return has('sale_deduct_stock')||has('stock_manage')||has('*')}
 function applyStaffSalePermissions(){
   $$('[data-need-perm]').forEach(el=>{
@@ -83,7 +86,7 @@ function applyStaffSalePermissions(){
   });
   // Docs/offer: sales role has them by default via sale_docs/sale_offer; still show cards for orders_manage
   $$('.pos-finish-card.docs').forEach(el=>el.classList.toggle('hidden',!canSaleDocs()));
-  $$('.pos-finish-card.invoice').forEach(el=>el.classList.toggle('hidden',!canSaleInvoice()));
+  $$('.pos-finish-card.invoice').forEach(el=>el.classList.toggle('hidden',!canInvoiceCenter()));
   $('#salesWizardOfferBtn')?.classList.toggle('hidden',!canSaleOffer());
 }
 function hidePanels(){
@@ -109,7 +112,10 @@ async function loadSession(){
     $('#roleName').textContent=currentUser.roleName||currentUser.role||'Personel';
     // Finans & Cari ekranları — her biri ayrı yetki
     if(canScreen('screen_sales_center')||has('orders_manage'))$('#salesCard').classList.remove('hidden');
-    if(canInvoiceCenter())$('#invoiceCard')?.classList.remove('hidden');
+    if(canInvoiceCenter()){
+      $('#invoiceCard')?.classList.remove('hidden');
+      $('#invoiceHeaderBtn')?.classList.remove('hidden');
+    }
     if(canScreen('screen_finance')||canFinance())$('#financeCard').classList.remove('hidden');
     if(canScreen('screen_customer_payments')||canFinance())$('#paymentsCard').classList.remove('hidden');
     if(has('stock_manage')||has('stock_view'))$('#stockCard').classList.remove('hidden');
@@ -633,6 +639,7 @@ function openPersonelInvoiceCenter(){
   if(!w)stToast('Tarayıcı yeni sekmeyi engelledi — e-Fatura ekranı açılamadı');
 }
 $('#invoiceCard')?.addEventListener('click',openPersonelInvoiceCenter);
+$('#invoiceHeaderBtn')?.addEventListener('click',openPersonelInvoiceCenter);
 function filterCustomersLocal(list,term){
   const q=String(term||'').trim().toLocaleLowerCase('tr-TR');
   if(!q)return [];

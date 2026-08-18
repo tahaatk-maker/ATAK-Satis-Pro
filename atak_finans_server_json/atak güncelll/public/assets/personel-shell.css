@@ -78,6 +78,8 @@ header button{
   background:#fff;color:#174a80;font-weight:800;cursor:pointer;transition:background .12s,border-color .12s
 }
 header button:hover{background:#eef5ff;border-color:#9db8d8}
+#invoiceHeaderBtn{background:linear-gradient(180deg,#1e3a8a,#2563eb);border-color:#1d4ed8;color:#fff}
+#invoiceHeaderBtn:hover{background:linear-gradient(180deg,#1d4ed8,#3b82f6);border-color:#2563eb;color:#fff}
 #logout{background:linear-gradient(180deg,#fff,#fff1f2);border-color:#fecdd3;color:#9f1239}
 
 main{max-width:1250px;margin:auto;padding:22px 20px 48px}
