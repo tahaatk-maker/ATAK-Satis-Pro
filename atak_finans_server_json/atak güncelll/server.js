@@ -247,6 +247,8 @@ function ensureStore(store) {
     }
     if(!String(store.invoiceIntegration.rapid360.systemId||'').trim())store.invoiceIntegration.rapid360.systemId='1';
     if(store.invoiceIntegration.rapid360.addReturns==null)store.invoiceIntegration.rapid360.addReturns=true;
+    if(!String(store.invoiceIntegration.rapid360.salesStore||'').trim())store.invoiceIntegration.rapid360.salesStore='340334';
+    if(!String(store.invoiceIntegration.rapid360.salesCompany||'').trim())store.invoiceIntegration.rapid360.salesCompany='2521';
   }
   {
     const seeded=atakGetE.ensureConfig(store.invoiceIntegration.atakDms, store.invoiceIntegration.rapid360);
@@ -1897,8 +1899,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.184-atak-geteinvoices',
-  build:'fix-v184',
+  version:'6.3.185-atak-geteinvoices',
+  build:'fix-v185',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5048,7 +5050,7 @@ function emptyRapidSalesError(parsed, fileMode){
   if(cancelled) return `${fileMode?'XML okundu':'Rapid360'}: ${cancelled} satış İPTAL işaretli, aktarılacak kayıt yok.`;
   return fileMode
     ? 'XML içinde satış siparişi bulunamadı. Rapid360 Detaylı satış bilgileri XML dosyasını seçin (SiparisNo öznitelik olarak gelir).'
-    : 'Rapid360 yanıtında satış siparişi yok. Tarih aralığını kontrol edin veya XML Aktar kullanın.';
+    : 'Rapid360 yanıtında satış yok. Tarih aralığını kontrol edin.';
 }
 function buildRapidSalesPreview(s, parsed){
   const rows=(parsed.sales||[]).map(sale=>{
@@ -5309,13 +5311,15 @@ app.post('/web-api/admin/rapid360-sales-import',rapidSalesPerm,dynamicsUpload.si
 app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
   try{
     const body=req.body||{};
+    const magaza=String(body.store||'').trim()||rapidSalesFetch.DEFAULT_STORE;
+    const company=String(body.company||'').trim()||rapidSalesFetch.DEFAULT_COMPANY;
     const s=readStore();
     const out=await rapidSalesFetch.fetchRapid360Sales({
       store:s,
       startDate:body.startDate,
       endDate:body.endDate,
-      magaza:body.store,
-      company:body.company
+      magaza,
+      company
     });
     if(!out.ok) return res.status(400).json({error:out.error||'Rapid360 çekilemedi',tried:out.tried||[]});
     if(!out.parsed || !out.parsed.sales.length){
@@ -5326,10 +5330,20 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
       dealerId:body.dealerId,
       startDate:body.startDate,
       endDate:body.endDate,
-      store:body.store,
-      company:body.company
+      store:magaza,
+      company
     });
-    res.json({...preview,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,tried:out.tried||[]});
+    const autoImport=body.autoImport===true||body.autoImport==='true'||body.autoImport==='1';
+    if(!autoImport){
+      return res.json({...preview,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,tried:out.tried||[],store:magaza,company});
+    }
+    const dealer=pickRapidDealer(s,body.dealerId);
+    if(!dealer)return res.status(400).json({error:'Satış bayisi bulunamadı (Atak Beko).'});
+    const actor=currentActor(req);
+    const stats=applyRapidSalesImport(s,out.parsed,{dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-pull'});
+    audit(s,'Rapid360 canlı satış aktarıldı',`${stats.imported} satış`,stats);
+    writeStore(s);
+    res.json({...preview,...stats,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,autoImported:true,tried:out.tried||[],store:magaza,company});
   }catch(e){
     res.status(400).json({error:e.message||'Rapid360 çekilemedi',tried:e.tried||[]});
   }
@@ -6244,7 +6258,7 @@ app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_m
         eInvoiceCode:String(incoming.eInvoiceCode!=null?incoming.eInvoiceCode:(x.rapid360Code!=null?x.rapid360Code:prev.eInvoiceCode||'')).trim(),
         systemId:String(incoming.systemId!=null?incoming.systemId:(x.rapid360SystemId!=null?x.rapid360SystemId:prev.systemId||'1')).trim()||'1',
         salesUrl:String(incoming.salesUrl!=null?incoming.salesUrl:(x.rapid360SalesUrl!=null?x.rapid360SalesUrl:prev.salesUrl||'')).trim().split('?')[0],
-        salesStore:String(incoming.salesStore!=null?incoming.salesStore:(x.rapid360SalesStore!=null?x.rapid360SalesStore:prev.salesStore||'')).trim(),
+        salesStore:String(incoming.salesStore!=null?incoming.salesStore:(x.rapid360SalesStore!=null?x.rapid360SalesStore:prev.salesStore||'340334')).trim()||'340334',
         salesCompany:String(incoming.salesCompany!=null?incoming.salesCompany:(x.rapid360SalesCompany!=null?x.rapid360SalesCompany:prev.salesCompany||'2521')).trim()||'2521',
         addReturns:(incoming.addReturns!=null?incoming.addReturns:x.rapid360AddReturns)!=null
           ? (incoming.addReturns===true||incoming.addReturns==='true'||x.rapid360AddReturns===true||x.rapid360AddReturns==='true'||x.rapid360AddReturns==='on')

@@ -56,7 +56,7 @@ async function run() {
     assert.equal(out.parsed.sales[0].custName, 'ALI SEZER');
     assert.ok(out.sourceUrl.includes('DealerID=340344'));
     assert.ok(!out.sourceUrl.includes('secret-value'));
-    assert.ok(!/Magaza=/.test(out.sourceUrl), 'boş mağaza filtresi yok');
+    assert.ok(out.sourceUrl.includes('Magaza=340334'));
   } finally {
     global.fetch = orig;
   }
@@ -101,7 +101,7 @@ async function run() {
       endDate: '2026-03-18',
     });
     assert.equal(out.ok, false);
-    assert.ok(/XML Aktar/i.test(out.error));
+    assert.ok(/XML/i.test(out.error));
   } finally {
     global.fetch = orig2;
   }

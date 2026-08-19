@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v184 */
+/* ATAK_PERSONEL_BUILD=fix-v185 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1748,35 +1748,46 @@ function isoDaysAgo(n){
   return d.toISOString().slice(0,10);
 }
 let rapid360PullToken='';
-function rapid360PullBody(){
+function rapid360PullBody(extra={}){
   return{
     startDate:$('#rapid360SalesStart')?.value||isoDaysAgo(7),
     endDate:$('#rapid360SalesEnd')?.value||isoDaysAgo(0),
-    store:$('#rapid360SalesStoreFilter')?.value||'',
+    store:$('#rapid360SalesStoreFilter')?.value||'340334',
     company:$('#rapid360SalesCompanyFilter')?.value||'2521',
     dealerId:$('#rapid360SalesXmlDealer')?.value||'atak-beko',
-    pullToken:rapid360PullToken||undefined
+    pullToken:rapid360PullToken||undefined,
+    ...extra
   };
+}
+function fillRapidAktarDefaults(){
+  if($('#rapid360SalesStart') && !$('#rapid360SalesStart').value) $('#rapid360SalesStart').value=isoDaysAgo(7);
+  if($('#rapid360SalesEnd') && !$('#rapid360SalesEnd').value) $('#rapid360SalesEnd').value=isoDaysAgo(0);
+  if($('#rapid360SalesStoreFilter') && !$('#rapid360SalesStoreFilter').value) $('#rapid360SalesStoreFilter').value='340334';
+  if($('#rapid360SalesCompanyFilter') && !$('#rapid360SalesCompanyFilter').value) $('#rapid360SalesCompanyFilter').value='2521';
 }
 $('#rapid360SalesXmlBtn')?.addEventListener('click',()=>{
   $('#rapid360SalesXmlModal')?.classList.remove('hidden');
   rapid360PullToken='';
-  if($('#rapid360SalesStart') && !$('#rapid360SalesStart').value) $('#rapid360SalesStart').value=isoDaysAgo(7);
-  if($('#rapid360SalesEnd') && !$('#rapid360SalesEnd').value) $('#rapid360SalesEnd').value=isoDaysAgo(0);
+  fillRapidAktarDefaults();
 });
 $('#rapid360SalesXmlClose')?.addEventListener('click',()=>$('#rapid360SalesXmlModal')?.classList.add('hidden'));
 $('#rapid360SalesPullBtn')?.addEventListener('click',async()=>{
   const st=$('#rapid360SalesXmlStatus');
+  fillRapidAktarDefaults();
   rapid360PullToken='';
-  st.textContent='Rapid360 satışları çekiliyor…';
+  st.textContent='Rapid360 satış XML’i çekilip aktarılıyor…';
   $('#rapid360SalesXmlImportBtn')&&($('#rapid360SalesXmlImportBtn').disabled=true);
+  $('#rapid360SalesPullBtn')&&($('#rapid360SalesPullBtn').disabled=true);
   try{
-    const d=await api('/web-api/admin/rapid360-sales-pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
+    const d=await api('/web-api/admin/rapid360-sales-pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody({autoImport:true}))});
     rapid360PullToken=d.pullToken||'';
     $('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.salesId||''}</td><td>${r.customerName||''}</td><td>${money(r.total)}</td><td>${r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok')}</td></tr>`).join('');
-    $('#rapid360SalesXmlImportBtn').disabled=!d.importable;
-    st.textContent=`${d.importable||0} satış aktarılabilir${d.cancelled?` · ${d.cancelled} iptal atlandı`:''}`;
+    $('#rapid360SalesXmlImportBtn').disabled=true;
+    const msg=`${d.imported||0} satış alındı · ${d.skippedDuplicate||0} zaten vardı${d.customersUpdated?` · ${d.customersUpdated} müşteri adı güncellendi`:''}`;
+    st.textContent=msg;
+    stToast(msg);
   }catch(e){st.textContent=e.message}
+  finally{$('#rapid360SalesPullBtn')&&($('#rapid360SalesPullBtn').disabled=false)}
 });
 $('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
   const st=$('#rapid360SalesXmlStatus');
