@@ -80,7 +80,7 @@ check "personel cache $EXPECT_BUILD" grep -q "personel.js?v=$EXPECT_BUILD" "$SRC
 check "personel e-fatura karti" grep -q 'id="invoiceCard"' "$SRC/public/personel.html"
 check "personel e-fatura header" grep -q 'id="invoiceHeaderBtn"' "$SRC/public/personel.html"
 check "personel fatura otomatik yetki" grep -q "grantInvoiceScreenOnList" "$SRC/server.js"
-check "e-fatura sayfasi" grep -q 'e-Fatura Merkezi' "$SRC/public/fatura.html"
+check "e-fatura sayfasi" grep -q 'Faturalar' "$SRC/public/fatura.html"
 check "e-fatura tam merkez" grep -q 'data-inv-module="efatura"' "$SRC/public/fatura.html"
 check "e-fatura giden kutu" grep -q 'data-inv-view="ef_out_pending"' "$SRC/public/fatura.html"
 check "vkn lookup api" grep -q "vkn-lookup" "$SRC/server.js"
