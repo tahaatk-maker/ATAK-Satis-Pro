@@ -164,7 +164,8 @@ function ensureStore(store) {
     fieldMessage:'message',
     extraJson:'',
     bodyTemplate:'',
-    overdueTemplate:'Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71'
+    overdueTemplate:'Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71',
+    missedTemplate:'Sayin {ad}, sizi aradik ancak ulasamadik. Atak Pazarlama: {telefon}'
   };
   // Eski Corvass-only kayıtları genel altyapıya taşı
   if(store.settings.sms && !store.settings.sms.provider){
@@ -1084,6 +1085,9 @@ function smsProviderPresets(){
 function smsDefaultOverdueTemplate(){
   return 'Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71';
 }
+function smsDefaultMissedTemplate(){
+  return 'Sayin {ad}, sizi aradik ancak ulasamadik. Atak Pazarlama: {telefon}';
+}
 function smsConfig(s){
   const fromStore=(s?.settings?.sms&&typeof s.settings.sms==='object')?s.settings.sms:{};
   const presets=smsProviderPresets();
@@ -1121,11 +1125,12 @@ function smsConfig(s){
   }
   const bodyTemplate=String(fromStore.bodyTemplate!=null?fromStore.bodyTemplate:(preset.bodyTemplate||''));
   const overdueTemplate=String(fromStore.overdueTemplate||smsDefaultOverdueTemplate());
+  const missedTemplate=String(fromStore.missedTemplate||smsDefaultMissedTemplate());
   const enabled=(String(process.env.SMS_ENABLED||'')==='1')||fromStore.enabled===true;
   return{
     enabled:Boolean(enabled&&endpoint&&username&&password&&originator),
     provider,endpoint,method,contentType:ct,username,password,originator,
-    phoneFormat,successRule,fields,extra,bodyTemplate,overdueTemplate,
+    phoneFormat,successRule,fields,extra,bodyTemplate,overdueTemplate,missedTemplate,
     label:preset.label
   };
 }
@@ -1798,8 +1803,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.162-comm-log',
-  build:'fix-v162',
+  version:'6.3.163-comm-del',
+  build:'fix-v163',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   mfa:mfaEnabled(),
@@ -1971,6 +1976,7 @@ app.get('/web-api/admin/sms-settings',requirePermission('settings_manage'),(req,
       extraJson:raw.extraJson||'',
       bodyTemplate:raw.bodyTemplate||'',
       overdueTemplate:raw.overdueTemplate||cfg.overdueTemplate,
+      missedTemplate:raw.missedTemplate||cfg.missedTemplate,
       configured:cfg.enabled,
       providerLabel:cfg.label||''
     },
@@ -1983,6 +1989,7 @@ app.post('/web-api/admin/sms-settings',requirePermission('settings_manage'),(req
   const passIn=String(x.password||'');
   const keepPass=passIn===''||passIn==='••••••••';
   const tpl=String(x.overdueTemplate||cur.overdueTemplate||'').trim();
+  const missedTpl=String(x.missedTemplate||cur.missedTemplate||'').trim();
   const provider=String(x.provider||cur.provider||'generic').trim().toLowerCase();
   const presets=smsProviderPresets();
   const safeProvider=presets[provider]?provider:'generic';
@@ -2010,7 +2017,8 @@ app.post('/web-api/admin/sms-settings',requirePermission('settings_manage'),(req
     fieldMessage:String(x.fieldMessage||cur.fieldMessage||'').trim(),
     extraJson,
     bodyTemplate:String(x.bodyTemplate!=null?x.bodyTemplate:(cur.bodyTemplate||'')),
-    overdueTemplate:tpl||smsDefaultOverdueTemplate()
+    overdueTemplate:tpl||smsDefaultOverdueTemplate(),
+    missedTemplate:missedTpl||smsDefaultMissedTemplate()
   };
   audit(s,'SMS ayarları kaydedildi',s.settings.sms.provider||'-',{enabled:s.settings.sms.enabled,originator:s.settings.sms.originator,endpoint:s.settings.sms.endpoint});
   writeStore(s);
@@ -2045,7 +2053,7 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
     const type=String(req.body?.type||'custom').trim().toLowerCase();
     const phoneOverride=String(req.body?.phone||'').trim();
     const prep=prepareCustomerSms(s,customer,{
-      type:type==='overdue'?'overdue':'custom',
+      type:type==='overdue'?'overdue':(type==='missed'?'missed':'custom'),
       message:String(req.body?.message||''),
       phone:phoneOverride
     });
@@ -2061,7 +2069,7 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
     const r=await sendProviderSms(s,{to:prep.phone,message:prep.message});
     const actor=actorForReq(req);
     const log=pushSmsLog(s,{
-      type:prep.type==='overdue'?'overdue':'custom',
+      type:prep.type==='overdue'?'overdue':(prep.type==='missed'?'missed':'custom'),
       customerId:customer.id,
       customerName:customer.name||'',
       phone:r.to,
@@ -2072,7 +2080,7 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
       actor:actor?.name||actor?.username||'Kullanıcı'
     });
     mirrorSmsToCustomer(s,customer,log,actor);
-    audit(s,prep.type==='overdue'?'Gecikme SMS gönderildi':'Özel SMS gönderildi',customer.name||customer.id,{phone:r.to,code:r.code,provider:r.provider});
+    audit(s,prep.type==='overdue'?'Gecikme SMS gönderildi':(prep.type==='missed'?'Ulaşılamadı SMS gönderildi':'Özel SMS gönderildi'),customer.name||customer.id,{phone:r.to,code:r.code,provider:r.provider});
     writeStore(s);
     res.json({ok:true,to:r.to,type:prep.type,message:prep.message,code:r.code,provider:r.provider,overdueAmount:prep.snap.overdueAmount,balance:prep.snap.balance});
   }catch(e){
@@ -2115,6 +2123,12 @@ function prepareCustomerSms(s,customer,{type='custom',message='',phone=''}={}){
       telefon:String(s.settings?.phone||'0212 223 28 71')
     });
     if(message&&String(message).trim())text=String(message).trim();
+  }else if(type==='missed'){
+    text=renderSmsTemplate(cfg.missedTemplate,{
+      ad:customer.name||'Musteri',
+      firma:ATAK_COMPANY.shortName||'Atak Pazarlama',
+      telefon:String(s.settings?.phone||'0212 223 28 71')
+    });
   }else{
     text=String(message||'').trim();
     if(!text)return{ok:false,error:'Özel SMS metni zorunlu',customer,snap,phone:to};
@@ -3977,6 +3991,17 @@ app.post('/web-api/admin/customer/:id/comm',requireAdminOrStaffAny('finance_mana
   }
   writeStore(s);
   res.json({ok:true,row:rec,comms:customerComms.listForCustomer(s,customer.id)});
+});
+
+app.delete('/web-api/admin/customer/:id/comm/:commId',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+  const s=readStore(),customer=(s.customers||[]).find(c=>String(c.id)===String(req.params.id));
+  if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
+  const commId=String(req.params.commId||'');
+  if(!commId)return res.status(400).json({error:'Kayıt id yok'});
+  const out=customerComms.remove(s,customer.id,commId);
+  audit(s,'Müşteri iletişim kaydı silindi',customer.name||customer.id,{commId,actor:(actorForReq(req)||{}).name||''});
+  writeStore(s);
+  res.json({ok:true,removed:out.id,comms:customerComms.listForCustomer(s,customer.id)});
 });
 
 app.post('/web-api/admin/customer/:id/delete-request',requireAdminOrStaff('customers_manage'),(req,res)=>{

@@ -7,6 +7,7 @@ const CALL_RESULTS = ['started', 'no_answer', 'reached', 'busy', 'voicemail'];
 function ensure(store){
   if(!store || typeof store !== 'object') return [];
   if(!Array.isArray(store.customerComms)) store.customerComms = [];
+  if(!Array.isArray(store.customerCommHiddenIds)) store.customerCommHiddenIds = [];
   return store.customerComms;
 }
 
@@ -110,14 +111,40 @@ function fromSmsLog(x){
 
 function listForCustomer(s, customerId, limit = 250){
   const id = String(customerId);
-  const comms = (s.customerComms || []).filter(x => String(x.customerId) === id);
+  const hidden = new Set((s.customerCommHiddenIds || []).map(String));
+  const comms = (s.customerComms || []).filter(x => String(x.customerId) === id && !hidden.has(String(x.id)));
   const linked = new Set(comms.map(x => String(x.smsLogId || '')).filter(Boolean));
   const extra = (s.smsLogs || [])
-    .filter(x => String(x.customerId) === id && x.id && !linked.has(String(x.id)))
+    .filter(x => String(x.customerId) === id && x.id && !linked.has(String(x.id)) && !hidden.has(String(x.id)) && !hidden.has('smslog-' + x.id))
     .map(fromSmsLog);
   return [...comms, ...extra]
     .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))
     .slice(0, limit);
+}
+
+function hideId(s, id){
+  ensure(s);
+  const key = String(id || '');
+  if(!key) return;
+  if(!s.customerCommHiddenIds.includes(key)) s.customerCommHiddenIds.unshift(key);
+  s.customerCommHiddenIds = s.customerCommHiddenIds.slice(0, 4000);
+}
+
+function remove(s, customerId, commId){
+  ensure(s);
+  const cid = String(customerId);
+  const id = String(commId);
+  const row = (s.customerComms || []).find(x => String(x.id) === id && String(x.customerId) === cid) || null;
+  s.customerComms = (s.customerComms || []).filter(x => !(String(x.id) === id && String(x.customerId) === cid));
+  const smsIds = [];
+  if(row && row.smsLogId) smsIds.push(String(row.smsLogId));
+  if(id.startsWith('smslog-')) smsIds.push(id.slice(7));
+  if(smsIds.length){
+    s.smsLogs = (s.smsLogs || []).filter(x => !smsIds.includes(String(x.id)));
+  }
+  hideId(s, id);
+  smsIds.forEach(x => hideId(s, x));
+  return {ok: true, id, found: Boolean(row) || id.startsWith('smslog-')};
 }
 
 function resultLabel(kind, result){
@@ -142,5 +169,6 @@ module.exports = {
   listForCustomer,
   resultLabel,
   lastOpenCall,
+  remove,
   CALL_RESULTS
 };

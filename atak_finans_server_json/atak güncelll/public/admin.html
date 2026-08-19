@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v162" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v162" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v162" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v162" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v163" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v163" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v163" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v163" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -2125,19 +2125,17 @@ Bulunamayan → Diğer.
     <h3>Arama ve mesaj kayıtları</h3>
     <span id="customerCommsCount"></span>
   </div>
-  <p class="note" style="margin:8px 0 10px">Kanıt için durur: kim aradı, saat kaçta, ulaşılamadı mı, hangi SMS gitti.</p>
+  <p class="note" style="margin:8px 0 10px">Kanıt: kim aradı, saat, ulaşılamadı mı, hangi hazır SMS gitti. Yanlış / deneme kaydı silebilirsiniz.</p>
   <div class="customer-comms-actions">
     <a id="customerCommsCallBtn" class="sip-call-btn is-off" href="#" aria-disabled="true">Ara ve kaydet</a>
     <button type="button" data-comm-result="no_answer">Ulaşılamadı</button>
     <button type="button" data-comm-result="reached">Görüşüldü</button>
     <button type="button" data-comm-result="busy">Meşgul</button>
+    <button type="button" data-comm-sms="missed">Hazır SMS: Ulaşılamadı</button>
+    <button type="button" data-comm-sms="overdue">Hazır SMS: Gecikme</button>
     <button type="button" class="secondary-btn" id="customerCommsPrintBtn">Kayıtları yazdır</button>
   </div>
   <label>Arama notu<input id="customerCommNote" placeholder="Örn: 2 kez çaldı, açılmadı"></label>
-  <label>Elle SMS kaydı (telefonda attıysanız)<textarea id="customerCommManualSms" rows="2" maxlength="640" placeholder="Gönderilen metin"></textarea></label>
-  <div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">
-    <button type="button" class="secondary-btn" id="customerCommManualSmsBtn">Elle SMS kaydet</button>
-  </div>
   <div id="customerCommsList" class="customer-comms-list"></div>
 </section>
 <div id="customerDebtBox" class="customer-debt-box"></div>
@@ -2630,6 +2628,10 @@ Bulunamayan → Diğer.
     <textarea id="smsOverdueTemplate" rows="3" placeholder="Sayin {ad}, ..."></textarea>
     <small class="field-hint">Değişkenler: {ad} {geciken} {bakiye} {acik} {firma} {telefon}</small>
   </label>
+  <label>Ulaşılamadı SMS şablonu
+    <textarea id="smsMissedTemplate" rows="3" placeholder="Sayin {ad}, sizi aradik ancak ulasamadik..."></textarea>
+    <small class="field-hint">Değişkenler: {ad} {firma} {telefon}</small>
+  </label>
   <div class="two-col">
     <label>Test telefonu<input id="smsTestPhone" placeholder="05xx xxx xx xx" inputmode="tel"/></label>
     <label>Test metni<input id="smsTestMessage" placeholder="ATAK SMS test"/></label>
@@ -2750,6 +2752,6 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v162"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v162"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v163"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v163"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

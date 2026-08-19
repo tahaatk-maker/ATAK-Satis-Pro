@@ -1,8 +1,8 @@
 # ATAK VPS kesin deploy (fix-v89) — health 6.3.90-mobilya-alis-v2 olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.162-comm-log
-EXPECT_BUILD=fix-v162
+EXPECT_HEALTH=6.3.163-comm-del
+EXPECT_BUILD=fix-v163
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -98,7 +98,8 @@ check "microsip ara sip-call.js" test -f "$SRC/public/assets/sip-call.js"
 check "admin microsip" grep -q "sip-call.js" "$SRC/public/admin.html"
 check "personel microsip" grep -q "sip-call.js" "$SRC/public/personel.html"
 check "musteri iletisim kaydi" grep -q "customerComms" "$SRC/server.js"
-check "musteri arama panel" grep -q "customerCommsPanel" "$SRC/public/admin.html"
+check "musteri iletisim sil" grep -q "customer/:id/comm/:commId" "$SRC/server.js"
+check "hazir ulasilamadi sms" grep -q "smsDefaultMissedTemplate" "$SRC/server.js"
 if grep -q 'data-finance-jump="uninvoiced"' "$SRC/public/admin.html"; then
   echo "   HATALI: Finans menusunde Kesilmeyen hala var"; exit 1
 fi

@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v162 */
+/* ATAK_PERSONEL_BUILD=fix-v163 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -2066,9 +2066,10 @@ function renderPayComms(customerId,preloaded){
       <div class="customer-comms-actions">
         <button type="button" data-pay-comm="no_answer">Ulaşılamadı</button>
         <button type="button" data-pay-comm="reached">Görüşüldü</button>
+        <button type="button" data-pay-sms="missed">Hazır SMS: Ulaşılamadı</button>
       </div>
       <label class="field">Not<input id="payCommNote" placeholder="2 kez çaldı, açılmadı"></label>
-      <div class="customer-comms-list">${items.length?items.slice(0,12).map(r=>`<article class="customer-comms-item"><b>${payCommLabel(r)}</b><small>${payCommWhen(r.at)} · ${esc(r.actor||'—')}</small>${r.message?`<div class="msg">${esc(r.message)}</div>`:(r.note?`<small>${esc(r.note)}</small>`:'')}</article>`).join(''):'<div class="note">Henüz kayıt yok.</div>'}</div>`;
+      <div class="customer-comms-list">${items.length?items.slice(0,12).map(r=>`<article class="customer-comms-item"><div><b>${payCommLabel(r)}</b><small>${payCommWhen(r.at)} · ${esc(r.actor||'—')}</small>${r.message?`<div class="msg">${esc(r.message)}</div>`:(r.note?`<small>${esc(r.note)}</small>`:'')}</div><button type="button" class="customer-comms-del" data-pay-comm-del="${esc(r.id)}">Sil</button></article>`).join(''):'<div class="note">Henüz kayıt yok.</div>'}</div>`;
     box.querySelectorAll('[data-pay-comm]').forEach(btn=>{
       btn.onclick=async()=>{
         try{
@@ -2078,6 +2079,27 @@ function renderPayComms(customerId,preloaded){
           });
           renderPayComms(customerId,d.comms);
         }catch(e){stToast(e.message||'Kayıt yazılamadı')}
+      };
+    });
+    box.querySelectorAll('[data-pay-sms]').forEach(btn=>{
+      btn.onclick=async()=>{
+        if(!confirm('Ulaşılamadı hazır SMS gönderilsin mi?'))return;
+        try{
+          await api('/web-api/admin/customer/'+encodeURIComponent(customerId)+'/sms',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({type:'missed'})
+          });
+          renderPayComms(customerId);
+        }catch(e){stToast(e.message||'SMS gönderilemedi')}
+      };
+    });
+    box.querySelectorAll('[data-pay-comm-del]').forEach(btn=>{
+      btn.onclick=async()=>{
+        if(!confirm('Bu kayıt silinsin mi?'))return;
+        try{
+          const d=await api('/web-api/admin/customer/'+encodeURIComponent(customerId)+'/comm/'+encodeURIComponent(btn.getAttribute('data-pay-comm-del')),{method:'DELETE'});
+          renderPayComms(customerId,d.comms);
+        }catch(e){stToast(e.message||'Silinemedi')}
       };
     });
   };

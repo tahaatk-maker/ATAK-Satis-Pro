@@ -326,8 +326,9 @@ td small{display:block;color:#7a879a;margin-top:2px}
 .customer-comms-actions button{min-height:40px;padding:0 12px;border:0;border-radius:9px;background:#b45309;color:#fff;font-weight:800;cursor:pointer}
 .customer-comms-actions button[data-pay-comm="reached"]{background:#15803d}
 .customer-comms-list{display:grid;max-height:280px;overflow:auto;background:#fff;border:1px solid #dbe7df;border-radius:10px;padding:0 12px}
-.customer-comms-item{display:grid;gap:3px;padding:10px 0;border-bottom:1px solid #edf2ef;font-size:13px}
+.customer-comms-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;padding:10px 0;border-bottom:1px solid #edf2ef;font-size:13px}
 .customer-comms-item .msg{white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px}
+.customer-comms-del{min-height:32px;padding:0 10px;border:0;border-radius:8px;background:#b42318;color:#fff;font-weight:800;cursor:pointer}
 [data-need-perm].perm-locked{opacity:.45;pointer-events:none;filter:grayscale(.2)}
 @media(max-width:900px){
   .pos-finish-split.pos-finish-3,.sales-calc-box,.preview-cards,.sc-grid-2{grid-template-columns:1fr}

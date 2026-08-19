@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v162 */
+/* ATAK_ADMIN_BUILD=fix-v163 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2394,7 +2394,7 @@ function renderCustomerComms(rows){
     const note=r.note?`<small>${salesEsc(r.note)}</small>`:'';
     const msg=r.message?`<div class="msg">${salesEsc(r.message)}</div>`:'';
     const extra=r.kind==='sms'&&r.provider?`<small>${r.manual?'Elle kayıt':salesEsc(r.provider)}</small>`:'';
-    return `<article class="customer-comms-item"><b>${commResultLabel(r)}</b><small>${when} · ${who}${phone?' · '+phone:''}</small>${note}${extra}${msg}</article>`;
+    return `<article class="customer-comms-item"><div><b>${commResultLabel(r)}</b><small>${when} · ${who}${phone?' · '+phone:''}</small>${note}${extra}${msg}</div><button type="button" class="customer-comms-del" data-comm-del="${salesEsc(r.id)}">Sil</button></article>`;
   }).join('');
 }
 function syncCustomerCallLinks(c={}){
@@ -2461,7 +2461,6 @@ async function selectCustomerPage(id){
     syncCustomerCallLinks(c);
     renderCustomerComms(d.comms||[]);
     if(q('#customerCommNote'))q('#customerCommNote').value='';
-    if(q('#customerCommManualSms'))q('#customerCommManualSms').value='';
     if(q('#customerDetailStatus')){
       const bits=[];
       if(c.active===false)bits.push('Pasif');else bits.push('Aktif');
@@ -2710,14 +2709,34 @@ document.addEventListener('click',e=>{
   }
 });
 q('#customerCommsPrintBtn')?.addEventListener('click',()=>printCustomerComms());
-q('#customerCommManualSmsBtn')?.addEventListener('click',async()=>{
-  const message=(q('#customerCommManualSms')?.value||'').trim();
-  if(!message){toast('Elle kayıt için SMS metnini yazın');return}
-  try{
-    await postCustomerComm({kind:'sms',result:'sent',message,note:'Elle kayıt',manual:true,phone:customersPageData._selected?.phone||''});
-    if(q('#customerCommManualSms'))q('#customerCommManualSms').value='';
-    toast('SMS kaydı işlendi');
-  }catch(err){toast(err.message||'Kayıt yazılamadı')}
+document.addEventListener('click',e=>{
+  const del=e.target.closest('[data-comm-del]');
+  if(del){
+    e.preventDefault();
+    const commId=del.getAttribute('data-comm-del');
+    const c=customersPageData._selected;
+    if(!c?.id||!commId)return;
+    if(!confirm('Bu kayıt silinsin mi? (deneme veya yanlış işaret)'))return;
+    api('/web-api/admin/customer/'+encodeURIComponent(c.id)+'/comm/'+encodeURIComponent(commId),{method:'DELETE'})
+      .then(d=>{renderCustomerComms(d.comms||[]);toast('Kayıt silindi')})
+      .catch(err=>toast(err.message||'Silinemedi'));
+  }
+  const smsBtn=e.target.closest('[data-comm-sms]');
+  if(smsBtn){
+    e.preventDefault();
+    const type=smsBtn.getAttribute('data-comm-sms');
+    const c=customersPageData._selected;
+    if(!c?.id){toast('Önce müşteri seçin');return}
+    const label=type==='missed'?'Ulaşılamadı hazır SMS':'Gecikme hazır SMS';
+    if(!confirm(label+' gönderilsin mi?'))return;
+    api('/web-api/admin/customer/'+encodeURIComponent(c.id)+'/sms',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type,phone:c.phone||''})
+    }).then(async r=>{
+      toast((type==='missed'?'Ulaşılamadı SMS':'Gecikme SMS')+' gönderildi → '+(r.to||''));
+      await selectCustomerPage(c.id);
+    }).catch(err=>toast(err.message||'SMS gönderilemedi'));
+  }
 });
 q('#customerDetailPayForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
@@ -4527,7 +4546,8 @@ function smsPayloadFromForm(){
     fieldMessage:q('#smsFieldMessage')?.value,
     extraJson:q('#smsExtraJson')?.value,
     bodyTemplate:q('#smsBodyTemplate')?.value,
-    overdueTemplate:q('#smsOverdueTemplate')?.value
+    overdueTemplate:q('#smsOverdueTemplate')?.value,
+    missedTemplate:q('#smsMissedTemplate')?.value
   };
 }
 function applySmsPreset(id,{fillEmptyOnly=false}={}){
@@ -4582,6 +4602,7 @@ async function loadSmsSettings(){
     if(q('#smsExtraJson'))q('#smsExtraJson').value=s.extraJson||'';
     if(q('#smsBodyTemplate'))q('#smsBodyTemplate').value=s.bodyTemplate||'';
     if(q('#smsOverdueTemplate'))q('#smsOverdueTemplate').value=s.overdueTemplate||'';
+    if(q('#smsMissedTemplate'))q('#smsMissedTemplate').value=s.missedTemplate||'';
     const preset=(smsPresetsCache||[]).find(x=>x.id===(s.provider||'generic'));
     if(q('#smsProviderHint'))q('#smsProviderHint').textContent=preset?.hint||'Firmanın API dokümanındaki endpoint ve alan adlarını kullanın.';
     if(st){

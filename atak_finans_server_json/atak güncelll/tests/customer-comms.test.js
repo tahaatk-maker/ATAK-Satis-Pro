@@ -23,4 +23,10 @@ assert(list.some(x => x.id === 'smslog-old1'), 'eski smsLogs birlesir');
 assert(comms.resultLabel('call','no_answer') === 'Ulaşılamadı', 'etiket');
 assert(comms.resultLabel('sms','sent') === 'SMS gönderildi', 'sms etiket');
 
+const gone = comms.remove(s, 'c1', started.id);
+assert(gone.ok, 'silindi');
+assert(!comms.listForCustomer(s, 'c1').some(x => x.id === started.id), 'arama listeden cikti');
+comms.remove(s, 'c1', 'smslog-old1');
+assert(!comms.listForCustomer(s, 'c1').some(x => x.id === 'smslog-old1'), 'eski sms silindi');
+
 console.log('customer-comms.test.js ok');

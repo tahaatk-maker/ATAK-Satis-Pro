@@ -149,11 +149,14 @@
 .customer-comms-actions button[data-comm-result="reached"]{background:#15803d}
 .customer-comms-actions button[data-comm-result="busy"]{background:#7c3aed}
 .customer-comms-list{display:grid;gap:0;max-height:420px;overflow:auto;background:#fff;border:1px solid #dbe7df;border-radius:10px;padding:0 12px}
-.customer-comms-item{display:grid;gap:4px;padding:11px 0;border-bottom:1px solid #edf2ef}
+.customer-comms-actions button[data-comm-sms="missed"]{background:#0f766e}
+.customer-comms-actions button[data-comm-sms="overdue"]{background:#b45309}
+.customer-comms-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;padding:11px 0;border-bottom:1px solid #edf2ef}
 .customer-comms-item:last-child{border-bottom:0}
 .customer-comms-item b{font-size:14px}
 .customer-comms-item small{color:#64748b}
 .customer-comms-item .msg{white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-size:13px}
+.customer-comms-del{min-height:32px;padding:0 10px;border:0;border-radius:8px;background:#b42318;color:#fff;font-weight:800;cursor:pointer;white-space:nowrap}
 .sms-advanced{margin:4px 0 8px;padding:10px 12px;border:1px solid #e8d5bf;border-radius:12px;background:#fffdf9}
 .sms-advanced>summary{cursor:pointer;font-weight:800;color:#7c2d12}
 .cust-pay-sms-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 10px;padding:10px 12px;border:1px solid #e8d5bf;border-radius:12px;background:#fffaf3}
