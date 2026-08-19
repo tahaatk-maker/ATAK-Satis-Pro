@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.194-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.195-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.194-atak-geteinvoices
-EXPECT_BUILD=fix-v194
+EXPECT_HEALTH=6.3.195-atak-geteinvoices
+EXPECT_BUILD=fix-v195
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -106,16 +106,26 @@ check "rapid360 detayli satis url" grep -q "DmrDetailedSalesReport" "$SRC/lib/ra
 check "rapid360 nativeclient yok" grep -q "isBlockedMicrosoftUrl" "$SRC/lib/rapid360-d365-auth.js"
 check "rapid360 magaza url" grep -q "parmMagaza" "$SRC/lib/rapid360-d365-auth.js"
 check "rapid360 tarih url" grep -q "StartDate" "$SRC/lib/rapid360-d365-auth.js"
-check "rapid360 ekran kalir" grep -q "rapid360silent" "$SRC/public/assets/admin.js"
-check "rapid360 kod kutusu yok" grep -q "microsoft.com/devicelogin" "$SRC/lib/rapid360-d365-auth.js"
-check "rapid360 ikinci kod penceresi yok" grep -q "continueRapidDeviceLogin" "$SRC/public/assets/admin.js"
+check "rapid360 web only login" grep -q "startWebOnlyLogin" "$SRC/lib/rapid360-d365-auth.js"
+check "rapid360 okta bagla" grep -q "rapid360OktaConnectBtn" "$SRC/public/admin.html"
+check "rapid360 secilenleri aktar" grep -q "Seçilenleri aktar" "$SRC/public/admin.html"
+check "rapid360 salesIds" grep -q "parseSalesIds" "$SRC/lib/rapid360-sales-catalog.js"
+check "rapid360 magaza 340334" grep -q 'value="340334"' "$SRC/public/admin.html"
+check "rapid360 atak magaza" grep -q "340334 ATAK" "$SRC/public/admin.html"
+check "rapid360 pull auto yok" grep -q "autoImport:false" "$SRC/public/assets/admin.js"
+if grep -q "rapid360silent" "$SRC/public/assets/admin.js" "$SRC/public/assets/personel.js"; then
+  echo "   HATALI: Rapid Aktar hâlâ silent Kod penceresi açıyor"; exit 1
+fi
+echo "   ok: Rapid Aktar silent Kod penceresi yok"
+if grep -q "deviceLoginUrl" "$SRC/public/assets/admin.js" "$SRC/public/assets/personel.js"; then
+  echo "   HATALI: Rapid Aktar hâlâ deviceLoginUrl açıyor"; exit 1
+fi
+echo "   ok: Rapid Aktar deviceLoginUrl yok"
 if grep -q "rapid360finish" "$SRC/public/assets/admin.js" "$SRC/public/assets/personel.js"; then
   echo "   HATALI: Rapid Aktar hâlâ ikinci Kod penceresi açıyor"; exit 1
 fi
 echo "   ok: Rapid Aktar ikinci Kod penceresi yok"
 check "rapid360 satis aktar ui" grep -q "Rapid Aktar" "$SRC/public/admin.html"
-check "rapid360 magaza 340334" grep -q 'value="340334"' "$SRC/public/admin.html"
-check "rapid360 auto import" grep -q "autoImport:true" "$SRC/public/assets/admin.js"
 check "rapid360 satis katalog" test -f "$SRC/lib/rapid360-sales-catalog.js"
 check "rapid360 missing products" grep -q "collectMissingProducts" "$SRC/lib/rapid360-sales-catalog.js"
 check "rapid360 yeni urun kategori" grep -q "createRapidMissingProducts" "$SRC/server.js"

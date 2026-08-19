@@ -83,7 +83,7 @@ function accountFromToken(token){
 
 function loginMessage(loginHint){
   const who = String(loginHint || DEFAULT_ACCOUNT).trim();
-  return `Rapid360 açılır (${who}). Telefona Okta bildirimi gelir; onaylayın. Kod yazılmaz. Mağaza 340334 seçili gelir, XML’i Atak arkada aktarır.`;
+  return `Rapid360 açılır (${who}). Telefona Okta bildirimi gelir; onaylayın. Kod yazılmaz. Mağaza 340334 ATAK Atak’ta uygulanır.`;
 }
 
 function isoDateParam(v){
@@ -365,6 +365,29 @@ function tokenFresh(cfg){
   const exp = Date.parse(cfg.expiresAt || '');
   if(!Number.isFinite(exp)) return true;
   return exp > Date.now() + 15000;
+}
+
+function startWebOnlyLogin(opts = {}){
+  const rapid = opts.rapid || {};
+  const cfg = configFromRapid(rapid, opts.env);
+  const company = String(opts.company || rapid.salesCompany || '2521').trim() || '2521';
+  const store = String(opts.store || rapid.salesStore || '340334').trim() || '340334';
+  const startDate = isoDateParam(opts.startDate);
+  const endDate = isoDateParam(opts.endDate);
+  const loginUrl = dynamicsReportUrl({
+    dynamicsUrl: isMuleUrl(cfg.dynamicsUrl) ? DEFAULT_DYNAMICS_URL : cfg.dynamicsUrl,
+    company,
+    store,
+    startDate,
+    endDate
+  });
+  return {
+    pollId: '',
+    loginUrl,
+    expiresIn: 900,
+    interval: 3,
+    message: `Rapid360 açıldı (${DEFAULT_ACCOUNT}). Telefonda Okta bildirimine basın. Kod yazılmaz. Mağaza 340334 ATAK Atak’ta uygulanır. Onaydan sonra Satışları oku.`
+  };
 }
 
 async function startInteractiveLogin(opts = {}){
@@ -725,6 +748,7 @@ module.exports = {
   tokenFresh,
   startDeviceLogin,
   startInteractiveLogin,
+  startWebOnlyLogin,
   pollDeviceLogin,
   completeAuthorizationCode,
   popupResultHtml,

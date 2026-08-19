@@ -46,6 +46,27 @@ function lookupCategory(map, item, fallback){
   return String(fallback || '').trim();
 }
 
+function parseSalesIds(raw){
+  if(raw == null || raw === '') return [];
+  if(Array.isArray(raw)) return [...new Set(raw.map((s) => String(s || '').trim()).filter(Boolean))];
+  if(typeof raw === 'string'){
+    const t = raw.trim();
+    if(!t) return [];
+    if(t.startsWith('[')){
+      try{ return parseSalesIds(JSON.parse(t)); }catch{ /* fall through */ }
+    }
+    return [...new Set(t.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean))];
+  }
+  return [];
+}
+
+function filterSalesByIds(parsed, salesIds){
+  const ids = new Set(parseSalesIds(salesIds));
+  if(!ids.size) return parsed;
+  const sales = ((parsed && parsed.sales) || []).filter((s) => ids.has(String(s.salesId || '').trim()));
+  return Object.assign({}, parsed || {}, { sales });
+}
+
 function collectMissingProducts(parsed, products, opts = {}){
   const skip = opts.skipSalesIds instanceof Set ? opts.skipSalesIds : new Set(opts.skipSalesIds || []);
   const suggest = typeof opts.suggestCategoryId === 'function' ? opts.suggestCategoryId : () => '';
@@ -60,7 +81,9 @@ function collectMissingProducts(parsed, products, opts = {}){
       if(findCatalogProduct(products, line)) continue;
       const k = fold(key);
       if(seen.has(k)){
-        seen.get(k).salesCount += 1;
+        const row = seen.get(k);
+        row.salesCount += 1;
+        if(salesId && !row.salesIds.includes(salesId)) row.salesIds.push(salesId);
         continue;
       }
       const name = String(line.name || line.searchName || key).trim();
@@ -72,7 +95,8 @@ function collectMissingProducts(parsed, products, opts = {}){
         name,
         suggestedCategoryId: suggested,
         categoryId: suggested,
-        salesCount: 1
+        salesCount: 1,
+        salesIds: salesId ? [salesId] : []
       });
     }
   }
@@ -85,5 +109,7 @@ module.exports = {
   findCatalogProduct,
   parseCategoryMap,
   lookupCategory,
-  collectMissingProducts
+  collectMissingProducts,
+  parseSalesIds,
+  filterSalesByIds
 };

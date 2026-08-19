@@ -237,46 +237,51 @@ async function fetchRapid360Sales(opts = {}){
   const range = {
     startDate: opts.startDate,
     endDate: opts.endDate,
-    store: opts.salesStore != null ? opts.salesStore : (opts.magaza != null ? opts.magaza : opts.storeId),
+    store: String(opts.salesStore != null ? opts.salesStore : (opts.magaza != null ? opts.magaza : opts.storeId) || DEFAULT_STORE).trim() || DEFAULT_STORE,
     company: opts.company
   };
   try{
+    if(rapid360.isChairmanMuleConsume(raw, opts.env || process.env) || String(raw && raw.dealerId || '') === rapid360.CHAIRMAN_DEALER_ID){
+      throw new Error('Başkanın Arçelik Rapid360 hesabı ile satış çekilmez. Atak bayi hesabını yazın (DealerID 21134761 kabul edilmez).');
+    }
+    const consume = Object.assign({}, rapid360.resolveConsumeConfig(raw), {
+      salesUrl: String(raw && raw.salesUrl || '').trim()
+    });
+    const muleReady = consumeReady(consume) || Boolean(consume.salesUrl);
+    if(muleReady){
+      try{
+        const out = await fetchDetailedSales(raw, range, { fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs });
+        if(out && out.parsed && out.parsed.sales && out.parsed.sales.length){
+          return {
+            ok: true,
+            parsed: out.parsed,
+            sourceUrl: out.sourceUrl || '',
+            store: out.store || range.store,
+            company: out.company || range.company,
+            tried: out.tried || [],
+            via: 'mule',
+            tokens: null
+          };
+        }
+      }catch(e){
+        if(/21134761/.test(String(e && e.message))) throw e;
+      }
+    }
     const okta = await fetchViaOkta(raw, range, opts);
     if(okta.ok){
       return {
         ok: true,
         parsed: okta.parsed,
         sourceUrl: okta.sourceUrl || '',
-        store: okta.store,
-        company: okta.company,
+        store: okta.store || range.store,
+        company: okta.company || range.company,
         tried: okta.tried || [],
         via: 'okta',
         tokens: okta.tokens || null
       };
     }
-    const consume = Object.assign({}, rapid360.resolveConsumeConfig(raw), {
-      salesUrl: String(raw && raw.salesUrl || '').trim()
-    });
-    const muleReady = consumeReady(consume) || Boolean(consume.salesUrl);
-    if(okta.needsOkta && muleReady){
-      try{
-        const out = await fetchDetailedSales(raw, range, { fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs });
-        return {
-          ok: true,
-          parsed: out.parsed,
-          sourceUrl: out.sourceUrl || '',
-          store: out.store,
-          company: out.company,
-          tried: out.tried || [],
-          via: 'mule'
-        };
-      }catch(e){
-        if(/21134761/.test(String(e && e.message))) throw e;
-        return { ok: false, needsOkta: true, error: okta.error || e.message || 'Okta Verify gerekli.', tried: e.tried || okta.tried || [], tokens: okta.tokens || null };
-      }
-    }
     if(okta.needsOkta){
-      return { ok: false, needsOkta: true, error: okta.error || 'Okta Verify gerekli.', tried: okta.tried || [], tokens: okta.tokens || null };
+      return { ok: false, needsOkta: true, error: 'Önce Okta bağla, sonra Satışları oku. Mağaza 340334 ATAK Atak’ta uygulanır.', tried: okta.tried || [], tokens: okta.tokens || null };
     }
     return { ok: false, error: okta.error || 'çekilemedi', tried: okta.tried || [], tokens: okta.tokens || null };
   }catch(e){

@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v194 */
+/* ATAK_FATURA_BUILD=fix-v195 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={module:'efatura',view:'ef_out_pending',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};

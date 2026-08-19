@@ -215,6 +215,24 @@ async function run(){
   assert.ok(!reused.deviceLoginUrl.includes('login_hint'));
   assert.ok(!reused.deviceLoginUrl.includes('deviceauth'));
 
+  const webOnly = auth.startWebOnlyLogin({
+    company: '2521',
+    store: '340334',
+    startDate: '2026-08-18',
+    endDate: '2026-08-19'
+  });
+  assert.ok(webOnly.loginUrl.includes('liverapid360.operations.dynamics.com'));
+  assert.ok(webOnly.loginUrl.includes('mi=DmrDetailedSalesReport'));
+  assert.ok(webOnly.loginUrl.includes('Magaza=340334'));
+  assert.ok(webOnly.loginUrl.includes('StartDate=2026-08-18'));
+  assert.equal(webOnly.deviceLoginUrl, undefined);
+  assert.ok(!('deviceLoginUrl' in webOnly));
+  assert.ok(!JSON.stringify(webOnly).includes('user_code'));
+  assert.ok(!JSON.stringify(webOnly).includes('devicelogin'));
+  assert.ok(!JSON.stringify(webOnly).includes('deviceauth'));
+  assert.ok(/Kod yazılmaz/i.test(webOnly.message));
+  assert.ok(/340334 ATAK/i.test(webOnly.message));
+
   console.log('rapid360-d365-auth tests OK');
 }
 

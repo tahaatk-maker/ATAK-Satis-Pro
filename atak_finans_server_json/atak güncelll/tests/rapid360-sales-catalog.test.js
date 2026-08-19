@@ -63,4 +63,13 @@ const found = catalog.findCatalogProduct(
 );
 assert.ok(found);
 
+assert.deepEqual(catalog.parseSalesIds('S1,S2 S3'), ['S1', 'S2', 'S3']);
+assert.deepEqual(catalog.parseSalesIds('[]'), []);
+assert.deepEqual(catalog.parseSalesIds(['S1', 'S1', ' S2 ']), ['S1', 'S2']);
+const picked = catalog.filterSalesByIds(parsed, ['S1']);
+assert.equal(picked.sales.length, 1);
+assert.equal(picked.sales[0].salesId, 'S1');
+assert.deepEqual(missing.find((x) => x.itemCode === 'C9120').salesIds, ['S1', 'S2']);
+assert.deepEqual(missing.find((x) => x.itemCode === 'NEW2').salesIds, ['S2']);
+
 console.log('rapid360-sales-catalog tests OK');
