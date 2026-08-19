@@ -353,7 +353,7 @@ function fillAtakDms(s){
   setVal('atakDmsCode',d.eInvoiceCode||'');
   setVal('atakDmsSystemId',d.systemId||'1');
   if(q('#atakDmsEnabled'))q('#atakDmsEnabled').checked=d.enabled!==false;
-  if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=d.includeInbox!==false;
+  if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=false;
   setVal('atakDmsAllowedIps',d.allowedIps||'');
   setVal('atakDmsCopyUrl',d.copyUrl||'');
 }

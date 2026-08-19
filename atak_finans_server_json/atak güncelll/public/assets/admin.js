@@ -4701,7 +4701,7 @@ async function loadInvoiceIntegration(){
   if(q('#atakDmsCode'))q('#atakDmsCode').value=dms.eInvoiceCode||'';
   if(q('#atakDmsSystemId'))q('#atakDmsSystemId').value=dms.systemId||'1';
   if(q('#atakDmsEnabled'))q('#atakDmsEnabled').checked=dms.enabled!==false;
-  if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=dms.includeInbox!==false;
+  if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=false;
   if(q('#atakDmsAllowedIps'))q('#atakDmsAllowedIps').value=dms.allowedIps||'';
   if(q('#atakDmsCopyUrl'))q('#atakDmsCopyUrl').value=dms.copyUrl||'';
   refreshInvoiceSeriesPreview();

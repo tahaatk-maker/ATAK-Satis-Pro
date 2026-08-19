@@ -40,6 +40,7 @@ assert(seeded.cfg.clientId === muleQuery.client_id, 'default client_id');
 assert(seeded.cfg.clientSecret === muleQuery.client_secret, 'default secret');
 assert(seeded.cfg.eInvoiceCode === '2E1N1D3E4', 'default servis kodu');
 assert(seeded.cfg.dealerId === '340344', 'Atak DealerID');
+assert(seeded.cfg.bayi === 'ATAKHOME', 'bayi ATAKHOME');
 assert(atak.ensureConfig({ dealerId: '21134761' }).cfg.dealerId === '340344', 'eski Arçelik bayi Atak’ta düzelir');
 
 const store = {
@@ -65,6 +66,14 @@ const store = {
       status: 'cancelled',
       docType: 'efatura',
       customer: { name: 'İade Müşteri' }
+    },
+    {
+      invoiceNumber: 'BEA2026000002096',
+      invoiceDate: '2026-08-11',
+      uuid: 'uuid-foreign-q',
+      total: 880,
+      status: 'issued',
+      source: 'rapid360'
     },
     {
       invoiceNumber: 'ATK2025000000099',
@@ -99,8 +108,9 @@ const all = atak.buildResponse(store, creds, {
   addReturns: 'true'
 });
 assert(Array.isArray(all.EInvoices), 'EInvoices');
-assert(all.RecordCount === 3, 'RecordCount ' + all.RecordCount);
+assert(all.RecordCount === 2, 'RecordCount ' + all.RecordCount);
 assert(all.DealerId === 340344, 'DealerId');
+assert(!all.EInvoices.some(x => String(x.FaturaNo || '').startsWith('BEA')), 'başka bayi yok');
 assert(all.EInvoiceCode === '2E1N1D3E4', 'EInvoiceCode');
 assert(all.startDate === '2026-08-01T00:00:00', 'startDate');
 assert(all.$id === '1' && all._schema === 0 && all._reference === '', 'zarf meta');
@@ -108,6 +118,8 @@ const rootWant = ['$id','DealerId','startDate','endDate','RecordCount','EInvoice
 assert(rootWant.every(k => Object.prototype.hasOwnProperty.call(all, k)) && Object.keys(all).every(k => rootWant.includes(k)), 'zarf alanları');
 const giden = all.EInvoices.find(x => x.FaturaNo === 'ATK2026000000001');
 assert(giden && giden.FaturalanacakMusteriAdi === 'Ahmet Yılmaz', 'müşteri');
+assert(giden.Bayi === 'ATAKHOME', 'Bayi ATAKHOME');
+assert(String(giden.BayiKodu) === '340344', 'BayiKodu');
 assert(giden.FaturaTarihi === '10/08/2026', 'tr tarih');
 assert(giden.TutarToplami === 1200, 'tutar');
 assert(Array.isArray(giden.EInvoicesLines) && giden.EInvoicesLines[0].MalzemeKodu === 'P1', 'satır');
@@ -122,7 +134,7 @@ const noRet = atak.buildResponse(store, creds, {
   EndDate: '2026-08-31',
   addReturns: 'false'
 });
-assert(noRet.RecordCount === 2 && !noRet.EInvoices.some(x => x.FaturaAsama === 'IADE'), 'addReturns false');
+assert(noRet.RecordCount === 1 && !noRet.EInvoices.some(x => x.FaturaAsama === 'IADE'), 'addReturns false');
 
 const noInbox = atak.buildResponse(store, { ...creds, includeInbox: false }, {
   StartDate: '2026-08-01',

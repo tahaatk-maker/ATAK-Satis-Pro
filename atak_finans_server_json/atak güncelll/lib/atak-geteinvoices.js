@@ -21,8 +21,8 @@ const DEFAULTS = {
   dealerId: '340344',
   eInvoiceCode: rapid360.DEFAULTS.eInvoiceCode,
   systemId: rapid360.DEFAULTS.systemId,
-  bayi: '1292',
-  subeKodu: '21134762',
+  bayi: 'ATAKHOME',
+  subeKodu: '340344',
   enabled: true,
   includeInbox: false
 };
@@ -53,6 +53,32 @@ function normalizeAtakDealerId(v){
   return s;
 }
 
+function normalizeAtakBayi(v){
+  const s = String(v || '').trim();
+  if(!s || s === '1292') return DEFAULTS.bayi;
+  return s;
+}
+
+function normalizeAtakSube(v){
+  const s = String(v || '').trim();
+  if(!s || s === '21134762') return DEFAULTS.subeKodu;
+  return s;
+}
+
+function isForeignInvoice(row){
+  if(!row || typeof row !== 'object') return true;
+  const src = String(row.source || row.Source || '').toUpperCase();
+  if(src.includes('RAPID') || src.includes('INBOX')) return true;
+  if(row.rapidRaw) return true;
+  const no = String(row.invoiceNumber || row.FaturaNo || (row.rapidRaw && row.rapidRaw.FaturaNo) || '').toUpperCase();
+  if(/^(BEA|BKO|BEX|ARC)/.test(no)) return true;
+  return false;
+}
+
+function isAtakOwnInvoice(row){
+  return !isForeignInvoice(row);
+}
+
 function ensureConfig(raw = {}, fallback = {}){
   const r = raw && typeof raw === 'object' ? raw : {};
   const mule = muleFallback(fallback);
@@ -61,14 +87,12 @@ function ensureConfig(raw = {}, fallback = {}){
     generated: missing,
     cfg: {
       enabled: r.enabled !== false && String(r.enabled) !== 'false',
-      includeInbox: r.includeInbox != null
-        ? (r.includeInbox === true || r.includeInbox === 'true' || r.includeInbox === 'on')
-        : DEFAULTS.includeInbox,
+      includeInbox: false,
       dealerId: normalizeAtakDealerId(r.dealerId),
       eInvoiceCode: String(r.eInvoiceCode || mule.eInvoiceCode).trim() || mule.eInvoiceCode,
       systemId: String(r.systemId || mule.systemId).trim() || '1',
-      bayi: String(r.bayi || DEFAULTS.bayi).trim() || DEFAULTS.bayi,
-      subeKodu: String(r.subeKodu || mule.subeKodu || DEFAULTS.subeKodu).trim() || DEFAULTS.subeKodu,
+      bayi: normalizeAtakBayi(r.bayi),
+      subeKodu: normalizeAtakSube(r.subeKodu),
       allowedIps: parseIpList(r.allowedIps),
       clientId: String(r.clientId || mule.clientId).trim(),
       clientSecret: String(r.clientSecret || mule.clientSecret).trim(),
@@ -310,7 +334,7 @@ function toRapidInvoice(row, store, cfg){
     MusteriEmail: String(customer.email || '').trim(),
     SubeKodu: String(sale.storeId || c.subeKodu),
     Bayi: String(c.bayi || DEFAULTS.bayi),
-    BayiKodu: String(c.dealerId),
+    BayiKodu: String(c.dealerId || DEFAULTS.dealerId),
     MusteriSayac: numericSayac(customer.id || row.customerId, sayac),
     VergiNo: partyTax(customer),
     VergiDairesi: String(customer.taxOffice || '').trim(),
@@ -436,17 +460,10 @@ function collectRows(store, cfg, query){
   const out = [];
   for(const row of (store && store.invoiceQueue) || []){
     if(!row || (!row.invoiceNumber && !row.uuid && !row.FaturaNo)) continue;
+    if(!isAtakOwnInvoice(row)) continue;
     if(!inDateRange(row, range)) continue;
     if(!addReturns && isReturnRow(row)) continue;
     out.push(toRapidInvoice(row, store, c));
-  }
-  if(c.includeInbox){
-    for(const row of (store && store.invoiceInbox) || []){
-      if(!row || (!row.invoiceNumber && !row.uuid && !row.FaturaNo)) continue;
-      if(!inDateRange(row, range)) continue;
-      if(!addReturns && isReturnRow(row)) continue;
-      out.push(toRapidInvoice(row, store, c));
-    }
   }
   out.sort((a, b) => ymd(b.FaturaTarihi).localeCompare(ymd(a.FaturaTarihi)) || String(b.FaturaNo || '').localeCompare(String(a.FaturaNo || '')));
   return { rows: out.slice(0, 5000), range, addReturns };
@@ -556,12 +573,12 @@ function mergeIncoming(prev, incoming, { rotate } = {}){
   }
   return {
     enabled: x.enabled != null ? (x.enabled === true || x.enabled === 'true' || x.enabled === 'on') : base.enabled,
-    includeInbox: x.includeInbox != null ? (x.includeInbox === true || x.includeInbox === 'true' || x.includeInbox === 'on') : base.includeInbox,
+    includeInbox: false,
     dealerId: normalizeAtakDealerId(x.dealerId != null ? x.dealerId : base.dealerId),
     eInvoiceCode: String(x.eInvoiceCode != null ? x.eInvoiceCode : base.eInvoiceCode).trim() || DEFAULTS.eInvoiceCode,
     systemId: String(x.systemId != null ? x.systemId : base.systemId).trim() || '1',
-    bayi: String(x.bayi != null ? x.bayi : base.bayi).trim() || DEFAULTS.bayi,
-    subeKodu: String(x.subeKodu != null ? x.subeKodu : base.subeKodu).trim() || DEFAULTS.subeKodu,
+    bayi: normalizeAtakBayi(x.bayi != null ? x.bayi : base.bayi),
+    subeKodu: normalizeAtakSube(x.subeKodu != null ? x.subeKodu : base.subeKodu),
     allowedIps: x.allowedIps != null ? parseIpList(x.allowedIps) : (base.allowedIps || []),
     clientId,
     clientSecret,
@@ -593,6 +610,8 @@ module.exports = {
   toDmsRow,
   mapQueueRow,
   mapInboxRow,
+  isAtakOwnInvoice,
+  isForeignInvoice,
   collectRows,
   buildResponse,
   failBody,
