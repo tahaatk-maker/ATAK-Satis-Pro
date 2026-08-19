@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v189 */
+/* ATAK_PERSONEL_BUILD=fix-v190 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1776,8 +1776,20 @@ function showRapidOktaBox(d){
   const box=$('#rapid360OktaBox');
   if(!box) return;
   box.classList.remove('hidden');
+  const extra=d.deviceLoginUrl
+    ? `<p class="muted" style="margin:8px 0 0">Telefonda onaylayın. Microsoft “tamam” derse pencereyi kapatın.</p>
+       <button type="button" id="rapid360OktaDoneBtn" class="primary-btn" style="margin-top:10px">Telefonda onayladım</button>`
+    : '';
   box.innerHTML=`<div style="font-weight:700;margin-bottom:6px">Okta Verify telefona gidiyor</div>
-    <p class="muted" style="margin:6px 0 0">${rapidOktaEsc(d.message||'Açılan pencerede Rapid360 hesabınızı seçin. Okta Verify telefona gider; telefonda onaylayın.')}</p>`;
+    <p class="muted" style="margin:6px 0 0">${rapidOktaEsc(d.message||'Açılan pencerede Rapid360 hesabınızı seçin. Okta Verify telefona gider; telefonda onaylayın.')}</p>${extra}`;
+}
+function openRapidOktaPopup(url, popup){
+  if(!url) return popup;
+  try{
+    if(popup && !popup.closed) popup.location.href=url;
+    else popup=window.open(url,'rapid360okta','popup=yes,width=520,height=740');
+  }catch(_){ window.open(url,'_blank','noopener'); }
+  return popup;
 }
 async function loadRapidOktaStatus(){
   const el=$('#rapid360OktaStatus');
@@ -1792,13 +1804,14 @@ async function loadRapidOktaStatus(){
 async function waitRapidOkta(st, payload, popup){
   showRapidOktaBox(payload||{});
   if(st) st.textContent=payload.message||'Telefonda Okta Verify’ı onaylayın';
-  const loginUrl=payload.loginUrl||'';
-  if(loginUrl){
-    try{
-      if(popup && !popup.closed) popup.location.href=loginUrl;
-      else window.open(loginUrl,'rapid360okta','popup=yes,width=520,height=740');
-    }catch(_){ window.open(loginUrl,'_blank','noopener'); }
-  }
+  popup=openRapidOktaPopup(payload.loginUrl||'', popup);
+  let openedDevice=false;
+  const openDevice=()=>{
+    if(openedDevice || !payload.deviceLoginUrl) return;
+    openedDevice=true;
+    popup=openRapidOktaPopup(payload.deviceLoginUrl, popup);
+  };
+  $('#rapid360OktaDoneBtn')?.addEventListener('click',(ev)=>{ev.preventDefault();openDevice();});
   let done=false;
   const onMsg=(ev)=>{
     if(ev.origin!==window.location.origin) return;
@@ -1810,6 +1823,7 @@ async function waitRapidOkta(st, payload, popup){
   try{
     while(Date.now()<until){
       if(done){ hideRapidOktaBox(); await loadRapidOktaStatus(); return {ok:true,connected:true}; }
+      if(popup && popup.closed) openDevice();
       const p=await api('/web-api/admin/rapid360-okta-poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pollId:payload.pollId})});
       if(p.ok||p.connected){ hideRapidOktaBox(); await loadRapidOktaStatus(); return p; }
       if(st) st.textContent='Okta Verify bekleniyor… telefonda onaylayın.';

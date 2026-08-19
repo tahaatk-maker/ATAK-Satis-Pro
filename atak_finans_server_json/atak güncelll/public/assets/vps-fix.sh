@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.189-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.190-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.189-atak-geteinvoices
-EXPECT_BUILD=fix-v189
+EXPECT_HEALTH=6.3.190-atak-geteinvoices
+EXPECT_BUILD=fix-v190
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -102,8 +102,8 @@ check "rapid360 okta auth" test -f "$SRC/lib/rapid360-d365-auth.js"
 check "rapid360 d365 sales" test -f "$SRC/lib/rapid360-d365-sales.js"
 check "rapid360 okta poll api" grep -q "rapid360-okta-poll" "$SRC/server.js"
 check "rapid360 okta callback" grep -q "rapid360-okta-callback" "$SRC/server.js"
-check "rapid360 otc url" grep -q "function deviceLoginUrl" "$SRC/lib/rapid360-d365-auth.js"
-check "rapid360 bozuk cihaz url" grep -q "function isBrokenDeviceLoginUrl" "$SRC/lib/rapid360-d365-auth.js"
+check "rapid360 okta authorize" grep -q "NATIVE_REDIRECT" "$SRC/lib/rapid360-d365-auth.js"
+check "rapid360 cihaz ikinci hop" grep -q "deviceLoginUrl" "$SRC/lib/rapid360-d365-auth.js"
 check "rapid360 satis aktar ui" grep -q "Rapid Aktar" "$SRC/public/admin.html"
 check "rapid360 magaza 340334" grep -q 'value="340334"' "$SRC/public/admin.html"
 check "rapid360 auto import" grep -q "autoImport:true" "$SRC/public/assets/admin.js"

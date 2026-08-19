@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * Rapid360 (D365 F&O) kullanıcı girişi — Microsoft cihaz otc + Okta Verify.
- * Pencere microsoft.com/devicelogin?otc=… açılır (kod yazılmaz); Okta Verify telefona gider.
+ * Rapid360 (D365 F&O) kullanıcı girişi.
+ * Popup önce Microsoft authorize (Okta Verify) açar; kod kutusu açılmaz.
+ * Token, aynı tarayıcı oturumuyla cihaz otc’sinin arka planda tamamlanmasıyla alınır.
  */
 
 const crypto = require('crypto');
@@ -15,6 +16,7 @@ const DEFAULT_CLIENT_IDS = [
   '1950a258-227b-4e31-a9cf-717495945fc2',
   '51f81489-12ee-4a9e-aaae-a2591f45987d'
 ];
+const NATIVE_REDIRECT = 'https://login.microsoftonline.com/common/oauth2/nativeclient';
 
 const pendingById = new Map();
 
@@ -97,27 +99,21 @@ function withLoginHint(url, loginHint){
   }
 }
 
-/** Microsoft cihaz sayfasına login_hint eklenirse otc düşer; boş “Kod” kutusu çıkar. */
+/** Cihaz otc’si yalnızca Okta’dan sonra, aynı tarayıcıda sessiz tamamlamak için. */
 function deviceLoginUrl(json){
   const userCode = String((json && json.user_code) || '').trim();
   const complete = String((json && (json.verification_uri_complete || json.verificationUriComplete)) || '').trim();
   const uri = String((json && (json.verification_uri || json.verification_url || json.verificationUri)) || '').trim();
-  let url = complete || uri || 'https://microsoft.com/devicelogin';
+  let code = userCode;
+  const url = complete || uri || '';
   try{
-    const u = new URL(url);
-    u.searchParams.delete('login_hint');
-    u.searchParams.delete('username');
-    u.searchParams.delete('whr');
-    if(!String(u.searchParams.get('otc') || '').trim() && userCode){
-      u.searchParams.set('otc', userCode);
+    if(url){
+      const u = new URL(url);
+      code = String(u.searchParams.get('otc') || userCode || '').trim();
     }
-    return u.toString();
-  }catch{
-    if(userCode && !/[?&]otc=/i.test(url)){
-      return `${url}${url.includes('?') ? '&' : '?'}otc=${encodeURIComponent(userCode)}`;
-    }
-    return url;
-  }
+  }catch(_){}
+  if(code) return `${LOGIN_HOST}/common/oauth2/deviceauth?otc=${encodeURIComponent(code)}`;
+  return url || 'https://microsoft.com/devicelogin';
 }
 
 function isBrokenDeviceLoginUrl(url){
@@ -144,38 +140,49 @@ function pkceChallenge(verifier){
   return crypto.createHash('sha256').update(String(verifier || '')).digest('base64url');
 }
 
-function buildAuthorizeUrl({ tenant, clientId, resource, redirectUri, loginHint, challenge, state }){
+function buildAuthorizeUrl({ tenant, clientId, resource, redirectUri, loginHint, challenge, state, prompt }){
   const q = new URLSearchParams({
     client_id: clientId,
     response_type: 'code',
     redirect_uri: redirectUri,
     response_mode: 'query',
     scope: `${resource}/.default offline_access openid profile`,
-    code_challenge: challenge,
-    code_challenge_method: 'S256',
-    state,
-    prompt: 'login'
+    state
   });
-  if(loginHint) q.set('login_hint', loginHint);
+  if(challenge){
+    q.set('code_challenge', challenge);
+    q.set('code_challenge_method', 'S256');
+  }
+  if(prompt) q.set('prompt', prompt);
+  if(loginHint){
+    q.set('login_hint', loginHint);
+    const domain = loginHint.includes('@') ? loginHint.split('@').pop() : '';
+    if(/rapid360|arcelik|okta/i.test(domain)) q.set('domain_hint', domain);
+  }
   return `${LOGIN_HOST}/${tenant}/oauth2/v2.0/authorize?${q.toString()}`;
 }
 
 function publicLoginStart(row){
   if(!row) return null;
+  const deviceUrl = deviceLoginUrl({
+    verification_uri_complete: row.verificationUriComplete || row.deviceLoginUrl,
+    verification_uri: row.verificationUri,
+    user_code: row.userCode
+  });
   const loginUrl = row.authorizeUrl
     ? String(row.loginUrl || row.authorizeUrl || '')
-    : deviceLoginUrl({
-        verification_uri_complete: row.verificationUriComplete || row.loginUrl,
-        verification_uri: row.verificationUri,
-        user_code: row.userCode
-      });
-  return {
+    : deviceUrl;
+  const out = {
     pollId: row.pollId,
     loginUrl,
     expiresIn: Math.max(0, Math.round((row.expiresAt - Date.now()) / 1000)),
     interval: row.interval,
     message: row.message
   };
+  if(row.authorizeUrl && row.deviceCode && deviceUrl && deviceUrl !== loginUrl){
+    out.deviceLoginUrl = deviceUrl;
+  }
+  return out;
 }
 
 function sweepPending(){
@@ -322,19 +329,14 @@ async function startInteractiveLogin(opts = {}){
   const usePkce = Boolean(cfg.oauthClientId && redirectUri);
   const existing = findPendingForSession(sessionId);
   if(existing){
-    const stalePkce = existing.authorizeUrl && !usePkce;
-    const staleDevice = !existing.authorizeUrl && isBrokenDeviceLoginUrl(existing.loginUrl);
-    if(!stalePkce && !staleDevice){
+    const isCallbackPkce = /rapid360-okta-callback/.test(String(existing.redirectUri || existing.authorizeUrl || ''));
+    const stalePkce = isCallbackPkce && !usePkce;
+    const staleDeviceOnly = !existing.authorizeUrl;
+    if(!stalePkce && !staleDeviceOnly){
       if(loginHint) existing.loginHint = loginHint;
       existing.message = loginMessage(loginHint || existing.loginHint);
       if(existing.authorizeUrl){
         existing.loginUrl = withLoginHint(existing.authorizeUrl, loginHint || existing.loginHint);
-      }else{
-        existing.loginUrl = deviceLoginUrl({
-          verification_uri_complete: existing.verificationUriComplete,
-          verification_uri: existing.verificationUri,
-          user_code: existing.userCode
-        });
       }
       return publicLoginStart(existing);
     }
@@ -354,7 +356,8 @@ async function startInteractiveLogin(opts = {}){
       redirectUri,
       loginHint,
       challenge: pkceChallenge(verifier),
-      state: pollId
+      state: pollId,
+      prompt: 'login'
     });
     const row = {
       pollId,
@@ -395,10 +398,19 @@ async function startInteractiveLogin(opts = {}){
       const verificationUri = String(json.verification_uri || json.verification_url || 'https://microsoft.com/devicelogin');
       const verificationUriComplete = String(json.verification_uri_complete || '');
       const userCode = String(json.user_code || '');
-      const loginUrl = deviceLoginUrl({
+      const deviceUrl = deviceLoginUrl({
         verification_uri_complete: verificationUriComplete,
         verification_uri: verificationUri,
         user_code: userCode
+      });
+      const authorizeUrl = buildAuthorizeUrl({
+        tenant,
+        clientId: id,
+        resource,
+        redirectUri: NATIVE_REDIRECT,
+        loginHint,
+        state: pollId,
+        prompt: 'login'
       });
       const row = {
         pollId,
@@ -411,11 +423,12 @@ async function startInteractiveLogin(opts = {}){
         protocol: got.protocol,
         verificationUri,
         verificationUriComplete,
-        authorizeUrl: '',
-        redirectUri: '',
+        authorizeUrl,
+        redirectUri: NATIVE_REDIRECT,
         codeVerifier: '',
         loginHint,
-        loginUrl,
+        loginUrl: authorizeUrl,
+        deviceLoginUrl: deviceUrl,
         interval,
         expiresAt: Date.now() + expiresIn * 1000,
         message: loginMessage(loginHint)
@@ -628,6 +641,7 @@ module.exports = {
   DEFAULT_DYNAMICS_URL,
   DEFAULT_TENANT,
   DEFAULT_CLIENT_IDS,
+  NATIVE_REDIRECT,
   normalizeDynamicsUrl,
   isMuleUrl,
   accountFromToken,
