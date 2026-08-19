@@ -18,6 +18,7 @@ const branchLock = require('./lib/branch-lock');
 const customerComms = require('./lib/customer-comms');
 const salaryProrate = require('./lib/salary-prorate');
 const autoBackupLib = require('./lib/auto-backup');
+const rapid360 = require('./lib/rapid360-einvoice');
 
 const app = express();
 const ROOT = __dirname;
@@ -213,6 +214,17 @@ function ensureStore(store) {
   if(!String(store.invoiceIntegration.earsivSeries||'').trim())store.invoiceIntegration.earsivSeries='ATA';
   if(!Number.isFinite(Number(store.invoiceIntegration.efaturaNext))||Number(store.invoiceIntegration.efaturaNext)<1)store.invoiceIntegration.efaturaNext=1;
   if(!Number.isFinite(Number(store.invoiceIntegration.earsivNext))||Number(store.invoiceIntegration.earsivNext)<1)store.invoiceIntegration.earsivNext=1;
+  store.invoiceIntegration.rapid360 = store.invoiceIntegration.rapid360 && typeof store.invoiceIntegration.rapid360==='object' ? store.invoiceIntegration.rapid360 : {};
+  {
+    const rz=store.invoiceIntegration.rapid360;
+    if(!String(rz.url||'').trim())rz.url=rapid360.DEFAULTS.url;
+    if(!String(rz.dealerId||'').trim())rz.dealerId=rapid360.DEFAULTS.dealerId;
+    if(!String(rz.eInvoiceCode||'').trim())rz.eInvoiceCode=rapid360.DEFAULTS.eInvoiceCode;
+    if(!String(rz.systemId||'').trim())rz.systemId=rapid360.DEFAULTS.systemId;
+    if(!String(rz.clientId||'').trim())rz.clientId=String(process.env.ARCELIK_MULE_CLIENT_ID||rapid360.DEFAULTS.clientId);
+    if(!String(rz.clientSecret||'').trim())rz.clientSecret=String(process.env.ARCELIK_MULE_CLIENT_SECRET||rapid360.DEFAULTS.clientSecret);
+    if(rz.addReturns==null)rz.addReturns=true;
+  }
 
   store.dealerSettings ||= [
     {id:'atak-beko',name:'Atak Beko',marginDividePct:25,commissionPct:0.50,cashMaxDiscountPct:10,cardMaxDiscountPct:5,active:true},
@@ -1821,8 +1833,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.168-yedek-oto',
-  build:'fix-v168',
+  version:'6.3.169-rapid360',
+  build:'fix-v169',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5699,6 +5711,7 @@ app.get('/web-api/admin/invoice-integration',requireAdminOrStaffAny(...INVOICE_C
     settings:{
       ...cfg,
       password:cfg.password?'********':'',
+      rapid360:rapid360.publicConfig(cfg.rapid360),
       efaturaSeries:efSeries,
       earsivSeries:eaSeries,
       efaturaNext:nextInvoiceSeq(cfg.efaturaNext),
@@ -5737,7 +5750,24 @@ app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_m
     efaturaSeries:normalizeInvoiceSeries(x.efaturaSeries!=null?x.efaturaSeries:old.efaturaSeries,'ATK'),
     earsivSeries:normalizeInvoiceSeries(x.earsivSeries!=null?x.earsivSeries:old.earsivSeries,'ATA'),
     efaturaNext:nextInvoiceSeq(x.efaturaNext!=null?x.efaturaNext:old.efaturaNext),
-    earsivNext:nextInvoiceSeq(x.earsivNext!=null?x.earsivNext:old.earsivNext)
+    earsivNext:nextInvoiceSeq(x.earsivNext!=null?x.earsivNext:old.earsivNext),
+    rapid360:(()=>{
+      const prev=old.rapid360||{};
+      const incoming=x.rapid360&&typeof x.rapid360==='object'?x.rapid360:{};
+      const secretRaw=incoming.clientSecret!=null?incoming.clientSecret:x.rapid360Secret;
+      return{
+        ...prev,
+        url:String(incoming.url!=null?incoming.url:(x.rapid360Url!=null?x.rapid360Url:prev.url||rapid360.DEFAULTS.url)).trim().split('?')[0],
+        clientId:String(incoming.clientId!=null?incoming.clientId:(x.rapid360ClientId!=null?x.rapid360ClientId:prev.clientId||'')).trim(),
+        clientSecret:String(secretRaw||'')==='********'?String(prev.clientSecret||''):String(secretRaw!=null?secretRaw:prev.clientSecret||''),
+        dealerId:String(incoming.dealerId!=null?incoming.dealerId:(x.rapid360DealerId!=null?x.rapid360DealerId:prev.dealerId||rapid360.DEFAULTS.dealerId)).trim(),
+        eInvoiceCode:String(incoming.eInvoiceCode!=null?incoming.eInvoiceCode:(x.rapid360Code!=null?x.rapid360Code:prev.eInvoiceCode||rapid360.DEFAULTS.eInvoiceCode)).trim(),
+        systemId:String(incoming.systemId!=null?incoming.systemId:(x.rapid360SystemId!=null?x.rapid360SystemId:prev.systemId||'1')).trim()||'1',
+        addReturns:(incoming.addReturns!=null?incoming.addReturns:x.rapid360AddReturns)!=null
+          ? (incoming.addReturns===true||incoming.addReturns==='true'||x.rapid360AddReturns===true||x.rapid360AddReturns==='true'||x.rapid360AddReturns==='on')
+          : prev.addReturns!==false
+      };
+    })()
   };
   audit(s,'QNB Solist entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider,efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries});writeStore(s);res.json({ok:true,settings:{efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries,efaturaNext:s.invoiceIntegration.efaturaNext,earsivNext:s.invoiceIntegration.earsivNext}});
 });
@@ -5798,7 +5828,7 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
   };
   res.json({
     ok:true,
-    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext)},
+    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext),rapid360:rapid360.publicConfig(cfg.rapid360)},
     counts,queue,inbox,responses,salesPending,
     portal:isStaffPortalReq(req)?'staff':'admin',
     canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),
@@ -5808,16 +5838,42 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
 });
 app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),async(req,res)=>{
   const s=readStore(),cfg=s.invoiceIntegration||{};
+  const x=req.body||{};
+  const days=Math.min(90,Math.max(1,Math.round(Number(x.days)||14)));
+  const end=x.endDate?new Date(String(x.endDate)):new Date();
+  const start=x.startDate?new Date(String(x.startDate)):new Date(end.getTime()-(days-1)*86400000);
+  const rz=cfg.rapid360||{};
+  const ready=rapid360.publicConfig(rz).ready;
+  if(ready){
+    try{
+      const out=await rapid360.fetchGetEInvoices(rz,{startDate:start,endDate:end});
+      const merge=rapid360.mergeInbox(s,out.invoices);
+      rz.lastSyncAt=new Date().toISOString();
+      rz.lastCount=out.count;
+      rz.lastError='';
+      s.invoiceIntegration.rapid360=rz;
+      audit(s,'Rapid360 e-fatura çekildi','Gelen Kutusu',{added:merge.added,updated:merge.updated,count:out.count});
+      writeStore(s);
+      const msg=out.empty
+        ? `Rapid360 bağlandı, bu aralıkta fatura yok (${days} gün). Örnek JSON dönerseniz alan eşlemesini netleştiririz.`
+        : `Rapid360: ${out.count} fatura · ${merge.added} yeni · ${merge.updated} güncellendi`;
+      return res.json({ok:true,mode:'rapid360',synced:merge.added,updated:merge.updated,count:out.count,empty:out.empty,sampleKeys:out.sampleKeys,message:msg});
+    }catch(e){
+      rz.lastError=e.message||'Rapid360 hata';
+      s.invoiceIntegration.rapid360=rz;
+      writeStore(s);
+      return res.status(502).json({error:e.message||'Rapid360 servisine ulaşılamadı',mode:'rapid360'});
+    }
+  }
   const checks=qnbSolist.readinessChecks(cfg);
-  const ready=checks.filter(c=>['Firma VKN','WSDL / servis URL','Kullanıcı','Şifre'].includes(c.name)).every(c=>c.ok)&&cfg.enabled;
-  if(!ready){
+  const qnbReady=checks.filter(c=>['Firma VKN','WSDL / servis URL','Kullanıcı','Şifre'].includes(c.name)).every(c=>c.ok)&&cfg.enabled;
+  if(!qnbReady){
     return res.json({
       ok:true,mode:'local_only',synced:0,
-      message:'QNB portal sorgusu henüz açık değil. WSDL + kullanıcı + “etkin” gelince Gelen Kutusu portaldan dolacak. Şimdilik yerel kuyruk yenilendi.',
+      message:'Rapid360 bilgisi eksik ve QNB portal sorgusu henüz açık değil. Kurulum’dan Rapid360 alanlarını kaydedin.',
       checks
     });
   }
-  // SOAP: QNB gelen fatura listesi buraya bağlanır.
   res.json({
     ok:true,mode:'stub',synced:0,
     message:'Portal sorgu noktası hazır (SOAP stub). QNB Çözüm Merkezi WSDL metodunu bağlayınca canlı çekim başlar.',

@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v168 */
+/* ATAK_ADMIN_BUILD=fix-v169 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4686,6 +4686,14 @@ async function loadInvoiceIntegration(){
   q('#invoiceEnabled').checked=!!s.enabled;
   q('#invoiceDraftMode').checked=s.draftMode!==false;
   q('#invoiceAutoDetect').checked=s.autoDetectType!==false;
+  const rz=s.rapid360||{};
+  if(q('#rapid360Url'))q('#rapid360Url').value=rz.url||'';
+  if(q('#rapid360ClientId'))q('#rapid360ClientId').value=rz.clientId||'';
+  if(q('#rapid360Secret'))q('#rapid360Secret').value=rz.clientSecret||'';
+  if(q('#rapid360DealerId'))q('#rapid360DealerId').value=rz.dealerId||'';
+  if(q('#rapid360Code'))q('#rapid360Code').value=rz.eInvoiceCode||'';
+  if(q('#rapid360SystemId'))q('#rapid360SystemId').value=rz.systemId||'1';
+  if(q('#rapid360AddReturns'))q('#rapid360AddReturns').checked=rz.addReturns!==false;
   refreshInvoiceSeriesPreview();
  }catch(e){toast(e.message)}
 }
@@ -4713,7 +4721,14 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       password:q('#invoicePassword').value,
       enabled:q('#invoiceEnabled').checked,
       draftMode:q('#invoiceDraftMode').checked,
-      autoDetectType:q('#invoiceAutoDetect').checked
+      autoDetectType:q('#invoiceAutoDetect').checked,
+      rapid360Url:q('#rapid360Url')?.value||'',
+      rapid360ClientId:q('#rapid360ClientId')?.value||'',
+      rapid360Secret:q('#rapid360Secret')?.value||'',
+      rapid360DealerId:q('#rapid360DealerId')?.value||'',
+      rapid360Code:q('#rapid360Code')?.value||'',
+      rapid360SystemId:q('#rapid360SystemId')?.value||'1',
+      rapid360AddReturns:!!q('#rapid360AddReturns')?.checked
     })});
     st.textContent='QNB ayarları kaydedildi · e-Fatura ATK / e-Arşiv ATA.';
     st.className='form-status success';
@@ -5418,7 +5433,7 @@ const INV_VIEW_META={
   ef_out_sent:{title:'e-Fatura · Gönderilen',hint:'Kuyruğa alınan / taslak / kesilmiş e-Faturalar.'},
   ef_out_error:{title:'e-Fatura · Hatalı',hint:'Gönderim veya doğrulama hatası. Tekrar deneyebilirsiniz.'},
   ef_out_archive:{title:'e-Fatura · Giden Arşiv',hint:'İptal / arşivlenmiş giden e-Faturalar.'},
-  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Portal senkronu bağlanınca gelen e-Faturalar.'},
+  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Arçelik Rapid360 geteinvoices. Rapid360\'dan çek son 14 günü alır.'},
   ef_in_responses:{title:'e-Fatura · Uygulama Yanıtları',hint:'Ticari fatura kabul/red yanıtları.'},
   ef_in_archive:{title:'e-Fatura · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Faturalar.'},
   ea_out_pending:{title:'e-Arşiv · Gönderilecek',hint:'Giden e-Arşiv kuyruğu.'},
@@ -5674,7 +5689,7 @@ q('#invUnreadOnly')?.addEventListener('change',()=>invPaintCurrentView());
 q('#invPortalQueryBtn')?.addEventListener('click',async()=>{
   q('#invFootStatus').textContent='Portal sorgulanıyor…';
   try{
-    const r=await api('/web-api/admin/invoice-center/portal-query',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const r=await api('/web-api/admin/invoice-center/portal-query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:14})});
     toast(r.message||'Portal sorgu tamam');
     q('#invFootStatus').textContent=r.message||'Tamam';
     await loadInvoiceCenter();
