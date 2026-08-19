@@ -1893,8 +1893,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.180-atak-geteinvoices',
-  build:'fix-v180',
+  version:'6.3.181-atak-geteinvoices',
+  build:'fix-v181',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5011,43 +5011,76 @@ function matchRapidSalesperson(s,name){
   if(user)return {id:user.id,name:user.name};
   return null;
 }
-function matchRapidCustomer(s,account,name){
+function matchRapidCustomer(s,account,name,tckn){
   const acc=String(account||'').trim().toLocaleLowerCase('tr-TR');
   const nm=String(name||'').trim().toLocaleLowerCase('tr-TR');
+  const tc=String(tckn||'').replace(/\D/g,'');
   const list=(s.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
+  if(tc.length===11){
+    const hit=list.find(c=>String(c.tckn||'').replace(/\D/g,'')===tc);
+    if(hit)return hit;
+  }
   if(acc){
     const hit=list.find(c=>String(c.rapidCustAccount||c.customerCode||'').trim().toLocaleLowerCase('tr-TR')===acc);
     if(hit)return hit;
   }
-  if(nm){
+  if(nm && /\s/.test(String(name||'').trim())){
     const hit=list.find(c=>String(c.name||'').trim().toLocaleLowerCase('tr-TR')===nm);
     if(hit)return hit;
   }
   return null;
 }
+function fillRapidCustomer(row,sale){
+  const name=rapidSalesXml.betterPersonName(row.name,sale.custName);
+  if(name)row.name=name;
+  if(sale.custAccount&&!row.rapidCustAccount)row.rapidCustAccount=sale.custAccount;
+  if(sale.custAccount&&!row.customerCode)row.customerCode=sale.custAccount;
+  if(sale.tckn&&!row.tckn)row.tckn=String(sale.tckn).replace(/\D/g,'');
+  if(sale.email&&!row.email)row.email=String(sale.email).trim();
+  const phone=customerExcel.extractBestPhone([sale.phone])||customerExcel.normalizePhone(sale.phone||'');
+  if(phone&&!row.phone)row.phone=phone;
+  if(sale.address&&(!row.address||row.address==='Rapid360 satış aktarımı'))row.address=String(sale.address).trim();
+  if(sale.city&&(!row.city||row.city==='İstanbul'))row.city=String(sale.city).trim();
+  if(sale.district&&(!row.district||row.district==='Sarıyer'))row.district=String(sale.district).trim();
+  if(sale.companyName&&!row.companyName)row.companyName=String(sale.companyName).trim();
+  if(sale.taxOffice&&!row.taxOffice)row.taxOffice=String(sale.taxOffice).trim();
+  const tax=String(sale.taxNo||'').replace(/\D/g,'');
+  if(tax.length===10&&!row.taxNo){
+    row.taxNo=tax;
+    if(!row.invoiceType||row.invoiceType==='individual')row.invoiceType=row.companyName?'corporate':'individual';
+  }
+  if(row.deliverySameAsBilling!==false){
+    row.deliveryCity=row.city;
+    row.deliveryDistrict=row.district;
+    row.deliveryAddress=row.address;
+  }
+  row.updatedAt=new Date().toISOString();
+  return row;
+}
 function ensureRapidCustomer(s,sale){
-  const existing=matchRapidCustomer(s,sale.custAccount,sale.custName);
+  const existing=matchRapidCustomer(s,sale.custAccount,sale.custName,sale.tckn);
   if(existing){
-    if(sale.custAccount&&!existing.rapidCustAccount)existing.rapidCustAccount=sale.custAccount;
-    if(sale.tckn&&!existing.tckn)existing.tckn=String(sale.tckn).replace(/\D/g,'');
-    if(sale.email&&!existing.email)existing.email=String(sale.email).trim();
-    if(sale.address&&(!existing.address||existing.address==='Rapid360 satış aktarımı'))existing.address=String(sale.address).trim();
-    if(sale.city&&existing.city==='İstanbul')existing.city=String(sale.city).trim();
-    if(sale.district&&existing.district==='Sarıyer')existing.district=String(sale.district).trim();
+    fillRapidCustomer(existing,sale);
     return {customer:existing,created:false};
   }
   const city=String(sale.city||'İstanbul').trim()||'İstanbul';
   const district=String(sale.district||'Sarıyer').trim()||'Sarıyer';
   const address=String(sale.address||'Rapid360 satış aktarımı').trim()||'Rapid360 satış aktarımı';
+  const tax=String(sale.taxNo||'').replace(/\D/g,'');
+  const companyName=String(sale.companyName||'').trim();
+  const phone=customerExcel.extractBestPhone([sale.phone])||customerExcel.normalizePhone(sale.phone||'')||'';
   const row={
     id:crypto.randomUUID(),
-    name:String(sale.custName||sale.custAccount||'Rapid360 müşteri').trim(),
-    phone:'',
+    name:String(sale.custName||companyName||sale.custAccount||'Rapid360 müşteri').trim(),
+    phone,
     email:String(sale.email||'').trim(),
-    taxNo:'',tckn:String(sale.tckn||'').replace(/\D/g,''),
+    taxNo:tax.length===10?tax:'',
+    tckn:String(sale.tckn||'').replace(/\D/g,''),
     city,district,address,
     deliverySameAsBilling:true,deliveryCity:city,deliveryDistrict:district,deliveryAddress:address,
-    invoiceType:'individual',companyName:'',taxOffice:'',
+    invoiceType:tax.length===10&&companyName?'corporate':'individual',
+    companyName:tax.length===10?companyName:'',
+    taxOffice:String(sale.taxOffice||'').trim(),
     rapidCustAccount:String(sale.custAccount||'').trim(),
     customerCode:String(sale.custAccount||'').trim(),
     note:sale.custAccount?`Rapid360 müşteri hesabı: ${sale.custAccount}`:'Rapid360 XML aktarım',
@@ -5089,7 +5122,7 @@ app.post('/web-api/admin/rapid360-sales-preview',requireAdminOrStaffAny('orders_
     }
     const s=readStore();
     const rows=parsed.sales.map(sale=>{
-      const customer=matchRapidCustomer(s,sale.custAccount,sale.custName);
+      const customer=matchRapidCustomer(s,sale.custAccount,sale.custName,sale.tckn);
       const duplicate=rapidSaleDuplicate(s,sale.salesId);
       const items=mapRapidSaleItems(s,sale);
       return{
@@ -5140,15 +5173,18 @@ app.post('/web-api/admin/rapid360-sales-import',requireAdminOrStaffAny('orders_m
     const actor=currentActor(req);
     const actorName=actor?.name||'Admin';
     const actorId=actor?.id||'';
-    let imported=0,skippedDuplicate=0,skippedEmpty=0,customersCreated=0;
+    let imported=0,skippedDuplicate=0,skippedEmpty=0,customersCreated=0,customersUpdated=0;
     const errors=[];
     for(const src of parsed.sales){
+      const before=matchRapidCustomer(s,src.custAccount,src.custName,src.tckn);
+      const beforeName=before?String(before.name||''):'';
+      const {customer,created}=ensureRapidCustomer(s,src);
+      if(created)customersCreated++;
+      else if(beforeName && beforeName!==String(customer.name||''))customersUpdated++;
       if(rapidSaleDuplicate(s,src.salesId)){skippedDuplicate++;continue}
       const items=mapRapidSaleItems(s,src);
       if(!items.length){skippedEmpty++;continue}
       const total=Math.round((src.total||items.reduce((a,i)=>a+Number(i.total||0),0))*100)/100;
-      const {customer,created}=ensureRapidCustomer(s,src);
-      if(created)customersCreated++;
       const ref=String(src.salesId||'').trim();
       const date=src.orderDate||src.invoiceDate||todayISO();
       const row=financeTx(s,{
@@ -5195,9 +5231,9 @@ app.post('/web-api/admin/rapid360-sales-import',requireAdminOrStaffAny('orders_m
       row.cashPosted=false;
       imported++;
     }
-    audit(s,'Rapid360 XML satış aktarıldı',`${imported} satış`,{imported,skippedDuplicate,skippedEmpty,customersCreated});
+    audit(s,'Rapid360 XML satış aktarıldı',`${imported} satış`,{imported,skippedDuplicate,skippedEmpty,customersCreated,customersUpdated});
     writeStore(s);
-    res.json({ok:true,imported,skippedDuplicate,skippedEmpty,customersCreated,errors});
+    res.json({ok:true,imported,skippedDuplicate,skippedEmpty,customersCreated,customersUpdated,errors});
   }catch(e){
     res.status(400).json({error:e.message||'Aktarım başarısız'});
   }

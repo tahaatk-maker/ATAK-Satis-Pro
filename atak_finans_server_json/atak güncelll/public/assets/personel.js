@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v180 */
+/* ATAK_PERSONEL_BUILD=fix-v181 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1755,7 +1755,7 @@ $('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
   st.textContent='Aktarılıyor…';
   try{
     const r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
-    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı`;
+    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}`;
     stToast(st.textContent);
   }catch(e){st.textContent=e.message}
 });

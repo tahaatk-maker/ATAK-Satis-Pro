@@ -38,7 +38,7 @@ function decodeBuffer(buf){
 
 function parseAttrs(tok){
   const attrs = {};
-  const re = /([:\w.-]+)\s*=\s*"([^"]*)"|([:\w.-]+)\s*=\s*'([^']*)'/g;
+  const re = /([^\s=<>/]+)\s*=\s*"([^"]*)"|([^\s=<>/]+)\s*=\s*'([^']*)'/g;
   let m;
   while((m = re.exec(String(tok || '')))){
     const name = String(m[1] || m[3] || '').replace(/^.*:/, '');
@@ -128,7 +128,7 @@ function walkRecords(val, acc, inherit = {}){
   const next = { ...inherit };
   const sid = pick(merged, KEY.salesId);
   if(sid) next.siparisno = sid;
-  if(Object.keys(flat).length && (sid || pick(merged, KEY.itemCode) || pick(merged, KEY.itemName) || pick(merged, KEY.custAccount) || pick(merged, KEY.custName) || merged.odemetarihi || merged.toplamtutar)){
+  if(Object.keys(flat).length && (sid || pick(merged, KEY.itemCode) || pick(merged, KEY.itemName) || pick(merged, KEY.custAccount) || composeCustomerName(merged) || merged.odemetarihi || merged.toplamtutar)){
     acc.push(merged);
   }
   for(const v of Object.values(val)) walkRecords(v, acc, next);
@@ -140,7 +140,13 @@ const KEY = {
   invoiceDate: ['invoicedate','faturatarihi','invoicedatetime'],
   invoiceNo: ['invoiceid','invoicenumber','emanetfatura','faturano','invoicesayac','faturasayac','faturasayacno','invoicecounter'],
   custAccount: ['custaccount','musterihesabi','accountnum','customercode','accountnumcust','musterikodu','custaccountnum'],
-  custName: ['custname','musteriadi','customername','partyname','namealias','musteri','faturalanacakmusteriadi'],
+  firstName: ['ad','adi','musteriad','firstname','givenname','first','irtibatadi','kisiadi','personfirstname'],
+  middleName: ['ikinciad','ortadad','middlename','secondname'],
+  lastName: ['soyad','soyadi','musterisoyadi','lastname','surname','familyname','faturalanacakmusterisoyadi'],
+  billedName: ['faturalanacakmusteriadi'],
+  musteriAdi: ['musteriadi','musteri'],
+  fullName: ['adsoyad','advesoyad','custname','customername','partyname','namealias'],
+  company: ['unvan','unvani','firmaunvani','companyname','ticariunvan'],
   store: ['inventlocationid','store','magaza','warehouse','inventlocation','storeid'],
   eInvoice: ['iseinvoice','efaturami','einvoice','efatura'],
   webOrder: ['isweborder','websiparisimi','weborder'],
@@ -152,11 +158,15 @@ const KEY = {
   headerTotal: ['toplamtutar','faturatutari','kdvtutartoplami'],
   cancelled: ['faturasinifi','faturaasama','status','iptal'],
   salesperson: ['satistemsilcisi','salesperson','satici','personel'],
-  tckn: ['tckimlik','tckn','tcno'],
-  address: ['adres','address'],
+  tckn: ['tckimlik','tckn','tcno','tckimlikno'],
+  taxNo: ['vergino','vkn','taxnumber','verginumarasi'],
+  taxOffice: ['vergidairesi','taxoffice'],
+  address: ['adres','address','evadresi','faturaadresi'],
   city: ['sehir','city','il'],
   district: ['ilce','district'],
-  email: ['eposta','email','mail'],
+  neighborhood: ['semt','mahalle','neighborhood'],
+  email: ['eposta','email','mail','musteriemail'],
+  phone: ['ceptelefonu','gsm','mobile','mobiltelefon','telefon','irtibattelefonu','evtelefonu','phoneno','phone'],
   payMethod: ['paymmode','odemeyontemi','paymentmethod','paymterm','paymmethod'],
   payName: ['paymmodename','odemeyontemiadi','paymentmethodname','paymname'],
   payAmount: ['odenecektutar','amountcur','paymamount','paymentamount','tutarodenecek'],
@@ -172,6 +182,62 @@ function pick(rec, names){
     if(rec[n] != null && String(rec[n]).trim() !== '') return String(rec[n]).trim();
   }
   return '';
+}
+
+function nameKey(s){
+  return foldKey(String(s || '').replace(/\s+/g, ''));
+}
+
+function joinNameParts(parts){
+  const out = [];
+  for(const raw of parts || []){
+    const s = String(raw || '').replace(/\s+/g, ' ').trim();
+    if(!s) continue;
+    const key = nameKey(s);
+    if(!key) continue;
+    const idx = out.findIndex(x => {
+      const k = nameKey(x);
+      return k === key || k.includes(key) || key.includes(k);
+    });
+    if(idx < 0) out.push(s);
+    else if(s.length > out[idx].length) out[idx] = s;
+  }
+  return out.join(' ').trim();
+}
+
+function betterPersonName(current, incoming){
+  const a = String(current || '').replace(/\s+/g, ' ').trim();
+  const b = String(incoming || '').replace(/\s+/g, ' ').trim();
+  if(!b) return a;
+  if(!a) return b;
+  if(a === b) return a;
+  const fa = nameKey(a);
+  const fb = nameKey(b);
+  if(fb.includes(fa) && b.length >= a.length) return b;
+  if(fa.includes(fb)) return a;
+  const aParts = a.split(/\s+/).length;
+  const bParts = b.split(/\s+/).length;
+  if(bParts > aParts) return b;
+  return a;
+}
+
+/** Rapid360 Ad + Soyad sütunlarını Atak tek “Ad Soyad” alanına birleştirir. */
+function composeCustomerName(rec){
+  if(!rec) return '';
+  const first = pick(rec, KEY.firstName);
+  const middle = pick(rec, KEY.middleName);
+  const last = pick(rec, KEY.lastName);
+  const billed = pick(rec, KEY.billedName);
+  const musteriAdi = pick(rec, KEY.musteriAdi);
+  const full = pick(rec, KEY.fullName);
+  const company = pick(rec, KEY.company);
+  const candidates = [];
+  if(first || last) candidates.push(joinNameParts([first, middle, last]));
+  if(first && billed) candidates.push(joinNameParts([first, middle, billed]));
+  if(musteriAdi && last) candidates.push(joinNameParts([musteriAdi, last]));
+  if(musteriAdi && billed) candidates.push(joinNameParts([musteriAdi, billed]));
+  candidates.push(full, musteriAdi, billed, last, first, company);
+  return candidates.filter(Boolean).sort((a, b) => b.length - a.length || a.localeCompare(b, 'tr'))[0] || '';
 }
 
 function asNumber(v){
@@ -224,7 +290,7 @@ function recKind(rec){
   const qty = asNumber(pick(rec, KEY.qty));
   const pay = pick(rec, KEY.payMethod) || pick(rec, KEY.payName);
   const payAmt = asNumber(pick(rec, KEY.payAmount));
-  const cust = pick(rec, KEY.custAccount) || pick(rec, KEY.custName);
+  const cust = pick(rec, KEY.custAccount) || composeCustomerName(rec);
   const isPayNode = !!(rec.odemetarihi || rec.vadetarihi || rec.taksitsayisi);
   if(isPayNode && !item) return 'payment';
   const hasLine = !!(item || ((itemName || qty) && !pay && !cust));
@@ -254,10 +320,15 @@ function ensureSale(map, id){
       cancelled: false,
       salespersonName: '',
       tckn: '',
+      taxNo: '',
+      taxOffice: '',
+      companyName: '',
       address: '',
       city: '',
       district: '',
+      neighborhood: '',
       email: '',
+      phone: '',
       headerTotal: 0,
       lines: [],
       payments: []
@@ -271,16 +342,27 @@ function applyHeader(sale, rec){
   sale.invoiceDate = sale.invoiceDate || toIsoDate(pick(rec, KEY.invoiceDate));
   sale.invoiceNumber = sale.invoiceNumber || pick(rec, KEY.invoiceNo);
   sale.custAccount = sale.custAccount || pick(rec, KEY.custAccount);
-  let name = pick(rec, KEY.custName);
-  if(!name && !pick(rec, KEY.itemCode)) name = rec.name || '';
-  if(name) sale.custName = sale.custName || name;
+  sale.custName = betterPersonName(sale.custName, composeCustomerName(rec));
   sale.store = sale.store || pick(rec, KEY.store);
   sale.salespersonName = sale.salespersonName || pick(rec, KEY.salesperson);
   sale.tckn = sale.tckn || pick(rec, KEY.tckn);
+  sale.taxNo = sale.taxNo || pick(rec, KEY.taxNo);
+  sale.taxOffice = sale.taxOffice || pick(rec, KEY.taxOffice);
+  sale.companyName = sale.companyName || pick(rec, KEY.company);
   sale.address = sale.address || pick(rec, KEY.address);
   sale.city = sale.city || String(pick(rec, KEY.city) || '').replace(/\s*\/\s*TUR\s*$/i, '').trim();
   sale.district = sale.district || pick(rec, KEY.district);
+  sale.neighborhood = sale.neighborhood || pick(rec, KEY.neighborhood);
+  if(sale.neighborhood && sale.address && !nameKey(sale.address).includes(nameKey(sale.neighborhood))){
+    sale.address = `${sale.address} ${sale.neighborhood}`.trim();
+  }
   sale.email = sale.email || pick(rec, KEY.email);
+  sale.phone = sale.phone || pick(rec, KEY.phone);
+  const taxDigits = String(sale.taxNo || '').replace(/\D/g, '');
+  if(!sale.tckn && taxDigits.length === 11){
+    sale.tckn = taxDigits;
+    sale.taxNo = '';
+  }else if(taxDigits.length === 10) sale.taxNo = taxDigits;
   const headerTotal = asNumber(pick(rec, KEY.headerTotal));
   if(headerTotal) sale.headerTotal = headerTotal;
   if(isCancelledFlag(pick(rec, KEY.cancelled))) sale.cancelled = true;
@@ -354,7 +436,7 @@ function groupRecords(records){
     }else if(sale.headerTotal > total) total = sale.headerTotal;
     sale.total = total;
     if(!sale.orderDate) sale.orderDate = sale.invoiceDate;
-    if(!sale.custName) sale.custName = sale.custAccount || 'Rapid360 müşteri';
+    if(!sale.custName) sale.custName = sale.companyName || sale.custAccount || 'Rapid360 müşteri';
     if(sale.total > 0 || sale.lines.length) sales.push(sale);
   }
   sales.sort((a, b) => String(b.orderDate).localeCompare(String(a.orderDate)) || String(b.salesId).localeCompare(String(a.salesId)));
@@ -456,5 +538,7 @@ module.exports = {
   extractSales,
   extractSalesFromRecords,
   recordsFromXlsxWorkbook,
-  parseXmlTree
+  parseXmlTree,
+  composeCustomerName,
+  betterPersonName
 };

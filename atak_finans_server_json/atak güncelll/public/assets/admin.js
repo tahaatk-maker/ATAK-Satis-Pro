@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v180 */
+/* ATAK_ADMIN_BUILD=fix-v181 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6251,7 +6251,7 @@ q('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
   q('#rapid360SalesXmlImportBtn').disabled=true;
   try{
     const r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
-    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı · ${r.customersCreated||0} yeni müşteri`;
+    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı · ${r.customersCreated||0} yeni müşteri${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}`;
     st.className='form-status success';
     toast(st.textContent);
     await loadSalesTracking();
