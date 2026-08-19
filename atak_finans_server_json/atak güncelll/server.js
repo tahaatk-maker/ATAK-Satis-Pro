@@ -1900,8 +1900,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.187-atak-geteinvoices',
-  build:'fix-v187',
+  version:'6.3.188-atak-geteinvoices',
+  build:'fix-v188',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5041,11 +5041,13 @@ function saveRapidOktaTokens(s, tokens){
 }
 async function startRapidOktaChallenge(req, s){
   const body=req.body||{};
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  const okta=d365Auth.publicAuth(rapid);
   return d365Auth.startInteractiveLogin({
     sessionId:req.sessionID||'',
-    rapid:(s.invoiceIntegration||{}).rapid360||{},
-    loginHint:body.loginHint||body.username||'',
-    redirectUri:`${publicBaseUrl(req)}/web-api/admin/rapid360-okta-callback`
+    rapid,
+    loginHint:body.loginHint||body.username||okta.lastUser||okta.account||'',
+    redirectUri:rapid.oauthClientId?`${publicBaseUrl(req)}/web-api/admin/rapid360-okta-callback`:''
   });
 }
 function parseRapid360SalesUpload(file){

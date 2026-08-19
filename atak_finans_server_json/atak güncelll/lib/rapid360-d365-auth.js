@@ -79,8 +79,8 @@ function accountFromToken(token){
 function loginMessage(loginHint){
   const who = String(loginHint || '').trim();
   return who
-    ? `Açılan pencerede ${who} ile girin. Okta Verify telefona gelecek; kod yazılmaz.`
-    : 'Açılan pencerede Rapid360 kullanıcınızı girin. Okta Verify telefona gelecek; kod yazılmaz.';
+    ? `Açılan pencerede Rapid360 hesabınızı onaylayın. Okta Verify telefona gelecek; kod yazılmaz.`
+    : 'Açılan pencerede Rapid360 hesabınızı seçin. Okta Verify telefona gelecek; kod yazılmaz.';
 }
 
 function withLoginHint(url, loginHint){
@@ -273,23 +273,27 @@ async function startInteractiveLogin(opts = {}){
   if(!sessionId) throw new Error('Oturum yok');
   const loginHint = String(opts.loginHint || opts.username || '').trim();
   const redirectUri = String(opts.redirectUri || '').trim();
-  const existing = findPendingForSession(sessionId);
-  if(existing){
-    if(loginHint) existing.loginHint = loginHint;
-    existing.loginUrl = existing.authorizeUrl
-      ? withLoginHint(existing.authorizeUrl, loginHint)
-      : withLoginHint(existing.verificationUriComplete || existing.verificationUri || existing.loginUrl, loginHint);
-    existing.message = loginMessage(loginHint);
-    return publicLoginStart(existing);
-  }
-
   const rapid = opts.rapid || {};
   const cfg = configFromRapid(rapid, opts.env);
+  const usePkce = Boolean(cfg.oauthClientId && redirectUri);
+  const existing = findPendingForSession(sessionId);
+  if(existing){
+    const stalePkce = existing.authorizeUrl && !usePkce;
+    if(!stalePkce){
+      if(loginHint) existing.loginHint = loginHint;
+      existing.loginUrl = existing.authorizeUrl
+        ? withLoginHint(existing.authorizeUrl, loginHint)
+        : withLoginHint(existing.verificationUriComplete || existing.verificationUri || existing.loginUrl, loginHint);
+      existing.message = loginMessage(loginHint || existing.loginHint);
+      return publicLoginStart(existing);
+    }
+    pendingById.delete(existing.pollId);
+  }
   const resource = isMuleUrl(cfg.dynamicsUrl) ? DEFAULT_DYNAMICS_URL : cfg.dynamicsUrl;
   const tenant = cfg.tenant || DEFAULT_TENANT;
-  const clientId = clientIdsFrom(cfg)[0];
+  const clientId = usePkce ? cfg.oauthClientId : clientIdsFrom(cfg)[0];
 
-  if(redirectUri){
+  if(usePkce){
     const pollId = crypto.randomBytes(16).toString('hex');
     const verifier = pkceVerifier();
     const authorizeUrl = buildAuthorizeUrl({
@@ -364,7 +368,7 @@ async function startInteractiveLogin(opts = {}){
     }
     lastErr = (got && got.error) || lastErr;
   }
-  throw new Error(`Okta Verify başlatılamadı (${lastErr}). Rapid360 kullanıcınızı yazıp tekrar deneyin.`);
+  throw new Error(`Okta Verify başlatılamadı (${lastErr}). Rapid Aktar’a tekrar basın.`);
 }
 
 async function startDeviceLogin(opts = {}){

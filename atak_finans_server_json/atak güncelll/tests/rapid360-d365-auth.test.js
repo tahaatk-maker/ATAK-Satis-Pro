@@ -28,7 +28,8 @@ async function run(){
   const interactive = await auth.startInteractiveLogin({
     sessionId: 'sess-pkce',
     loginHint: 'taha@atakhome.com.tr',
-    redirectUri: 'https://panel.atakhome.com.tr/web-api/admin/rapid360-okta-callback'
+    redirectUri: 'https://panel.atakhome.com.tr/web-api/admin/rapid360-okta-callback',
+    rapid: { oauthClientId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }
   });
   assert.ok(interactive.loginUrl.includes('login.microsoftonline.com'));
   assert.ok(interactive.loginUrl.includes('login_hint=taha'));
@@ -59,6 +60,25 @@ async function run(){
   assert.equal(polled.tokens.account, 'taha@atakhome.com.tr');
 
   auth.resetPendingForTests();
+  const noAzureApp = await auth.startInteractiveLogin({
+    sessionId: 'sess-noaad',
+    redirectUri: 'https://atakhome.com.tr/web-api/admin/rapid360-okta-callback',
+    fetchImpl: async (url) => {
+      if(String(url).includes('v2.0/devicecode')) return jsonRes(400, { error: 'invalid_client' });
+      return jsonRes(200, {
+        user_code: 'HIDE-ME',
+        device_code: 'dev-x',
+        verification_uri_complete: 'https://microsoft.com/devicelogin?otc=HIDE-ME',
+        expires_in: 900,
+        interval: 5
+      });
+    }
+  });
+  assert.ok(!noAzureApp.loginUrl.includes('okta-callback'));
+  assert.ok(!noAzureApp.loginUrl.includes('authorize'));
+  assert.equal(noAzureApp.userCode, undefined);
+
+  auth.resetPendingForTests();
   const started = await auth.startDeviceLogin({
     sessionId: 'sess-1',
     loginHint: 'taha@atakhome.com.tr',
@@ -81,6 +101,7 @@ async function run(){
   assert.ok(started.pollId);
   assert.ok(/Okta Verify/.test(started.message));
   assert.ok(!JSON.stringify(started).includes('dev-1'));
+  assert.ok(!started.loginUrl.includes('rapid360-okta-callback'));
   assert.ok(!('userCode' in started));
 
   const pending = await auth.pollDeviceLogin({

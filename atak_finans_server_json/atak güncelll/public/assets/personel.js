@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v187 */
+/* ATAK_PERSONEL_BUILD=fix-v188 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1760,7 +1760,6 @@ function rapid360PullBody(extra={}){
     store:$('#rapid360SalesStoreFilter')?.value||'340334',
     company:$('#rapid360SalesCompanyFilter')?.value||'2521',
     dealerId:$('#rapid360SalesXmlDealer')?.value||'atak-beko',
-    loginHint:String($('#rapid360OktaUser')?.value||'').trim(),
     pullToken:rapid360PullToken||undefined,
     ...extra
   };
@@ -1785,12 +1784,10 @@ async function loadRapidOktaStatus(){
   if(!el) return;
   try{
     const d=await api('/web-api/admin/rapid360-okta-status');
-    const user=d.okta&&(d.okta.lastUser||d.okta.account);
-    if($('#rapid360OktaUser') && user && !$('#rapid360OktaUser').value) $('#rapid360OktaUser').value=user;
     el.textContent=(d.okta&&d.okta.connected)
       ?(`Rapid360 bağlı${d.okta.account?`: ${d.okta.account}`:''}. Yalnız ürünler okunur.`)
-      :'Kullanıcıyı yazın, Okta Verify otomatik gelir. Kod yok.';
-  }catch(_){el.textContent='Kullanıcıyı yazın, Okta Verify otomatik gelir. Kod yok.'}
+      :'Okta Verify telefona gelir, kullanıcı yazılmaz.';
+  }catch(_){el.textContent='Okta Verify telefona gelir, kullanıcı yazılmaz.'}
 }
 async function waitRapidOkta(st, payload, popup){
   showRapidOktaBox(payload||{});
@@ -1822,8 +1819,6 @@ async function waitRapidOkta(st, payload, popup){
   throw new Error('Okta Verify süresi doldu. Rapid Aktar’a tekrar basın.');
 }
 async function pullRapid360Live(autoImport, st){
-  const user=String($('#rapid360OktaUser')?.value||'').trim();
-  if(!user) throw new Error('Rapid360 kullanıcısını yazın. Kod gelmez; Okta Verify telefona gider.');
   const popup=window.open('about:blank','rapid360okta','popup=yes,width=520,height=740');
   try{ if(popup) popup.document.write('<p style="font-family:sans-serif;padding:24px">Rapid360 açılıyor…</p>'); }catch(_){}
   try{

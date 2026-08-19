@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v187 */
+/* ATAK_ADMIN_BUILD=fix-v188 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6267,7 +6267,6 @@ function rapid360PullBody(extra={}){
     store:q('#rapid360SalesStoreFilter')?.value||'340334',
     company:q('#rapid360SalesCompanyFilter')?.value||'2521',
     dealerId:q('#rapid360SalesXmlDealer')?.value||'atak-beko',
-    loginHint:String(q('#rapid360OktaUser')?.value||'').trim(),
     pullToken:rapid360PullToken||undefined,
     ...extra
   };
@@ -6292,17 +6291,15 @@ async function loadRapidOktaStatus(){
   if(!el) return;
   try{
     const d=await api('/web-api/admin/rapid360-okta-status');
-    const user=d.okta&&(d.okta.lastUser||d.okta.account);
-    if(q('#rapid360OktaUser') && user && !q('#rapid360OktaUser').value) q('#rapid360OktaUser').value=user;
     if(d.okta&&d.okta.connected){
       el.textContent=`Rapid360 bağlı${d.okta.account?`: ${d.okta.account}`:''}. Rapid Aktar yalnız ürünleri okur.`;
       el.className='form-status success';
     }else{
-      el.textContent='Kullanıcıyı yazın — Okta Verify otomatik gelir, kod yazılmaz.';
+      el.textContent='Rapid Aktar — Okta Verify telefona gelir, kullanıcı yazılmaz.';
       el.className='note';
     }
   }catch(_){
-    el.textContent='Kullanıcıyı yazın — Okta Verify otomatik gelir, kod yazılmaz.';
+    el.textContent='Rapid Aktar — Okta Verify telefona gelir, kullanıcı yazılmaz.';
   }
 }
 async function waitRapidOkta(st, payload, popup){
@@ -6350,10 +6347,6 @@ async function waitRapidOkta(st, payload, popup){
   throw new Error('Okta Verify süresi doldu. Rapid Aktar’a tekrar basın.');
 }
 async function pullRapid360Live(autoImport, st){
-  const user=String(q('#rapid360OktaUser')?.value||'').trim();
-  if(!user){
-    throw new Error('Rapid360 kullanıcısını yazın. Kod gelmez; Okta Verify telefona gider.');
-  }
   const popup=window.open('about:blank','rapid360okta','popup=yes,width=520,height=740');
   try{ if(popup) popup.document.write('<p style="font-family:sans-serif;padding:24px">Rapid360 açılıyor…</p>'); }catch(_){}
   try{
