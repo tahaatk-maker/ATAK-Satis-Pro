@@ -87,11 +87,18 @@ assert(all.RecordCount === 3, 'RecordCount ' + all.RecordCount);
 assert(all.DealerId === 21134761, 'DealerId');
 assert(all.EInvoiceCode === '2E1N1D3E4', 'EInvoiceCode');
 assert(all.startDate === '2026-08-01T00:00:00', 'startDate');
+assert(all.$id === '1' && all._schema === 0 && all._reference === '', 'zarf meta');
+const rootWant = ['$id','DealerId','startDate','endDate','RecordCount','EInvoiceCode','addReturns','EInvoices','_reference','_schema'];
+assert(rootWant.every(k => Object.prototype.hasOwnProperty.call(all, k)) && Object.keys(all).every(k => rootWant.includes(k)), 'zarf alanları');
 const giden = all.EInvoices.find(x => x.FaturaNo === 'ATK2026000000001');
 assert(giden && giden.FaturalanacakMusteriAdi === 'Ahmet Yılmaz', 'müşteri');
 assert(giden.FaturaTarihi === '10/08/2026', 'tr tarih');
 assert(giden.TutarToplami === 1200, 'tutar');
 assert(Array.isArray(giden.EInvoicesLines) && giden.EInvoicesLines[0].MalzemeKodu === 'P1', 'satır');
+const invWant = ['$id','FaturaTarihi','FaturaSayac','FaturaNo','EmanetMi','EFaturaMi','ResmiBelgeNo','FaturaSinifi','FaturaTipi','FaturaAsama','FaturaAciklama','MusteriKodu','MusteriEmail','SubeKodu','Bayi','BayiKodu','MusteriSayac','VergiNo','VergiDairesi','Adres','Sehir','Ilce','Semt','IrtibatTelefonu','EvTelefonu','CepTelefonu','MuhasebeBaglantiKodu','FaturalanacakMusteriAdi','ValorTarihi','TutarToplami','KDVTutarToplami','AktarimToplami','IndirimToplami','FaturaMiktari','EInvoicesLines'];
+const lineWant = ['$id','FaturaTarihi','FaturaSayac','FaturaDetaySayac','SiparisSayac','Sirket','MalzemeKodu','UrunAdi','TransferTarihi','Depo','Birim','Miktar','BirimFiyat','Tutar','IndirimTutari','KDVTutari','SatirTutari','KDVOrani','SiparisSatirSayac'];
+assert(invWant.every(k => Object.prototype.hasOwnProperty.call(giden, k)), 'fatura alanları');
+assert(lineWant.every(k => Object.prototype.hasOwnProperty.call(giden.EInvoicesLines[0], k)), 'satır alanları');
 assert(all.EInvoices.some(x => x.FaturaNo === 'ATK2026000000002' && x.FaturaAsama === 'IADE'), 'iade');
 
 const noRet = atak.buildResponse(store, creds, {
