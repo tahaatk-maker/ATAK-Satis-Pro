@@ -1,0 +1,20 @@
+.sip-call-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:36px;padding:0 12px;border:0;border-radius:9px;
+  background:#15803d;color:#fff;font-weight:800;font-size:13px;line-height:1;
+  text-decoration:none;cursor:pointer;white-space:nowrap;flex-shrink:0;
+}
+.sip-call-btn:hover{background:#166534;color:#fff}
+.sip-call-btn.is-off,.sip-call-btn[disabled]{
+  background:#94a3b8;color:#fff;cursor:not-allowed;opacity:.75;
+}
+.sip-call-btn.sip-call-sm{min-height:30px;padding:0 10px;font-size:12px;border-radius:8px}
+.customer-card .sip-call-btn{align-self:center}
+.customer-action-buttons .sip-call-btn{
+  height:48px;border-radius:11px;font-weight:900;font-size:14px;
+}
+.sales-customer-info .sip-call-btn,.info-box .sip-call-btn{margin-top:8px}
+#payCustomerBox .sip-call-btn,#custPayCustomerBox .sip-call-btn{margin:8px 0}
+@media(max-width:700px){
+  .sip-call-btn,.sip-call-btn.sip-call-sm{min-height:44px;padding:0 14px}
+}

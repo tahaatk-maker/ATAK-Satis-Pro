@@ -106,9 +106,10 @@
 .customer-page-grid .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .customer-list-panel{position:sticky;top:18px;min-width:0}
 .customer-card-list{display:grid;gap:8px;margin-top:12px;max-height:680px;overflow:auto}
-.customer-card{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px;border:1px solid #dfe6ef;border-radius:12px;background:#fff;text-align:left;cursor:pointer}
+.customer-card{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px 8px 6px;border:1px solid #dfe6ef;border-radius:12px;background:#fff;text-align:left}
 .customer-card:hover{border-color:#79a9d8;background:#f7fbff}
-.customer-card>div:first-child{display:grid;gap:4px;min-width:0}
+.customer-card-pick{flex:1;min-width:0;display:grid;gap:4px;padding:6px 8px;border:0;background:transparent;text-align:left;cursor:pointer}
+.customer-card>div:first-child,.customer-card-pick{display:grid;gap:4px;min-width:0}
 .customer-card b,.customer-card small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .customer-card small{color:#6e7a8c}
 .customer-card-balance{display:grid;justify-items:end;gap:3px;flex-shrink:0}
@@ -130,7 +131,8 @@
 .customer-balance-box small,.customer-balance-box strong{display:block}
 .customer-balance-box strong{font-size:26px;color:#075da8;margin-top:4px}
 .customer-action-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
-.customer-action-buttons button{height:48px;border:0;border-radius:11px;background:#0a5ca8;color:#fff;font-weight:900;cursor:pointer}
+.customer-action-buttons button,.customer-action-buttons .sip-call-btn{height:48px;border:0;border-radius:11px;background:#0a5ca8;color:#fff;font-weight:900;cursor:pointer}
+.customer-action-buttons .sip-call-btn{background:#15803d}
 .customer-action-buttons button.customer-pay-btn{background:#0f766e}
 .customer-action-buttons button.customer-sale-btn{background:#5d6b7f}
 .customer-action-buttons button.customer-sms-btn{background:#b45309}

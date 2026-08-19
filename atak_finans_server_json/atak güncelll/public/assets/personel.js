@@ -1,4 +1,5 @@
-/* ATAK_PERSONEL_BUILD=fix-v160 */
+/* ATAK_PERSONEL_BUILD=fix-v161 */
+function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -492,7 +493,7 @@ function renderCustomers(){
   $('#customerRows').innerHTML=rows.map(c=>`
     <tr>
       <td><b>${c.name||''}</b><small>${c.taxNo||''}</small></td>
-      <td>${c.phone||'—'}</td>
+      <td>${c.phone||'—'} ${sipBtn(c.phone,{className:'sip-call-sm'})}</td>
       <td><b>${money(c.balance)}</b></td>
     </tr>`).join('')||'<tr><td colspan="3">Cari bulunamadı.</td></tr>';
 }
@@ -748,7 +749,7 @@ function salesCustomerChanged(){
   }
   box.innerHTML=`
     <div><small>Şahıs / Senet</small><b>${c.name||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">TCKN ${c.tckn||'—'}</span></div>
-    <div><small>Telefon</small><b>${c.phone||'—'}</b></div>
+    <div><small>Telefon</small><b>${c.phone||'—'}</b>${sipBtn(c.phone,{className:'sip-call-sm'})}</div>
     <div><small>Cari</small><b>${money(c.balance)}</b></div>
     ${hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">VKN ${c.taxNo||'—'} · ${c.taxOffice||''}</span></div>`:''}`;
   salesRefreshKefilUI();
@@ -2005,7 +2006,7 @@ function renderPayments(){
   if(tbody){
     tbody.innerHTML=(payState.rows||[]).length
       ?(payState.rows||[]).map(r=>`<tr data-pay-cust="${r.customerId}" class="${r.customerId===payState.selectedId?'active':''}">
-          <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small></td>
+          <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm'})}</td>
           <td><span class="pay-bucket ${r.bucket}">${payBucketLabel(r.bucket)}</span></td>
           <td>${money(r.balance)}${Number(r.pendingHavaleAmount||0)>0.009?`<br><small>Havale ${money(r.pendingHavaleAmount)}</small>`:''}</td>
           <td>${money(r.overdueAmount)}</td>
@@ -2048,7 +2049,7 @@ function selectPayCustomer(customerId,keepAmount=false){
   body?.classList.remove('hidden');
   const havaleAmt=Number(row.pendingHavaleAmount||0);
   const suggest=havaleAmt>0.009?havaleAmt:(row.overdueAmount>0.009?row.overdueAmount:(row.dueMonthAmount>0.009?row.dueMonthAmount:Math.max(row.balance,0)));
-  $('#payCustomerBox').innerHTML=`<b>${row.customerName||''}</b><br><small>${row.customerPhone||''}</small><br>
+  $('#payCustomerBox').innerHTML=`<b>${row.customerName||''}</b> ${sipBtn(row.customerPhone,{className:'sip-call-sm'})}<br><small>${row.customerPhone||''}</small><br>
     Cari: <b>${money(row.balance)}</b> · Havale: <b>${money(havaleAmt)}</b> · Geciken: <b>${money(row.overdueAmount)}</b>`;
   const havaleBox=$('#payHavale');
   if(havaleBox){

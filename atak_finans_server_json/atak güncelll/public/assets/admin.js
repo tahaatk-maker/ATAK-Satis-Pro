@@ -1,4 +1,5 @@
-/* ATAK_ADMIN_BUILD=fix-v160 */
+/* ATAK_ADMIN_BUILD=fix-v161 */
+function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
 const money2=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -1808,7 +1809,7 @@ function renderCustomerTable(){
   if(!financeData||!q('#customerTable'))return;
   const term=(q('#customerSearch')?.value||'').toLocaleLowerCase('tr-TR');
   const rows=financeData.customers.filter(x=>`${x.name} ${x.phone} ${x.taxNo}`.toLocaleLowerCase('tr-TR').includes(term));
-  q('#customerTable').innerHTML=rows.length?`<table><thead><tr><th>Müşteri</th><th>Telefon</th><th>VKN/TCKN</th><th>Bakiye</th><th>Durum</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.name}</b></td><td>${x.phone||'-'}</td><td>${x.taxNo||'-'}</td><td><b>${money(x.balance)}</b></td><td>${x.balance>0?'Borçlu':x.balance<0?'Alacaklı':'Kapalı'}</td></tr>`).join('')}</tbody></table>`:'<p>Müşteri bulunamadı.</p>';
+  q('#customerTable').innerHTML=rows.length?`<table><thead><tr><th>Müşteri</th><th>Telefon</th><th>VKN/TCKN</th><th>Bakiye</th><th>Durum</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.name}</b></td><td>${x.phone||'-'} ${sipBtn(x.phone,{className:'sip-call-sm'})}</td><td>${x.taxNo||'-'}</td><td><b>${money(x.balance)}</b></td><td>${x.balance>0?'Borçlu':x.balance<0?'Alacaklı':'Kapalı'}</td></tr>`).join('')}</tbody></table>`:'<p>Müşteri bulunamadı.</p>';
 }
 q('#customerSearch')?.addEventListener('input',renderCustomerTable);
 if(q('#transferDate'))q('#transferDate').value=new Date().toISOString().slice(0,10);
@@ -2104,7 +2105,7 @@ function renderCustomerPageList(){
     const sub=[c.phone,c.email,c.city&&c.district?`${c.district}/${c.city}`:(c.address||'')].filter(Boolean).join(' · ');
     const active=String(c.id)===String(customersPageData.selectedId)?'active':'';
     const badge=customerHasCorporate(c)?(c.invoiceType==='corporate'?' · Şahıs+Firma':' · Firma kayıtlı'):' · Bireysel';
-    return `<button type="button" class="customer-card ${active}" data-customer-id="${c.id}"><div><b>${c.name||'-'}</b><small>${sub||'Adres yok'}${badge}${c.companyName?` · ${c.companyName}`:''}</small></div><div class="customer-card-balance ${balCls}"><small>Cari</small><strong>${money2(bal)}</strong></div></button>`;
+    return `<div class="customer-card ${active}"><button type="button" class="customer-card-pick" data-customer-id="${c.id}"><div><b>${c.name||'-'}</b><small>${sub||'Adres yok'}${badge}${c.companyName?` · ${c.companyName}`:''}</small></div></button>${sipBtn(c.phone,{className:'sip-call-sm'})}<div class="customer-card-balance ${balCls}"><small>Cari</small><strong>${money2(bal)}</strong></div></div>`;
   }).join('');
   qa('#customerPageList [data-customer-id]').forEach(btn=>btn.addEventListener('click',()=>selectCustomerPage(btn.dataset.customerId)));
 }
@@ -2376,6 +2377,15 @@ async function selectCustomerPage(id){
     empty?.classList.add('hidden');content?.classList.remove('hidden');
     if(q('#customerDetailName'))q('#customerDetailName').textContent=c.name||'-';
     if(q('#customerDetailPhone'))q('#customerDetailPhone').textContent=[c.phone,c.email].filter(Boolean).join(' · ')||'-';
+    const callBtn=q('#customerDetailCallBtn');
+    if(callBtn){
+      const href=typeof sipHref==='function'?sipHref(c.phone):'';
+      if(href){
+        callBtn.href=href;callBtn.classList.remove('is-off');callBtn.removeAttribute('aria-disabled');
+      }else{
+        callBtn.href='#';callBtn.classList.add('is-off');callBtn.setAttribute('aria-disabled','true');
+      }
+    }
     if(q('#customerDetailStatus')){
       const bits=[];
       if(c.active===false)bits.push('Pasif');else bits.push('Aktif');
@@ -3367,7 +3377,7 @@ function salesCustomerChanged(){
   const addr=[c.district,c.city].filter(Boolean).join('/')||(c.address||'-');
   const hasCorp=customerHasCorporate(c);
   const corpLine=hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'-'}</b><span style="display:block;font-size:11px;color:#667890">VKN ${c.taxNo||'-'} · ${c.taxOffice||''}</span></div>`:'';
-  box.innerHTML=`<div><small>Şahıs / Senet</small><b>${c.name}</b><span style="display:block;font-size:11px;color:#667890">TCKN ${c.tckn||'—'}</span></div><div><small>Telefon</small><b>${c.phone||'-'}</b></div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>${corpLine}`;
+  box.innerHTML=`<div><small>Şahıs / Senet</small><b>${c.name}</b><span style="display:block;font-size:11px;color:#667890">TCKN ${c.tckn||'—'}</span></div><div><small>Telefon</small><b>${c.phone||'-'}</b>${sipBtn(c.phone,{className:'sip-call-sm'})}</div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>${corpLine}`;
   if(billWrap&&billSel){
     // Kurumsal bilgi varsa otomatik kurumsal; seçim gösterilmez
     billWrap.classList.add('hidden');
@@ -5991,7 +6001,7 @@ function renderSalesTracking(){
   q('#salesTrackingSummary').innerHTML=`<article><small>Gösterilen</small><b>${rows.length}</b></article><article><small>Açık Satış</small><b>${open}</b></article><article><small>Teslim Edildi</small><b>${delivered}</b></article><article><small>Toplam Tutar</small><b>${salesMoney(total)}</b></article>`;
   q('#salesTrackingTable').innerHTML=rows.map(r=>`<tr>
     <td><b>${r.reference||'-'}</b><small>${r.date||''}</small></td>
-    <td><b>${r.customerName||'-'}</b><small>${r.customerPhone||''}</small></td>
+    <td><b>${r.customerName||'-'}</b><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm'})}</td>
     <td>${r.dealerName||'-'}<small>${r.salespersonName||'-'}</small></td>
     <td><b>${salesMoney(r.total)}</b></td>
     <td><select data-track-status="${r.id}">${Object.entries(deliveryStatusNames).map(([k,v])=>`<option value="${k}" ${k===r.deliveryStatus?'selected':''}>${v}</option>`).join('')}</select></td>
@@ -6049,7 +6059,7 @@ function renderCustomerPayments(){
     tbody.innerHTML=(custPayState.rows||[]).length
       ?(custPayState.rows||[]).map(r=>`<tr data-cust-pay="${r.customerId}" class="${r.customerId===custPayState.selectedId?'active':''}">
           <td><input type="checkbox" class="cust-pay-sms-cb" value="${r.customerId}" ${prevSelected.has(String(r.customerId))?'checked':''}></td>
-          <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small></td>
+          <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm'})}</td>
           <td><span class="pay-bucket ${r.bucket}">${custPayBucketLabel(r.bucket)}</span></td>
           <td>${money2(r.balance)}${Number(r.pendingHavaleAmount||0)>0.009?`<br><small style="color:#0b4f96;font-weight:750">Havale ${money2(r.pendingHavaleAmount)}</small>`:''}</td>
           <td>${money2(r.overdueAmount)}</td>
@@ -6134,7 +6144,7 @@ function selectCustomerPayment(customerId,keepAmount=false){
   body?.classList.remove('hidden');
   const havaleAmt=Number(row.pendingHavaleAmount||0);
   const suggest=havaleAmt>0.009?havaleAmt:(row.overdueAmount>0.009?row.overdueAmount:(row.dueMonthAmount>0.009?row.dueMonthAmount:Math.max(row.balance,0)));
-  q('#custPayCustomerBox').innerHTML=`<b>${row.customerName||''}</b><br><small>${row.customerPhone||''}</small><br>
+  q('#custPayCustomerBox').innerHTML=`<b>${row.customerName||''}</b> ${sipBtn(row.customerPhone,{className:'sip-call-sm'})}<br><small>${row.customerPhone||''}</small><br>
     Cari: <b>${money2(row.balance)}</b> · Havale: <b>${money2(havaleAmt)}</b> · Geciken: <b>${money2(row.overdueAmount)}</b> · Bu ay: <b>${money2(row.dueMonthAmount)}</b>`;
   const havaleBox=q('#custPayHavale');
   if(havaleBox){
