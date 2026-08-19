@@ -113,6 +113,7 @@ assert(d.cancelledCount === 1, '1 iptal ' + d.cancelledCount);
 assert(d.sales.length === 1, 'iptal atılır, 1 satış kalır ' + d.sales.length);
 assert(d.sales[0].salesId === '2521-065711', 'sipariş no öznitelik');
 assert(d.sales[0].custName === 'ALİ SEZER', 'ad+soyad birleşir ' + d.sales[0].custName);
+assert(d.sales[0].firstName === 'ALİ' && d.sales[0].lastName === 'SEZER', 'ayrı ad soyad');
 assert(d.sales[0].custAccount === '2521-M0044001', 'musteri kodu');
 assert(d.sales[0].orderDate === '2026-08-18', 'sipariş tarihi slash');
 assert(d.sales[0].lines.length === 3, '3 kalem ' + d.sales[0].lines.length);

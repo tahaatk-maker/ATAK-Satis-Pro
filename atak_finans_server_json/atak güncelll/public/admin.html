@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v181" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v181" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v181" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v181" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v182" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v182" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v182" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v182" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -748,7 +748,11 @@ body.inv-full #pageTitle{font-size:18px}
     <div class="panel-head"><h2>Yeni Müşteri Ekle</h2><button class="secondary-btn" id="salesQuickCustomerClose" type="button">Kapat</button></div>
     <form id="salesQuickCustomerForm" class="form-stack" action="javascript:void(0)">
       <div class="cust-form-sec"><div class="cust-form-sec-title">İletişim</div>
-        <label>Ad Soyad (Şahıs / Senet) *<input id="salesQuickCustomerName" required placeholder="Senet borçlusu şahıs adı"/></label>
+        <div class="two-col">
+          <label>Ad *<input id="salesQuickCustomerFirstName" required placeholder="Adı" autocomplete="given-name"/></label>
+          <label>Soyad *<input id="salesQuickCustomerLastName" required placeholder="Soyadı" autocomplete="family-name"/></label>
+        </div>
+        <p class="field-hint" style="margin:0">Senet ve listelerde Ad Soyad olarak birleşir.</p>
         <div class="two-col">
           <label>Telefon *<input id="salesQuickCustomerPhone" required placeholder="05xx xxx xx xx"/></label>
           <label>E-posta<input id="salesQuickCustomerEmail" type="email"/></label>
@@ -2243,7 +2247,11 @@ Bulunamayan → Diğer.
 <form action="javascript:void(0)" class="form-stack" id="customerPageForm" onsubmit="return false;">
 <input id="customerPageId" type="hidden"/>
 <div class="cust-form-sec"><div class="cust-form-sec-title">İletişim</div>
-<label>Ad Soyad (Şahıs / Senet) *<input autocomplete="name" id="customerPageName" required placeholder="Senet borçlusu şahıs adı"/></label>
+<div class="two-col">
+<label>Ad *<input autocomplete="given-name" id="customerPageFirstName" required placeholder="Adı"/></label>
+<label>Soyad *<input autocomplete="family-name" id="customerPageLastName" required placeholder="Soyadı"/></label>
+</div>
+<p class="field-hint" style="margin:0">Senet ve listelerde Ad Soyad olarak birleşir.</p>
 <div class="two-col">
 <label>Telefon *<input autocomplete="tel" id="customerPagePhone" required placeholder="05xx xxx xx xx"/></label>
 <label>E-posta (e-Fatura / e-Arşiv)<input autocomplete="email" id="customerPageEmail" type="email" placeholder="ornek@mail.com"/><small class="field-hint">Fatura gönderimi için önerilir</small></label>
@@ -2807,6 +2815,6 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v181"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v181"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v182"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v182"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

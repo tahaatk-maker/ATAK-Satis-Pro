@@ -314,6 +314,8 @@ function ensureSale(map, id){
       invoiceNumber: '',
       custAccount: '',
       custName: '',
+      firstName: '',
+      lastName: '',
       store: '',
       eInvoice: false,
       webOrder: false,
@@ -343,6 +345,10 @@ function applyHeader(sale, rec){
   sale.invoiceNumber = sale.invoiceNumber || pick(rec, KEY.invoiceNo);
   sale.custAccount = sale.custAccount || pick(rec, KEY.custAccount);
   sale.custName = betterPersonName(sale.custName, composeCustomerName(rec));
+  sale.firstName = sale.firstName || pick(rec, KEY.firstName);
+  sale.lastName = sale.lastName || pick(rec, KEY.lastName);
+  const billedLast = pick(rec, KEY.billedName);
+  if(!sale.lastName && billedLast && !/\s/.test(billedLast)) sale.lastName = billedLast;
   sale.store = sale.store || pick(rec, KEY.store);
   sale.salespersonName = sale.salespersonName || pick(rec, KEY.salesperson);
   sale.tckn = sale.tckn || pick(rec, KEY.tckn);
@@ -437,6 +443,13 @@ function groupRecords(records){
     sale.total = total;
     if(!sale.orderDate) sale.orderDate = sale.invoiceDate;
     if(!sale.custName) sale.custName = sale.companyName || sale.custAccount || 'Rapid360 müşteri';
+    if(sale.custName && (!sale.firstName || !sale.lastName)){
+      const bits = String(sale.custName).trim().split(/\s+/).filter(Boolean);
+      if(bits.length >= 2){
+        sale.lastName = sale.lastName || bits[bits.length - 1];
+        sale.firstName = sale.firstName || bits.slice(0, -1).join(' ');
+      }else if(bits.length === 1 && !sale.firstName) sale.firstName = bits[0];
+    }
     if(sale.total > 0 || sale.lines.length) sales.push(sale);
   }
   sales.sort((a, b) => String(b.orderDate).localeCompare(String(a.orderDate)) || String(b.salesId).localeCompare(String(a.salesId)));

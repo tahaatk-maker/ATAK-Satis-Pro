@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v181 */
+/* ATAK_PERSONEL_BUILD=fix-v182 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1933,6 +1933,7 @@ $('#salesNewCustomerBtn')?.addEventListener('click',()=>{
   setQcVknStatus('10 hane yazınca ünvan otomatik dolar');
   syncQcInvoiceUI();
   $('#salesQuickCustomerModal')?.classList.remove('hidden');
+  $('#qcFirstName')?.focus();
 });
 $('#salesQuickCustomerClose')?.addEventListener('click',()=>$('#salesQuickCustomerModal')?.classList.add('hidden'));
 $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
@@ -1954,7 +1955,10 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        name:$('#qcName').value,phone:$('#qcPhone').value,
+        firstName:($('#qcFirstName')?.value||'').trim(),
+        lastName:($('#qcLastName')?.value||'').trim(),
+        name:[($('#qcFirstName')?.value||'').trim(),($('#qcLastName')?.value||'').trim()].filter(Boolean).join(' '),
+        phone:$('#qcPhone').value,
         city:$('#qcCity').value,district:$('#qcDistrict').value,address:$('#qcAddress').value,
         deliverySameAsBilling:true,invoiceType,
         tckn:tckn||'',

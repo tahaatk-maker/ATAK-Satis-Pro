@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v181 */
+/* ATAK_ADMIN_BUILD=fix-v182 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1934,8 +1934,16 @@ function syncCustomerFormUI(prefix){
   if(office)office.required=corp;
   if(vkn)vkn.required=corp;
 }
+function splitCustomerName(full){
+  const parts=String(full||'').replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
+  if(!parts.length)return {firstName:'',lastName:''};
+  if(parts.length===1)return {firstName:parts[0],lastName:''};
+  return {firstName:parts.slice(0,-1).join(' '),lastName:parts[parts.length-1]};
+}
 function collectCustomerPayload(prefix,{requireActive=false}={}){
-  const name=(q(`#${prefix}Name`)?.value||'').trim();
+  const firstName=(q(`#${prefix}FirstName`)?.value||'').trim();
+  const lastName=(q(`#${prefix}LastName`)?.value||'').trim();
+  const name=[firstName,lastName].filter(Boolean).join(' ').trim()||(q(`#${prefix}Name`)?.value||'').trim();
   const phone=(q(`#${prefix}Phone`)?.value||'').trim();
   const city=(q(`#${prefix}City`)?.value||'').trim();
   const district=(q(`#${prefix}District`)?.value||'').trim();
@@ -1949,7 +1957,8 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
   const taxOffice=(q(`#${prefix}TaxOffice`)?.value||'').trim();
   const taxNo=(q(`#${prefix}TaxNo`)?.value||'').trim();
   const tckn=(q(`#${prefix}Tckn`)?.value||'').trim();
-  if(!name)throw new Error('Şahıs / müşteri adı zorunludur');
+  if(!firstName)throw new Error('Ad zorunludur');
+  if(!lastName)throw new Error('Soyad zorunludur');
   if(!phone)throw new Error('Telefon zorunludur');
   if(!city||!district||!address)throw new Error('Adres (il, ilçe, açık adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress))throw new Error('Teslimat adresi için il, ilçe ve açık adres girin');
@@ -1962,7 +1971,7 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
   const email=(q(`#${prefix}Email`)?.value||'').trim();
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Geçerli bir e-posta girin (e-Fatura / e-Arşiv için)');
   const payload={
-    name,phone,
+    firstName,lastName,name,phone,
     email,
     city,district,address,
     deliverySameAsBilling:deliverySame,
@@ -1982,6 +1991,9 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
 }
 function fillCustomerForm(prefix,c={}){
   if(q(`#${prefix}Id`))q(`#${prefix}Id`).value=c.id||'';
+  const split=(!c.firstName||!c.lastName)?splitCustomerName(c.name||''):null;
+  if(q(`#${prefix}FirstName`))q(`#${prefix}FirstName`).value=c.firstName||split?.firstName||'';
+  if(q(`#${prefix}LastName`))q(`#${prefix}LastName`).value=c.lastName||split?.lastName||'';
   if(q(`#${prefix}Name`))q(`#${prefix}Name`).value=c.name||'';
   if(q(`#${prefix}Phone`))q(`#${prefix}Phone`).value=c.phone||'';
   if(q(`#${prefix}Email`))q(`#${prefix}Email`).value=c.email||'';
@@ -2100,7 +2112,7 @@ function openCustomerModal(c=null){
   if(!c&&q('#customerPageDeliverySame'))q('#customerPageDeliverySame').checked=true;
   syncCustomerFormUI('customerPage');
   q('#customerModal')?.classList.remove('hidden');
-  q('#customerPageName')?.focus();
+  q('#customerPageFirstName')?.focus();
 }
 function renderCustomerPageList(){
   const rows=(customersPageData.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
@@ -3885,7 +3897,7 @@ q('#salesNewCustomerBtn')?.addEventListener('click',()=>{
   document.querySelectorAll('input[name="salesQuickCustomerInvoiceType"]').forEach(r=>{r.checked=r.value==='individual'});
   syncCustomerFormUI('salesQuickCustomer');
   q('#salesQuickCustomerModal')?.classList.remove('hidden');
-  q('#salesQuickCustomerName')?.focus();
+  q('#salesQuickCustomerFirstName')?.focus();
 });
 q('#salesQuickCustomerClose')?.addEventListener('click',()=>q('#salesQuickCustomerModal')?.classList.add('hidden'));
 q('#salesQuickCustomerDeliverySame')?.addEventListener('change',()=>syncCustomerFormUI('salesQuickCustomer'));

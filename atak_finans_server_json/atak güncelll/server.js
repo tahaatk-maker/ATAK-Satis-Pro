@@ -21,6 +21,7 @@ const autoBackupLib = require('./lib/auto-backup');
 const rapid360 = require('./lib/rapid360-einvoice');
 const atakGetE = require('./lib/atak-geteinvoices');
 const rapidSalesXml = require('./lib/rapid360-sales-xml');
+const personName = require('./lib/person-name');
 
 const app = express();
 const ROOT = __dirname;
@@ -1893,8 +1894,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.181-atak-geteinvoices',
-  build:'fix-v181',
+  version:'6.3.182-atak-geteinvoices',
+  build:'fix-v182',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3350,7 +3351,7 @@ app.delete('/web-api/admin/finance-account/:id',requireAdmin,(req,res)=>{
 });
 function customerSnapshot(c={}){
   return {
-    name:c.name||'',phone:c.phone||'',email:c.email||'',taxNo:c.taxNo||'',tckn:c.tckn||'',
+    name:c.name||'',firstName:c.firstName||'',lastName:c.lastName||'',phone:c.phone||'',email:c.email||'',taxNo:c.taxNo||'',tckn:c.tckn||'',
     city:c.city||'',district:c.district||'',address:c.address||'',
     deliverySameAsBilling:c.deliverySameAsBilling!==false,deliveryCity:c.deliveryCity||'',
     deliveryDistrict:c.deliveryDistrict||'',deliveryAddress:c.deliveryAddress||'',
@@ -3411,7 +3412,15 @@ function resolveCustomerInvoiceParty(customer={},prefer=''){
   };
 }
 function parseCustomerPayload(x={}){
-  const name=String(x.name||'').trim();
+  const explicitSplit=Object.prototype.hasOwnProperty.call(x,'firstName')||Object.prototype.hasOwnProperty.call(x,'lastName')||Object.prototype.hasOwnProperty.call(x,'ad')||Object.prototype.hasOwnProperty.call(x,'soyad');
+  const parts=personName.normalizePersonName(x);
+  let firstName=parts.firstName,lastName=parts.lastName,name=parts.name;
+  if(explicitSplit){
+    if(!firstName)throw new Error('Ad zorunludur');
+    if(!lastName)throw new Error('Soyad zorunludur');
+    name=personName.joinPersonName(firstName,lastName);
+  }
+  if(!name)throw new Error('Ad ve soyad zorunludur');
   const phone=String(x.phone||'').trim();
   const city=String(x.city||'').trim();
   const district=String(x.district||'').trim();
@@ -3426,7 +3435,6 @@ function parseCustomerPayload(x={}){
   // taxNo = kurumsal VKN; tckn = şahıs (ikisi birden saklanır)
   const taxNo=String(x.taxNo||x.corporateTaxNo||'').trim();
   const tckn=String(x.tckn||x.individualTaxNo||'').trim();
-  if(!name)throw new Error('Şahıs / müşteri adı zorunludur');
   if(!phone)throw new Error('Telefon zorunludur');
   if(!city||!district||!address)throw new Error('Fatura adresi (il, ilçe, açık adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress)){
@@ -3439,7 +3447,7 @@ function parseCustomerPayload(x={}){
   }
   if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
   const out={
-    name,phone,
+    name,firstName,lastName,phone,
     email:String(x.email||'').trim(),
     taxNo:invoiceType==='corporate'?taxNo:'',
     tckn:tckn||'',
@@ -3491,7 +3499,7 @@ function customerSearchHandler(req,res){
     .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'tr'))
     .slice(0,limit)
     .map(c=>({
-      id:c.id,name:c.name||'',phone:c.phone||'',email:c.email||'',
+      id:c.id,name:c.name||'',firstName:c.firstName||'',lastName:c.lastName||'',phone:c.phone||'',email:c.email||'',
       taxNo:c.taxNo||'',tckn:c.tckn||'',city:c.city||'',district:c.district||'',
       address:c.address||'',companyName:c.companyName||'',taxOffice:c.taxOffice||'',
       invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
@@ -5031,8 +5039,14 @@ function matchRapidCustomer(s,account,name,tckn){
   return null;
 }
 function fillRapidCustomer(row,sale){
-  const name=rapidSalesXml.betterPersonName(row.name,sale.custName);
-  if(name)row.name=name;
+  const parts=personName.normalizePersonName({
+    firstName:sale.firstName||row.firstName,
+    lastName:sale.lastName||row.lastName,
+    name:rapidSalesXml.betterPersonName(row.name,sale.custName)
+  });
+  if(parts.name)row.name=parts.name;
+  row.firstName=parts.firstName||row.firstName||'';
+  row.lastName=parts.lastName||row.lastName||'';
   if(sale.custAccount&&!row.rapidCustAccount)row.rapidCustAccount=sale.custAccount;
   if(sale.custAccount&&!row.customerCode)row.customerCode=sale.custAccount;
   if(sale.tckn&&!row.tckn)row.tckn=String(sale.tckn).replace(/\D/g,'');
@@ -5069,9 +5083,12 @@ function ensureRapidCustomer(s,sale){
   const tax=String(sale.taxNo||'').replace(/\D/g,'');
   const companyName=String(sale.companyName||'').trim();
   const phone=customerExcel.extractBestPhone([sale.phone])||customerExcel.normalizePhone(sale.phone||'')||'';
+  const parts=personName.normalizePersonName({firstName:sale.firstName,lastName:sale.lastName,name:sale.custName||companyName||sale.custAccount||'Rapid360 müşteri'});
   const row={
     id:crypto.randomUUID(),
-    name:String(sale.custName||companyName||sale.custAccount||'Rapid360 müşteri').trim(),
+    name:parts.name||String(sale.custName||companyName||sale.custAccount||'Rapid360 müşteri').trim(),
+    firstName:parts.firstName||'',
+    lastName:parts.lastName||'',
     phone,
     email:String(sale.email||'').trim(),
     taxNo:tax.length===10?tax:'',

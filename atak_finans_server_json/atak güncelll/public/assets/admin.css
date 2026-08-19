@@ -104,6 +104,7 @@
 .customer-shortcut button{min-width:190px;height:45px}
 .customer-page-grid{display:grid;grid-template-columns:minmax(360px,.8fr) minmax(0,1.2fr);gap:16px;align-items:start}
 .customer-page-grid .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.customer-modal-card .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .customer-list-panel{position:sticky;top:18px;min-width:0}
 .customer-card-list{display:grid;gap:8px;margin-top:12px;max-height:680px;overflow:auto}
 .customer-card{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px 8px 6px;border:1px solid #dfe6ef;border-radius:12px;background:#fff;text-align:left}
@@ -116,7 +117,7 @@
 .customer-card-balance.debt strong{color:#b02b2b}.customer-card-balance.credit strong{color:#087c47}.customer-card-balance.closed strong{color:#41536c}
 .form-status{min-height:20px;font-size:12px;font-weight:800}.form-status.success{color:#087c47}.form-status.error{color:#b02b2b}
 @media(max-width:900px){.customer-page-grid{grid-template-columns:1fr}.customer-list-panel{position:static}}
-@media(max-width:650px){.customer-page-grid .two-col{grid-template-columns:1fr}.customer-shortcut{align-items:stretch;flex-direction:column}.customer-shortcut button{width:100%}}
+@media(max-width:650px){.customer-page-grid .two-col,.customer-modal-card .two-col{grid-template-columns:1fr}.customer-shortcut{align-items:stretch;flex-direction:column}.customer-shortcut button{width:100%}}
 
 .receipt-link{display:inline-block;padding:7px 10px;border-radius:8px;background:#e6f2ff;color:#075da8;text-decoration:none;font-weight:800;margin-right:5px}
 
