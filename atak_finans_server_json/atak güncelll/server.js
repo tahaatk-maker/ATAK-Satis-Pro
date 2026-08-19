@@ -20,6 +20,7 @@ const salaryProrate = require('./lib/salary-prorate');
 const autoBackupLib = require('./lib/auto-backup');
 const rapid360 = require('./lib/rapid360-einvoice');
 const atakGetE = require('./lib/atak-geteinvoices');
+const rapidSalesXml = require('./lib/rapid360-sales-xml');
 
 const app = express();
 const ROOT = __dirname;
@@ -1892,8 +1893,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.178-atak-geteinvoices',
-  build:'fix-v178',
+  version:'6.3.179-atak-geteinvoices',
+  build:'fix-v179',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3472,7 +3473,7 @@ function customerSearchHandler(req,res){
     // 1+ karakter: satış ekranında "a" / "atak" ile bulunsun
     const digits=q.replace(/\D+/g,'');
     rows=rows.filter(c=>{
-      const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.email||''} ${c.city||''} ${c.district||''}`.toLocaleLowerCase('tr-TR');
+      const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.email||''} ${c.city||''} ${c.district||''} ${c.rapidCustAccount||''} ${c.customerCode||''}`.toLocaleLowerCase('tr-TR');
       if(hay.includes(q))return true;
       if(digits.length>=3){
         const phoneDigits=String(c.phone||'').replace(/\D+/g,'');
@@ -4979,6 +4980,200 @@ app.get('/web-api/admin/sales-tracking',requireAdminOrStaffAny('screen_sales_tra
     })
     .sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
   res.json({ok:true,rows});
+});
+
+function parseRapid360SalesUpload(file){
+  if(!file||!file.buffer)throw new Error('XML dosyası seçilmedi');
+  const name=String(file.originalname||'').toLowerCase();
+  const buf=file.buffer;
+  if(/\.(xlsx|xls)$/.test(name)||(buf[0]===0x50&&buf[1]===0x4b)){
+    const wb=XLSX.read(buf,{type:'buffer'});
+    const records=rapidSalesXml.recordsFromXlsxWorkbook(wb,XLSX);
+    return {sales:rapidSalesXml.extractSalesFromRecords(records),format:'xlsx',recordCount:records.length};
+  }
+  const text=rapidSalesXml.decodeBuffer(buf);
+  const out=rapidSalesXml.extractSales(text);
+  return out;
+}
+function rapidSaleDuplicate(s,salesId){
+  const id=String(salesId||'').trim();
+  if(!id)return false;
+  return (s.financeTransactions||[]).some(t=>t.kind==='sale'&&!t.cancelled&&(
+    String(t.rapidSalesId||'')===id||String(t.reference||'')===id||String(t.reference||'')===`R360-${id}`
+  ));
+}
+function matchRapidCustomer(s,account,name){
+  const acc=String(account||'').trim().toLocaleLowerCase('tr-TR');
+  const nm=String(name||'').trim().toLocaleLowerCase('tr-TR');
+  const list=(s.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
+  if(acc){
+    const hit=list.find(c=>String(c.rapidCustAccount||c.customerCode||'').trim().toLocaleLowerCase('tr-TR')===acc);
+    if(hit)return hit;
+  }
+  if(nm){
+    const hit=list.find(c=>String(c.name||'').trim().toLocaleLowerCase('tr-TR')===nm);
+    if(hit)return hit;
+  }
+  return null;
+}
+function ensureRapidCustomer(s,sale){
+  const existing=matchRapidCustomer(s,sale.custAccount,sale.custName);
+  if(existing){
+    if(sale.custAccount&&!existing.rapidCustAccount)existing.rapidCustAccount=sale.custAccount;
+    return {customer:existing,created:false};
+  }
+  const row={
+    id:crypto.randomUUID(),
+    name:String(sale.custName||sale.custAccount||'Rapid360 müşteri').trim(),
+    phone:'',
+    email:'',
+    taxNo:'',tckn:'',
+    city:'İstanbul',district:'Sarıyer',address:'Rapid360 satış aktarımı',
+    deliverySameAsBilling:true,deliveryCity:'İstanbul',deliveryDistrict:'Sarıyer',deliveryAddress:'Rapid360 satış aktarımı',
+    invoiceType:'individual',companyName:'',taxOffice:'',
+    rapidCustAccount:String(sale.custAccount||'').trim(),
+    customerCode:String(sale.custAccount||'').trim(),
+    note:sale.custAccount?`Rapid360 müşteri hesabı: ${sale.custAccount}`:'Rapid360 XML aktarım',
+    source:'rapid360-xml',
+    active:true,
+    createdAt:new Date().toISOString(),
+    updatedAt:new Date().toISOString()
+  };
+  s.customers.push(row);
+  return {customer:row,created:true};
+}
+function mapRapidSaleItems(s,sale){
+  return (sale.lines||[]).map((line,i)=>{
+    const product=dynamicsExistingProduct(s,{itemCode:line.itemCode,searchName:line.name,dynamicsProductId:line.itemCode});
+    const qty=Math.max(1,Math.round(Number(line.quantity)||1));
+    const unitPrice=cleanMoney(line.unitPrice||line.total);
+    const total=cleanMoney(line.total||qty*unitPrice);
+    const unitCost=normalizeNumber(product?.purchasePrice||0);
+    const vatRate=Number(product?.vatRate!=null?product.vatRate:20)||20;
+    const productCode=String(product?.code||line.itemCode||`R360-${sale.salesId||'x'}-${i+1}`).trim();
+    const materialCode=String(product?.searchName||product?.code||line.name||productCode).trim();
+    return{
+      productCode,itemCode:String(line.itemCode||product?.itemCode||'').trim(),materialCode,
+      productName:materialCode,brand:String(product?.brand||'').trim(),
+      quantity:qty,unitPrice,total,vatRate,unitCost,
+      costTotal:Math.round(qty*unitCost*100)/100,
+      costMissing:unitCost<=0,
+      unmatched:!product
+    };
+  }).filter(i=>i.productCode);
+}
+app.post('/web-api/admin/rapid360-sales-preview',requireAdminOrStaffAny('orders_manage','screen_sales_center','screen_sales_tracking'),dynamicsUpload.single('file'),(req,res)=>{
+  try{
+    const parsed=parseRapid360SalesUpload(req.file);
+    if(!parsed.sales.length)return res.status(400).json({error:'XML içinde satış siparişi bulunamadı. Rapid360 → Detaylı satış bilgileri XML → XML Aktar dosyasını seçin.'});
+    const s=readStore();
+    const rows=parsed.sales.map(sale=>{
+      const customer=matchRapidCustomer(s,sale.custAccount,sale.custName);
+      const duplicate=rapidSaleDuplicate(s,sale.salesId);
+      const items=mapRapidSaleItems(s,sale);
+      return{
+        salesId:sale.salesId,
+        date:sale.orderDate||sale.invoiceDate||'',
+        invoiceDate:sale.invoiceDate||'',
+        invoiceNumber:sale.invoiceNumber||'',
+        custAccount:sale.custAccount||'',
+        customerName:sale.custName||'',
+        customerStatus:customer?'existing':'new',
+        store:sale.store||'',
+        webOrder:!!sale.webOrder,
+        eInvoice:!!sale.eInvoice,
+        itemCount:items.length,
+        unmatchedItems:items.filter(i=>i.unmatched).length,
+        total:sale.total||0,
+        paymentMethod:(sale.payments||[]).map(p=>p.method).filter(Boolean).join(' + ')||'',
+        duplicate,
+        skip:!items.length||duplicate
+      };
+    });
+    res.json({
+      ok:true,
+      format:parsed.format||'xml',
+      count:rows.length,
+      importable:rows.filter(r=>!r.skip).length,
+      duplicate:rows.filter(r=>r.duplicate).length,
+      customersNew:rows.filter(r=>r.customerStatus==='new'&&!r.duplicate).length,
+      rows
+    });
+  }catch(e){
+    res.status(400).json({error:e.message||'XML okunamadı'});
+  }
+});
+app.post('/web-api/admin/rapid360-sales-import',requireAdminOrStaffAny('orders_manage','screen_sales_center','screen_sales_tracking'),dynamicsUpload.single('file'),(req,res)=>{
+  try{
+    const parsed=parseRapid360SalesUpload(req.file);
+    if(!parsed.sales.length)return res.status(400).json({error:'XML içinde satış siparişi bulunamadı.'});
+    const s=readStore();
+    const dealer=(s.dealerSettings||[]).find(d=>String(d.id)===String(req.body?.dealerId||'atak-beko')&&d.active!==false)
+      ||(s.dealerSettings||[]).find(d=>d.active!==false);
+    if(!dealer)return res.status(400).json({error:'Satış bayisi bulunamadı (Atak Beko).'});
+    const actor=currentActor(req);
+    const actorName=actor?.name||'Admin';
+    const actorId=actor?.id||'';
+    let imported=0,skippedDuplicate=0,skippedEmpty=0,customersCreated=0;
+    const errors=[];
+    for(const src of parsed.sales){
+      if(rapidSaleDuplicate(s,src.salesId)){skippedDuplicate++;continue}
+      const items=mapRapidSaleItems(s,src);
+      if(!items.length){skippedEmpty++;continue}
+      const total=Math.round((src.total||items.reduce((a,i)=>a+Number(i.total||0),0))*100)/100;
+      const {customer,created}=ensureRapidCustomer(s,src);
+      if(created)customersCreated++;
+      const ref=String(src.salesId||'').trim();
+      const date=src.orderDate||src.invoiceDate||todayISO();
+      const row=financeTx(s,{
+        date,kind:'sale',accountId:'',customerId:customer.id,amount:0,customerDelta:0,
+        category:'Ürün Satışı',description:`Rapid360 XML · ${ref}`,reference:ref,
+        createdBy:actorName,createdById:actorId
+      });
+      const commissionPct=Number(dealer.commissionPct||0);
+      const commissionAmount=Math.round((total*commissionPct/100)*100)/100;
+      const impliedCost=Math.round((total/(1+Number(dealer.marginDividePct||0)/100))*100)/100;
+      const payLabel=(src.payments||[]).map(p=>p.method).filter(Boolean).join(' + ')||'Rapid360';
+      row.items=items.map(({unmatched,...rest})=>rest);
+      row.grossTotal=total;
+      row.discountPct=0;
+      row.discountAmount=0;
+      row.total=total;
+      row.dealerId=dealer.id;
+      row.dealerName=dealer.name;
+      row.marginDividePct=Number(dealer.marginDividePct||0);
+      row.impliedCost=impliedCost;
+      row.commissionPct=commissionPct;
+      row.commissionAmount=commissionAmount;
+      row.salespersonId=actorId;
+      row.salespersonName=actorName||'Rapid360';
+      row.deliveryStatus=src.invoiceDate?'delivered':'order_received';
+      row.deliveryNote=src.webOrder?'Rapid360 web siparişi':'Rapid360 XML aktarım';
+      row.paymentMethod=payLabel;
+      row.payments=(src.payments||[]).filter(p=>Number(p.amount)>0).map(p=>({method:p.method,amount:cleanMoney(p.amount),accountId:'',imported:true}));
+      row.warehouseId='';
+      row.deductStock=false;
+      row.reserveStock=false;
+      row.stockMode='none';
+      row.invoiceStatus=src.invoiceDate||src.invoiceNumber?'issued':'not_required';
+      row.invoiceNumber=String(src.invoiceNumber||'').trim();
+      row.invoiceDate=src.invoiceDate||'';
+      row.invoiceIssuedAt=src.invoiceDate?new Date().toISOString():'';
+      row.invoiceQueueId='';
+      row.billingParty='individual';
+      row.rapidSalesId=ref;
+      row.rapidCustAccount=src.custAccount||'';
+      row.rapidStore=src.store||'';
+      row.source='rapid360-xml';
+      row.cashPosted=false;
+      imported++;
+    }
+    audit(s,'Rapid360 XML satış aktarıldı',`${imported} satış`,{imported,skippedDuplicate,skippedEmpty,customersCreated});
+    writeStore(s);
+    res.json({ok:true,imported,skippedDuplicate,skippedEmpty,customersCreated,errors});
+  }catch(e){
+    res.status(400).json({error:e.message||'Aktarım başarısız'});
+  }
 });
 app.post('/web-api/admin/sale/:id/delivery-status',requireAdminOrStaffAny('screen_sales_tracking','orders_manage','screen_sales_center'),(req,res)=>{
   const s=readStore(),sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');

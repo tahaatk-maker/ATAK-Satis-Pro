@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v178" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v178" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v178" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v178" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v179" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v179" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v179" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v179" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -710,6 +710,7 @@ body.inv-full #pageTitle{font-size:18px}
 <div class="sales-center-head">
 <div><small>SATIŞ OPERASYON · KASA / POS <span class="pos-ver">v659 A4</span></small><h2>Satış Kasası</h2><p>Tek A4 sözleşme+senet · Fatura Kes (QNB) · adım adım</p></div>
 <div class="sales-center-head-actions">
+  <button class="pos-head-btn" id="rapid360SalesXmlBtn" type="button">Rapid360 XML Aktar</button>
   <button class="pos-head-btn" id="salesTrackingShortcut" type="button">Sipariş Takibi</button>
   <button class="pos-head-btn danger" id="salesResetBtn" type="button">Yeni Fiş</button>
 </div>
@@ -1139,7 +1140,12 @@ body.inv-full #pageTitle{font-size:18px}
 </div></section>
 <section class="tab" id="salesTracking">
 <div class="panel">
-  <div class="panel-head"><div><small class="eyebrow">SATIŞ OPERASYONU</small><h2>Satış Takibi</h2><p>Satışı aldıktan teslim edilene kadar takip edin. İptal edilmiş satışlar listelenmez.</p></div><button id="salesTrackingRefresh" class="secondary-btn" type="button">Yenile</button></div>
+  <div class="panel-head"><div><small class="eyebrow">SATIŞ OPERASYONU</small><h2>Satış Takibi</h2><p>Satışı aldıktan teslim edilene kadar takip edin. Rapid360 Detaylı satış XML aktarımı bu listeden yapılır.</p></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="rapid360SalesXmlBtn2" class="primary" type="button">Rapid360 XML Aktar</button>
+      <button id="salesTrackingRefresh" class="secondary-btn" type="button">Yenile</button>
+    </div>
+  </div>
   <div class="sales-tracking-filters">
     <label>Durum<select id="salesTrackingStatusFilter">
       <option value="">Tüm açık satışlar</option><option value="order_received">Sipariş Alındı</option><option value="preparing">Hazırlanıyor</option><option value="ready">Teslimata Hazır</option><option value="shipped">Sevkte</option><option value="delivered">Teslim Edildi</option>
@@ -2778,6 +2784,29 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v178"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v178"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<div class="customer-modal hidden" id="rapid360SalesXmlModal">
+  <div class="customer-modal-card customer-modal-wide">
+    <div class="panel-head">
+      <div>
+        <small class="eyebrow">RAPID360 · MAĞAZA 340344</small>
+        <h2>Detaylı satış XML aktar</h2>
+        <p class="note">Rapid360 → Detaylı satış bilgileri XML → Sorgula → <b>XML Aktar</b>. Dosyayı buraya yükleyin. Kasa ve stok değişmez; satışlar Satış Takibi’ne düşer. Aynı sipariş no tekrar alınmaz.</p>
+      </div>
+      <button class="secondary-btn" id="rapid360SalesXmlClose" type="button">Kapat</button>
+    </div>
+    <label>XML dosyası<input id="rapid360SalesXmlFile" type="file" accept=".xml,.xlsx,.xls,text/xml,application/xml"/></label>
+    <label>Satış bayisi<select id="rapid360SalesXmlDealer"><option value="atak-beko">Atak Beko</option><option value="atak-istikbal">Atak İstikbal</option></select></label>
+    <div class="dynamics-import-actions" style="margin-top:12px">
+      <button class="secondary-btn" id="rapid360SalesXmlPreviewBtn" type="button">Önizle</button>
+      <button class="primary" id="rapid360SalesXmlImportBtn" type="button" disabled>Satışlara aktar</button>
+    </div>
+    <div id="rapid360SalesXmlStatus" class="form-status"></div>
+    <div id="rapid360SalesXmlSummary" class="dynamics-summary" style="margin-top:12px"></div>
+    <div class="table-wrap" style="margin-top:12px;max-height:320px;overflow:auto">
+      <table><thead><tr><th>Sipariş</th><th>Tarih</th><th>Müşteri</th><th>Kalem</th><th>Tutar</th><th>Durum</th></tr></thead><tbody id="rapid360SalesXmlTable"></tbody></table>
+    </div>
+  </div>
+</div>
+<script src="/web-admin-assets/sip-call.js?v=fix-v179"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v179"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

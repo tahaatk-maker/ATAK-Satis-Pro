@@ -8,9 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v178">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v178">
-<link rel="stylesheet" href="/assets/sip-call.css?v=fix-v178">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v179">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v179">
+<link rel="stylesheet" href="/assets/sip-call.css?v=fix-v179">
 </head>
 <body>
 
@@ -336,6 +336,7 @@
 <h2>Satış Merkezi</h2>
 <p id="salesScopeHint">Müşteri → ürün → ödeme. Bayi seçimi Beko / İstikbal ayrımı için önemli.</p>
 </div>
+<button id="rapid360SalesXmlBtn" class="ghost-btn" type="button">Rapid360 XML</button>
 <button id="salesResetBtn" class="ghost-btn" type="button">Yeni Fiş</button>
 </div>
 
@@ -705,7 +706,29 @@
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/assets/sip-call.js?v=fix-v178"></script>
-<script src="/assets/personel.js?v=fix-v178"></script>
+<div id="rapid360SalesXmlModal" class="modal hidden">
+  <div class="modal-card" style="width:min(720px,96vw)">
+    <div class="panel-head">
+      <div>
+        <small class="eyebrow">RAPID360</small>
+        <h2>Detaylı satış XML aktar</h2>
+        <p class="muted">Rapid360 → XML Aktar dosyasını yükleyin. Kasa/stok değişmez.</p>
+      </div>
+      <button class="ghost-btn" id="rapid360SalesXmlClose" type="button">Kapat</button>
+    </div>
+    <label class="field">XML dosyası<input id="rapid360SalesXmlFile" type="file" accept=".xml,.xlsx,.xls,text/xml,application/xml"></label>
+    <label class="field">Satış bayisi<select id="rapid360SalesXmlDealer"><option value="atak-beko">Atak Beko</option><option value="atak-istikbal">Atak İstikbal</option></select></label>
+    <div class="toolbar" style="margin-top:10px;gap:8px">
+      <button class="ghost-btn" id="rapid360SalesXmlPreviewBtn" type="button">Önizle</button>
+      <button class="primary-btn" id="rapid360SalesXmlImportBtn" type="button" disabled>Satışlara aktar</button>
+    </div>
+    <div id="rapid360SalesXmlStatus" class="status"></div>
+    <div class="table-wrap" style="margin-top:10px;max-height:280px;overflow:auto">
+      <table><thead><tr><th>Sipariş</th><th>Müşteri</th><th>Tutar</th><th>Durum</th></tr></thead><tbody id="rapid360SalesXmlTable"></tbody></table>
+    </div>
+  </div>
+</div>
+<script src="/assets/sip-call.js?v=fix-v179"></script>
+<script src="/assets/personel.js?v=fix-v179"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v178 */
+/* ATAK_ADMIN_BUILD=fix-v179 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6205,6 +6205,58 @@ q('#salesTrackingShortcut')?.addEventListener('click',()=>goTab('salesTracking')
 q('#salesTrackingRefresh')?.addEventListener('click',loadSalesTracking);
 q('#salesTrackingStatusFilter')?.addEventListener('change',renderSalesTracking);
 q('#salesTrackingSearch')?.addEventListener('input',renderSalesTracking);
+
+function rapid360SalesXmlForm(){
+  const file=q('#rapid360SalesXmlFile')?.files?.[0];
+  if(!file)return null;
+  const fd=new FormData();
+  fd.append('file',file);
+  fd.append('dealerId',q('#rapid360SalesXmlDealer')?.value||'atak-beko');
+  return fd;
+}
+function openRapid360SalesXmlModal(){
+  q('#rapid360SalesXmlModal')?.classList.remove('hidden');
+  q('#rapid360SalesXmlImportBtn')&&(q('#rapid360SalesXmlImportBtn').disabled=true);
+}
+function closeRapid360SalesXmlModal(){q('#rapid360SalesXmlModal')?.classList.add('hidden')}
+function renderRapid360SalesXmlPreview(d){
+  const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(Number(n||0));
+  q('#rapid360SalesXmlSummary').innerHTML=`<article><b>${d.count||0}</b><span>Sipariş</span></article><article><b>${d.importable||0}</b><span>Aktarılacak</span></article><article><b>${d.duplicate||0}</b><span>Zaten var</span></article><article><b>${d.customersNew||0}</b><span>Yeni müşteri</span></article>`;
+  q('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>{
+    const st=r.duplicate?'Kayıtlı':(!r.itemCount?'Kalem yok':(r.customerStatus==='new'?'Yeni müşteri':'Hazır'));
+    return `<tr><td><b>${r.salesId||''}</b></td><td>${r.date||'-'}</td><td>${r.customerName||r.custAccount||'-'}<div style="font-size:11px;color:#667890">${r.custAccount||''}</div></td><td>${r.itemCount||0}</td><td>${money(r.total)}</td><td>${st}</td></tr>`;
+  }).join('')||'<tr><td colspan="6">Satış yok</td></tr>';
+  q('#rapid360SalesXmlImportBtn').disabled=!d.importable;
+}
+q('#rapid360SalesXmlBtn')?.addEventListener('click',openRapid360SalesXmlModal);
+q('#rapid360SalesXmlBtn2')?.addEventListener('click',openRapid360SalesXmlModal);
+q('#rapid360SalesXmlClose')?.addEventListener('click',closeRapid360SalesXmlModal);
+q('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
+  const st=q('#rapid360SalesXmlStatus');
+  const fd=rapid360SalesXmlForm();
+  if(!fd){st.textContent='XML dosyası seçin';st.className='form-status error';return}
+  st.textContent='XML okunuyor…';st.className='form-status';
+  try{
+    const d=await api('/web-api/admin/rapid360-sales-preview',{method:'POST',body:fd});
+    renderRapid360SalesXmlPreview(d);
+    st.textContent=`${d.importable||0} satış aktarılabilir.`;st.className='form-status success';
+  }catch(e){st.textContent=e.message;st.className='form-status error'}
+});
+q('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
+  const st=q('#rapid360SalesXmlStatus');
+  const fd=rapid360SalesXmlForm();
+  if(!fd)return;
+  if(!confirm('Seçilen Rapid360 satışları Atak satış listesine eklensin mi?\nKasa ve stok değişmez. Aynı sipariş numaraları atlanır.'))return;
+  st.textContent='Aktarılıyor…';st.className='form-status';
+  q('#rapid360SalesXmlImportBtn').disabled=true;
+  try{
+    const r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
+    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı · ${r.customersCreated||0} yeni müşteri`;
+    st.className='form-status success';
+    toast(st.textContent);
+    await loadSalesTracking();
+  }catch(e){st.textContent=e.message;st.className='form-status error';q('#rapid360SalesXmlImportBtn').disabled=false}
+});
 
 /* ——— Müşteri Ödemeleri (taksit / senet takip + A5 makbuz) ——— */
 let custPayState={filter:'overdue',q:'',rows:[],recentPaid:[],accounts:[],summary:null,selectedId:''};
