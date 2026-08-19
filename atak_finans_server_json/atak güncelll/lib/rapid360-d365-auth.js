@@ -91,30 +91,13 @@ function isoDateParam(v){
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
 }
 
-function dynamicsReportUrl({ dynamicsUrl, company, store, startDate, endDate } = {}){
+function dynamicsReportUrl({ dynamicsUrl, company } = {}){
   const base = normalizeDynamicsUrl(dynamicsUrl || DEFAULT_DYNAMICS_URL);
   const cmp = String(company || '2521').trim() || '2521';
-  const magaza = String(store || '340334').trim() || '340334';
-  const from = isoDateParam(startDate);
-  const to = isoDateParam(endDate) || from;
   const u = new URL(`${base}/`);
   u.searchParams.set('cmp', cmp);
   u.searchParams.set('mi', 'DmrDetailedSalesReport');
   u.searchParams.set('prt', 'initial');
-  u.searchParams.set('InventLocationId', magaza);
-  u.searchParams.set('inventLocationId', magaza);
-  u.searchParams.set('Magaza', magaza);
-  u.searchParams.set('Store', magaza);
-  u.searchParams.set('RetailStoreId', magaza);
-  u.searchParams.set('parmMagaza', magaza);
-  if(from){
-    u.searchParams.set('FromDate', from);
-    u.searchParams.set('StartDate', from);
-  }
-  if(to){
-    u.searchParams.set('ToDate', to);
-    u.searchParams.set('EndDate', to);
-  }
   return u.toString();
 }
 

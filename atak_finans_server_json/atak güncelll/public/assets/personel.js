@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v196 */
+/* ATAK_PERSONEL_BUILD=fix-v197 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1832,23 +1832,26 @@ function hideRapidOktaBox(){$('#rapid360OktaBox')?.classList.add('hidden')}
 function rapidOktaEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function rapid360ReportUrl(){
   const company=$('#rapid360SalesCompanyFilter')?.value||'2521';
-  const store=$('#rapid360SalesStoreFilter')?.value||'340334';
-  const start=$('#rapid360SalesStart')?.value||'';
-  const end=$('#rapid360SalesEnd')?.value||'';
-  const p=new URLSearchParams({
-    cmp:company,mi:'DmrDetailedSalesReport',prt:'initial',
-    InventLocationId:store,inventLocationId:store,Magaza:store,Store:store,RetailStoreId:store,parmMagaza:store
-  });
-  if(start){p.set('FromDate',start);p.set('StartDate',start)}
-  if(end){p.set('ToDate',end);p.set('EndDate',end)}
-  return `https://liverapid360.operations.dynamics.com/?${p.toString()}`;
+  return `https://liverapid360.operations.dynamics.com/?cmp=${encodeURIComponent(company)}&mi=DmrDetailedSalesReport&prt=initial`;
+}
+function rapid360MagazaConsoleScript(){
+  return `(()=>{const w='340334';const names=['InventLocationId','inventLocationId','parmInventLocationId','Magaza','parmMagaza','RetailStoreId','Store'];const all=[...document.querySelectorAll('[data-dyn-controlname]')];let host=all.find(el=>names.includes(el.getAttribute('data-dyn-controlname')))||all.find(el=>/inventlocation|magaza|store|warehouse/i.test(el.getAttribute('data-dyn-controlname')||''));const input=(host&&host.querySelector('input:not([type=hidden])'))||[...document.querySelectorAll('input')].find(i=>/ma[gğ]aza|inventlocation|depo/i.test((i.getAttribute('aria-label')||'')+(i.id||'')));if(!input){alert('Mağaza kutusu bulunamadı. Atak’ta Satışları oku.');return;}input.focus();input.click();const d=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');if(d&&d.set)d.set.call(input,w);else input.value=w;['input','change'].forEach(t=>input.dispatchEvent(new Event(t,{bubbles:true})));input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));})();`;
 }
 function showRapidOktaBox(d){
   const box=$('#rapid360OktaBox');
   if(!box) return;
   box.classList.remove('hidden');
+  const script=rapid360MagazaConsoleScript();
   box.innerHTML=`<div style="font-weight:700;margin-bottom:6px">Okta bağlanıyor</div>
-    <p class="muted" style="margin:6px 0 0">${rapidOktaEsc(d.message||'Rapid360 açıldı. Telefonda bildirimi onaylayın. Kod yazılmaz. Sonra Satışları oku.')}</p>`;
+    <p class="muted" style="margin:6px 0 0">${rapidOktaEsc(d.message||'Rapid360 açıldı. Telefonda bildirimi onaylayın. Kod yazılmaz. Sonra Satışları oku.')}</p>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">Rapid360 Mağaza boşsa (F12)</summary>
+      <p class="muted">F12 → Console → yapıştır → Enter. Mağaza 340334 ATAK yazılır.</p>
+      <textarea id="rapid360MagazaScript" readonly rows="4" style="width:100%;font:12px/1.4 ui-monospace,monospace">${rapidOktaEsc(script)}</textarea>
+      <button type="button" class="ghost-btn" id="rapid360MagazaCopyBtn" style="margin-top:6px">Kopyala</button>
+    </details>`;
+  $('#rapid360MagazaCopyBtn')?.addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText(script);stToast('F12 komutu kopyalandı')}catch(_){$('#rapid360MagazaScript')?.select()}
+  });
 }
 function openRapidOktaPopup(url, popup, name){
   let href=String(url||'');

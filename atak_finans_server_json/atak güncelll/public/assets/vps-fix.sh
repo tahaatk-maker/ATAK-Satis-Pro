@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.196-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.197-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.196-atak-geteinvoices
-EXPECT_BUILD=fix-v196
+EXPECT_HEALTH=6.3.197-atak-geteinvoices
+EXPECT_BUILD=fix-v197
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -110,8 +110,12 @@ check "rapid360 okta poll api" grep -q "rapid360-okta-poll" "$SRC/server.js"
 check "rapid360 okta callback" grep -q "rapid360-okta-callback" "$SRC/server.js"
 check "rapid360 detayli satis url" grep -q "DmrDetailedSalesReport" "$SRC/lib/rapid360-d365-auth.js"
 check "rapid360 nativeclient yok" grep -q "isBlockedMicrosoftUrl" "$SRC/lib/rapid360-d365-auth.js"
-check "rapid360 magaza url" grep -q "parmMagaza" "$SRC/lib/rapid360-d365-auth.js"
-check "rapid360 tarih url" grep -q "StartDate" "$SRC/lib/rapid360-d365-auth.js"
+check "rapid360 magaza url yok" grep -q "prt', 'initial'" "$SRC/lib/rapid360-d365-auth.js"
+if grep -q "parmMagaza" "$SRC/lib/rapid360-d365-auth.js"; then
+  echo "   HATALI: Rapid360 URL hâlâ sahte Magaza query gönderiyor"; exit 1
+fi
+echo "   ok: Rapid360 URL Magaza query yok"
+check "rapid360 f12 magaza" grep -q "rapid360MagazaConsoleScript" "$SRC/public/assets/admin.js"
 check "rapid360 web only login" grep -q "startWebOnlyLogin" "$SRC/lib/rapid360-d365-auth.js"
 check "rapid360 okta bagla" grep -q "rapid360OktaConnectBtn" "$SRC/public/admin.html"
 check "rapid360 secilenleri aktar" grep -q "Seçilenleri aktar" "$SRC/public/admin.html"

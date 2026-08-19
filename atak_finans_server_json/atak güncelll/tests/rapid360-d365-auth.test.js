@@ -78,7 +78,8 @@ async function run(){
   assert.ok(!noAzureApp.loginUrl.includes('okta-callback'));
   assert.ok(noAzureApp.loginUrl.includes('liverapid360.operations.dynamics.com'));
   assert.ok(noAzureApp.loginUrl.includes('mi=DmrDetailedSalesReport'));
-  assert.ok(noAzureApp.loginUrl.includes('Magaza=340334'));
+  assert.ok(noAzureApp.loginUrl.includes('cmp=2521'));
+  assert.ok(!noAzureApp.loginUrl.includes('Magaza='));
   assert.ok(!noAzureApp.loginUrl.includes('nativeclient'));
   assert.ok(!noAzureApp.loginUrl.includes('deviceauth'));
   assert.ok(noAzureApp.deviceLoginUrl.includes('otc=HIDE-ME'));
@@ -114,7 +115,7 @@ async function run(){
   assert.ok(!started.loginUrl.includes('rapid360-okta-callback'));
   assert.ok(started.loginUrl.includes('DmrDetailedSalesReport'));
   assert.ok(started.loginUrl.includes('cmp=2521'));
-  assert.ok(started.loginUrl.includes('Magaza=340334'));
+  assert.ok(!started.loginUrl.includes('Magaza='));
   assert.ok(!started.loginUrl.includes('nativeclient'));
   assert.ok(!started.loginUrl.includes('deviceauth'));
   assert.ok(started.deviceLoginUrl.includes('otc=ABCD-EFGH'));
@@ -125,10 +126,9 @@ async function run(){
   const report = auth.dynamicsReportUrl({ company: '2521', store: '340334', startDate: '2026-08-18', endDate: '2026-08-19' });
   assert.ok(report.includes('cmp=2521'));
   assert.ok(report.includes('mi=DmrDetailedSalesReport'));
-  assert.ok(report.includes('Magaza=340334'));
-  assert.ok(report.includes('InventLocationId=340334'));
-  assert.ok(report.includes('StartDate=2026-08-18'));
-  assert.ok(report.includes('EndDate=2026-08-19'));
+  assert.ok(report.includes('prt=initial'));
+  assert.ok(!report.includes('Magaza='));
+  assert.ok(!report.includes('parmMagaza'));
   assert.ok(!report.includes('nativeclient'));
   assert.equal(auth.isBlockedMicrosoftUrl('https://login.microsoftonline.com/common/oauth2/nativeclient?code=x'), true);
 
@@ -197,7 +197,7 @@ async function run(){
     }
   });
   assert.ok(onlyUri.loginUrl.includes('DmrDetailedSalesReport'));
-  assert.ok(onlyUri.loginUrl.includes('Magaza=340334'));
+  assert.ok(!onlyUri.loginUrl.includes('Magaza='));
   assert.ok(!onlyUri.loginUrl.includes('nativeclient'));
   assert.ok(!onlyUri.loginUrl.includes('deviceauth'));
   assert.ok(onlyUri.deviceLoginUrl.includes('otc=ZZZZ-YYYY'));
@@ -223,8 +223,8 @@ async function run(){
   });
   assert.ok(webOnly.loginUrl.includes('liverapid360.operations.dynamics.com'));
   assert.ok(webOnly.loginUrl.includes('mi=DmrDetailedSalesReport'));
-  assert.ok(webOnly.loginUrl.includes('Magaza=340334'));
-  assert.ok(webOnly.loginUrl.includes('StartDate=2026-08-18'));
+  assert.ok(!webOnly.loginUrl.includes('Magaza='));
+  assert.ok(!webOnly.loginUrl.includes('StartDate='));
   assert.equal(webOnly.deviceLoginUrl, undefined);
   assert.ok(!('deviceLoginUrl' in webOnly));
   assert.ok(!JSON.stringify(webOnly).includes('user_code'));
