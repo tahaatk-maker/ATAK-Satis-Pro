@@ -15,6 +15,7 @@ const qnbSolist = require('./qnb-solist-adapter');
 const customerExcel = require('./customer-excel-import');
 const invoicePrint = require('./lib/invoice-print');
 const branchLock = require('./lib/branch-lock');
+const customerComms = require('./lib/customer-comms');
 
 const app = express();
 const ROOT = __dirname;
@@ -170,6 +171,7 @@ function ensureStore(store) {
     store.settings.sms.provider=/corvass/i.test(String(store.settings.sms.endpoint||''))?'corvass':'generic';
   }
   store.smsLogs = Array.isArray(store.smsLogs) ? store.smsLogs : [];
+  customerComms.ensure(store);
   store.trainingVideos = Array.isArray(store.trainingVideos) ? store.trainingVideos : [];
   store.brands = Array.isArray(store.brands) ? store.brands : [];
   store.sales = Array.isArray(store.sales) ? store.sales : [];
@@ -1317,12 +1319,30 @@ async function sendProviderSms(s,{to,message}){
 }
 function pushSmsLog(s,row){
   s.smsLogs=Array.isArray(s.smsLogs)?s.smsLogs:[];
-  s.smsLogs.unshift({
+  const rec={
     id:crypto.randomUUID(),
     at:new Date().toISOString(),
     ...row
-  });
+  };
+  s.smsLogs.unshift(rec);
   s.smsLogs=s.smsLogs.slice(0,500);
+  return rec;
+}
+function actorForReq(req){
+  return currentSessionUser(req)||currentActor(req);
+}
+function mirrorSmsToCustomer(s,customer,log,actor){
+  if(!customer||!log)return;
+  customerComms.recordSms(s,customer,{
+    result:log.ok===false?'failed':'sent',
+    phone:log.phone||customer.phone||'',
+    message:log.message||'',
+    note:log.error||'',
+    actor:actor||{name:log.actor},
+    smsLogId:log.id,
+    provider:log.provider||'',
+    ok:log.ok!==false
+  });
 }
 function publicBaseUrl(req){
   const env=String(process.env.PUBLIC_BASE_URL||'').trim().replace(/\/$/,'');
@@ -1778,8 +1798,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.161-microsip',
-  build:'fix-v161',
+  version:'6.3.162-comm-log',
+  build:'fix-v162',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   mfa:mfaEnabled(),
@@ -2039,8 +2059,8 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
       });
     }
     const r=await sendProviderSms(s,{to:prep.phone,message:prep.message});
-    const actor=currentSessionUser(req)||currentActor(req);
-    pushSmsLog(s,{
+    const actor=actorForReq(req);
+    const log=pushSmsLog(s,{
       type:prep.type==='overdue'?'overdue':'custom',
       customerId:customer.id,
       customerName:customer.name||'',
@@ -2051,6 +2071,7 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
       provider:r.provider,
       actor:actor?.name||actor?.username||'Kullanıcı'
     });
+    mirrorSmsToCustomer(s,customer,log,actor);
     audit(s,prep.type==='overdue'?'Gecikme SMS gönderildi':'Özel SMS gönderildi',customer.name||customer.id,{phone:r.to,code:r.code,provider:r.provider});
     writeStore(s);
     res.json({ok:true,to:r.to,type:prep.type,message:prep.message,code:r.code,provider:r.provider,overdueAmount:prep.snap.overdueAmount,balance:prep.snap.balance});
@@ -2058,7 +2079,8 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
     try{
       const s=readStore();
       const customer=(s.customers||[]).find(c=>String(c.id)===String(req.params.id));
-      pushSmsLog(s,{
+      const actor=actorForReq(req);
+      const log=pushSmsLog(s,{
         type:String(req.body?.type||'custom'),
         customerId:req.params.id,
         customerName:customer?.name||'',
@@ -2066,8 +2088,9 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
         message:String(req.body?.message||''),
         ok:false,
         error:e.message||'hata',
-        actor:(currentSessionUser(req)||currentActor(req))?.name||'Kullanıcı'
+        actor:actor?.name||'Kullanıcı'
       });
+      if(customer)mirrorSmsToCustomer(s,customer,log,actor);
       writeStore(s);
     }catch(_){}
     res.status(400).json({error:e.message||'SMS gönderilemedi'});
@@ -2142,7 +2165,7 @@ app.post('/web-api/admin/sms-bulk',requireAdminOrStaffAny('finance_manage','cust
       try{
         const r=await sendProviderSms(s,{to:prep.phone,message:prep.message});
         sent++;
-        pushSmsLog(s,{
+        const log=pushSmsLog(s,{
           type:type==='overdue'?'overdue_bulk':'custom_bulk',
           customerId:customer.id,
           customerName:customer.name||'',
@@ -2153,10 +2176,11 @@ app.post('/web-api/admin/sms-bulk',requireAdminOrStaffAny('finance_manage','cust
           provider:r.provider,
           actor:actorName
         });
+        mirrorSmsToCustomer(s,customer,log,actor);
         results.push({customerId:id,customerName:customer.name||'',phone:r.to,ok:true,code:r.code});
       }catch(err){
         failed++;
-        pushSmsLog(s,{
+        const log=pushSmsLog(s,{
           type:type==='overdue'?'overdue_bulk':'custom_bulk',
           customerId:customer.id,
           customerName:customer.name||'',
@@ -2166,6 +2190,7 @@ app.post('/web-api/admin/sms-bulk',requireAdminOrStaffAny('finance_manage','cust
           error:err.message||'hata',
           actor:actorName
         });
+        mirrorSmsToCustomer(s,customer,log,actor);
         results.push({customerId:id,customerName:customer.name||'',phone:prep.phone,ok:false,error:err.message||'hata'});
       }
     }
@@ -3922,8 +3947,36 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
       .filter(n=>n.customerId===customer.id)
       .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))
       .map(n=>enrichPromissoryNote(s,n)),
-    orphanNotesCount:(s.promissoryNotes||[]).filter(n=>n.customerId===customer.id&&!['paid','cancelled'].includes(String(n.status||'open'))&&!n.saleId&&!n.saleReference).length
+    orphanNotesCount:(s.promissoryNotes||[]).filter(n=>n.customerId===customer.id&&!['paid','cancelled'].includes(String(n.status||'open'))&&!n.saleId&&!n.saleReference).length,
+    comms:customerComms.listForCustomer(s,customer.id)
   });
+});
+
+app.post('/web-api/admin/customer/:id/comm',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+  const s=readStore(),customer=(s.customers||[]).find(c=>String(c.id)===String(req.params.id));
+  if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
+  const actor=actorForReq(req);
+  const kind=String(req.body?.kind||'call').toLowerCase()==='sms'?'sms':'call';
+  const phone=String(req.body?.phone||customer.phone||'').trim();
+  const note=String(req.body?.note||'').trim();
+  const message=String(req.body?.message||'').trim();
+  let rec;
+  if(kind==='sms'){
+    if(!message && !note)return res.status(400).json({error:'SMS kaydı için mesaj veya not yazın'});
+    rec=customerComms.recordSms(s,customer,{
+      result:String(req.body?.result||'')==='failed'?'failed':'sent',
+      phone,message:message||note,note,actor,manual:true,
+      ok:String(req.body?.result||'')!=='failed'
+    });
+    audit(s,'Müşteri SMS kaydı',customer.name||customer.id,{manual:true,result:rec.result});
+  }else{
+    const result=String(req.body?.result||'started');
+    if(!customerComms.CALL_RESULTS.includes(result))return res.status(400).json({error:'Geçersiz arama sonucu'});
+    rec=customerComms.recordCall(s,customer,{result,phone,note,actor});
+    audit(s,'Müşteri arama kaydı',customer.name||customer.id,{result:rec.result,phone:rec.phone});
+  }
+  writeStore(s);
+  res.json({ok:true,row:rec,comms:customerComms.listForCustomer(s,customer.id)});
 });
 
 app.post('/web-api/admin/customer/:id/delete-request',requireAdminOrStaff('customers_manage'),(req,res)=>{

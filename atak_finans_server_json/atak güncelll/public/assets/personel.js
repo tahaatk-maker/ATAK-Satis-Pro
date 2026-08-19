@@ -1,5 +1,17 @@
-/* ATAK_PERSONEL_BUILD=fix-v161 */
+/* ATAK_PERSONEL_BUILD=fix-v162 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
+window.atakOnSipCall=function(info){
+  const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
+  if(!id)return;
+  const phone=String(info?.href||'').replace(/^sip:/i,'');
+  fetch('/web-api/admin/customer/'+encodeURIComponent(id)+'/comm',{
+    method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({kind:'call',result:'started',phone})
+  }).then(r=>r.json()).then(d=>{
+    if(typeof payState!=='undefined' && String(id)===String(payState.selectedId) && typeof renderPayComms==='function')
+      renderPayComms(id,d.comms);
+  }).catch(()=>{});
+};
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const money=v=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(Number(v||0));
@@ -493,7 +505,7 @@ function renderCustomers(){
   $('#customerRows').innerHTML=rows.map(c=>`
     <tr>
       <td><b>${c.name||''}</b><small>${c.taxNo||''}</small></td>
-      <td>${c.phone||'—'} ${sipBtn(c.phone,{className:'sip-call-sm'})}</td>
+      <td>${c.phone||'—'} ${sipBtn(c.phone,{className:'sip-call-sm',customerId:c.id})}</td>
       <td><b>${money(c.balance)}</b></td>
     </tr>`).join('')||'<tr><td colspan="3">Cari bulunamadı.</td></tr>';
 }
@@ -749,7 +761,7 @@ function salesCustomerChanged(){
   }
   box.innerHTML=`
     <div><small>Şahıs / Senet</small><b>${c.name||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">TCKN ${c.tckn||'—'}</span></div>
-    <div><small>Telefon</small><b>${c.phone||'—'}</b>${sipBtn(c.phone,{className:'sip-call-sm'})}</div>
+    <div><small>Telefon</small><b>${c.phone||'—'}</b>${sipBtn(c.phone,{className:'sip-call-sm',customerId:c.id})}</div>
     <div><small>Cari</small><b>${money(c.balance)}</b></div>
     ${hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">VKN ${c.taxNo||'—'} · ${c.taxOffice||''}</span></div>`:''}`;
   salesRefreshKefilUI();
@@ -2006,7 +2018,7 @@ function renderPayments(){
   if(tbody){
     tbody.innerHTML=(payState.rows||[]).length
       ?(payState.rows||[]).map(r=>`<tr data-pay-cust="${r.customerId}" class="${r.customerId===payState.selectedId?'active':''}">
-          <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm'})}</td>
+          <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm',customerId:r.customerId})}</td>
           <td><span class="pay-bucket ${r.bucket}">${payBucketLabel(r.bucket)}</span></td>
           <td>${money(r.balance)}${Number(r.pendingHavaleAmount||0)>0.009?`<br><small>Havale ${money(r.pendingHavaleAmount)}</small>`:''}</td>
           <td>${money(r.overdueAmount)}</td>
@@ -2035,6 +2047,43 @@ function renderPayments(){
   }
   if(payState.selectedId)selectPayCustomer(payState.selectedId,true);
 }
+function payCommWhen(iso){
+  const d=new Date(iso||'');
+  if(!Number.isFinite(d.getTime()))return String(iso||'');
+  const p=n=>String(n).padStart(2,'0');
+  return `${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function payCommLabel(row){
+  if(row.kind==='sms')return row.result==='failed'?'SMS gönderilemedi':'SMS gönderildi';
+  return({started:'Arama başlatıldı',no_answer:'Ulaşılamadı',reached:'Görüşüldü',busy:'Meşgul'}[row.result]||row.result||'Arama');
+}
+function renderPayComms(customerId,preloaded){
+  const box=$('#payCommsBox');if(!box||!customerId)return;
+  const paint=rows=>{
+    const items=Array.isArray(rows)?rows:[];
+    box.innerHTML=`
+      <div class="section-title" style="margin:0 0 8px">Arama / SMS kayıtları</div>
+      <div class="customer-comms-actions">
+        <button type="button" data-pay-comm="no_answer">Ulaşılamadı</button>
+        <button type="button" data-pay-comm="reached">Görüşüldü</button>
+      </div>
+      <label class="field">Not<input id="payCommNote" placeholder="2 kez çaldı, açılmadı"></label>
+      <div class="customer-comms-list">${items.length?items.slice(0,12).map(r=>`<article class="customer-comms-item"><b>${payCommLabel(r)}</b><small>${payCommWhen(r.at)} · ${esc(r.actor||'—')}</small>${r.message?`<div class="msg">${esc(r.message)}</div>`:(r.note?`<small>${esc(r.note)}</small>`:'')}</article>`).join(''):'<div class="note">Henüz kayıt yok.</div>'}</div>`;
+    box.querySelectorAll('[data-pay-comm]').forEach(btn=>{
+      btn.onclick=async()=>{
+        try{
+          const d=await api('/web-api/admin/customer/'+encodeURIComponent(customerId)+'/comm',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({kind:'call',result:btn.getAttribute('data-pay-comm'),note:$('#payCommNote')?.value||''})
+          });
+          renderPayComms(customerId,d.comms);
+        }catch(e){stToast(e.message||'Kayıt yazılamadı')}
+      };
+    });
+  };
+  if(preloaded){paint(preloaded);return}
+  api('/web-api/admin/customer-detail/'+encodeURIComponent(customerId)).then(d=>paint(d.comms||[])).catch(()=>{box.innerHTML=''});
+}
 function selectPayCustomer(customerId,keepAmount=false){
   payState.selectedId=String(customerId||'');
   const row=(payState.rows||[]).find(r=>String(r.customerId)===payState.selectedId);
@@ -2049,8 +2098,9 @@ function selectPayCustomer(customerId,keepAmount=false){
   body?.classList.remove('hidden');
   const havaleAmt=Number(row.pendingHavaleAmount||0);
   const suggest=havaleAmt>0.009?havaleAmt:(row.overdueAmount>0.009?row.overdueAmount:(row.dueMonthAmount>0.009?row.dueMonthAmount:Math.max(row.balance,0)));
-  $('#payCustomerBox').innerHTML=`<b>${row.customerName||''}</b> ${sipBtn(row.customerPhone,{className:'sip-call-sm'})}<br><small>${row.customerPhone||''}</small><br>
+  $('#payCustomerBox').innerHTML=`<b>${row.customerName||''}</b> ${sipBtn(row.customerPhone,{className:'sip-call-sm',customerId:row.customerId})}<br><small>${row.customerPhone||''}</small><br>
     Cari: <b>${money(row.balance)}</b> · Havale: <b>${money(havaleAmt)}</b> · Geciken: <b>${money(row.overdueAmount)}</b>`;
+  renderPayComms(row.customerId);
   const havaleBox=$('#payHavale');
   if(havaleBox){
     havaleBox.innerHTML=(row.pendingHavale||[]).length

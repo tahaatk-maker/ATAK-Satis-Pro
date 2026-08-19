@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v161 */
+/* ATAK_ADMIN_BUILD=fix-v162 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1809,7 +1809,7 @@ function renderCustomerTable(){
   if(!financeData||!q('#customerTable'))return;
   const term=(q('#customerSearch')?.value||'').toLocaleLowerCase('tr-TR');
   const rows=financeData.customers.filter(x=>`${x.name} ${x.phone} ${x.taxNo}`.toLocaleLowerCase('tr-TR').includes(term));
-  q('#customerTable').innerHTML=rows.length?`<table><thead><tr><th>Müşteri</th><th>Telefon</th><th>VKN/TCKN</th><th>Bakiye</th><th>Durum</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.name}</b></td><td>${x.phone||'-'} ${sipBtn(x.phone,{className:'sip-call-sm'})}</td><td>${x.taxNo||'-'}</td><td><b>${money(x.balance)}</b></td><td>${x.balance>0?'Borçlu':x.balance<0?'Alacaklı':'Kapalı'}</td></tr>`).join('')}</tbody></table>`:'<p>Müşteri bulunamadı.</p>';
+  q('#customerTable').innerHTML=rows.length?`<table><thead><tr><th>Müşteri</th><th>Telefon</th><th>VKN/TCKN</th><th>Bakiye</th><th>Durum</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.name}</b></td><td>${x.phone||'-'} ${sipBtn(x.phone,{className:'sip-call-sm',customerId:x.id})}</td><td>${x.taxNo||'-'}</td><td><b>${money(x.balance)}</b></td><td>${x.balance>0?'Borçlu':x.balance<0?'Alacaklı':'Kapalı'}</td></tr>`).join('')}</tbody></table>`:'<p>Müşteri bulunamadı.</p>';
 }
 q('#customerSearch')?.addEventListener('input',renderCustomerTable);
 if(q('#transferDate'))q('#transferDate').value=new Date().toISOString().slice(0,10);
@@ -2105,7 +2105,7 @@ function renderCustomerPageList(){
     const sub=[c.phone,c.email,c.city&&c.district?`${c.district}/${c.city}`:(c.address||'')].filter(Boolean).join(' · ');
     const active=String(c.id)===String(customersPageData.selectedId)?'active':'';
     const badge=customerHasCorporate(c)?(c.invoiceType==='corporate'?' · Şahıs+Firma':' · Firma kayıtlı'):' · Bireysel';
-    return `<div class="customer-card ${active}"><button type="button" class="customer-card-pick" data-customer-id="${c.id}"><div><b>${c.name||'-'}</b><small>${sub||'Adres yok'}${badge}${c.companyName?` · ${c.companyName}`:''}</small></div></button>${sipBtn(c.phone,{className:'sip-call-sm'})}<div class="customer-card-balance ${balCls}"><small>Cari</small><strong>${money2(bal)}</strong></div></div>`;
+    return `<div class="customer-card ${active}"><button type="button" class="customer-card-pick" data-customer-id="${c.id}"><div><b>${c.name||'-'}</b><small>${sub||'Adres yok'}${badge}${c.companyName?` · ${c.companyName}`:''}</small></div></button>${sipBtn(c.phone,{className:'sip-call-sm',customerId:c.id})}<div class="customer-card-balance ${balCls}"><small>Cari</small><strong>${money2(bal)}</strong></div></div>`;
   }).join('');
   qa('#customerPageList [data-customer-id]').forEach(btn=>btn.addEventListener('click',()=>selectCustomerPage(btn.dataset.customerId)));
 }
@@ -2367,6 +2367,86 @@ function renderCustomerBillingCards(c={}){
       ${c.note?`<span>Not: ${c.note}</span>`:''}
     </article>`;
 }
+function commWhen(iso){
+  const d=new Date(iso||'');
+  if(!Number.isFinite(d.getTime()))return String(iso||'');
+  const p=n=>String(n).padStart(2,'0');
+  return `${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function commResultLabel(row){
+  if(row.kind==='sms')return row.result==='failed'?'SMS gönderilemedi':'SMS gönderildi';
+  return({started:'Arama başlatıldı',no_answer:'Ulaşılamadı',reached:'Görüşüldü',busy:'Meşgul',voicemail:'Sesli mesaj'}[row.result]||row.result||'Arama');
+}
+function renderCustomerComms(rows){
+  const list=q('#customerCommsList'),count=q('#customerCommsCount');
+  const items=Array.isArray(rows)?rows:[];
+  customersPageData._comms=items;
+  if(count)count.textContent=items.length?`${items.length} kayıt`:'kayıt yok';
+  if(!list)return;
+  if(!items.length){
+    list.innerHTML='<div class="note" style="padding:12px 0">Henüz arama / SMS kaydı yok. Ara ve kaydet veya SMS gönderin.</div>';
+    return;
+  }
+  list.innerHTML=items.map(r=>{
+    const who=salesEsc(r.actor||'—');
+    const when=commWhen(r.at);
+    const phone=salesEsc(r.phone||'');
+    const note=r.note?`<small>${salesEsc(r.note)}</small>`:'';
+    const msg=r.message?`<div class="msg">${salesEsc(r.message)}</div>`:'';
+    const extra=r.kind==='sms'&&r.provider?`<small>${r.manual?'Elle kayıt':salesEsc(r.provider)}</small>`:'';
+    return `<article class="customer-comms-item"><b>${commResultLabel(r)}</b><small>${when} · ${who}${phone?' · '+phone:''}</small>${note}${extra}${msg}</article>`;
+  }).join('');
+}
+function syncCustomerCallLinks(c={}){
+  const href=typeof sipHref==='function'?sipHref(c.phone):'';
+  ['#customerDetailCallBtn','#customerCommsCallBtn'].forEach(sel=>{
+    const el=q(sel);if(!el)return;
+    el.setAttribute('data-customer-id',c.id||'');
+    if(href){el.href=href;el.classList.remove('is-off');el.removeAttribute('aria-disabled')}
+    else{el.href='#';el.classList.add('is-off');el.setAttribute('aria-disabled','true')}
+  });
+}
+async function postCustomerComm(payload){
+  const c=customersPageData._selected;
+  if(!c?.id){toast('Önce müşteri seçin');return null}
+  const d=await api('/web-api/admin/customer/'+encodeURIComponent(c.id)+'/comm',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+  renderCustomerComms(d.comms||[]);
+  return d;
+}
+window.atakOnSipCall=function(info){
+  const id=info?.customerId||customersPageData.selectedId||customersPageData._selected?.id||'';
+  if(!id)return;
+  const phone=String(info?.href||'').replace(/^sip:/i,'');
+  const note=q('#customerCommNote')?.value||'';
+  fetch('/web-api/admin/customer/'+encodeURIComponent(id)+'/comm',{
+    method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({kind:'call',result:'started',phone,note})
+  }).then(r=>r.json()).then(d=>{
+    if(String(id)===String(customersPageData._selected?.id))renderCustomerComms(d.comms||[]);
+  }).catch(()=>{});
+};
+function printCustomerComms(){
+  const c=customersPageData._selected;
+  const rows=customersPageData._comms||[];
+  if(!c){toast('Önce müşteri seçin');return}
+  const body=rows.length?rows.map(r=>`<tr><td>${commWhen(r.at)}</td><td>${commResultLabel(r)}</td><td>${salesEsc(r.actor||'')}</td><td>${salesEsc(r.phone||'')}</td><td>${salesEsc(r.note||r.message||'')}</td></tr>`).join('')
+    :'<tr><td colspan="5">Kayıt yok</td></tr>';
+  const w=window.open('','_blank');
+  if(!w){toast('Yazdırma penceresi engellendi');return}
+  w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>İletişim kayıtları · ${salesEsc(c.name||'')}</title>
+  <style>body{font-family:Segoe UI,Arial,sans-serif;padding:24px;color:#123}h1{font-size:18px;margin:0 0 6px}p{margin:0 0 14px;color:#456}
+  table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #ccd;padding:8px;text-align:left;vertical-align:top}th{background:#f3f6fa}</style></head><body>
+  <h1>ATAK EV GEREÇLERİ · Müşteri iletişim kayıtları</h1>
+  <p><b>${salesEsc(c.name||'')}</b> · ${salesEsc(c.phone||'')} · ${new Date().toLocaleString('tr-TR')}</p>
+  <table><thead><tr><th>Tarih / saat</th><th>İşlem</th><th>Personel</th><th>Telefon</th><th>Not / SMS</th></tr></thead><tbody>${body}</tbody></table>
+  </body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
+}
 async function selectCustomerPage(id){
   customersPageData.selectedId=id;
   renderCustomerPageList();
@@ -2377,15 +2457,11 @@ async function selectCustomerPage(id){
     empty?.classList.add('hidden');content?.classList.remove('hidden');
     if(q('#customerDetailName'))q('#customerDetailName').textContent=c.name||'-';
     if(q('#customerDetailPhone'))q('#customerDetailPhone').textContent=[c.phone,c.email].filter(Boolean).join(' · ')||'-';
-    const callBtn=q('#customerDetailCallBtn');
-    if(callBtn){
-      const href=typeof sipHref==='function'?sipHref(c.phone):'';
-      if(href){
-        callBtn.href=href;callBtn.classList.remove('is-off');callBtn.removeAttribute('aria-disabled');
-      }else{
-        callBtn.href='#';callBtn.classList.add('is-off');callBtn.setAttribute('aria-disabled','true');
-      }
-    }
+    customersPageData._selected=c;
+    syncCustomerCallLinks(c);
+    renderCustomerComms(d.comms||[]);
+    if(q('#customerCommNote'))q('#customerCommNote').value='';
+    if(q('#customerCommManualSms'))q('#customerCommManualSms').value='';
     if(q('#customerDetailStatus')){
       const bits=[];
       if(c.active===false)bits.push('Pasif');else bits.push('Aktif');
@@ -2487,6 +2563,7 @@ async function sendCustomerSmsFromPanel(){
     });
     if(st){st.textContent=`SMS gönderildi → ${r.to}`;st.className='form-status success'}
     toast('SMS gönderildi');
+    await selectCustomerPage(c.id);
   }catch(err){
     if(st){st.textContent=err.message;st.className='form-status error'}
     toast(err.message||'SMS gönderilemedi');
@@ -2620,6 +2697,27 @@ q('#customerSmsSendBtn')?.addEventListener('click',()=>sendCustomerSmsFromPanel(
 q('#customerSmsPreviewBtn')?.addEventListener('click',()=>{
   if(customersPageData._smsType==='overdue')openCustomerSmsPanel('overdue');
   else toast('Özel SMS’de metni yazıp Gönder’e basın');
+});
+document.addEventListener('click',e=>{
+  const resBtn=e.target.closest('[data-comm-result]');
+  if(resBtn){
+    e.preventDefault();
+    const result=resBtn.getAttribute('data-comm-result');
+    const note=q('#customerCommNote')?.value||'';
+    postCustomerComm({kind:'call',result,note,phone:customersPageData._selected?.phone||''})
+      .then(()=>toast(result==='no_answer'?'Ulaşılamadı kaydedildi':(result==='reached'?'Görüşüldü kaydedildi':'Kayıt alındı')))
+      .catch(err=>toast(err.message||'Kayıt yazılamadı'));
+  }
+});
+q('#customerCommsPrintBtn')?.addEventListener('click',()=>printCustomerComms());
+q('#customerCommManualSmsBtn')?.addEventListener('click',async()=>{
+  const message=(q('#customerCommManualSms')?.value||'').trim();
+  if(!message){toast('Elle kayıt için SMS metnini yazın');return}
+  try{
+    await postCustomerComm({kind:'sms',result:'sent',message,note:'Elle kayıt',manual:true,phone:customersPageData._selected?.phone||''});
+    if(q('#customerCommManualSms'))q('#customerCommManualSms').value='';
+    toast('SMS kaydı işlendi');
+  }catch(err){toast(err.message||'Kayıt yazılamadı')}
 });
 q('#customerDetailPayForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
@@ -3377,7 +3475,7 @@ function salesCustomerChanged(){
   const addr=[c.district,c.city].filter(Boolean).join('/')||(c.address||'-');
   const hasCorp=customerHasCorporate(c);
   const corpLine=hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'-'}</b><span style="display:block;font-size:11px;color:#667890">VKN ${c.taxNo||'-'} · ${c.taxOffice||''}</span></div>`:'';
-  box.innerHTML=`<div><small>Şahıs / Senet</small><b>${c.name}</b><span style="display:block;font-size:11px;color:#667890">TCKN ${c.tckn||'—'}</span></div><div><small>Telefon</small><b>${c.phone||'-'}</b>${sipBtn(c.phone,{className:'sip-call-sm'})}</div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>${corpLine}`;
+  box.innerHTML=`<div><small>Şahıs / Senet</small><b>${c.name}</b><span style="display:block;font-size:11px;color:#667890">TCKN ${c.tckn||'—'}</span></div><div><small>Telefon</small><b>${c.phone||'-'}</b>${sipBtn(c.phone,{className:'sip-call-sm',customerId:c.id})}</div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>${corpLine}`;
   if(billWrap&&billSel){
     // Kurumsal bilgi varsa otomatik kurumsal; seçim gösterilmez
     billWrap.classList.add('hidden');
@@ -6001,7 +6099,7 @@ function renderSalesTracking(){
   q('#salesTrackingSummary').innerHTML=`<article><small>Gösterilen</small><b>${rows.length}</b></article><article><small>Açık Satış</small><b>${open}</b></article><article><small>Teslim Edildi</small><b>${delivered}</b></article><article><small>Toplam Tutar</small><b>${salesMoney(total)}</b></article>`;
   q('#salesTrackingTable').innerHTML=rows.map(r=>`<tr>
     <td><b>${r.reference||'-'}</b><small>${r.date||''}</small></td>
-    <td><b>${r.customerName||'-'}</b><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm'})}</td>
+    <td><b>${r.customerName||'-'}</b><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm',customerId:r.customerId})}</td>
     <td>${r.dealerName||'-'}<small>${r.salespersonName||'-'}</small></td>
     <td><b>${salesMoney(r.total)}</b></td>
     <td><select data-track-status="${r.id}">${Object.entries(deliveryStatusNames).map(([k,v])=>`<option value="${k}" ${k===r.deliveryStatus?'selected':''}>${v}</option>`).join('')}</select></td>
@@ -6059,7 +6157,7 @@ function renderCustomerPayments(){
     tbody.innerHTML=(custPayState.rows||[]).length
       ?(custPayState.rows||[]).map(r=>`<tr data-cust-pay="${r.customerId}" class="${r.customerId===custPayState.selectedId?'active':''}">
           <td><input type="checkbox" class="cust-pay-sms-cb" value="${r.customerId}" ${prevSelected.has(String(r.customerId))?'checked':''}></td>
-          <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm'})}</td>
+          <td><b>${r.customerName||'—'}</b><br><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm',customerId:r.customerId})}</td>
           <td><span class="pay-bucket ${r.bucket}">${custPayBucketLabel(r.bucket)}</span></td>
           <td>${money2(r.balance)}${Number(r.pendingHavaleAmount||0)>0.009?`<br><small style="color:#0b4f96;font-weight:750">Havale ${money2(r.pendingHavaleAmount)}</small>`:''}</td>
           <td>${money2(r.overdueAmount)}</td>
@@ -6144,7 +6242,7 @@ function selectCustomerPayment(customerId,keepAmount=false){
   body?.classList.remove('hidden');
   const havaleAmt=Number(row.pendingHavaleAmount||0);
   const suggest=havaleAmt>0.009?havaleAmt:(row.overdueAmount>0.009?row.overdueAmount:(row.dueMonthAmount>0.009?row.dueMonthAmount:Math.max(row.balance,0)));
-  q('#custPayCustomerBox').innerHTML=`<b>${row.customerName||''}</b> ${sipBtn(row.customerPhone,{className:'sip-call-sm'})}<br><small>${row.customerPhone||''}</small><br>
+  q('#custPayCustomerBox').innerHTML=`<b>${row.customerName||''}</b> ${sipBtn(row.customerPhone,{className:'sip-call-sm',customerId:row.customerId})}<br><small>${row.customerPhone||''}</small><br>
     Cari: <b>${money2(row.balance)}</b> · Havale: <b>${money2(havaleAmt)}</b> · Geciken: <b>${money2(row.overdueAmount)}</b> · Bu ay: <b>${money2(row.dueMonthAmount)}</b>`;
   const havaleBox=q('#custPayHavale');
   if(havaleBox){

@@ -1,4 +1,4 @@
-/* ATAK_SIP_BUILD=fix-v161 — MicroSIP tıkla-ara (sip: bağlantısı) */
+/* ATAK_SIP_BUILD=fix-v162 — MicroSIP tıkla-ara (sip: bağlantısı) */
 (function(root){
   function sipDigits(raw){
     let d=String(raw==null?'':raw).replace(/\D+/g,'');
@@ -18,10 +18,11 @@
     const href=sipHref(raw);
     const label=opts.label||'Ara';
     const extra=opts.className?(' '+opts.className):'';
+    const cid=opts.customerId?` data-customer-id="${String(opts.customerId).replace(/"/g,'')}"`:'';
     if(!href){
       return `<button type="button" class="sip-call-btn is-off${extra}" disabled title="Telefon yok">${label}</button>`;
     }
-    return `<a class="sip-call-btn${extra}" href="${href}" title="MicroSIP ile ara">${label}</a>`;
+    return `<a class="sip-call-btn${extra}" href="${href}" title="MicroSIP ile ara"${cid}>${label}</a>`;
   }
   function bindSipCallClicks(doc){
     const d=doc||(typeof document!=='undefined'?document:null);
@@ -34,6 +35,10 @@
       if(a.classList.contains('is-off')||a.getAttribute('aria-disabled')==='true'){
         e.preventDefault();
         if(typeof root.toast==='function')root.toast('Müşterinin telefonu yok');
+        return;
+      }
+      if(typeof root.atakOnSipCall==='function'){
+        try{root.atakOnSipCall({href:a.getAttribute('href')||'',customerId:a.getAttribute('data-customer-id')||''});}catch(_){}
       }
     });
   }
