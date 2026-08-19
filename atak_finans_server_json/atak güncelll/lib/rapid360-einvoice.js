@@ -104,7 +104,7 @@ function collectArrays(node, out, depth){
 function looksLikeInvoice(x){
   if(!x || typeof x !== 'object' || Array.isArray(x)) return false;
   const keys = Object.keys(x).join(' ').toLowerCase();
-  return /invoice|fatura|ettn|uuid|document|amount|tutar|supplier|vergi|vkn/.test(keys);
+  return /invoice|fatura|ettn|uuid|document|amount|tutar|supplier|vergi|vkn|faturano|einvoiceslines/.test(keys);
 }
 
 function extractList(payload){
@@ -136,26 +136,40 @@ function extractList(payload){
   return best || [];
 }
 
+function toIsoDate(raw){
+  const s = String(raw || '').trim();
+  const tr = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+  if(tr) return `${tr[3]}-${String(tr[2]).padStart(2, '0')}-${String(tr[1]).padStart(2, '0')}`;
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const dt = new Date(s);
+  if(Number.isFinite(dt.getTime())){
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  }
+  return '';
+}
+
 function normalizeInvoice(raw, i = 0){
-  const uuid = String(pick(raw, ['UUID', 'uuid', 'Ettn', 'ETTN', 'ettn', 'DocumentUUID', 'InvoiceUUID'])).trim();
+  const uuid = String(pick(raw, ['UUID', 'uuid', 'Ettn', 'ETTN', 'ettn', 'DocumentUUID', 'InvoiceUUID', 'FaturaSayac'])).trim();
   const invoiceNumber = String(pick(raw, [
     'InvoiceNumber', 'invoiceNumber', 'InvoiceNo', 'invoiceNo', 'DocumentId', 'DocumentID',
-    'FaturaNo', 'faturaNo', 'ID', 'Id'
+    'FaturaNo', 'faturaNo', 'ResmiBelgeNo', 'ID', 'Id'
   ])).trim();
-  const invoiceDateRaw = pick(raw, ['InvoiceDate', 'invoiceDate', 'IssueDate', 'issueDate', 'Date', 'FaturaTarihi']);
-  const invoiceDate = String(invoiceDateRaw || '').slice(0, 10);
+  const invoiceDate = toIsoDate(pick(raw, ['InvoiceDate', 'invoiceDate', 'IssueDate', 'issueDate', 'Date', 'FaturaTarihi']));
   const total = asNumber(pick(raw, [
-    'PayableAmount', 'payableAmount', 'GrandTotal', 'TotalAmount', 'Amount', 'amount',
-    'Tutar', 'ToplamTutar', 'DocumentAmount'
+    'TutarToplami', 'PayableAmount', 'payableAmount', 'GrandTotal', 'TotalAmount', 'Amount', 'amount',
+    'Tutar', 'ToplamTutar', 'DocumentAmount', 'SatirTutari'
   ]));
+  const customerName = String(pick(raw, [
+    'FaturalanacakMusteriAdi', 'CustomerName', 'customerName', 'MusteriAdi'
+  ])).trim();
   const supplierName = String(pick(raw, [
     'SupplierName', 'supplierName', 'VendorName', 'SenderName', 'PartyName',
     'SenderTitle', 'AccountingSupplierName', 'Unvan'
-  ])).trim() || 'Arçelik A.Ş.';
+  ])).trim() || customerName || 'Arçelik A.Ş.';
   const supplierVkn = String(pick(raw, [
-    'SupplierTaxNumber', 'supplierVkn', 'VKN', 'Vkn', 'TaxNumber', 'SenderVkn'
+    'VergiNo', 'SupplierTaxNumber', 'supplierVkn', 'VKN', 'Vkn', 'TaxNumber', 'SenderVkn'
   ])).replace(/\D/g, '');
-  const profile = String(pick(raw, ['Profile', 'ProfileID', 'InvoiceType', 'DocumentType', 'DocType']) || 'efatura');
+  const profile = String(pick(raw, ['Profile', 'ProfileID', 'InvoiceType', 'DocumentType', 'DocType', 'FaturaTipi']) || 'efatura');
   const isReturn = /true|1|iade|return/i.test(String(pick(raw, ['IsReturn', 'isReturn', 'Return', 'addReturn', 'IsCreditNote'])));
   const id = uuid || invoiceNumber || `rapid360-${i}`;
   return {
@@ -167,12 +181,14 @@ function normalizeInvoice(raw, i = 0){
     total,
     supplierName,
     supplierVkn,
+    customerName,
     profile,
     docType: /arsiv|earsiv/i.test(profile) ? 'earsiv' : 'efatura',
     isReturn,
     status: 'ready',
     read: false,
     erpImported: false,
+    rapidRaw: raw,
     rawKeys: Object.keys(raw || {}).slice(0, 40)
   };
 }
@@ -262,6 +278,8 @@ function mergeInbox(store, invoices){
         docType: inv.docType || prev.docType,
         isReturn: inv.isReturn,
         source: 'rapid360',
+        customerName: inv.customerName || prev.customerName,
+        rapidRaw: inv.rapidRaw || prev.rapidRaw,
         updatedAt: now
       });
       updated++;
@@ -279,6 +297,7 @@ function mergeInbox(store, invoices){
 module.exports = {
   DEFAULTS,
   formatDateTime,
+  toIsoDate,
   asNumber,
   resolveConfig,
   buildQuery,
