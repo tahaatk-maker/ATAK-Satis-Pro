@@ -44,11 +44,22 @@ echo "   rsync=$HAVE_RSYNC python3=$HAVE_PY"
 step "kaynak indiriliyor"
 mkdir -p "$TMP" && cd "$TMP"
 BRANCH_URLENC=${BRANCH//\//%2F}
-if ! curl -fsSL "https://codeload.github.com/tahaatk-maker/ATAK-Satis-Pro/tar.gz/refs/heads/$BRANCH" -o src.tgz; then
+curl_get(){
+  curl -4 -fL --connect-timeout 20 --max-time 180 --retry 2 --retry-delay 2 --progress-bar "$@"
+}
+echo "   GitHub paket indiriliyor (IPv4, ilerleme cubugu)..."
+if ! curl_get "https://codeload.github.com/tahaatk-maker/ATAK-Satis-Pro/tar.gz/refs/heads/$BRANCH" -o src.tgz; then
   echo "   ana adres olmadi, alternatif deneniyor"
-  curl -fsSL "https://codeload.github.com/tahaatk-maker/ATAK-Satis-Pro/tar.gz/$BRANCH_URLENC" -o src.tgz
+  curl_get "https://codeload.github.com/tahaatk-maker/ATAK-Satis-Pro/tar.gz/$BRANCH_URLENC" -o src.tgz
 fi
-tar -xzf src.tgz
+if [ ! -s src.tgz ] && command -v git >/dev/null 2>&1; then
+  echo "   curl paket bos, git clone deneniyor"
+  git clone --depth 1 --branch "$BRANCH" https://github.com/tahaatk-maker/ATAK-Satis-Pro.git repo
+  ln -s repo src-clone 2>/dev/null || true
+fi
+if [ -s src.tgz ]; then
+  tar -xzf src.tgz
+fi
 SRC=$(find "$TMP" -type d -name 'atak güncelll' | head -1)
 if [ -z "${SRC:-}" ]; then echo "KAYNAK KLASOR BULUNAMADI"; ls -la "$TMP"; exit 1; fi
 
