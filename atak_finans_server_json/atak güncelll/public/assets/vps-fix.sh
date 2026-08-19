@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.183-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.184-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.183-atak-geteinvoices
-EXPECT_BUILD=fix-v183
+EXPECT_HEALTH=6.3.184-atak-geteinvoices
+EXPECT_BUILD=fix-v184
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -91,6 +91,9 @@ check "rapid360 xml oz nitelik" grep -q "function parseAttrs" "$SRC/lib/rapid360
 check "rapid360 siparisno" grep -q "siparisno" "$SRC/lib/rapid360-sales-xml.js"
 check "rapid360 ad soyad" grep -q "composeCustomerName" "$SRC/lib/rapid360-sales-xml.js"
 check "musteri ad soyad ayri" grep -q "customerPageFirstName" "$SRC/public/admin.html"
+check "musteri kodu alani" grep -q "customerPageCode" "$SRC/public/admin.html"
+check "musteri kodu lib" test -f "$SRC/lib/customer-code.js"
+check "musteri kodu next api" grep -q "customer-code-next" "$SRC/server.js"
 check "person name lib" test -f "$SRC/lib/person-name.js"
 check "rapid360 satis fetch" test -f "$SRC/lib/rapid360-sales-fetch.js"
 check "rapid360 getdetailedsales" grep -q "getdetailedsales" "$SRC/lib/rapid360-sales-fetch.js"

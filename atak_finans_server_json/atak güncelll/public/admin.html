@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v183" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v183" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v183" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v183" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v184" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v184" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v184" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v184" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -729,11 +729,11 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 <div class="pos-block-body">
 <div class="sales-customer-top">
-  <label>Müşteri Ara<input id="salesCustomerSearch" placeholder="Ad, telefon, VKN veya TCKN yazın — otomatik arar" autocomplete="off"/></label>
+  <label>Müşteri Ara<input id="salesCustomerSearch" placeholder="Ad, müşteri kodu, telefon, VKN veya TCKN — otomatik arar" autocomplete="off"/></label>
   <button id="salesCustomerSearchBtn" type="button">🔍 Ara</button>
   <label>Sonuçlar<select id="salesCustomerSelect"><option value="">Önce arayın, sonra seçin</option></select></label>
   <span class="sales-customer-count" id="salesCustomerCount">0 sonuç</span>
-  <p class="sales-customer-hint" id="salesCustomerSearchHint">10.000+ müşteri kaydı için listeyi yüklemiyoruz. Ad / telefon / VKN ile arayıp seçin.</p>
+  <p class="sales-customer-hint" id="salesCustomerSearchHint">10.000+ müşteri kaydı için listeyi yüklemiyoruz. Ad / kod / telefon / VKN ile arayıp seçin.</p>
 </div>
 <div class="sales-customer-info hidden" id="salesCustomerInfo"></div>
 <label class="sales-billing-party hidden" id="salesBillingPartyWrap">Fatura kime kesilsin?
@@ -753,6 +753,8 @@ body.inv-full #pageTitle{font-size:18px}
           <label>Soyad *<input id="salesQuickCustomerLastName" required placeholder="Soyadı" autocomplete="family-name"/></label>
         </div>
         <p class="field-hint" style="margin:0">Senet ve listelerde Ad Soyad olarak birleşir.</p>
+        <label>Müşteri kodu<input id="salesQuickCustomerCode" placeholder="Boşsa otomatik A000001" autocomplete="off"/>
+        <small class="field-hint">Rapid’ten gelen numaradır. Yeni kayıtta boş bırakırsanız sırayla verilir.</small></label>
         <div class="two-col">
           <label>Telefon *<input id="salesQuickCustomerPhone" required placeholder="05xx xxx xx xx"/></label>
           <label>E-posta<input id="salesQuickCustomerEmail" type="email"/></label>
@@ -2116,7 +2118,7 @@ Bulunamayan → Diğer.
 <div><h2>Müşteriler</h2><p class="note">Bir müşteriye tıklayarak işlemlerini açın.</p></div>
 <span class="count-badge" id="customerPageCount">0</span>
 </div>
-<input id="customerPageSearch" placeholder="Ad, telefon veya VKN/TCKN ara"/>
+<input id="customerPageSearch" placeholder="Ad, müşteri kodu, telefon veya VKN/TCKN ara"/>
 <div class="customer-card-list" id="customerPageList"></div>
 </section>
 <section class="panel customer-detail-panel">
@@ -2130,6 +2132,7 @@ Bulunamayan → Diğer.
 <div>
 <small id="customerDetailPhone"></small>
 <h2 id="customerDetailName"></h2>
+<small id="customerDetailCode"></small>
 <span id="customerDetailStatus"></span>
 </div>
 <div class="customer-balance-box">
@@ -2255,6 +2258,8 @@ Bulunamayan → Diğer.
 <label>Soyad *<input autocomplete="family-name" id="customerPageLastName" required placeholder="Soyadı"/></label>
 </div>
 <p class="field-hint" style="margin:0">Senet ve listelerde Ad Soyad olarak birleşir.</p>
+<label>Müşteri kodu<input id="customerPageCode" placeholder="Boşsa otomatik A000001" autocomplete="off"/>
+<small class="field-hint">Rapid360 müşteri numarası buraya gelir. Elle eklerken sıradaki kod otomatik yazılır.</small></label>
 <div class="two-col">
 <label>Telefon *<input autocomplete="tel" id="customerPagePhone" required placeholder="05xx xxx xx xx"/></label>
 <label>E-posta (e-Fatura / e-Arşiv)<input autocomplete="email" id="customerPageEmail" type="email" placeholder="ornek@mail.com"/><small class="field-hint">Fatura gönderimi için önerilir</small></label>
@@ -2827,6 +2832,6 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v183"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v183"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v184"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v184"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

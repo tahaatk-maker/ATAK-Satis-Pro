@@ -254,6 +254,7 @@ function mapDataRow(row,cols){
       taxOffice:useCorp?(taxOffice||city||'Belirtilmedi'):'',
       taxNo:useCorp?vkn:'',
       tckn:tcknDigits.length===11?tcknDigits:'',
+      customerCode:kod||'',
       note:notes.join(' · '),
       active:true
     }

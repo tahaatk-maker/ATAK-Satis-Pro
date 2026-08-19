@@ -23,6 +23,7 @@ const atakGetE = require('./lib/atak-geteinvoices');
 const rapidSalesXml = require('./lib/rapid360-sales-xml');
 const rapidSalesFetch = require('./lib/rapid360-sales-fetch');
 const personName = require('./lib/person-name');
+const customerCode = require('./lib/customer-code');
 
 const app = express();
 const ROOT = __dirname;
@@ -219,6 +220,7 @@ function ensureStore(store) {
   store.productStocks = Array.isArray(store.productStocks) ? store.productStocks : [];
   store.financeAccounts = Array.isArray(store.financeAccounts) ? store.financeAccounts : [];
   store.customers = Array.isArray(store.customers) ? store.customers : [];
+  if(!Number.isFinite(Number(store.customerCodeSeq)) || Number(store.customerCodeSeq) < 0) store.customerCodeSeq = 0;
   store.financeTransactions = Array.isArray(store.financeTransactions) ? store.financeTransactions : [];
   store.receivables = Array.isArray(store.receivables) ? store.receivables : [];
   store.promissoryNotes = Array.isArray(store.promissoryNotes) ? store.promissoryNotes : [];
@@ -1895,8 +1897,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.183-atak-geteinvoices',
-  build:'fix-v183',
+  version:'6.3.184-atak-geteinvoices',
+  build:'fix-v184',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3358,6 +3360,8 @@ function customerSnapshot(c={}){
     deliveryDistrict:c.deliveryDistrict||'',deliveryAddress:c.deliveryAddress||'',
     invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
     companyName:c.companyName||'',taxOffice:c.taxOffice||'',note:c.note||'',
+    customerCode:c.customerCode||c.rapidCustAccount||'',
+    rapidCustAccount:c.rapidCustAccount||'',
     guarantor:normalizeGuarantor(c.guarantor),
     active:c.active!==false
   };
@@ -3461,6 +3465,7 @@ function parseCustomerPayload(x={}){
     companyName:invoiceType==='corporate'?companyName:'',
     taxOffice:invoiceType==='corporate'?taxOffice:'',
     note:String(x.note||'').trim(),
+    customerCode:customerCode.normalizeCustomerCode(x.customerCode||x.code||x.musteriKodu||''),
     active:x.active!==false&&x.active!=='false',
     updatedAt:new Date().toISOString()
   };
@@ -3505,6 +3510,8 @@ function customerSearchHandler(req,res){
       address:c.address||'',companyName:c.companyName||'',taxOffice:c.taxOffice||'',
       invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
       hasCorporate:customerHasCorporateBilling(c),note:c.note||'',
+      customerCode:c.customerCode||c.rapidCustAccount||'',
+      rapidCustAccount:c.rapidCustAccount||'',
       guarantor:normalizeGuarantor(c.guarantor),
       balance:customerBalance(s,c.id),
       active:c.active!==false
@@ -3514,16 +3521,22 @@ function customerSearchHandler(req,res){
 app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),customerSearchHandler);
 // Alias — bazı proxy/yönlendirmelerde /customers/search takılırsa
 app.get('/web-api/admin/customer-search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),customerSearchHandler);
+app.get('/web-api/admin/customer-code-next',requireAdminOrStaffAny('customers_manage','orders_manage','screen_sales_center'),(req,res)=>{
+  res.json({ok:true,customerCode:customerCode.peekNext(readStore())});
+});
 app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{};
   let data;
   try{data=parseCustomerPayload(x)}catch(e){return res.status(400).json({error:e.message})}
   let row=s.customers.find(v=>v.id===x.id);
+  try{
+    data.customerCode=customerCode.resolveForSave(s,data.customerCode,{existing:row||null});
+  }catch(e){return res.status(400).json({error:e.message})}
   // Yeni müşteri: doğrudan kaydet
   if(!row){
     row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),...data};
     s.customers.push(row);
-    audit(s,'Müşteri kaydedildi',row.name);writeStore(s);
+    audit(s,'Müşteri kaydedildi',`${row.customerCode||''} ${row.name}`.trim());writeStore(s);
     return res.json({ok:true,row:{...row,balance:customerBalance(s,row.id)}});
   }
   // Düzenleme: yönetici değilse onay kuyruğuna
@@ -3648,7 +3661,11 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
     for(const row of classified.rows){
       if(row.status!=='ready'||!row.payload)continue;
       let data;
-      try{data=parseCustomerPayload(row.payload)}
+      try{
+        data=parseCustomerPayload(row.payload);
+        try{data.customerCode=customerCode.allocate(s,data.customerCode)}
+        catch(_){data.customerCode=customerCode.allocate(s,'')}
+      }
       catch(e){
         invalid++;
         if(errors.length<12)errors.push(`${row.payload.name}: ${e.message}`);
@@ -5231,7 +5248,7 @@ function ensureRapidCustomer(s,sale){
     companyName:tax.length===10?companyName:'',
     taxOffice:String(sale.taxOffice||'').trim(),
     rapidCustAccount:String(sale.custAccount||'').trim(),
-    customerCode:String(sale.custAccount||'').trim(),
+    customerCode:sale.custAccount?customerCode.normalizeCustomerCode(sale.custAccount):customerCode.allocate(s,''),
     note:sale.custAccount?`Rapid360 müşteri hesabı: ${sale.custAccount}`:'Rapid360 XML aktarım',
     source:'rapid360-xml',
     active:true,
@@ -6066,6 +6083,7 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny
     if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
     try{
       const data=parseCustomerPayload({...(row.payload?.after||{}),id:customer.id});
+      data.customerCode=customerCode.resolveForSave(s,data.customerCode,{existing:customer});
       applyCustomerData(customer,data);
       row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
       audit(s,'Müşteri düzenleme onaylandı',customer.name,{reason:row.reason,personel:row.requestedByName});

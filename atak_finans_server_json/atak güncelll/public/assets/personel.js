@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v183 */
+/* ATAK_PERSONEL_BUILD=fix-v184 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -497,14 +497,25 @@ function renderFinance(){
   renderTransactions();
 }
 
+function customerOptionLabel(c={}){
+  return [c.name||'',c.customerCode||c.rapidCustAccount||'',c.phone||''].filter(Boolean).join(' · ');
+}
+async function fillNextCustomerCode(id){
+  const el=$(id);
+  if(!el||el.value)return;
+  try{
+    const d=await api('/web-api/admin/customer-code-next');
+    if(!el.value && d.customerCode) el.value=d.customerCode;
+  }catch(_){}
+}
 function renderCustomers(){
   const term=($('#customerSearch')?.value||'').toLocaleLowerCase('tr-TR');
   const rows=(financeData?.customers||[]).filter(c=>
-    `${c.name||''} ${c.phone||''} ${c.taxNo||''}`.toLocaleLowerCase('tr-TR').includes(term)
+    `${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.customerCode||''} ${c.rapidCustAccount||''}`.toLocaleLowerCase('tr-TR').includes(term)
   );
   $('#customerRows').innerHTML=rows.map(c=>`
     <tr>
-      <td><b>${c.name||''}</b><small>${c.taxNo||''}</small></td>
+      <td><b>${c.name||''}</b><small>${[c.customerCode||c.rapidCustAccount,c.taxNo].filter(Boolean).join(' · ')}</small></td>
       <td>${c.phone||'—'} ${sipBtn(c.phone,{className:'sip-call-sm',customerId:c.id})}</td>
       <td><b>${money(c.balance)}</b></td>
     </tr>`).join('')||'<tr><td colspan="3">Cari bulunamadı.</td></tr>';
@@ -604,7 +615,7 @@ function salesReset(){
   if($('#customerSearchSale'))$('#customerSearchSale').value='';
   if($('#salesCustomerSelect')){
     $('#salesCustomerSelect').innerHTML=salesCustomers.length
-      ?('<option value="">Müşteri seçin</option>'+salesCustomers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' · '+c.phone:''}</option>`).join(''))
+      ?('<option value="">Müşteri seçin</option>'+salesCustomers.map(c=>`<option value="${c.id}">${customerOptionLabel(c)}</option>`).join(''))
       :'<option value="">Önce arayın, sonra seçin</option>';
   }
   if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=(salesCustomerTotal||salesCustomers.length||0)+' kayıt';
@@ -658,7 +669,7 @@ function filterCustomersLocal(list,term){
   if(!q)return [];
   const digits=q.replace(/\D+/g,'');
   return (list||[]).filter(c=>{
-    const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.email||''}`.toLocaleLowerCase('tr-TR');
+    const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.customerCode||''} ${c.rapidCustAccount||''}`.toLocaleLowerCase('tr-TR');
     if(hay.includes(q))return true;
     if(digits.length>=3){
       const phoneDigits=String(c.phone||'').replace(/\D+/g,'');
@@ -698,7 +709,7 @@ async function loadSales(){
     salesReset();
     if(salesCustomers.length && $('#salesCustomerSelect')){
       $('#salesCustomerSelect').innerHTML='<option value="">Müşteri seçin</option>'+
-        salesCustomers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' · '+c.phone:''}</option>`).join('');
+        salesCustomers.map(c=>`<option value="${c.id}">${customerOptionLabel(c)}</option>`).join('');
     }
     if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=salesCustomerTotal+' kayıt';
     if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent=
@@ -729,7 +740,7 @@ async function salesSearchCustomers(){
     salesCustomers=[...map.values()];
     if($('#salesCustomerCount'))$('#salesCustomerCount').textContent=`${rows.length} sonuç`;
     $('#salesCustomerSelect').innerHTML=(rows.length?'':'<option value="">Sonuç yok</option>')+
-      rows.map(c=>`<option value="${c.id}" ${String(c.id)===String(current)?'selected':''}>${c.name}${c.phone?' · '+c.phone:''}</option>`).join('');
+      rows.map(c=>`<option value="${c.id}" ${String(c.id)===String(current)?'selected':''}>${customerOptionLabel(c)}</option>`).join('');
     if(current && rows.some(c=>String(c.id)===String(current)))$('#salesCustomerSelect').value=current;
     else if(rows.length===1)$('#salesCustomerSelect').value=rows[0].id;
     if(hint)hint.textContent=rows.length?`${rows.length} müşteri. Seçin.`:'Eşleşen müşteri yok.';
@@ -760,7 +771,7 @@ function salesCustomerChanged(){
       :'Fatura bireysel (şahıs / TCKN). Senet her zaman şahsa.';
   }
   box.innerHTML=`
-    <div><small>Şahıs / Senet</small><b>${c.name||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">TCKN ${c.tckn||'—'}</span></div>
+    <div><small>Şahıs / Senet</small><b>${c.name||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">Kod ${c.customerCode||c.rapidCustAccount||'—'} · TCKN ${c.tckn||'—'}</span></div>
     <div><small>Telefon</small><b>${c.phone||'—'}</b>${sipBtn(c.phone,{className:'sip-call-sm',customerId:c.id})}</div>
     <div><small>Cari</small><b>${money(c.balance)}</b></div>
     ${hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">VKN ${c.taxNo||'—'} · ${c.taxOffice||''}</span></div>`:''}`;
@@ -1973,6 +1984,7 @@ $('#salesNewCustomerBtn')?.addEventListener('click',()=>{
   setQcVknStatus('10 hane yazınca ünvan otomatik dolar');
   syncQcInvoiceUI();
   $('#salesQuickCustomerModal')?.classList.remove('hidden');
+  fillNextCustomerCode('#qcCode');
   $('#qcFirstName')?.focus();
 });
 $('#salesQuickCustomerClose')?.addEventListener('click',()=>$('#salesQuickCustomerModal')?.classList.add('hidden'));
@@ -1998,6 +2010,7 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
         firstName:($('#qcFirstName')?.value||'').trim(),
         lastName:($('#qcLastName')?.value||'').trim(),
         name:[($('#qcFirstName')?.value||'').trim(),($('#qcLastName')?.value||'').trim()].filter(Boolean).join(' '),
+        customerCode:($('#qcCode')?.value||'').trim(),
         phone:$('#qcPhone').value,
         city:$('#qcCity').value,district:$('#qcDistrict').value,address:$('#qcAddress').value,
         deliverySameAsBilling:true,invoiceType,
@@ -2014,7 +2027,7 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
     salesCustomerTotal=Number(salesCustomerTotal||0)+1;
     $('#salesQuickCustomerModal')?.classList.add('hidden');
     if($('#customerSearchSale'))$('#customerSearchSale').value=row.name||'';
-    $('#salesCustomerSelect').innerHTML=`<option value="${row.id}">${row.name||''}${row.phone?' · '+row.phone:''}</option>`;
+    $('#salesCustomerSelect').innerHTML=`<option value="${row.id}">${customerOptionLabel(row)}</option>`;
     $('#salesCustomerSelect').value=row.id;
     if($('#salesCustomerCount'))$('#salesCustomerCount').textContent='1 sonuç';
     if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent='Yeni müşteri kaydedildi ve seçildi.';
