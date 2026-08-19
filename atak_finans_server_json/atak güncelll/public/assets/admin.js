@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v169 */
+/* ATAK_ADMIN_BUILD=fix-v170 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4694,6 +4694,15 @@ async function loadInvoiceIntegration(){
   if(q('#rapid360Code'))q('#rapid360Code').value=rz.eInvoiceCode||'';
   if(q('#rapid360SystemId'))q('#rapid360SystemId').value=rz.systemId||'1';
   if(q('#rapid360AddReturns'))q('#rapid360AddReturns').checked=rz.addReturns!==false;
+  const dms=s.atakDms||{};
+  if(q('#atakDmsClientId'))q('#atakDmsClientId').value=dms.clientId||'';
+  if(q('#atakDmsSecret'))q('#atakDmsSecret').value=dms.clientSecret||'';
+  if(q('#atakDmsDealerId'))q('#atakDmsDealerId').value=dms.dealerId||'';
+  if(q('#atakDmsCode'))q('#atakDmsCode').value=dms.eInvoiceCode||'';
+  if(q('#atakDmsSystemId'))q('#atakDmsSystemId').value=dms.systemId||'1';
+  if(q('#atakDmsEnabled'))q('#atakDmsEnabled').checked=dms.enabled!==false;
+  if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=dms.includeInbox!==false;
+  if(q('#atakDmsCopyUrl'))q('#atakDmsCopyUrl').value=dms.copyUrl||dms.copyUrlMasked||'';
   refreshInvoiceSeriesPreview();
  }catch(e){toast(e.message)}
 }
@@ -4728,7 +4737,14 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       rapid360DealerId:q('#rapid360DealerId')?.value||'',
       rapid360Code:q('#rapid360Code')?.value||'',
       rapid360SystemId:q('#rapid360SystemId')?.value||'1',
-      rapid360AddReturns:!!q('#rapid360AddReturns')?.checked
+      rapid360AddReturns:!!q('#rapid360AddReturns')?.checked,
+      atakDmsEnabled:!!q('#atakDmsEnabled')?.checked,
+      atakDmsIncludeInbox:!!q('#atakDmsIncludeInbox')?.checked,
+      atakDmsDealerId:q('#atakDmsDealerId')?.value||'',
+      atakDmsCode:q('#atakDmsCode')?.value||'',
+      atakDmsSystemId:q('#atakDmsSystemId')?.value||'1',
+      atakDmsClientId:q('#atakDmsClientId')?.value||'',
+      atakDmsSecret:q('#atakDmsSecret')?.value||''
     })});
     st.textContent='QNB ayarları kaydedildi · e-Fatura ATK / e-Arşiv ATA.';
     st.className='form-status success';
@@ -4737,6 +4753,22 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
   }catch(err){st.textContent=err.message;st.className='form-status error'}
 });
 q('#invoiceConnectionTestBtn')?.addEventListener('click',async()=>{const box=q('#invoiceConnectionTestResult');box.innerHTML='<p>Kontrol ediliyor…</p>';try{const r=await api('/web-api/admin/invoice-integration/test');box.innerHTML=(r.checks||[]).map(c=>`<div class="self-test-row ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${c.name}</b><small>${c.detail}</small></div>`).join('')+`<div class="self-test-row"><small>${r.note||''}</small></div>`}catch(e){box.innerHTML=`<div class="self-test-row bad"><b>Test çalışmadı</b><small>${e.message}</small></div>`}});
+q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
+  const url=String(q('#atakDmsCopyUrl')?.value||'').trim();
+  if(!url)return toast('Önce ayarları kaydedin');
+  try{await navigator.clipboard.writeText(url);toast('geteinvoices URL kopyalandı')}
+  catch(_){q('#atakDmsCopyUrl')?.select();try{document.execCommand('copy');toast('geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}}
+});
+q('#atakDmsRotateBtn')?.addEventListener('click',async()=>{
+  if(!confirm('Yeni client_id / client_secret üretilecek. E-fatura firmasına yeni URL vermeniz gerekir.'))return;
+  const st=q('#invoiceIntegrationStatus');
+  try{
+    await api('/web-api/admin/invoice-integration/atak-dms-rotate',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    toast('Atak geteinvoices anahtarları yenilendi');
+    if(st){st.textContent='Atak geteinvoices anahtarları yenilendi. Yeni URL’yi firmaya verin.';st.className='form-status success'}
+    await loadInvoiceIntegration();
+  }catch(e){toast(e.message);if(st){st.textContent=e.message;st.className='form-status error'}}
+});
 
 let dynamicsPreviewData=null;
 let dynamicsCategories=[];

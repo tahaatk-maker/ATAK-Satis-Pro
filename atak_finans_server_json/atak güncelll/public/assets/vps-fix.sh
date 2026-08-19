@@ -1,8 +1,8 @@
 # ATAK VPS kesin deploy (fix-v89) — health 6.3.90-mobilya-alis-v2 olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.169-rapid360
-EXPECT_BUILD=fix-v169
+EXPECT_HEALTH=6.3.170-atak-geteinvoices
+EXPECT_BUILD=fix-v170
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -96,6 +96,7 @@ check "personel girisi .env son deger" grep -q "forceKeys" "$SRC/server.js"
 check "store.json yedek kurtarma" grep -q "recoverStoreFile" "$SRC/server.js"
 check "otomatik yedek" grep -q "auto-backup" "$SRC/server.js"
 check "rapid360 einvoice" grep -q "rapid360-einvoice" "$SRC/server.js"
+check "atak geteinvoices" grep -q "atak-geteinvoices" "$SRC/server.js"
 check "microsip ara sip-call.js" test -f "$SRC/public/assets/sip-call.js"
 check "admin microsip" grep -q "sip-call.js" "$SRC/public/admin.html"
 check "personel microsip" grep -q "sip-call.js" "$SRC/public/personel.html"

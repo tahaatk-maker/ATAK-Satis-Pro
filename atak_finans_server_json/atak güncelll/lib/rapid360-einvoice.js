@@ -279,6 +279,7 @@ function mergeInbox(store, invoices){
 module.exports = {
   DEFAULTS,
   formatDateTime,
+  asNumber,
   resolveConfig,
   buildQuery,
   buildUrl,

@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v169 */
+/* ATAK_FATURA_BUILD=fix-v170 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={module:'efatura',view:'ef_out_pending',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -345,6 +345,28 @@ function refreshInvoiceSeriesPreview(){
   if(q('#invoiceEarsivPreview'))q('#invoiceEarsivPreview').textContent='Önizleme: '+gibSeriesPreview(q('#invoiceEarsivSeries')?.value||'ATA',q('#invoiceEarsivNext')?.value||1);
 }
 function setVal(id,v){const el=q('#'+id);if(el)el.value=v??''}
+function fillAtakDms(s){
+  const d=s.atakDms||{};
+  setVal('atakDmsClientId',d.clientId||'');
+  setVal('atakDmsSecret',d.clientSecret||'');
+  setVal('atakDmsDealerId',d.dealerId||'');
+  setVal('atakDmsCode',d.eInvoiceCode||'');
+  setVal('atakDmsSystemId',d.systemId||'1');
+  if(q('#atakDmsEnabled'))q('#atakDmsEnabled').checked=d.enabled!==false;
+  if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=d.includeInbox!==false;
+  setVal('atakDmsCopyUrl',d.copyUrl||d.copyUrlMasked||'');
+}
+function atakDmsPayload(extra){
+  return Object.assign({
+    atakDmsEnabled:!!q('#atakDmsEnabled')?.checked,
+    atakDmsIncludeInbox:!!q('#atakDmsIncludeInbox')?.checked,
+    atakDmsDealerId:q('#atakDmsDealerId')?.value||'',
+    atakDmsCode:q('#atakDmsCode')?.value||'',
+    atakDmsSystemId:q('#atakDmsSystemId')?.value||'1',
+    atakDmsClientId:q('#atakDmsClientId')?.value||'',
+    atakDmsSecret:q('#atakDmsSecret')?.value||''
+  },extra||{});
+}
 async function loadInvoiceIntegration(){
   try{
     const d=await api('/web-api/admin/invoice-integration'),s=d.settings||{};
@@ -379,6 +401,7 @@ async function loadInvoiceIntegration(){
     setVal('rapid360Code',rz.eInvoiceCode||'');
     setVal('rapid360SystemId',rz.systemId||'1');
     if(q('#rapid360AddReturns'))q('#rapid360AddReturns').checked=rz.addReturns!==false;
+    fillAtakDms(s);
     refreshInvoiceSeriesPreview();
   }catch(e){toast(e.message)}
 }
@@ -469,7 +492,8 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       rapid360DealerId:q('#rapid360DealerId')?.value||'',
       rapid360Code:q('#rapid360Code')?.value||'',
       rapid360SystemId:q('#rapid360SystemId')?.value||'1',
-      rapid360AddReturns:!!q('#rapid360AddReturns')?.checked
+      rapid360AddReturns:!!q('#rapid360AddReturns')?.checked,
+      ...atakDmsPayload()
     })});
     st.textContent='QNB ayarları kaydedildi · e-Fatura ATK / e-Arşiv ATA.';
     st.className='form-status success';
@@ -485,6 +509,28 @@ q('#invoiceConnectionTestBtn')?.addEventListener('click',async()=>{
     const r=await api('/web-api/admin/invoice-integration/test',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
     box.innerHTML=(r.checks||[]).map(c=>`<div class="self-test-row ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${c.name}</b><small>${c.detail}</small></div>`).join('')+`<div class="self-test-row"><small>${r.note||''}</small></div>`;
   }catch(e){box.innerHTML=`<div class="self-test-row bad"><b>Test çalışmadı</b><small>${e.message}</small></div>`}
+});
+q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
+  const url=String(q('#atakDmsCopyUrl')?.value||'').trim();
+  if(!url)return toast('Önce ayarları kaydedin');
+  try{
+    await navigator.clipboard.writeText(url);
+    toast('geteinvoices URL kopyalandı');
+  }catch(_){
+    q('#atakDmsCopyUrl')?.select();
+    try{document.execCommand('copy');toast('geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}
+  }
+});
+q('#atakDmsRotateBtn')?.addEventListener('click',async()=>{
+  if(!state.canSetup)return toast('Kurulum yetkiniz yok');
+  if(!confirm('Yeni client_id / client_secret üretilecek. E-fatura firmasına yeni URL vermeniz gerekir.'))return;
+  const st=q('#invoiceIntegrationStatus');
+  try{
+    await api('/web-api/admin/invoice-integration/atak-dms-rotate',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    toast('Atak geteinvoices anahtarları yenilendi');
+    if(st){st.textContent='Atak geteinvoices anahtarları yenilendi. Yeni URL’yi firmaya verin.';st.className='form-status success'}
+    await loadInvoiceIntegration();
+  }catch(e){toast(e.message);if(st){st.textContent=e.message;st.className='form-status error'}}
 });
 
 boot();

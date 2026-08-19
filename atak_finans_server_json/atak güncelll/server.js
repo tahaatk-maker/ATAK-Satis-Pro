@@ -19,6 +19,7 @@ const customerComms = require('./lib/customer-comms');
 const salaryProrate = require('./lib/salary-prorate');
 const autoBackupLib = require('./lib/auto-backup');
 const rapid360 = require('./lib/rapid360-einvoice');
+const atakGetE = require('./lib/atak-geteinvoices');
 
 const app = express();
 const ROOT = __dirname;
@@ -225,6 +226,11 @@ function ensureStore(store) {
     if(!String(rz.clientSecret||'').trim())rz.clientSecret=String(process.env.ARCELIK_MULE_CLIENT_SECRET||rapid360.DEFAULTS.clientSecret);
     if(rz.addReturns==null)rz.addReturns=true;
   }
+  {
+    const seeded=atakGetE.ensureConfig(store.invoiceIntegration.atakDms);
+    store.invoiceIntegration.atakDms=seeded.cfg;
+    if(seeded.generated)store.__atakDmsSeeded=true;
+  }
 
   store.dealerSettings ||= [
     {id:'atak-beko',name:'Atak Beko',marginDividePct:25,commissionPct:0.50,cashMaxDiscountPct:10,cardMaxDiscountPct:5,active:true},
@@ -413,12 +419,22 @@ function readStore(){
       console.log(`[mobilya] ${n} ürün alış maliyeti sıfırlandı`);
     }catch(e){console.error('[mobilya] alış sıfırlama kaydı yazılamadı',e.message)}
   }
+  if(s.__atakDmsSeeded){
+    delete s.__atakDmsSeeded;
+    try{
+      const t=`${STORE_PATH}.tmp`;
+      fs.writeFileSync(t,JSON.stringify(s,null,2),'utf8');
+      fs.renameSync(t,STORE_PATH);
+      console.log('[atak-dms] geteinvoices anahtarları üretildi');
+    }catch(e){console.error('[atak-dms] anahtar kaydı yazılamadı',e.message)}
+  }
   return s;
 }
 function writeStore(store){
   const clean={...ensureStore(store)};
   delete clean.__istikbalCategoryFixed;
   delete clean.__mobilyaPurchaseCleared;
+  delete clean.__atakDmsSeeded;
   const t=`${STORE_PATH}.tmp`;
   fs.writeFileSync(t,JSON.stringify(clean,null,2),'utf8');
   fs.renameSync(t,STORE_PATH);
@@ -1784,7 +1800,7 @@ app.use(session({
   cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:12*60*60*1000}
 }));
 app.use((req,res,next)=>{
-  if(req.path==='/health')return next();
+  if(req.path==='/health'||atakGetE.PUBLIC_PATHS.includes(req.path))return next();
   if(!ipAllowed(req)){
     const wantsHtml=String(req.headers.accept||'').includes('text/html');
     if(wantsHtml)return res.status(403).type('html').send('<!doctype html><meta charset="utf-8"><title>Erişim Engeli</title><body style="font-family:Arial;padding:40px"><h1>Erişim engellendi</h1><p>Bu panel yalnızca yetkili IP üzerinden açılır.</p></body>');
@@ -1833,8 +1849,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.169-rapid360',
-  build:'fix-v169',
+  version:'6.3.170-atak-geteinvoices',
+  build:'fix-v170',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -1843,6 +1859,23 @@ app.get('/health',(req,res)=>res.json({
   company:ATAK_COMPANY.legalName,
   time:new Date().toISOString()
 }));
+function handleAtakGetEInvoices(req,res){
+  try{
+    const s=readStore();
+    const cfg=atakGetE.ensureConfig((s.invoiceIntegration||{}).atakDms).cfg;
+    const auth=atakGetE.authenticate(cfg,req.query||{});
+    if(!auth.ok){
+      const fail=atakGetE.failBody(auth.message,auth.status);
+      return res.status(fail.status).json(fail.body);
+    }
+    return res.json(atakGetE.buildResponse(s,auth.cfg,req.query||{}));
+  }catch(e){
+    const fail=atakGetE.failBody(e.message||'Error',500);
+    return res.status(fail.status).json(fail.body);
+  }
+}
+app.get(atakGetE.PATH,handleAtakGetEInvoices);
+app.get(atakGetE.PATH_ALIAS,handleAtakGetEInvoices);
 app.get('/web-api/public',(req,res)=>{ const s=readStore(); res.json({settings:s.settings,categories:s.categories.filter(c=>c.active).sort((a,b)=>a.sort-b.sort),products:s.products.filter(p=>p.active).map(p=>({...p,salePrice:calculateSalePrice(p)})),campaigns:s.campaigns.filter(isCampaignLive).sort((a,b)=>a.sort-b.sort),banners:s.banners.filter(b=>b.active).sort((a,b)=>a.sort-b.sort)}); });
 app.post('/web-api/login',async(req,res)=>{
   try{
@@ -5707,11 +5740,13 @@ app.get('/web-api/admin/invoice-integration',requireAdminOrStaffAny(...INVOICE_C
   const year=new Date().getFullYear();
   const efSeries=normalizeInvoiceSeries(cfg.efaturaSeries,'ATK');
   const eaSeries=normalizeInvoiceSeries(cfg.earsivSeries,'ATA');
+  const reveal=req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage');
   res.json({
     settings:{
       ...cfg,
       password:cfg.password?'********':'',
       rapid360:rapid360.publicConfig(cfg.rapid360),
+      atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal,baseUrl:publicBaseUrl(req)}),
       efaturaSeries:efSeries,
       earsivSeries:eaSeries,
       efaturaNext:nextInvoiceSeq(cfg.efaturaNext),
@@ -5767,15 +5802,38 @@ app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_m
           ? (incoming.addReturns===true||incoming.addReturns==='true'||x.rapid360AddReturns===true||x.rapid360AddReturns==='true'||x.rapid360AddReturns==='on')
           : prev.addReturns!==false
       };
+    })(),
+    atakDms:(()=>{
+      const incoming=x.atakDms&&typeof x.atakDms==='object'?x.atakDms:{};
+      const rotate=x.atakDmsRotate===true||x.atakDmsRotate==='true'||incoming.rotate===true;
+      return atakGetE.mergeIncoming(old.atakDms,{
+        enabled:incoming.enabled!=null?incoming.enabled:x.atakDmsEnabled,
+        includeInbox:incoming.includeInbox!=null?incoming.includeInbox:x.atakDmsIncludeInbox,
+        dealerId:incoming.dealerId!=null?incoming.dealerId:x.atakDmsDealerId,
+        eInvoiceCode:incoming.eInvoiceCode!=null?incoming.eInvoiceCode:x.atakDmsCode,
+        systemId:incoming.systemId!=null?incoming.systemId:x.atakDmsSystemId,
+        clientId:incoming.clientId!=null?incoming.clientId:x.atakDmsClientId,
+        clientSecret:incoming.clientSecret!=null?incoming.clientSecret:x.atakDmsSecret
+      },{rotate});
     })()
   };
   audit(s,'QNB Solist entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider,efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries});writeStore(s);res.json({ok:true,settings:{efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries,efaturaNext:s.invoiceIntegration.efaturaNext,earsivNext:s.invoiceIntegration.earsivNext}});
 });
+app.post('/web-api/admin/invoice-integration/atak-dms-rotate',requireAdminOrStaffAny('settings_manage','invoices_manage'),(req,res)=>{
+  const s=readStore(),old=s.invoiceIntegration||{};
+  s.invoiceIntegration={...old,atakDms:atakGetE.mergeIncoming(old.atakDms,{},{rotate:true})};
+  audit(s,'Atak geteinvoices anahtarları yenilendi','Fatura Entegrasyonu',{dealerId:s.invoiceIntegration.atakDms.dealerId});
+  writeStore(s);
+  const reveal=req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage');
+  res.json({ok:true,atakDms:atakGetE.publicConfig(s.invoiceIntegration.atakDms,{reveal,baseUrl:publicBaseUrl(req)})});
+});
 app.post('/web-api/admin/invoice-integration/test',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS,'settings_manage'),(req,res)=>{
   const s=readStore(),c=s.invoiceIntegration||{};
   const checks=qnbSolist.readinessChecks(c);
+  const dms=atakGetE.publicConfig(c.atakDms,{reveal:false,baseUrl:publicBaseUrl(req)});
+  checks.push({name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} hazır (DealerID ${dms.dealerId})`:'Anahtar üretilemedi'});
   const ep=qnbSolist.defaultEndpoints(c.environment||'test');
-  res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,endpoints:ep,note:'Dış servise belge göndermez. QNB Solist WSDL/kullanıcı gelince SOAP gönderim açılır.'});
+  res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,endpoints:ep,atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Dış servise belge göndermez. QNB Solist WSDL/kullanıcı gelince SOAP gönderim açılır. Atak geteinvoices e-fatura firmasının çağıracağı yerel uçtur.'});
 });
 app.get('/web-api/admin/invoice-queue',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
 /** e-Fatura Merkezi özet: QNB kutusu klasör sayıları + kuyruk + gelen (placeholder) */
@@ -5828,12 +5886,12 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
   };
   res.json({
     ok:true,
-    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext),rapid360:rapid360.publicConfig(cfg.rapid360)},
+    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext),rapid360:rapid360.publicConfig(cfg.rapid360),atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal:false,baseUrl:publicBaseUrl(req)})},
     counts,queue,inbox,responses,salesPending,
     portal:isStaffPortalReq(req)?'staff':'admin',
     canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),
     canIssue:req.session?.admin===true||staffCanInvoice(req),
-    note:'Gelen kutusu QNB portal senkronu bağlanınca dolar. Giden kutu yerel kuyruk + UBL taslağıdır.'
+    note:'Gelen kutusu Rapid360 geteinvoices ile dolar. Giden kutu yerel kuyruk + UBL taslağıdır. Atak geteinvoices URL’sini e-fatura firmasına Kurulum’dan verin.'
   });
 });
 app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),async(req,res)=>{

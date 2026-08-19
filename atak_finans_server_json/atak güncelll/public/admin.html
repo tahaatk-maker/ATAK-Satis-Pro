@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v169" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v169" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v169" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v169" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v170" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v170" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v170" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v170" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -557,9 +557,10 @@ body.inv-full #pageTitle{font-size:18px}
 #invoiceCenter #invoiceIntegrationForm .two-col{display:contents}
 #invoiceCenter #invoiceIntegrationForm .two-col>label{display:grid;gap:6px}
 #invoiceCenter #invoiceIntegrationForm label{display:grid;gap:6px;font-weight:700;color:#334155;font-size:13px}
-#invoiceCenter #invoiceIntegrationForm input,#invoiceCenter #invoiceIntegrationForm select{
+#invoiceCenter #invoiceIntegrationForm input,#invoiceCenter #invoiceIntegrationForm select,#invoiceCenter #invoiceIntegrationForm textarea{
   min-height:44px;border:1px solid #d5e0ee;border-radius:10px;padding:0 12px;font:inherit;background:#fff;
 }
+#invoiceCenter #invoiceIntegrationForm textarea{min-height:88px;padding:10px 12px;resize:vertical;line-height:1.4}
 #invoiceCenter #invoiceIntegrationForm label.check{display:flex;align-items:center;gap:8px;grid-column:span 1}
 #invoiceCenter #invoiceIntegrationForm .button-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
 #invoiceCenter #invoiceIntegrationForm .button-row .primary,#invoiceCenter #invoiceIntegrationForm .button-row .secondary-btn{
@@ -1715,6 +1716,15 @@ Bulunamayan → Diğer.
             <div class="two-col"><label>Client ID<input id="rapid360ClientId" autocomplete="off"/></label><label>Client secret<input id="rapid360Secret" type="password" autocomplete="new-password"/></label></div>
             <div class="two-col"><label>Dealer ID<input id="rapid360DealerId" placeholder="21134761"/></label><label>EInvoiceCode<input id="rapid360Code" placeholder="2E1N1D3E4"/></label></div>
             <div class="two-col"><label>SystemId<input id="rapid360SystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="rapid360AddReturns" type="checkbox" checked/> İadeleri de getir (addReturns)</label></div>
+            <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
+            <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Atak geteinvoices</h2>
+            <p class="note">Rapid360 ile aynı sözleşme. E-fatura firmasına bu URL’yi verin; oturum gerekmez. Giden kuyruk + (isteğe bağlı) gelen kutu JSON döner.</p>
+            <label>Hazır URL<textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="Kaydettikten sonra burada oluşur"></textarea></label>
+            <div class="button-row"><button class="secondary-btn" type="button" id="atakDmsCopyBtn">URL’yi kopyala</button><button class="secondary-btn" type="button" id="atakDmsRotateBtn">Anahtarları yenile</button></div>
+            <div class="two-col"><label>Client ID<input id="atakDmsClientId" readonly autocomplete="off"/></label><label>Client secret<input id="atakDmsSecret" type="password" readonly autocomplete="new-password"/></label></div>
+            <div class="two-col"><label>Dealer ID<input id="atakDmsDealerId" placeholder="21134761"/></label><label>EInvoiceCode<input id="atakDmsCode" placeholder="2E1N1D3E4"/></label></div>
+            <div class="two-col"><label>SystemId<input id="atakDmsSystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="atakDmsEnabled" type="checkbox" checked/> Servisi açık tut</label></div>
+            <label class="check"><input id="atakDmsIncludeInbox" type="checkbox" checked/> Gelen kutuyu (Rapid360 çekimleri) de dahil et</label>
           </form>
           <hr style="border:0;border-top:1px solid #e2e8f0;margin:8px 0 4px"/>
           <p class="note">Hazırlık checklist — QNB Çözüm Merkezi kurulunda yeşile döner.</p>
@@ -2767,6 +2777,6 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v169"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v169"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v170"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v170"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
