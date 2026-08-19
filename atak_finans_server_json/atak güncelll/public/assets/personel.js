@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v190 */
+/* ATAK_PERSONEL_BUILD=fix-v191 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1772,23 +1772,29 @@ function fillRapidAktarDefaults(){
 }
 function hideRapidOktaBox(){$('#rapid360OktaBox')?.classList.add('hidden')}
 function rapidOktaEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function rapid360ReportUrl(){
+  const company=$('#rapid360SalesCompanyFilter')?.value||'2521';
+  const store=$('#rapid360SalesStoreFilter')?.value||'340334';
+  return `https://liverapid360.operations.dynamics.com/?cmp=${encodeURIComponent(company)}&mi=DmrDetailedSalesReport&InventLocationId=${encodeURIComponent(store)}&Magaza=${encodeURIComponent(store)}`;
+}
 function showRapidOktaBox(d){
   const box=$('#rapid360OktaBox');
   if(!box) return;
   box.classList.remove('hidden');
   const extra=d.deviceLoginUrl
-    ? `<p class="muted" style="margin:8px 0 0">Telefonda onaylayın. Microsoft “tamam” derse pencereyi kapatın.</p>
-       <button type="button" id="rapid360OktaDoneBtn" class="primary-btn" style="margin-top:10px">Telefonda onayladım</button>`
+    ? `<p class="muted" style="margin:8px 0 0">Rapid360 açılınca telefonda Okta’yı onaylayın. Sonra aşağıdaki düğmeye basın.</p>
+       <button type="button" id="rapid360OktaDoneBtn" class="primary-btn" style="margin-top:10px">Okta onaylandı — satışları çek</button>`
     : '';
   box.innerHTML=`<div style="font-weight:700;margin-bottom:6px">Okta Verify telefona gidiyor</div>
-    <p class="muted" style="margin:6px 0 0">${rapidOktaEsc(d.message||'Açılan pencerede Rapid360 hesabınızı seçin. Okta Verify telefona gider; telefonda onaylayın.')}</p>${extra}`;
+    <p class="muted" style="margin:6px 0 0">${rapidOktaEsc(d.message||'Açılan pencerede Rapid360 detaylı satış açılır. Okta Verify telefona gider.')}</p>${extra}`;
 }
-function openRapidOktaPopup(url, popup){
-  if(!url) return popup;
+function openRapidOktaPopup(url, popup, name){
+  let href=String(url||'');
+  if(!href || /nativeclient|wrongplace|deviceauth|devicelogin/i.test(href)) href=rapid360ReportUrl();
   try{
-    if(popup && !popup.closed) popup.location.href=url;
-    else popup=window.open(url,'rapid360okta','popup=yes,width=520,height=740');
-  }catch(_){ window.open(url,'_blank','noopener'); }
+    if(popup && !popup.closed && !name) popup.location.href=href;
+    else popup=window.open(href,name||'rapid360okta','popup=yes,width=1080,height=780');
+  }catch(_){ window.open(href,'_blank','noopener'); }
   return popup;
 }
 async function loadRapidOktaStatus(){
@@ -1809,7 +1815,7 @@ async function waitRapidOkta(st, payload, popup){
   const openDevice=()=>{
     if(openedDevice || !payload.deviceLoginUrl) return;
     openedDevice=true;
-    popup=openRapidOktaPopup(payload.deviceLoginUrl, popup);
+    window.open(payload.deviceLoginUrl,'rapid360finish','popup=yes,width=480,height=640');
   };
   $('#rapid360OktaDoneBtn')?.addEventListener('click',(ev)=>{ev.preventDefault();openDevice();});
   let done=false;

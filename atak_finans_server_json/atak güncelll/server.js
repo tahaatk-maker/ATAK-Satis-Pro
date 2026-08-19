@@ -1900,8 +1900,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.190-atak-geteinvoices',
-  build:'fix-v190',
+  version:'6.3.191-atak-geteinvoices',
+  build:'fix-v191',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5047,7 +5047,9 @@ async function startRapidOktaChallenge(req, s){
     sessionId:req.sessionID||'',
     rapid,
     loginHint:body.loginHint||body.username||okta.lastUser||okta.account||'',
-    redirectUri:rapid.oauthClientId?`${publicBaseUrl(req)}/web-api/admin/rapid360-okta-callback`:''
+    redirectUri:rapid.oauthClientId?`${publicBaseUrl(req)}/web-api/admin/rapid360-okta-callback`:'',
+    company:body.company,
+    store:body.store||body.magaza
   });
 }
 function parseRapid360SalesUpload(file){
@@ -5346,8 +5348,10 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
       return res.status(409).json({
         needsOkta:true,
         error:started.message||out.error||'Okta Verify gerekli.',
+        message:started.message,
         pollId:started.pollId,
         loginUrl:started.loginUrl,
+        deviceLoginUrl:started.deviceLoginUrl,
         expiresIn:started.expiresIn,
         interval:started.interval,
         tried:out.tried||[]

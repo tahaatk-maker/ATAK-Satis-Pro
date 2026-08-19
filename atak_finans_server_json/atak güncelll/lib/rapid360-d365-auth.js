@@ -2,8 +2,9 @@
 
 /**
  * Rapid360 (D365 F&O) kullanıcı girişi.
- * Popup önce Microsoft authorize (Okta Verify) açar; kod kutusu açılmaz.
- * Token, aynı tarayıcı oturumuyla cihaz otc’sinin arka planda tamamlanmasıyla alınır.
+ * Popup, kullanıcının her gün açtığı detaylı satış ekranını açar
+ * (liverapid360 … mi=DmrDetailedSalesReport). Okta Verify orada gelir.
+ * nativeclient açılmaz (Microsoft /common/wrongplace).
  */
 
 const crypto = require('crypto');
@@ -81,8 +82,24 @@ function accountFromToken(token){
 function loginMessage(loginHint){
   const who = String(loginHint || '').trim();
   return who
-    ? `Açılan pencerede Rapid360 hesabınızı seçin (${who}). Okta Verify telefona gider; telefonda onaylayın.`
-    : 'Açılan pencerede Rapid360 hesabınızı seçin. Okta Verify telefona gider; telefonda onaylayın.';
+    ? `Açılan pencerede Rapid360 detaylı satış açılır (${who}). Okta Verify telefona gider; mağaza 340334 arka planda uygulanır.`
+    : 'Açılan pencerede Rapid360 detaylı satış açılır. Okta Verify telefona gider; mağaza 340334 arka planda uygulanır.';
+}
+
+function dynamicsReportUrl({ dynamicsUrl, company, store } = {}){
+  const base = normalizeDynamicsUrl(dynamicsUrl || DEFAULT_DYNAMICS_URL);
+  const cmp = String(company || '2521').trim() || '2521';
+  const magaza = String(store || '340334').trim() || '340334';
+  const u = new URL(`${base}/`);
+  u.searchParams.set('cmp', cmp);
+  u.searchParams.set('mi', 'DmrDetailedSalesReport');
+  u.searchParams.set('InventLocationId', magaza);
+  u.searchParams.set('Magaza', magaza);
+  return u.toString();
+}
+
+function isBlockedMicrosoftUrl(url){
+  return /nativeclient|wrongplace|deviceauth|devicelogin/i.test(String(url || ''));
 }
 
 function withLoginHint(url, loginHint){
@@ -169,9 +186,14 @@ function publicLoginStart(row){
     verification_uri: row.verificationUri,
     user_code: row.userCode
   });
-  const loginUrl = row.authorizeUrl
-    ? String(row.loginUrl || row.authorizeUrl || '')
-    : deviceUrl;
+  let loginUrl = String(row.loginUrl || row.reportUrl || '');
+  if(!loginUrl || isBlockedMicrosoftUrl(loginUrl)){
+    loginUrl = dynamicsReportUrl({
+      dynamicsUrl: row.resource,
+      company: row.company,
+      store: row.store
+    });
+  }
   const out = {
     pollId: row.pollId,
     loginUrl,
@@ -179,7 +201,7 @@ function publicLoginStart(row){
     interval: row.interval,
     message: row.message
   };
-  if(row.authorizeUrl && row.deviceCode && deviceUrl && deviceUrl !== loginUrl){
+  if(row.deviceCode && deviceUrl && !isBlockedMicrosoftUrl(loginUrl)){
     out.deviceLoginUrl = deviceUrl;
   }
   return out;
@@ -327,15 +349,27 @@ async function startInteractiveLogin(opts = {}){
   const rapid = opts.rapid || {};
   const cfg = configFromRapid(rapid, opts.env);
   const usePkce = Boolean(cfg.oauthClientId && redirectUri);
+  const company = String(opts.company || rapid.salesCompany || '2521').trim() || '2521';
+  const store = String(opts.store || rapid.salesStore || '340334').trim() || '340334';
   const existing = findPendingForSession(sessionId);
   if(existing){
     const isCallbackPkce = /rapid360-okta-callback/.test(String(existing.redirectUri || existing.authorizeUrl || ''));
     const stalePkce = isCallbackPkce && !usePkce;
-    const staleDeviceOnly = !existing.authorizeUrl;
-    if(!stalePkce && !staleDeviceOnly){
+    const staleNative = isBlockedMicrosoftUrl(existing.loginUrl) || isBlockedMicrosoftUrl(existing.authorizeUrl) || isBlockedMicrosoftUrl(existing.redirectUri);
+    const isDynamics = /operations\.dynamics\.com/i.test(String(existing.loginUrl || existing.reportUrl || ''));
+    if(!stalePkce && !staleNative && (isDynamics || isCallbackPkce)){
       if(loginHint) existing.loginHint = loginHint;
+      existing.company = company;
+      existing.store = store;
       existing.message = loginMessage(loginHint || existing.loginHint);
-      if(existing.authorizeUrl){
+      if(isDynamics){
+        existing.loginUrl = dynamicsReportUrl({
+          dynamicsUrl: existing.resource || cfg.dynamicsUrl,
+          company,
+          store
+        });
+        existing.reportUrl = existing.loginUrl;
+      }else if(existing.authorizeUrl){
         existing.loginUrl = withLoginHint(existing.authorizeUrl, loginHint || existing.loginHint);
       }
       return publicLoginStart(existing);
@@ -403,14 +437,10 @@ async function startInteractiveLogin(opts = {}){
         verification_uri: verificationUri,
         user_code: userCode
       });
-      const authorizeUrl = buildAuthorizeUrl({
-        tenant,
-        clientId: id,
-        resource,
-        redirectUri: NATIVE_REDIRECT,
-        loginHint,
-        state: pollId,
-        prompt: 'login'
+      const reportUrl = dynamicsReportUrl({
+        dynamicsUrl: resource,
+        company,
+        store
       });
       const row = {
         pollId,
@@ -423,11 +453,14 @@ async function startInteractiveLogin(opts = {}){
         protocol: got.protocol,
         verificationUri,
         verificationUriComplete,
-        authorizeUrl,
-        redirectUri: NATIVE_REDIRECT,
+        authorizeUrl: '',
+        redirectUri: '',
         codeVerifier: '',
         loginHint,
-        loginUrl: authorizeUrl,
+        company,
+        store,
+        reportUrl,
+        loginUrl: reportUrl,
         deviceLoginUrl: deviceUrl,
         interval,
         expiresAt: Date.now() + expiresIn * 1000,
@@ -642,6 +675,8 @@ module.exports = {
   DEFAULT_TENANT,
   DEFAULT_CLIENT_IDS,
   NATIVE_REDIRECT,
+  dynamicsReportUrl,
+  isBlockedMicrosoftUrl,
   normalizeDynamicsUrl,
   isMuleUrl,
   accountFromToken,

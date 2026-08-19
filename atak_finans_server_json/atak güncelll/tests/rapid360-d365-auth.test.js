@@ -76,11 +76,13 @@ async function run(){
     }
   });
   assert.ok(!noAzureApp.loginUrl.includes('okta-callback'));
-  assert.ok(noAzureApp.loginUrl.includes('/authorize'));
-  assert.ok(noAzureApp.loginUrl.includes('nativeclient'));
+  assert.ok(noAzureApp.loginUrl.includes('liverapid360.operations.dynamics.com'));
+  assert.ok(noAzureApp.loginUrl.includes('mi=DmrDetailedSalesReport'));
+  assert.ok(noAzureApp.loginUrl.includes('Magaza=340334'));
+  assert.ok(!noAzureApp.loginUrl.includes('nativeclient'));
+  assert.ok(!noAzureApp.loginUrl.includes('deviceauth'));
   assert.ok(noAzureApp.deviceLoginUrl.includes('otc=HIDE-ME'));
   assert.ok(!noAzureApp.deviceLoginUrl.includes('login_hint'));
-  assert.ok(!noAzureApp.loginUrl.includes('deviceauth'));
   assert.equal(noAzureApp.userCode, undefined);
 
   auth.resetPendingForTests();
@@ -107,13 +109,19 @@ async function run(){
   assert.ok(/Okta Verify/.test(started.message));
   assert.ok(!JSON.stringify(started).includes('dev-1'));
   assert.ok(!started.loginUrl.includes('rapid360-okta-callback'));
-  assert.ok(started.loginUrl.includes('/authorize'));
-  assert.ok(started.loginUrl.includes('nativeclient'));
-  assert.ok(started.loginUrl.includes('login_hint'));
+  assert.ok(started.loginUrl.includes('DmrDetailedSalesReport'));
+  assert.ok(started.loginUrl.includes('cmp=2521'));
+  assert.ok(started.loginUrl.includes('Magaza=340334'));
+  assert.ok(!started.loginUrl.includes('nativeclient'));
   assert.ok(!started.loginUrl.includes('deviceauth'));
   assert.ok(started.deviceLoginUrl.includes('otc=ABCD-EFGH'));
   assert.ok(!started.deviceLoginUrl.includes('login_hint'));
   assert.ok(!('userCode' in started));
+  assert.equal(
+    auth.dynamicsReportUrl({ company: '2521', store: '340334' }),
+    'https://liverapid360.operations.dynamics.com/?cmp=2521&mi=DmrDetailedSalesReport&InventLocationId=340334&Magaza=340334'
+  );
+  assert.equal(auth.isBlockedMicrosoftUrl('https://login.microsoftonline.com/common/oauth2/nativeclient?code=x'), true);
 
   assert.equal(auth.isBrokenDeviceLoginUrl('https://login.microsoftonline.com/common/oauth2/deviceauth?login_hint=W340334.1%40x'), true);
   assert.equal(auth.isBrokenDeviceLoginUrl('https://microsoft.com/devicelogin?otc=ABCD-EFGH'), false);
@@ -162,6 +170,8 @@ async function run(){
   const onlyUri = await auth.startDeviceLogin({
     sessionId: 'sess-otc',
     loginHint: 'W340334.1@rapid360.arcelikpazarlama.com.tr',
+    company: '2521',
+    store: '340334',
     fetchImpl: async (url) => {
       if(String(url).includes('v2.0/devicecode')) return jsonRes(400, { error: 'invalid_client' });
       return jsonRes(200, {
@@ -173,9 +183,9 @@ async function run(){
       });
     }
   });
-  assert.ok(onlyUri.loginUrl.includes('/authorize'));
-  assert.ok(onlyUri.loginUrl.includes('login_hint=W340334.1'));
-  assert.ok(onlyUri.loginUrl.includes('domain_hint='));
+  assert.ok(onlyUri.loginUrl.includes('DmrDetailedSalesReport'));
+  assert.ok(onlyUri.loginUrl.includes('Magaza=340334'));
+  assert.ok(!onlyUri.loginUrl.includes('nativeclient'));
   assert.ok(!onlyUri.loginUrl.includes('deviceauth'));
   assert.ok(onlyUri.deviceLoginUrl.includes('otc=ZZZZ-YYYY'));
   assert.ok(!onlyUri.deviceLoginUrl.includes('login_hint'));
@@ -186,7 +196,7 @@ async function run(){
     fetchImpl: async () => { throw new Error('should reuse pending otc url'); }
   });
   assert.equal(reused.pollId, onlyUri.pollId);
-  assert.ok(reused.loginUrl.includes('/authorize'));
+  assert.ok(reused.loginUrl.includes('DmrDetailedSalesReport'));
   assert.ok(reused.deviceLoginUrl.includes('otc=ZZZZ-YYYY'));
   assert.ok(!reused.deviceLoginUrl.includes('login_hint'));
 
