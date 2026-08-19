@@ -122,10 +122,14 @@ async function run(){
   assert.ok(!started.deviceLoginUrl.includes('deviceauth'));
   assert.ok(started.deviceLoginUrl.includes('microsoft.com/devicelogin'));
   assert.ok(!('userCode' in started));
-  assert.equal(
-    auth.dynamicsReportUrl({ company: '2521', store: '340334' }),
-    'https://liverapid360.operations.dynamics.com/?cmp=2521&mi=DmrDetailedSalesReport&InventLocationId=340334&Magaza=340334'
-  );
+  const report = auth.dynamicsReportUrl({ company: '2521', store: '340334', startDate: '2026-08-18', endDate: '2026-08-19' });
+  assert.ok(report.includes('cmp=2521'));
+  assert.ok(report.includes('mi=DmrDetailedSalesReport'));
+  assert.ok(report.includes('Magaza=340334'));
+  assert.ok(report.includes('InventLocationId=340334'));
+  assert.ok(report.includes('StartDate=2026-08-18'));
+  assert.ok(report.includes('EndDate=2026-08-19'));
+  assert.ok(!report.includes('nativeclient'));
   assert.equal(auth.isBlockedMicrosoftUrl('https://login.microsoftonline.com/common/oauth2/nativeclient?code=x'), true);
 
   assert.equal(auth.isBrokenDeviceLoginUrl('https://login.microsoftonline.com/common/oauth2/deviceauth?login_hint=W340334.1%40x'), true);

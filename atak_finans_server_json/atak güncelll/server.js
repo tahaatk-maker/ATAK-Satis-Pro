@@ -1901,8 +1901,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.193-atak-geteinvoices',
-  build:'fix-v193',
+  version:'6.3.194-atak-geteinvoices',
+  build:'fix-v194',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5050,7 +5050,9 @@ async function startRapidOktaChallenge(req, s){
     loginHint:body.loginHint||body.username||okta.lastUser||okta.account||'',
     redirectUri:rapid.oauthClientId?`${publicBaseUrl(req)}/web-api/admin/rapid360-okta-callback`:'',
     company:body.company,
-    store:body.store||body.magaza
+    store:body.store||body.magaza,
+    startDate:body.startDate,
+    endDate:body.endDate
   });
 }
 function parseRapid360SalesUpload(file){

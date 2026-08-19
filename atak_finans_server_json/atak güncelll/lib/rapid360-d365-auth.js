@@ -83,18 +83,38 @@ function accountFromToken(token){
 
 function loginMessage(loginHint){
   const who = String(loginHint || DEFAULT_ACCOUNT).trim();
-  return `Açılan pencerede Rapid360 açılır (${who}). Telefona Okta bildirimi gelir; onaylayın. Kod yazılmaz. Mağaza 340334 arka planda uygulanır.`;
+  return `Rapid360 açılır (${who}). Telefona Okta bildirimi gelir; onaylayın. Kod yazılmaz. Mağaza 340334 seçili gelir, XML’i Atak arkada aktarır.`;
 }
 
-function dynamicsReportUrl({ dynamicsUrl, company, store } = {}){
+function isoDateParam(v){
+  const s = String(v || '').trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+}
+
+function dynamicsReportUrl({ dynamicsUrl, company, store, startDate, endDate } = {}){
   const base = normalizeDynamicsUrl(dynamicsUrl || DEFAULT_DYNAMICS_URL);
   const cmp = String(company || '2521').trim() || '2521';
   const magaza = String(store || '340334').trim() || '340334';
+  const from = isoDateParam(startDate);
+  const to = isoDateParam(endDate) || from;
   const u = new URL(`${base}/`);
   u.searchParams.set('cmp', cmp);
   u.searchParams.set('mi', 'DmrDetailedSalesReport');
+  u.searchParams.set('prt', 'initial');
   u.searchParams.set('InventLocationId', magaza);
+  u.searchParams.set('inventLocationId', magaza);
   u.searchParams.set('Magaza', magaza);
+  u.searchParams.set('Store', magaza);
+  u.searchParams.set('RetailStoreId', magaza);
+  u.searchParams.set('parmMagaza', magaza);
+  if(from){
+    u.searchParams.set('FromDate', from);
+    u.searchParams.set('StartDate', from);
+  }
+  if(to){
+    u.searchParams.set('ToDate', to);
+    u.searchParams.set('EndDate', to);
+  }
   return u.toString();
 }
 
@@ -195,7 +215,9 @@ function publicLoginStart(row){
     loginUrl = dynamicsReportUrl({
       dynamicsUrl: row.resource,
       company: row.company,
-      store: row.store
+      store: row.store,
+      startDate: row.startDate,
+      endDate: row.endDate
     });
   }
   const out = {
@@ -355,6 +377,8 @@ async function startInteractiveLogin(opts = {}){
   const usePkce = Boolean(cfg.oauthClientId && redirectUri);
   const company = String(opts.company || rapid.salesCompany || '2521').trim() || '2521';
   const store = String(opts.store || rapid.salesStore || '340334').trim() || '340334';
+  const startDate = isoDateParam(opts.startDate);
+  const endDate = isoDateParam(opts.endDate);
   const existing = findPendingForSession(sessionId);
   if(existing){
     const isCallbackPkce = /rapid360-okta-callback/.test(String(existing.redirectUri || existing.authorizeUrl || ''));
@@ -365,12 +389,16 @@ async function startInteractiveLogin(opts = {}){
       if(loginHint) existing.loginHint = loginHint;
       existing.company = company;
       existing.store = store;
+      existing.startDate = startDate || existing.startDate;
+      existing.endDate = endDate || existing.endDate;
       existing.message = loginMessage(loginHint || existing.loginHint);
       if(isDynamics){
         existing.loginUrl = dynamicsReportUrl({
           dynamicsUrl: existing.resource || cfg.dynamicsUrl,
           company,
-          store
+          store,
+          startDate: existing.startDate,
+          endDate: existing.endDate
         });
         existing.reportUrl = existing.loginUrl;
       }else if(existing.authorizeUrl){
@@ -444,7 +472,9 @@ async function startInteractiveLogin(opts = {}){
       const reportUrl = dynamicsReportUrl({
         dynamicsUrl: resource,
         company,
-        store
+        store,
+        startDate,
+        endDate
       });
       const row = {
         pollId,
@@ -463,6 +493,8 @@ async function startInteractiveLogin(opts = {}){
         loginHint,
         company,
         store,
+        startDate,
+        endDate,
         reportUrl,
         loginUrl: reportUrl,
         deviceLoginUrl: deviceUrl,
@@ -680,6 +712,7 @@ module.exports = {
   DEFAULT_ACCOUNT,
   DEFAULT_CLIENT_IDS,
   NATIVE_REDIRECT,
+  isoDateParam,
   dynamicsReportUrl,
   isBlockedMicrosoftUrl,
   normalizeDynamicsUrl,
