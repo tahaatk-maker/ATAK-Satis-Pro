@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v188 */
+/* ATAK_PERSONEL_BUILD=fix-v189 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1777,7 +1777,7 @@ function showRapidOktaBox(d){
   if(!box) return;
   box.classList.remove('hidden');
   box.innerHTML=`<div style="font-weight:700;margin-bottom:6px">Okta Verify telefona gidiyor</div>
-    <p class="muted" style="margin:6px 0 0">${rapidOktaEsc(d.message||'Açılan pencerede Rapid360 kullanıcınızı girin. Kod yazılmaz.')}</p>`;
+    <p class="muted" style="margin:6px 0 0">${rapidOktaEsc(d.message||'Açılan pencerede Rapid360 hesabınızı seçin. Okta Verify telefona gider; telefonda onaylayın.')}</p>`;
 }
 async function loadRapidOktaStatus(){
   const el=$('#rapid360OktaStatus');
@@ -1786,8 +1786,8 @@ async function loadRapidOktaStatus(){
     const d=await api('/web-api/admin/rapid360-okta-status');
     el.textContent=(d.okta&&d.okta.connected)
       ?(`Rapid360 bağlı${d.okta.account?`: ${d.okta.account}`:''}. Yalnız ürünler okunur.`)
-      :'Okta Verify telefona gelir, kullanıcı yazılmaz.';
-  }catch(_){el.textContent='Okta Verify telefona gelir, kullanıcı yazılmaz.'}
+      :'Açılan pencerede hesabı seçin, Okta Verify telefona gelir.';
+  }catch(_){el.textContent='Açılan pencerede hesabı seçin, Okta Verify telefona gelir.'}
 }
 async function waitRapidOkta(st, payload, popup){
   showRapidOktaBox(payload||{});

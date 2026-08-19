@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v188 */
+/* ATAK_ADMIN_BUILD=fix-v189 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6284,7 +6284,7 @@ function showRapidOktaBox(d){
   if(!box) return;
   box.classList.remove('hidden');
   box.innerHTML=`<div style="font-weight:700;color:#1e3a8a;margin-bottom:6px">Okta Verify telefona gidiyor</div>
-    <p style="margin:6px 0 0;font-size:13px;color:#334155">${rapidOktaEsc(d.message||'Açılan pencerede Rapid360 kullanıcınızı girin. Kod yazılmaz; onay telefona gelir.')}</p>`;
+    <p style="margin:6px 0 0;font-size:13px;color:#334155">${rapidOktaEsc(d.message||'Açılan pencerede Rapid360 hesabınızı seçin. Okta Verify telefona gider; telefonda onaylayın.')}</p>`;
 }
 async function loadRapidOktaStatus(){
   const el=q('#rapid360OktaStatus');
@@ -6295,11 +6295,11 @@ async function loadRapidOktaStatus(){
       el.textContent=`Rapid360 bağlı${d.okta.account?`: ${d.okta.account}`:''}. Rapid Aktar yalnız ürünleri okur.`;
       el.className='form-status success';
     }else{
-      el.textContent='Rapid Aktar — Okta Verify telefona gelir, kullanıcı yazılmaz.';
+      el.textContent='Rapid Aktar — açılan pencerede hesabı seçin, Okta Verify telefona gelir.';
       el.className='note';
     }
   }catch(_){
-    el.textContent='Rapid Aktar — Okta Verify telefona gelir, kullanıcı yazılmaz.';
+    el.textContent='Rapid Aktar — açılan pencerede hesabı seçin, Okta Verify telefona gelir.';
   }
 }
 async function waitRapidOkta(st, payload, popup){

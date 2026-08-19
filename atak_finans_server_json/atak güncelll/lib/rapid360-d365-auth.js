@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Rapid360 (D365 F&O) kullanıcı girişi — Microsoft cihaz kodu.
- * Kullanıcı microsoft.com/devicelogin + Okta Verify onaylar; Atak sadece okuma token’ı tutar.
+ * Rapid360 (D365 F&O) kullanıcı girişi — Microsoft cihaz otc + Okta Verify.
+ * Pencere microsoft.com/devicelogin?otc=… açılır (kod yazılmaz); Okta Verify telefona gider.
  */
 
 const crypto = require('crypto');
@@ -79,8 +79,8 @@ function accountFromToken(token){
 function loginMessage(loginHint){
   const who = String(loginHint || '').trim();
   return who
-    ? `Açılan pencerede Rapid360 hesabınızı onaylayın. Okta Verify telefona gelecek; kod yazılmaz.`
-    : 'Açılan pencerede Rapid360 hesabınızı seçin. Okta Verify telefona gelecek; kod yazılmaz.';
+    ? `Açılan pencerede Rapid360 hesabınızı seçin (${who}). Okta Verify telefona gider; telefonda onaylayın.`
+    : 'Açılan pencerede Rapid360 hesabınızı seçin. Okta Verify telefona gider; telefonda onaylayın.';
 }
 
 function withLoginHint(url, loginHint){
@@ -91,11 +91,48 @@ function withLoginHint(url, loginHint){
   try{
     const u = new URL(base);
     u.searchParams.set('login_hint', hint);
-    u.searchParams.set('username', hint);
-    if(hint.includes('@')) u.searchParams.set('whr', hint.split('@').pop());
     return u.toString();
   }catch{
     return base;
+  }
+}
+
+/** Microsoft cihaz sayfasına login_hint eklenirse otc düşer; boş “Kod” kutusu çıkar. */
+function deviceLoginUrl(json){
+  const userCode = String((json && json.user_code) || '').trim();
+  const complete = String((json && (json.verification_uri_complete || json.verificationUriComplete)) || '').trim();
+  const uri = String((json && (json.verification_uri || json.verification_url || json.verificationUri)) || '').trim();
+  let url = complete || uri || 'https://microsoft.com/devicelogin';
+  try{
+    const u = new URL(url);
+    u.searchParams.delete('login_hint');
+    u.searchParams.delete('username');
+    u.searchParams.delete('whr');
+    if(!String(u.searchParams.get('otc') || '').trim() && userCode){
+      u.searchParams.set('otc', userCode);
+    }
+    return u.toString();
+  }catch{
+    if(userCode && !/[?&]otc=/i.test(url)){
+      return `${url}${url.includes('?') ? '&' : '?'}otc=${encodeURIComponent(userCode)}`;
+    }
+    return url;
+  }
+}
+
+function isBrokenDeviceLoginUrl(url){
+  const s = String(url || '');
+  if(!s) return true;
+  if(/oauth2\/v2\.0\/authorize|rapid360-okta-callback/i.test(s)) return false;
+  try{
+    const u = new URL(s);
+    const otc = String(u.searchParams.get('otc') || '').trim();
+    const extra = u.searchParams.has('login_hint') || u.searchParams.has('username') || u.searchParams.has('whr');
+    if(extra) return true;
+    if(/deviceauth|devicelogin/i.test(s) && !otc) return true;
+    return false;
+  }catch{
+    return true;
   }
 }
 
@@ -125,9 +162,16 @@ function buildAuthorizeUrl({ tenant, clientId, resource, redirectUri, loginHint,
 
 function publicLoginStart(row){
   if(!row) return null;
+  const loginUrl = row.authorizeUrl
+    ? String(row.loginUrl || row.authorizeUrl || '')
+    : deviceLoginUrl({
+        verification_uri_complete: row.verificationUriComplete || row.loginUrl,
+        verification_uri: row.verificationUri,
+        user_code: row.userCode
+      });
   return {
     pollId: row.pollId,
-    loginUrl: row.loginUrl || '',
+    loginUrl,
     expiresIn: Math.max(0, Math.round((row.expiresAt - Date.now()) / 1000)),
     interval: row.interval,
     message: row.message
@@ -279,12 +323,19 @@ async function startInteractiveLogin(opts = {}){
   const existing = findPendingForSession(sessionId);
   if(existing){
     const stalePkce = existing.authorizeUrl && !usePkce;
-    if(!stalePkce){
+    const staleDevice = !existing.authorizeUrl && isBrokenDeviceLoginUrl(existing.loginUrl);
+    if(!stalePkce && !staleDevice){
       if(loginHint) existing.loginHint = loginHint;
-      existing.loginUrl = existing.authorizeUrl
-        ? withLoginHint(existing.authorizeUrl, loginHint)
-        : withLoginHint(existing.verificationUriComplete || existing.verificationUri || existing.loginUrl, loginHint);
       existing.message = loginMessage(loginHint || existing.loginHint);
+      if(existing.authorizeUrl){
+        existing.loginUrl = withLoginHint(existing.authorizeUrl, loginHint || existing.loginHint);
+      }else{
+        existing.loginUrl = deviceLoginUrl({
+          verification_uri_complete: existing.verificationUriComplete,
+          verification_uri: existing.verificationUri,
+          user_code: existing.userCode
+        });
+      }
       return publicLoginStart(existing);
     }
     pendingById.delete(existing.pollId);
@@ -343,11 +394,17 @@ async function startInteractiveLogin(opts = {}){
       const interval = Math.max(3, Number(json.interval || 5));
       const verificationUri = String(json.verification_uri || json.verification_url || 'https://microsoft.com/devicelogin');
       const verificationUriComplete = String(json.verification_uri_complete || '');
-      const loginUrl = withLoginHint(verificationUriComplete || verificationUri, loginHint);
+      const userCode = String(json.user_code || '');
+      const loginUrl = deviceLoginUrl({
+        verification_uri_complete: verificationUriComplete,
+        verification_uri: verificationUri,
+        user_code: userCode
+      });
       const row = {
         pollId,
         sessionId,
         deviceCode: String(json.device_code || json.code || ''),
+        userCode,
         clientId: id,
         tenant,
         resource,
@@ -587,5 +644,7 @@ module.exports = {
   refreshAccessToken,
   ensureAccessToken,
   resetPendingForTests,
-  loginMessage
+  loginMessage,
+  deviceLoginUrl,
+  isBrokenDeviceLoginUrl
 };

@@ -36,7 +36,8 @@ async function run(){
   assert.ok(interactive.loginUrl.includes('code_challenge'));
   assert.equal(interactive.userCode, undefined);
   assert.ok(!JSON.stringify(interactive).includes('user_code'));
-  assert.ok(/kod yazılmaz/i.test(interactive.message));
+  assert.ok(/Okta Verify/.test(interactive.message));
+  assert.ok(!/kod yazılmaz/i.test(JSON.stringify(interactive)));
 
   const pendingPkce = await auth.pollDeviceLogin({
     sessionId: 'sess-pkce',
@@ -76,6 +77,8 @@ async function run(){
   });
   assert.ok(!noAzureApp.loginUrl.includes('okta-callback'));
   assert.ok(!noAzureApp.loginUrl.includes('authorize'));
+  assert.ok(noAzureApp.loginUrl.includes('otc=HIDE-ME'));
+  assert.ok(!noAzureApp.loginUrl.includes('login_hint'));
   assert.equal(noAzureApp.userCode, undefined);
 
   auth.resetPendingForTests();
@@ -102,7 +105,23 @@ async function run(){
   assert.ok(/Okta Verify/.test(started.message));
   assert.ok(!JSON.stringify(started).includes('dev-1'));
   assert.ok(!started.loginUrl.includes('rapid360-okta-callback'));
+  assert.ok(!started.loginUrl.includes('login_hint'));
+  assert.ok(started.loginUrl.includes('otc=ABCD-EFGH'));
   assert.ok(!('userCode' in started));
+
+  assert.equal(auth.isBrokenDeviceLoginUrl('https://login.microsoftonline.com/common/oauth2/deviceauth?login_hint=W340334.1%40x'), true);
+  assert.equal(auth.isBrokenDeviceLoginUrl('https://microsoft.com/devicelogin?otc=ABCD-EFGH'), false);
+  assert.equal(
+    auth.deviceLoginUrl({
+      verification_uri: 'https://login.microsoftonline.com/common/oauth2/deviceauth',
+      user_code: 'OKTA-OK'
+    }),
+    'https://login.microsoftonline.com/common/oauth2/deviceauth?otc=OKTA-OK'
+  );
+  assert.ok(!auth.deviceLoginUrl({
+    verification_uri_complete: 'https://microsoft.com/devicelogin?otc=KEEP-ME',
+    user_code: 'KEEP-ME'
+  }).includes('login_hint'));
 
   const pending = await auth.pollDeviceLogin({
     sessionId: 'sess-1',
@@ -132,6 +151,33 @@ async function run(){
   const saved = auth.persistTokens({}, done.tokens);
   assert.equal(saved.d365Auth.account, 'taha@atakhome.com.tr');
   assert.equal(saved.d365Auth.refreshToken, 'r1');
+
+  auth.resetPendingForTests();
+  const onlyUri = await auth.startDeviceLogin({
+    sessionId: 'sess-otc',
+    loginHint: 'W340334.1@rapid360.arcelikpazarlama.com.tr',
+    fetchImpl: async (url) => {
+      if(String(url).includes('v2.0/devicecode')) return jsonRes(400, { error: 'invalid_client' });
+      return jsonRes(200, {
+        user_code: 'ZZZZ-YYYY',
+        device_code: 'dev-2',
+        verification_uri: 'https://login.microsoftonline.com/common/oauth2/deviceauth',
+        expires_in: 900,
+        interval: 5
+      });
+    }
+  });
+  assert.ok(onlyUri.loginUrl.includes('otc=ZZZZ-YYYY'));
+  assert.ok(!onlyUri.loginUrl.includes('login_hint'));
+
+  const reused = await auth.startDeviceLogin({
+    sessionId: 'sess-otc',
+    loginHint: 'W340334.1@rapid360.arcelikpazarlama.com.tr',
+    fetchImpl: async () => { throw new Error('should reuse pending otc url'); }
+  });
+  assert.equal(reused.pollId, onlyUri.pollId);
+  assert.ok(reused.loginUrl.includes('otc=ZZZZ-YYYY'));
+  assert.ok(!reused.loginUrl.includes('login_hint'));
 
   console.log('rapid360-d365-auth tests OK');
 }
