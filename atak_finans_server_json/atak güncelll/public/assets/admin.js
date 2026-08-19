@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v164 */
+/* ATAK_ADMIN_BUILD=fix-v165 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6569,7 +6569,11 @@ function fillMoneyAccounts(selId,preferCash=true){
   const el=q(selId); if(!el)return;
   const acc=moneyState.accounts||[];
   const cur=el.value;
-  el.innerHTML=acc.map(a=>`<option value="${a.id}">${a.name} (${money2(a.balance)})</option>`).join('')||'<option value="">Hesap yok</option>';
+  el.innerHTML=acc.map(a=>{
+    const bal=Number(a.balance||0);
+    const tag=bal<-0.009?`${money2(bal)} borç`:money2(bal);
+    return `<option value="${a.id}">${a.name} (${tag})</option>`;
+  }).join('')||'<option value="">Hesap yok</option>';
   if(cur && [...el.options].some(o=>o.value===cur))el.value=cur;
   else if(preferCash){
     const cash=acc.find(a=>a.type==='cash'); if(cash)el.value=cash.id;
@@ -6587,7 +6591,7 @@ function renderMoneySalaryBreakdown(p,type){
   if(!box)return;
   if(!p){box.innerHTML='';return}
   if(type==='advance'){
-    box.innerHTML=`<div><b>${p.name}</b> için avans vereceksiniz. Avans, ay sonu ödenecekten düşülür.</div>
+    box.innerHTML=`<div><b>${p.name}</b> için avans vereceksiniz. Avans, ay sonu ödenecekten düşülür. Kasada para olmasa da seçilen hesap eksi bakiyeye (borç) yazılır.</div>
       <span class="net">Şu an ödenecek kalan: ${money2(p.netDue)}</span>`;
     return;
   }
@@ -6737,13 +6741,13 @@ q('#moneyExpenseForm')?.addEventListener('submit',async e=>{
   const st=q('#moneyExpenseStatus');
   st.textContent='Kaydediliyor...';st.className='form-status';
   try{
-    await api('/web-api/admin/money-expense',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    const r=await api('/web-api/admin/money-expense',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       amount:q('#moneyExpenseAmount').value,accountId:q('#moneyExpenseAccount').value,
       category:q('#moneyExpenseCategory').value,date:q('#moneyExpenseDate').value||localDate(),
       description:q('#moneyExpenseDesc').value.trim()
     })});
     st.textContent='Masraf kaydedildi';st.className='form-status success';
-    toast('Masraf kaydedildi');
+    toast(Number(r.balance)<-0.009?`Masraf kaydedildi · hesap ${money2(r.balance)} (borç)`:'Masraf kaydedildi');
     q('#moneyExpenseModal')?.classList.add('hidden');
     await loadMoneyCenter();
   }catch(err){st.textContent=err.message;st.className='form-status error'}
@@ -6753,14 +6757,14 @@ q('#moneySalaryForm')?.addEventListener('submit',async e=>{
   const st=q('#moneySalaryStatus');
   st.textContent='Ödeniyor...';st.className='form-status';
   try{
-    await api('/web-api/admin/salary-pay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    const r=await api('/web-api/admin/salary-pay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       staffId:q('#moneySalaryStaff').value,amount:q('#moneySalaryAmount').value,
       accountId:q('#moneySalaryAccount').value,payType:q('#moneySalaryType').value,
       date:q('#moneySalaryDate').value||localDate(),month:moneyState.month,
       description:q('#moneySalaryDesc').value.trim()
     })});
     st.textContent='Ödeme kaydedildi';st.className='form-status success';
-    toast('Ödeme kaydedildi');
+    toast(Number(r.balance)<-0.009?`Ödeme kaydedildi · hesap ${money2(r.balance)} (borç)`:'Ödeme kaydedildi');
     q('#moneySalaryModal')?.classList.add('hidden');
     await loadMoneyCenter();
   }catch(err){st.textContent=err.message;st.className='form-status error'}

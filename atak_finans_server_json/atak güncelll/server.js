@@ -1812,8 +1812,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.164-maas-kismi',
-  build:'fix-v164',
+  version:'6.3.165-kasa-eksi',
+  build:'fix-v165',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   mfa:mfaEnabled(),
@@ -3741,7 +3741,7 @@ app.post('/web-api/admin/money-expense',requireAdminOrStaffAny('finance_manage',
   const accountId=String(x.accountId||'');
   if(!amount)return res.status(400).json({error:'Tutar zorunlu'});
   if(!accountId||!s.financeAccounts.some(a=>a.id===accountId&&a.active!==false))return res.status(400).json({error:'Kasa/banka seçin'});
-  if(accountBalance(s,accountId)+0.009<amount)return res.status(400).json({error:'Hesap bakiyesi yetersiz'});
+  // Kasa 0 olsa da masraf yazılır — hesap eksi bakiyeye düşer
   const category=String(x.category||'Diğer').trim()||'Diğer';
   const row=financeTx(s,{
     date:x.date||todayISO(),kind:'expense',accountId,amount:-amount,
@@ -3763,7 +3763,7 @@ app.post('/web-api/admin/salary-pay',requireAdminOrStaffAny('finance_manage','sc
   const accountId=String(x.accountId||'');
   if(!amount)return res.status(400).json({error:'Ödeme tutarı zorunlu'});
   if(!accountId||!s.financeAccounts.some(a=>a.id===accountId&&a.active!==false))return res.status(400).json({error:'Kasa/banka seçin'});
-  if(accountBalance(s,accountId)+0.009<amount)return res.status(400).json({error:'Hesap bakiyesi yetersiz'});
+  // Avans/maaş: kasada nakit olmasa da seçilen hesaba eksi tutar yazılır (borç)
   const rawType=String(x.payType||'salary').toLowerCase();
   const payType=['commission','advance','payroll'].includes(rawType)?rawType:'salary';
   const month=moneyMonthKey(x.month);

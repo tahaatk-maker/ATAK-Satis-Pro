@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v164" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v164" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v164" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v164" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v165" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v165" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v165" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v165" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1856,7 +1856,7 @@ Bulunamayan → Diğer.
   <form class="modal-card" id="moneyExpenseForm">
     <button class="x" id="moneyExpenseClose" type="button">×</button>
     <h2>🧾 Masraf Yaz</h2>
-    <p class="note">Kasadan veya bankadan çıkan para (kira, fatura, yakıt…).</p>
+    <p class="note">Kasadan veya bankadan çıkan para (kira, fatura, yakıt…). Kasada para olmasa da kayıt olur; hesap eksi bakiyeye (borç) düşer.</p>
     <div class="two-cols">
       <label>Tutar *<input id="moneyExpenseAmount" type="number" min="0.01" step="0.01" required></label>
       <label>Tarih<input id="moneyExpenseDate" type="date"></label>
@@ -1875,7 +1875,7 @@ Bulunamayan → Diğer.
   <form class="modal-card" id="moneySalaryForm">
     <button class="x" id="moneySalaryClose" type="button">×</button>
     <h2 id="moneySalaryTitle">💵 Ay Sonu Öde</h2>
-    <p class="note" id="moneySalaryHint">Personel seçin — tutar otomatik hesaplanır (kısmi/tam maaş + prim − avans).</p>
+    <p class="note" id="moneySalaryHint">Personel seçin — tutar otomatik hesaplanır (kısmi/tam maaş + prim − avans). Kasada para olmasa da seçtiğiniz hesaba eksi yazılır.</p>
     <div id="moneySalaryBreakdown" class="money-breakdown"></div>
     <input type="hidden" id="moneySalaryStaffId"/>
     <div class="two-cols">
@@ -2761,6 +2761,6 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v164"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v164"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v165"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v165"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
