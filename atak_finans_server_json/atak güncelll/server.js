@@ -1866,8 +1866,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.174-atak-geteinvoices',
-  build:'fix-v174',
+  version:'6.3.175-atak-geteinvoices',
+  build:'fix-v175',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),

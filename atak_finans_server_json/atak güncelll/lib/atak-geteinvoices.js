@@ -11,11 +11,14 @@ const rapid360 = require('./rapid360-einvoice');
 const PATH = '/exp/dms/dms/geteinvoices';
 const PATH_ALIAS = '/api/dms/geteinvoices';
 const PUBLIC_PATHS = [PATH, PATH_ALIAS];
+const ARCELIK_DEALER_ID = '21134761';
+const SAMPLE_START = '2023-03-27T00:00:00';
+const SAMPLE_END = '2023-03-31T00:00:00';
 
 const DEFAULTS = {
   clientId: rapid360.DEFAULTS.clientId,
   clientSecret: rapid360.DEFAULTS.clientSecret,
-  dealerId: rapid360.DEFAULTS.dealerId,
+  dealerId: '340344',
   eInvoiceCode: rapid360.DEFAULTS.eInvoiceCode,
   systemId: rapid360.DEFAULTS.systemId,
   bayi: '1292',
@@ -38,10 +41,16 @@ function muleFallback(fallback){
   return {
     clientId: String(f.clientId || DEFAULTS.clientId).trim(),
     clientSecret: String(f.clientSecret || DEFAULTS.clientSecret).trim(),
-    dealerId: String(f.dealerId || DEFAULTS.dealerId).trim() || DEFAULTS.dealerId,
+    dealerId: DEFAULTS.dealerId,
     eInvoiceCode: String(f.eInvoiceCode || DEFAULTS.eInvoiceCode).trim() || DEFAULTS.eInvoiceCode,
     systemId: String(f.systemId || DEFAULTS.systemId).trim() || '1'
   };
+}
+
+function normalizeAtakDealerId(v){
+  const s = String(v || '').trim();
+  if(!s || s === ARCELIK_DEALER_ID) return DEFAULTS.dealerId;
+  return s;
 }
 
 function ensureConfig(raw = {}, fallback = {}){
@@ -55,7 +64,7 @@ function ensureConfig(raw = {}, fallback = {}){
       includeInbox: r.includeInbox != null
         ? (r.includeInbox === true || r.includeInbox === 'true' || r.includeInbox === 'on')
         : DEFAULTS.includeInbox,
-      dealerId: String(r.dealerId || mule.dealerId).trim() || mule.dealerId,
+      dealerId: normalizeAtakDealerId(r.dealerId),
       eInvoiceCode: String(r.eInvoiceCode || mule.eInvoiceCode).trim() || mule.eInvoiceCode,
       systemId: String(r.systemId || mule.systemId).trim() || '1',
       bayi: String(r.bayi || DEFAULTS.bayi).trim() || DEFAULTS.bayi,
@@ -180,7 +189,7 @@ function formatTrDate(v){
 
 function dealerNumber(cfg){
   const n = Number(String(cfg.dealerId || DEFAULTS.dealerId).replace(/\D/g, ''));
-  return Number.isFinite(n) && n > 0 ? n : 21134761;
+  return Number.isFinite(n) && n > 0 ? n : Number(DEFAULTS.dealerId);
 }
 
 function numericSayac(seed, fallback){
@@ -484,8 +493,8 @@ function failBody(message, status){
 
 function muleQueryString(cfg, { startDate, endDate, mask } = {}){
   const c = ensureConfig(cfg).cfg;
-  const start = rapid360.formatDateTime(startDate || new Date(Date.now() - 13 * 86400000), false);
-  const end = rapid360.formatDateTime(endDate || new Date(), false);
+  const start = rapid360.formatDateTime(startDate || SAMPLE_START, false);
+  const end = rapid360.formatDateTime(endDate || SAMPLE_END, false);
   const secret = mask ? '********' : String(c.clientSecret || '');
   return [
     'client_id=' + String(c.clientId || ''),
@@ -548,7 +557,7 @@ function mergeIncoming(prev, incoming, { rotate } = {}){
   return {
     enabled: x.enabled != null ? (x.enabled === true || x.enabled === 'true' || x.enabled === 'on') : base.enabled,
     includeInbox: x.includeInbox != null ? (x.includeInbox === true || x.includeInbox === 'true' || x.includeInbox === 'on') : base.includeInbox,
-    dealerId: String(x.dealerId != null ? x.dealerId : base.dealerId).trim() || DEFAULTS.dealerId,
+    dealerId: normalizeAtakDealerId(x.dealerId != null ? x.dealerId : base.dealerId),
     eInvoiceCode: String(x.eInvoiceCode != null ? x.eInvoiceCode : base.eInvoiceCode).trim() || DEFAULTS.eInvoiceCode,
     systemId: String(x.systemId != null ? x.systemId : base.systemId).trim() || '1',
     bayi: String(x.bayi != null ? x.bayi : base.bayi).trim() || DEFAULTS.bayi,
@@ -565,6 +574,8 @@ module.exports = {
   PATH_ALIAS,
   PUBLIC_PATHS,
   DEFAULTS,
+  SAMPLE_START,
+  SAMPLE_END,
   generateClientId,
   generateClientSecret,
   ensureConfig,

@@ -9,7 +9,7 @@ function assert(cond, msg){
 const muleQuery = {
   client_id: '842fb1bc7caf495bb8cdda9e12039adb',
   client_secret: '3f0774B1c94E4750Bf07a059EEea48d6',
-  DealerID: '21134761',
+  DealerID: '340344',
   EInvoiceCode: '2E1N1D3E4',
   SystemId: '1'
 };
@@ -20,6 +20,7 @@ assert(atak.authenticate({}, muleQuery).ok === true, 'mule auth');
 assert(atak.authenticate({}, { ...muleQuery, EInvoiceCode: '' }).ok === false, 'servis kodu zorunlu');
 assert(atak.authenticate({}, { ...muleQuery, DealerID: '' }).ok === false, 'DealerID zorunlu');
 assert(atak.authenticate({}, { ...muleQuery, DealerID: '999' }).ok === false, 'DealerID yanlış');
+assert(atak.authenticate({}, { ...muleQuery, DealerID: '21134761' }).ok === false, 'Arçelik bayi Atak’ta geçmez');
 assert(atak.authenticate({}, { ...muleQuery, client_id: '' }).ok === false, 'client_id zorunlu');
 assert(atak.authenticate({}, { ...muleQuery, client_secret: 'wrong' }).ok === false, 'secret');
 assert(atak.authenticate({}, { ...muleQuery, client_secret: 'wrong' }).message === 'Unauthorized', 'hata sızmaz');
@@ -38,6 +39,8 @@ const seeded = atak.ensureConfig({});
 assert(seeded.cfg.clientId === muleQuery.client_id, 'default client_id');
 assert(seeded.cfg.clientSecret === muleQuery.client_secret, 'default secret');
 assert(seeded.cfg.eInvoiceCode === '2E1N1D3E4', 'default servis kodu');
+assert(seeded.cfg.dealerId === '340344', 'Atak DealerID');
+assert(atak.ensureConfig({ dealerId: '21134761' }).cfg.dealerId === '340344', 'eski Arçelik bayi Atak’ta düzelir');
 
 const store = {
   invoiceIntegration: { companyTitle: 'ATAK PAZARLAMA SANAYİ VE TİCARET LİMİTED ŞİRKETİ', companyVkn: '1234567890' },
@@ -97,7 +100,7 @@ const all = atak.buildResponse(store, creds, {
 });
 assert(Array.isArray(all.EInvoices), 'EInvoices');
 assert(all.RecordCount === 3, 'RecordCount ' + all.RecordCount);
-assert(all.DealerId === 21134761, 'DealerId');
+assert(all.DealerId === 340344, 'DealerId');
 assert(all.EInvoiceCode === '2E1N1D3E4', 'EInvoiceCode');
 assert(all.startDate === '2026-08-01T00:00:00', 'startDate');
 assert(all.$id === '1' && all._schema === 0 && all._reference === '', 'zarf meta');
@@ -156,12 +159,12 @@ const pub = atak.publicConfig(creds, { reveal: false, baseUrl: 'https://panel.at
 assert(pub.copyUrl.includes('EInvoiceCode=2E1N1D3E4'), 'copy servis kodu');
 assert(pub.copyUrl.includes('client_id=' + muleQuery.client_id), 'copy client');
 assert(pub.copyUrl.includes('client_secret=' + muleQuery.client_secret), 'copy secret');
-assert(pub.copyUrl.includes('DealerID=21134761'), 'copy DealerID');
+assert(pub.copyUrl.includes('DealerID=340344'), 'copy DealerID');
 assert(pub.copyUrl.includes('SystemId=1'), 'copy SystemId');
 assert(pub.copyUrl.includes('addReturns=true'), 'copy addReturns');
-assert(pub.copyUrl.includes('StartDate='), 'copy StartDate');
-assert(pub.copyUrl.includes('EndDate='), 'copy EndDate');
+assert(pub.copyUrl.includes('StartDate=2023-03-27T00:00:00'), 'copy StartDate örnek');
+assert(pub.copyUrl.includes('EndDate=2023-03-31T00:00:00'), 'copy EndDate örnek');
 assert(!pub.copyUrl.includes('%3A'), 'tarih encode yok');
-assert(pub.copyUrl.startsWith('https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?'), 'copy path');
+assert(pub.copyUrl === 'https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?client_id=' + muleQuery.client_id + '&client_secret=' + muleQuery.client_secret + '&StartDate=2023-03-27T00:00:00&EndDate=2023-03-31T00:00:00&DealerID=340344&EInvoiceCode=2E1N1D3E4&SystemId=1&addReturns=true', 'Arçelik ile aynı sıra');
 
 console.log('atak-geteinvoices.test.js ok');
