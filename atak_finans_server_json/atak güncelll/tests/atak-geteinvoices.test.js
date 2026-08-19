@@ -11,8 +11,10 @@ assert(atak.PATH === '/exp/dms/dms/geteinvoices', 'path');
 assert(atak.PUBLIC_PATHS.includes('/api/dms/geteinvoices'), 'alias');
 
 const seeded = atak.ensureConfig({});
-assert(seeded.generated === true && seeded.cfg.clientId.length === 32, 'seed id');
-assert(seeded.cfg.clientSecret.length >= 32, 'seed secret');
+assert(seeded.generated === true, 'seed flag');
+assert(seeded.cfg.clientId === atak.DEFAULTS.clientId, 'mule client_id');
+assert(seeded.cfg.clientSecret === atak.DEFAULTS.clientSecret, 'mule secret');
+assert(seeded.cfg.eInvoiceCode === '2E1N1D3E4', 'servis kodu');
 assert(seeded.cfg.dealerId === '21134761', 'default dealer');
 
 const authOk = atak.authenticate(creds, {
@@ -119,6 +121,14 @@ const noInbox = atak.buildResponse(store, { ...creds, includeInbox: false }, {
   addReturns: 'true'
 });
 assert(noInbox.Count === 2 && !noInbox.Data.some(x => x.Source === 'RAPID360'), 'inbox kapalı');
+
+const sameDay = atak.buildResponse(store, creds, {
+  StartDate: '2026-08-12T00:00:00',
+  EndDate: '2026-08-12T00:00:00',
+  addReturns: 'true'
+});
+assert(sameDay.Count === 1 && sameDay.Data[0].InvoiceNumber === 'ATK2026000000002', 'EndDate T00:00:00 gün dahil');
+assert(sameDay.EndDate === '2026-08-12T00:00:00', 'örnek EndDate formatı');
 
 const pub = atak.publicConfig(creds, { reveal: true, baseUrl: 'https://panel.atakhome.com.tr' });
 assert(pub.clientSecret === '********', 'maske');

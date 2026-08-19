@@ -13,9 +13,11 @@ const PATH_ALIAS = '/api/dms/geteinvoices';
 const PUBLIC_PATHS = [PATH, PATH_ALIAS];
 
 const DEFAULTS = {
-  dealerId: '21134761',
-  eInvoiceCode: '2E1N1D3E4',
-  systemId: '1',
+  clientId: rapid360.DEFAULTS.clientId,
+  clientSecret: rapid360.DEFAULTS.clientSecret,
+  dealerId: rapid360.DEFAULTS.dealerId,
+  eInvoiceCode: rapid360.DEFAULTS.eInvoiceCode,
+  systemId: rapid360.DEFAULTS.systemId,
   enabled: true,
   includeInbox: true
 };
@@ -29,22 +31,32 @@ function generateClientSecret(){
   return hex.slice(0, 8) + hex.slice(8, 16).toUpperCase() + hex.slice(16);
 }
 
-function ensureConfig(raw = {}){
-  const r = raw && typeof raw === 'object' ? raw : {};
-  const clientId = String(r.clientId || '').trim();
-  const clientSecret = String(r.clientSecret || '').trim();
-  const generated = !clientId || !clientSecret;
+function muleFallback(fallback){
+  const f = fallback && typeof fallback === 'object' ? fallback : {};
   return {
-    generated,
+    clientId: String(f.clientId || DEFAULTS.clientId).trim(),
+    clientSecret: String(f.clientSecret || DEFAULTS.clientSecret).trim(),
+    dealerId: String(f.dealerId || DEFAULTS.dealerId).trim() || DEFAULTS.dealerId,
+    eInvoiceCode: String(f.eInvoiceCode || DEFAULTS.eInvoiceCode).trim() || DEFAULTS.eInvoiceCode,
+    systemId: String(f.systemId || DEFAULTS.systemId).trim() || '1'
+  };
+}
+
+function ensureConfig(raw = {}, fallback = {}){
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const mule = muleFallback(fallback);
+  const missing = !String(r.clientId || '').trim() || !String(r.clientSecret || '').trim();
+  return {
+    generated: missing,
     cfg: {
       enabled: r.enabled !== false && String(r.enabled) !== 'false',
       includeInbox: r.includeInbox !== false && String(r.includeInbox) !== 'false',
-      dealerId: String(r.dealerId || DEFAULTS.dealerId).trim() || DEFAULTS.dealerId,
-      eInvoiceCode: String(r.eInvoiceCode || DEFAULTS.eInvoiceCode).trim() || DEFAULTS.eInvoiceCode,
-      systemId: String(r.systemId || DEFAULTS.systemId).trim() || '1',
-      clientId: clientId || generateClientId(),
-      clientSecret: clientSecret || generateClientSecret(),
-      rotatedAt: r.rotatedAt || (generated ? new Date().toISOString() : '')
+      dealerId: String(r.dealerId || mule.dealerId).trim() || mule.dealerId,
+      eInvoiceCode: String(r.eInvoiceCode || mule.eInvoiceCode).trim() || mule.eInvoiceCode,
+      systemId: String(r.systemId || mule.systemId).trim() || '1',
+      clientId: String(r.clientId || mule.clientId).trim(),
+      clientSecret: String(r.clientSecret || mule.clientSecret).trim(),
+      rotatedAt: r.rotatedAt || (missing ? new Date().toISOString() : '')
     }
   };
 }
@@ -100,22 +112,38 @@ function parseAddReturns(query, fallback = true){
   return v === 'true' || v === '1' || v.toLowerCase() === 'true';
 }
 
+function ymd(v){
+  const s = String(v || '').trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(m) return m[1];
+  const dt = v instanceof Date ? v : new Date(s);
+  if(!Number.isFinite(dt.getTime())) return '';
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
 function parseRange(query){
   const startRaw = qpick(query, ['StartDate', 'startDate', 'start']);
   const endRaw = qpick(query, ['EndDate', 'endDate', 'end']);
-  const end = endRaw ? new Date(rapid360.formatDateTime(endRaw, true)) : new Date();
-  const start = startRaw
-    ? new Date(rapid360.formatDateTime(startRaw, false))
-    : new Date(end.getTime() - 29 * 86400000);
-  const startMs = Number.isFinite(start.getTime()) ? start.getTime() : 0;
-  const endMs = Number.isFinite(end.getTime()) ? end.getTime() : Date.now();
-  return { startMs, endMs, startDate: rapid360.formatDateTime(start, false), endDate: rapid360.formatDateTime(end, true) };
+  const endYmd = ymd(endRaw) || ymd(new Date());
+  let startYmd = ymd(startRaw);
+  if(!startYmd){
+    const end = new Date(`${endYmd}T00:00:00`);
+    startYmd = ymd(new Date(end.getTime() - 29 * 86400000));
+  }
+  return {
+    startYmd,
+    endYmd,
+    startDate: `${startYmd}T00:00:00`,
+    endDate: `${endYmd}T00:00:00`,
+    startMs: Date.parse(`${startYmd}T00:00:00`),
+    endMs: Date.parse(`${endYmd}T23:59:59`)
+  };
 }
 
-function rowTime(row){
-  const raw = row && (row.invoiceDate || row.createdAt || row.updatedAt || '');
-  const t = Date.parse(String(raw));
-  return Number.isFinite(t) ? t : 0;
+function inDateRange(row, range){
+  const d = ymd(row && (row.invoiceDate || row.createdAt));
+  if(!d) return true;
+  return d >= range.startYmd && d <= range.endYmd;
 }
 
 function isReturnRow(row){
@@ -196,16 +224,14 @@ function collectRows(store, cfg, query){
   const out = [];
   for(const row of (store && store.invoiceQueue) || []){
     if(!row || (!row.invoiceNumber && !row.uuid)) continue;
-    const t = rowTime(row);
-    if(t && (t < range.startMs || t > range.endMs + 999)) continue;
+    if(!inDateRange(row, range)) continue;
     if(!addReturns && isReturnRow(row)) continue;
     out.push(mapQueueRow(row, store, c));
   }
   if(c.includeInbox){
     for(const row of (store && store.invoiceInbox) || []){
       if(!row || (!row.invoiceNumber && !row.uuid)) continue;
-      const t = rowTime(row);
-      if(t && (t < range.startMs || t > range.endMs + 999)) continue;
+      if(!inDateRange(row, range)) continue;
       if(!addReturns && isReturnRow(row)) continue;
       out.push(mapInboxRow(row, c));
     }
@@ -240,7 +266,7 @@ function buildCopyUrl(cfg, { baseUrl, startDate, endDate, mask } = {}){
   q.set('client_id', c.clientId);
   q.set('client_secret', mask ? '********' : c.clientSecret);
   q.set('StartDate', rapid360.formatDateTime(startDate || new Date(Date.now() - 13 * 86400000), false));
-  q.set('EndDate', rapid360.formatDateTime(endDate || new Date(), true));
+  q.set('EndDate', rapid360.formatDateTime(endDate || new Date(), false));
   q.set('DealerID', c.dealerId);
   q.set('EInvoiceCode', c.eInvoiceCode);
   q.set('SystemId', c.systemId);
@@ -304,6 +330,8 @@ module.exports = {
   ensureConfig,
   authenticate,
   parseRange,
+  ymd,
+  inDateRange,
   parseAddReturns,
   isReturnRow,
   profileOf,

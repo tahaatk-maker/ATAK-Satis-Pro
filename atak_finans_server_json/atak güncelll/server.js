@@ -227,7 +227,7 @@ function ensureStore(store) {
     if(rz.addReturns==null)rz.addReturns=true;
   }
   {
-    const seeded=atakGetE.ensureConfig(store.invoiceIntegration.atakDms);
+    const seeded=atakGetE.ensureConfig(store.invoiceIntegration.atakDms, store.invoiceIntegration.rapid360);
     store.invoiceIntegration.atakDms=seeded.cfg;
     if(seeded.generated)store.__atakDmsSeeded=true;
   }
@@ -1849,8 +1849,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.170-atak-geteinvoices',
-  build:'fix-v170',
+  version:'6.3.171-atak-geteinvoices',
+  build:'fix-v171',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -1862,7 +1862,7 @@ app.get('/health',(req,res)=>res.json({
 function handleAtakGetEInvoices(req,res){
   try{
     const s=readStore();
-    const cfg=atakGetE.ensureConfig((s.invoiceIntegration||{}).atakDms).cfg;
+    const cfg=atakGetE.ensureConfig((s.invoiceIntegration||{}).atakDms,(s.invoiceIntegration||{}).rapid360).cfg;
     const auth=atakGetE.authenticate(cfg,req.query||{});
     if(!auth.ok){
       const fail=atakGetE.failBody(auth.message,auth.status);
