@@ -1901,8 +1901,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.195-atak-geteinvoices',
-  build:'fix-v195',
+  version:'6.3.196-atak-geteinvoices',
+  build:'fix-v196',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5066,12 +5066,16 @@ function parseRapid360SalesUpload(file){
   const out=rapidSalesXml.extractSales(text);
   return out;
 }
-function emptyRapidSalesError(parsed, fileMode){
+function emptyRapidSalesError(parsed, fileMode, extra){
   const cancelled=Number(parsed && parsed.cancelledCount||0);
   if(cancelled) return `${fileMode?'XML okundu':'Rapid360'}: ${cancelled} satış İPTAL işaretli, aktarılacak kayıt yok.`;
+  const magaza=String(extra&&extra.store||'340334').trim()||'340334';
+  const start=String(extra&&extra.startDate||'').slice(0,10);
+  const end=String(extra&&extra.endDate||'').slice(0,10);
+  const when=start?` ${start}${end&&end!==start?`–${end}`:''}`:'';
   return fileMode
     ? 'XML içinde satış siparişi bulunamadı. Rapid360 Detaylı satış bilgileri XML dosyasını seçin (SiparisNo öznitelik olarak gelir).'
-    : 'Rapid360 yanıtında satış yok. Tarih aralığını kontrol edin.';
+    : `Rapid360 yanıtında satış yok. Mağaza ${magaza} ATAK${when}. Tarihi genişletin veya XML yükleyin.`;
 }
 function rapidDealerIsFurniture(dealer){
   return /istikbal/i.test(String(dealer&&(dealer.id||dealer.name)||''));
@@ -5435,9 +5439,9 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
         store:magaza,company,tried:out.tried||[]
       });
     }
-    if(!out.ok) return res.status(400).json({error:out.error||'Rapid360 çekilemedi',tried:out.tried||[]});
+    if(!out.ok) return res.status(400).json({error:out.error||'Rapid360 çekilemedi',tried:out.tried||[],store:magaza,company,via:out.via||''});
     if(!out.parsed || !out.parsed.sales.length){
-      return res.status(400).json({error:emptyRapidSalesError(out.parsed||{},false),tried:out.tried||[]});
+      return res.status(400).json({error:emptyRapidSalesError(out.parsed||{},false,{store:magaza,startDate:body.startDate,endDate:body.endDate}),tried:out.tried||[],store:magaza,company});
     }
     const dealer=pickRapidDealer(s,body.dealerId);
     const preview=buildRapidSalesPreview(s,out.parsed,dealer);

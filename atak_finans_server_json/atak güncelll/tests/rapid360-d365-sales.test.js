@@ -13,8 +13,9 @@ async function run(){
   assert.ok(d365.scoreEntityName('DmrDetailedSalesReportLines') > d365.scoreEntityName('SalesOrderHeadersV2'));
   assert.equal(d365.filterSales([
     { store: '340334', orderDate: '2026-08-18', total: 10 },
+    { store: '340344', orderDate: '2026-08-18', total: 10 },
     { store: '999', orderDate: '2026-08-18', total: 10 }
-  ], { store: '340334', startDate: '2026-08-18', endDate: '2026-08-18' }).length, 1);
+  ], { store: '340334', startDate: '2026-08-18', endDate: '2026-08-18' }).length, 2);
 
   const out = await d365.fetchWithToken({
     token: 'tok',

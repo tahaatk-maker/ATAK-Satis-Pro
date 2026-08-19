@@ -1,5 +1,11 @@
 const assert = require('assert');
-const { fetchRapid360Sales, candidateUrls } = require('../lib/rapid360-sales-fetch');
+const {
+  fetchRapid360Sales,
+  candidateUrls,
+  salesQueryVariants,
+  resolveSalesConsume,
+  keepSaleStore
+} = require('../lib/rapid360-sales-fetch');
 
 function makeStore(over = {}) {
   return {
@@ -17,10 +23,11 @@ function makeStore(over = {}) {
   };
 }
 
-function xmlBody() {
+function xmlBody(store) {
+  const magaza = store || '340334';
   return `<?xml version="1.0"?>
 <Satislar XMLVERSION="1">
-  <SatisBilgileri SiparisNo="R1" SiparisTarihi="18/03/2026" MusteriKodu="C1" Ad="ALI" Soyad="SEZER" ToplamTutar="100" Magaza="340334">
+  <SatisBilgileri SiparisNo="R1" SiparisTarihi="18/03/2026" MusteriKodu="C1" Ad="ALI" Soyad="SEZER" ToplamTutar="100" Magaza="${magaza}">
     <SatisSatirlari>
       <SatisSatiri MalzemeKodu="P1" MalzemeAdi="Urun" Miktar="1" BirimFiyat="100" Tutar="100" KDVOrani="20"/>
     </SatisSatirlari>
@@ -33,10 +40,36 @@ async function run() {
   assert.ok(urls.some((u) => u.endsWith('/getdetailedsales')));
   assert.ok(!urls.some((u) => /geteinvoices$/i.test(u)));
 
-  await assert.rejects(
-    () => fetchRapid360Sales({ store: makeStore({ dealerId: '21134761' }), startDate: '2026-03-01', endDate: '2026-03-18' }),
-    /21134761/
-  );
+  const consume = resolveSalesConsume({ dealerId: '21134761', url: 'https://example.test/x', clientId: 'c', clientSecret: 's' });
+  assert.equal(consume.dealerId, '340344');
+  const q = salesQueryVariants(consume, { startDate: '2026-08-18', endDate: '2026-08-19', store: '340334', company: '2521' });
+  assert.ok(q[0].includes('DealerID=340344'));
+  assert.ok(!q[0].includes('Magaza='));
+  assert.ok(!q[0].includes('Sirket=340334'));
+  assert.ok(q.some((s) => s.includes('Magaza=340334') && s.includes('Company=2521')));
+  assert.ok(keepSaleStore({ store: '340344' }, '340334'));
+  assert.ok(!keepSaleStore({ store: '999' }, '340334'));
+
+  const origChair = global.fetch;
+  global.fetch = async (url) => {
+    const u = String(url);
+    assert.ok(!u.includes('DealerID=21134761'));
+    if (u.includes('getdetailedsales') && u.includes('DealerID=340344')) {
+      return { ok: true, status: 200, text: async () => xmlBody() };
+    }
+    return { ok: false, status: 404, text: async () => '' };
+  };
+  try {
+    const out = await fetchRapid360Sales({
+      store: makeStore({ dealerId: '21134761' }),
+      startDate: '2026-03-01',
+      endDate: '2026-03-18',
+    });
+    assert.equal(out.ok, true, out.error);
+    assert.ok(out.sourceUrl.includes('DealerID=340344'));
+  } finally {
+    global.fetch = origChair;
+  }
 
   const orig = global.fetch;
   global.fetch = async (url) => {
@@ -56,9 +89,30 @@ async function run() {
     assert.equal(out.parsed.sales[0].custName, 'ALI SEZER');
     assert.ok(out.sourceUrl.includes('DealerID=340344'));
     assert.ok(!out.sourceUrl.includes('secret-value'));
-    assert.ok(out.sourceUrl.includes('Magaza=340334'));
+    assert.ok(!out.sourceUrl.includes('Sirket=340334'));
   } finally {
     global.fetch = orig;
+  }
+
+  const origStore = global.fetch;
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('getdetailedsales') && !u.includes('Magaza=')) {
+      return { ok: true, status: 200, text: async () => xmlBody('340344') };
+    }
+    return { ok: true, status: 200, text: async () => '<Satislar/>' };
+  };
+  try {
+    const out = await fetchRapid360Sales({
+      store: makeStore(),
+      magaza: '340334',
+      startDate: '2026-03-01',
+      endDate: '2026-03-18',
+    });
+    assert.equal(out.ok, true, out.error);
+    assert.equal(out.parsed.sales[0].store, '340344');
+  } finally {
+    global.fetch = origStore;
   }
 
   const origJson = global.fetch;
@@ -101,20 +155,27 @@ async function run() {
       endDate: '2026-03-18',
     });
     assert.equal(out.ok, false);
-    assert.ok(/XML|Okta/i.test(out.error));
+    assert.ok(!out.needsOkta);
+    assert.ok(/XML|satış/i.test(out.error));
   } finally {
     global.fetch = orig2;
   }
 
-  const empty = await fetchRapid360Sales({
-    store: { invoiceIntegration: { rapid360: {} } },
-    startDate: '2026-08-18',
-    endDate: '2026-08-18',
-  });
-  assert.equal(empty.ok, false);
-  assert.equal(empty.needsOkta, true);
-  assert.ok(/Okta/i.test(empty.error));
-  assert.ok(!/Servis URL, Client ID ve Client secret kaydedin/i.test(empty.error));
+  const origEmpty = global.fetch;
+  global.fetch = async () => ({ ok: false, status: 404, text: async () => '' });
+  try {
+    const empty = await fetchRapid360Sales({
+      store: { invoiceIntegration: { rapid360: {} } },
+      startDate: '2026-08-18',
+      endDate: '2026-08-18',
+    });
+    assert.equal(empty.ok, false);
+    assert.ok(!empty.needsOkta);
+    assert.ok(/XML|satış|Mağaza/i.test(empty.error));
+    assert.ok(!/Servis URL, Client ID ve Client secret kaydedin/i.test(empty.error));
+  } finally {
+    global.fetch = origEmpty;
+  }
 
   console.log('rapid360-sales-fetch tests OK');
 }

@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.195-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.196-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.195-atak-geteinvoices
-EXPECT_BUILD=fix-v195
+EXPECT_HEALTH=6.3.196-atak-geteinvoices
+EXPECT_BUILD=fix-v196
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -98,6 +98,12 @@ check "person name lib" test -f "$SRC/lib/person-name.js"
 check "rapid360 satis fetch" test -f "$SRC/lib/rapid360-sales-fetch.js"
 check "rapid360 getdetailedsales" grep -q "getdetailedsales" "$SRC/lib/rapid360-sales-fetch.js"
 check "rapid360 pull api" grep -q "rapid360-sales-pull" "$SRC/server.js"
+check "rapid360 atak bayi 340344" grep -q "DEFAULT_DEALER" "$SRC/lib/rapid360-sales-fetch.js"
+check "rapid360 sales query variants" grep -q "salesQueryVariants" "$SRC/lib/rapid360-sales-fetch.js"
+if grep -q "Sirket', magaza" "$SRC/lib/rapid360-sales-fetch.js"; then
+  echo "   HATALI: satış sorgusu Sirket=mağaza gönderiyor"; exit 1
+fi
+echo "   ok: satış sorgusu Sirket=mağaza değil"
 check "rapid360 okta auth" test -f "$SRC/lib/rapid360-d365-auth.js"
 check "rapid360 d365 sales" test -f "$SRC/lib/rapid360-d365-sales.js"
 check "rapid360 okta poll api" grep -q "rapid360-okta-poll" "$SRC/server.js"

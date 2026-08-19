@@ -6,13 +6,15 @@ const d365Auth = require('./rapid360-d365-auth');
 const d365Sales = require('./rapid360-d365-sales');
 
 const DEFAULT_STORE = '340334';
+const DEFAULT_DEALER = '340344';
 const DEFAULT_COMPANY = '2521';
+const ATAK_STORES = new Set(['340334', '340344']);
 
 const SALES_PATHS = [
   'getdetailedsales',
+  'getsales',
   'getdetailedsalesreport',
   'getdmrdetailedsalesreport',
-  'getsales',
   'getsaledetails',
   'getsalesinfo',
   'dmrdetailedsales',
@@ -54,30 +56,109 @@ function publicUrl(url){
   }
 }
 
-function buildSalesQuery(consume, { startDate, endDate, store, company } = {}){
+function atakDealerId(raw){
+  const d = String(raw || '').trim();
+  if(!d || d === rapid360.CHAIRMAN_DEALER_ID) return DEFAULT_DEALER;
+  return d;
+}
+
+function sameAtakStore(a, b){
+  const A = String(a || '').trim();
+  const B = String(b || '').trim();
+  if(!A || !B || A === B) return true;
+  return ATAK_STORES.has(A) && ATAK_STORES.has(B);
+}
+
+function keepSaleStore(sale, magaza){
+  const st = String(sale && sale.store || '').trim();
+  if(!st || !magaza) return true;
+  if(st === String(magaza).trim()) return true;
+  return sameAtakStore(st, magaza);
+}
+
+function filterParsedByStore(parsed, magaza){
+  const sales = ((parsed && parsed.sales) || []).filter((s) => keepSaleStore(s, magaza));
+  return Object.assign({}, parsed || {}, { sales });
+}
+
+function resolveSalesConsume(rawCfg, env = process.env){
+  const raw = rawCfg && typeof rawCfg === 'object' ? rawCfg : {};
+  const consume = rapid360.resolveConsumeConfig(raw, env);
+  const defaults = rapid360.DEFAULTS || {};
+  const dealerId = atakDealerId(consume.dealerId || raw.dealerId);
+  return {
+    url: String(consume.url || env.ARCELIK_MULE_URL || defaults.url || '').trim().split('?')[0],
+    clientId: String(consume.clientId || env.ARCELIK_MULE_CLIENT_ID || defaults.clientId || '').trim(),
+    clientSecret: String(consume.clientSecret || env.ARCELIK_MULE_CLIENT_SECRET || defaults.clientSecret || '').trim(),
+    dealerId,
+    eInvoiceCode: String(consume.eInvoiceCode || env.ARCELIK_EINVOICE_CODE || defaults.eInvoiceCode || '').trim(),
+    systemId: String(consume.systemId || env.ARCELIK_SYSTEM_ID || defaults.systemId || '1').trim() || '1',
+    salesUrl: String(raw.salesUrl || env.ARCELIK_SALES_URL || '').trim(),
+    salesStore: String(raw.salesStore || env.ARCELIK_STORE_ID || DEFAULT_STORE).trim() || DEFAULT_STORE,
+    salesCompany: String(raw.salesCompany || env.ARCELIK_COMPANY || DEFAULT_COMPANY).trim() || DEFAULT_COMPANY
+  };
+}
+
+function consumeReady(consume){
+  return Boolean(consume && consume.url && consume.clientId && consume.clientSecret);
+}
+
+function baseSalesQuery(consume, { startDate, endDate, dealerId } = {}){
   const q = new URLSearchParams();
   if(consume.clientId) q.set('client_id', consume.clientId);
   if(consume.clientSecret) q.set('client_secret', consume.clientSecret);
   q.set('StartDate', rapid360.formatDateTime(startDate, false));
   q.set('EndDate', rapid360.formatDateTime(endDate, true));
-  if(consume.dealerId) q.set('DealerID', consume.dealerId);
+  const dealer = atakDealerId(dealerId || consume.dealerId);
+  if(dealer) q.set('DealerID', dealer);
   if(consume.eInvoiceCode) q.set('EInvoiceCode', consume.eInvoiceCode);
   q.set('SystemId', consume.systemId || '1');
-  const magaza = String(store == null ? (consume.salesStore || DEFAULT_STORE) : store).trim() || DEFAULT_STORE;
-  if(magaza){
-    q.set('Magaza', magaza);
-    q.set('InventLocationId', magaza);
-    q.set('Store', magaza);
-    q.set('Sirket', magaza);
-  }
+  return q;
+}
+
+function cloneQuery(q){
+  return new URLSearchParams(String(q));
+}
+
+function salesQueryVariants(consume, { startDate, endDate, store, company } = {}){
+  const magaza = String(store || consume.salesStore || DEFAULT_STORE).trim() || DEFAULT_STORE;
   const cmp = String(company || consume.salesCompany || DEFAULT_COMPANY).trim() || DEFAULT_COMPANY;
-  if(cmp){
-    q.set('Company', cmp);
-    q.set('dataAreaId', cmp);
-    q.set('cmp', cmp);
+  const dealers = [];
+  const primary = atakDealerId(consume.dealerId);
+  for(const id of [primary, DEFAULT_DEALER, magaza]){
+    if(id && !dealers.includes(id)) dealers.push(id);
   }
-  q.set('ReportName', 'DmrDetailedSalesReport');
-  return q.toString();
+  const out = [];
+  const seen = new Set();
+  const push = (q) => {
+    const s = q.toString();
+    if(seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  };
+  for(const dealerId of dealers){
+    const base = baseSalesQuery(consume, { startDate, endDate, dealerId });
+    push(base);
+    const withStore = cloneQuery(base);
+    withStore.set('Magaza', magaza);
+    withStore.set('InventLocationId', magaza);
+    withStore.set('Store', magaza);
+    withStore.set('Company', cmp);
+    withStore.set('dataAreaId', cmp);
+    withStore.set('cmp', cmp);
+    withStore.set('ReportName', 'DmrDetailedSalesReport');
+    push(withStore);
+    const withSube = cloneQuery(base);
+    withSube.set('Magaza', magaza);
+    withSube.set('SubeKodu', DEFAULT_DEALER);
+    withSube.set('BayiKodu', 'ATAKHOME');
+    push(withSube);
+  }
+  return out;
+}
+
+function buildSalesQuery(consume, range = {}){
+  return salesQueryVariants(consume, range)[0] || '';
 }
 
 function parseSalesPayload(body, contentType){
@@ -92,10 +173,6 @@ function parseSalesPayload(body, contentType){
     }
   }
   return salesXml.extractSales(text);
-}
-
-function consumeReady(consume){
-  return Boolean(consume && consume.url && consume.clientId && consume.clientSecret);
 }
 
 function headerGet(headers, name){
@@ -151,62 +228,68 @@ function consumeFromStore(store){
   return store && store.rapid360 ? store.rapid360 : store;
 }
 
-async function fetchDetailedSales(rawCfg, range = {}, { fetchImpl, timeoutMs = 90000 } = {}){
-  if(rapid360.isChairmanMuleConsume(rawCfg, process.env) || String(rawCfg && rawCfg.dealerId || '') === rapid360.CHAIRMAN_DEALER_ID){
-    throw new Error('Başkanın Arçelik Rapid360 hesabı ile satış çekilmez. Atak bayi hesabını yazın (DealerID 21134761 kabul edilmez).');
-  }
-  const consume = Object.assign({}, rapid360.resolveConsumeConfig(rawCfg), {
-    salesUrl: String(rawCfg && rawCfg.salesUrl || process.env.ARCELIK_SALES_URL || '').trim(),
-    salesStore: String(rawCfg && rawCfg.salesStore || process.env.ARCELIK_STORE_ID || DEFAULT_STORE).trim() || DEFAULT_STORE,
-    salesCompany: String(rawCfg && rawCfg.salesCompany || process.env.ARCELIK_COMPANY || DEFAULT_COMPANY).trim() || DEFAULT_COMPANY
-  });
+async function fetchDetailedSales(rawCfg, range = {}, { fetchImpl, timeoutMs = 45000, env } = {}){
+  const consume = resolveSalesConsume(rawCfg, env || process.env);
   if(!consumeReady(consume) && !consume.salesUrl){
     throw new Error('Rapid360 satış XML’i çekilemedi. Faturalar → Kurulum’da Atak Rapid360 Servis URL, Client ID ve Client secret kaydedin. Dosya yüklemeniz gerekmez.');
   }
   const store = String(range.store != null && String(range.store).trim() ? range.store : consume.salesStore || DEFAULT_STORE).trim() || DEFAULT_STORE;
   const company = String(range.company || consume.salesCompany || DEFAULT_COMPANY).trim() || DEFAULT_COMPANY;
-  const query = buildSalesQuery(consume, {
+  const queries = salesQueryVariants(consume, {
     startDate: range.startDate,
     endDate: range.endDate,
     store,
     company
   });
-  const urls = candidateUrls(consume, consume.salesUrl).map(u => `${u}?${query}`);
+  const urls = candidateUrls(consume, consume.salesUrl);
   if(!urls.length){
     throw new Error('Rapid360 satış adresi yok. Servis URL veya satış çekme URL yazın.');
   }
   const tried = [];
   let lastErr = '';
-  for(const url of urls){
-    const shown = publicUrl(url);
-    try{
-      const res = await fetchOne(url, { fetchImpl, timeoutMs });
-      tried.push({ url: shown, status: res.status });
-      if(!res.ok){
-        lastErr = `HTTP ${res.status}`;
-        continue;
+  let lastParsed = null;
+  for(const base of urls){
+    let pathMissing = false;
+    for(const query of queries){
+      const url = `${base}?${query}`;
+      const shown = publicUrl(url);
+      try{
+        const res = await fetchOne(url, { fetchImpl, timeoutMs });
+        tried.push({ url: shown, status: res.status });
+        if(res.status === 404 || res.status === 405){
+          lastErr = `HTTP ${res.status}`;
+          pathMissing = true;
+          break;
+        }
+        if(!res.ok){
+          lastErr = `HTTP ${res.status}`;
+          continue;
+        }
+        const parsed = filterParsedByStore(parseSalesPayload(res.buf, res.contentType), store);
+        lastParsed = parsed;
+        if(parsed.sales && parsed.sales.length){
+          return {
+            ok: true,
+            parsed: Object.assign(parsed, { fetched: true, source: shown }),
+            sourceUrl: shown,
+            store,
+            company,
+            tried
+          };
+        }
+        lastErr = parsed.cancelledCount
+          ? `${parsed.cancelledCount} satış İPTAL, aktarılacak yok`
+          : 'yanıtta satış yok';
+      }catch(e){
+        lastErr = /abort/i.test(String(e && e.name)) ? 'zaman aşımı' : (e.message || 'bağlantı hatası');
+        tried.push({ url: shown, status: 0, error: lastErr });
       }
-      const parsed = parseSalesPayload(res.buf, res.contentType);
-      if(parsed.sales && parsed.sales.length){
-        return {
-          ok: true,
-          parsed: Object.assign(parsed, { fetched: true, source: shown }),
-          sourceUrl: shown,
-          store,
-          company,
-          tried
-        };
-      }
-      lastErr = parsed.cancelledCount
-        ? `${parsed.cancelledCount} satış İPTAL, aktarılacak yok`
-        : 'yanıtta satış yok';
-    }catch(e){
-      lastErr = /abort/i.test(String(e && e.name)) ? 'zaman aşımı' : (e.message || 'bağlantı hatası');
-      tried.push({ url: shown, status: 0, error: lastErr });
     }
+    if(pathMissing) continue;
   }
-  const err = new Error(`Rapid360 satış XML’i alınamadı (${lastErr}). Mağaza ${store || DEFAULT_STORE} / ${company}.`);
+  const err = new Error(`Rapid360 satış XML’i alınamadı (${lastErr}). Mağaza ${store} ATAK / bayi ${consume.dealerId} / şirket ${company}.`);
   err.tried = tried;
+  err.parsed = lastParsed;
   throw err;
 }
 
@@ -229,28 +312,32 @@ async function fetchViaOkta(raw, range, opts = {}){
   if(out.needsOkta){
     return { ok: false, needsOkta: true, error: out.error || 'Okta Verify gerekli.', tried: out.tried || [], tokens: ensured.refreshed ? ensured.tokens : null };
   }
+  if(out.ok && out.parsed){
+    out.parsed = filterParsedByStore(out.parsed, range.store);
+    if(!(out.parsed.sales && out.parsed.sales.length)){
+      return { ok: false, error: out.error || 'Okta bağlandı ama bu mağaza/tarihte satış yok.', tried: out.tried || [], tokens: ensured.refreshed ? ensured.tokens : null };
+    }
+  }
   return Object.assign({ tokens: ensured.refreshed ? ensured.tokens : null }, out);
 }
 
 async function fetchRapid360Sales(opts = {}){
   const raw = consumeFromStore(opts.store) || opts.consume || opts.cfg || {};
+  const consume = resolveSalesConsume(raw, opts.env || process.env);
   const range = {
     startDate: opts.startDate,
     endDate: opts.endDate,
     store: String(opts.salesStore != null ? opts.salesStore : (opts.magaza != null ? opts.magaza : opts.storeId) || DEFAULT_STORE).trim() || DEFAULT_STORE,
-    company: opts.company
+    company: opts.company || consume.salesCompany || DEFAULT_COMPANY
   };
   try{
-    if(rapid360.isChairmanMuleConsume(raw, opts.env || process.env) || String(raw && raw.dealerId || '') === rapid360.CHAIRMAN_DEALER_ID){
-      throw new Error('Başkanın Arçelik Rapid360 hesabı ile satış çekilmez. Atak bayi hesabını yazın (DealerID 21134761 kabul edilmez).');
-    }
-    const consume = Object.assign({}, rapid360.resolveConsumeConfig(raw), {
-      salesUrl: String(raw && raw.salesUrl || '').trim()
-    });
+    let muleErr = '';
+    let muleTried = [];
+    let muleParsed = null;
     const muleReady = consumeReady(consume) || Boolean(consume.salesUrl);
     if(muleReady){
       try{
-        const out = await fetchDetailedSales(raw, range, { fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs });
+        const out = await fetchDetailedSales(raw, range, { fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs, env: opts.env || process.env });
         if(out && out.parsed && out.parsed.sales && out.parsed.sales.length){
           return {
             ok: true,
@@ -264,7 +351,9 @@ async function fetchRapid360Sales(opts = {}){
           };
         }
       }catch(e){
-        if(/21134761/.test(String(e && e.message))) throw e;
+        muleErr = e.message || 'çekilemedi';
+        muleTried = e.tried || [];
+        muleParsed = e.parsed || null;
       }
     }
     const okta = await fetchViaOkta(raw, range, opts);
@@ -275,8 +364,19 @@ async function fetchRapid360Sales(opts = {}){
         sourceUrl: okta.sourceUrl || '',
         store: okta.store || range.store,
         company: okta.company || range.company,
-        tried: okta.tried || [],
+        tried: (muleTried || []).concat(okta.tried || []),
         via: 'okta',
+        tokens: okta.tokens || null
+      };
+    }
+    if(muleErr){
+      return {
+        ok: false,
+        error: muleErr,
+        tried: muleTried,
+        parsed: muleParsed,
+        store: range.store,
+        company: range.company,
         tokens: okta.tokens || null
       };
     }
@@ -285,19 +385,23 @@ async function fetchRapid360Sales(opts = {}){
     }
     return { ok: false, error: okta.error || 'çekilemedi', tried: okta.tried || [], tokens: okta.tokens || null };
   }catch(e){
-    if(/21134761/.test(String(e && e.message))) throw e;
     return { ok: false, error: e.message || 'çekilemedi', tried: e.tried || [] };
   }
 }
 
 module.exports = {
   DEFAULT_STORE,
+  DEFAULT_DEALER,
   DEFAULT_COMPANY,
+  ATAK_STORES,
   SALES_PATHS,
   candidateUrls,
   publicUrl,
   buildSalesQuery,
+  salesQueryVariants,
+  resolveSalesConsume,
   parseSalesPayload,
+  keepSaleStore,
   fetchDetailedSales,
   fetchViaOkta,
   fetchRapid360Sales

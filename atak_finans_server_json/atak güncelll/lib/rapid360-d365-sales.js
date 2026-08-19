@@ -170,12 +170,20 @@ function looksLikeLine(rec){
   );
 }
 
+function sameAtakStore(a, b){
+  const A = String(a || '').trim();
+  const B = String(b || '').trim();
+  if(!A || !B || A === B) return true;
+  return (A === '340334' || A === '340344') && (B === '340334' || B === '340344');
+}
+
 function filterSales(sales, { store, startDate, endDate }){
   const magaza = String(store || '').trim();
   const from = String(startDate || '').slice(0, 10);
   const to = String(endDate || '').slice(0, 10);
   return (sales || []).filter(s => {
-    if(magaza && s.store && String(s.store).trim() && String(s.store).trim() !== magaza) return false;
+    const st = String(s.store || '').trim();
+    if(magaza && st && st !== magaza && !sameAtakStore(st, magaza)) return false;
     const d = String(s.orderDate || s.invoiceDate || '').slice(0, 10);
     if(from && d && d < from) return false;
     if(to && d && d > to) return false;
