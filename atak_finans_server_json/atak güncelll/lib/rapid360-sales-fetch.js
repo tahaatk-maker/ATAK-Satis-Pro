@@ -84,15 +84,14 @@ function filterParsedByStore(parsed, magaza){
 function resolveSalesConsume(rawCfg, env = process.env){
   const raw = rawCfg && typeof rawCfg === 'object' ? rawCfg : {};
   const consume = rapid360.resolveConsumeConfig(raw, env);
-  const defaults = rapid360.DEFAULTS || {};
   const dealerId = atakDealerId(consume.dealerId || raw.dealerId);
   return {
-    url: String(consume.url || env.ARCELIK_MULE_URL || defaults.url || '').trim().split('?')[0],
-    clientId: String(consume.clientId || env.ARCELIK_MULE_CLIENT_ID || defaults.clientId || '').trim(),
-    clientSecret: String(consume.clientSecret || env.ARCELIK_MULE_CLIENT_SECRET || defaults.clientSecret || '').trim(),
+    url: String(consume.url || env.ARCELIK_MULE_URL || '').trim().split('?')[0],
+    clientId: String(consume.clientId || env.ARCELIK_MULE_CLIENT_ID || '').trim(),
+    clientSecret: String(consume.clientSecret || env.ARCELIK_MULE_CLIENT_SECRET || '').trim(),
     dealerId,
-    eInvoiceCode: String(consume.eInvoiceCode || env.ARCELIK_EINVOICE_CODE || defaults.eInvoiceCode || '').trim(),
-    systemId: String(consume.systemId || env.ARCELIK_SYSTEM_ID || defaults.systemId || '1').trim() || '1',
+    eInvoiceCode: String(consume.eInvoiceCode || env.ARCELIK_EINVOICE_CODE || '').trim(),
+    systemId: String(consume.systemId || env.ARCELIK_SYSTEM_ID || '1').trim() || '1',
     salesUrl: String(raw.salesUrl || env.ARCELIK_SALES_URL || '').trim(),
     salesStore: String(raw.salesStore || env.ARCELIK_STORE_ID || DEFAULT_STORE).trim() || DEFAULT_STORE,
     salesCompany: String(raw.salesCompany || env.ARCELIK_COMPANY || DEFAULT_COMPANY).trim() || DEFAULT_COMPANY
@@ -299,9 +298,10 @@ async function fetchViaOkta(raw, range, opts = {}){
     return { ok: false, needsOkta: true, error: 'Rapid360 için Okta Verify gerekli.', tokens: null, cfg: ensured.cfg };
   }
   const cfg = ensured.cfg;
+  const dynamicsUrl = d365Auth.isMuleUrl(cfg.dynamicsUrl) ? d365Auth.DEFAULT_DYNAMICS_URL : cfg.dynamicsUrl;
   const out = await d365Sales.fetchWithToken({
     token: ensured.token,
-    dynamicsUrl: cfg.dynamicsUrl,
+    dynamicsUrl,
     odataEntity: cfg.odataEntity,
     company: range.company,
     store: range.store,
@@ -331,11 +331,15 @@ async function fetchRapid360Sales(opts = {}){
     company: opts.company || consume.salesCompany || DEFAULT_COMPANY
   };
   try{
+    const cfg = d365Auth.configFromRapid(raw, opts.env || process.env);
+    const oktaReady = d365Auth.tokenFresh(cfg) || Boolean(cfg.accessToken && cfg.refreshToken);
     let muleErr = '';
     let muleTried = [];
     let muleParsed = null;
-    const muleReady = consumeReady(consume) || Boolean(consume.salesUrl);
-    if(muleReady){
+    const muleReady = Boolean(consume.salesUrl) || (consumeReady(consume) && !oktaReady);
+
+    async function tryMule(){
+      if(!(consumeReady(consume) || Boolean(consume.salesUrl))) return null;
       try{
         const out = await fetchDetailedSales(raw, range, { fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs, env: opts.env || process.env });
         if(out && out.parsed && out.parsed.sales && out.parsed.sales.length){
@@ -355,6 +359,42 @@ async function fetchRapid360Sales(opts = {}){
         muleTried = e.tried || [];
         muleParsed = e.parsed || null;
       }
+      return null;
+    }
+
+    if(oktaReady){
+      const okta = await fetchViaOkta(raw, range, opts);
+      if(okta.ok){
+        return {
+          ok: true,
+          parsed: okta.parsed,
+          sourceUrl: okta.sourceUrl || '',
+          store: okta.store || range.store,
+          company: okta.company || range.company,
+          tried: okta.tried || [],
+          via: 'okta',
+          tokens: okta.tokens || null
+        };
+      }
+      const mule = await tryMule();
+      if(mule) return mule;
+      if(okta.needsOkta && !muleErr){
+        return { ok: false, needsOkta: true, error: 'Önce Okta bağla, sonra Satışları oku. Mağaza 340334 ATAK Atak’ta uygulanır.', tried: okta.tried || [], tokens: okta.tokens || null };
+      }
+      return {
+        ok: false,
+        error: okta.error || muleErr || 'Satışlar okunamadı',
+        tried: (okta.tried || []).concat(muleTried),
+        parsed: muleParsed,
+        store: range.store,
+        company: range.company,
+        tokens: okta.tokens || null
+      };
+    }
+
+    if(muleReady){
+      const mule = await tryMule();
+      if(mule) return mule;
     }
     const okta = await fetchViaOkta(raw, range, opts);
     if(okta.ok){
@@ -369,21 +409,10 @@ async function fetchRapid360Sales(opts = {}){
         tokens: okta.tokens || null
       };
     }
-    if(muleErr){
-      return {
-        ok: false,
-        error: muleErr,
-        tried: muleTried,
-        parsed: muleParsed,
-        store: range.store,
-        company: range.company,
-        tokens: okta.tokens || null
-      };
-    }
     if(okta.needsOkta){
-      return { ok: false, needsOkta: true, error: 'Önce Okta bağla, sonra Satışları oku. Mağaza 340334 ATAK Atak’ta uygulanır.', tried: okta.tried || [], tokens: okta.tokens || null };
+      return { ok: false, needsOkta: true, error: 'Önce Okta bağla, sonra Satışları oku. Mağaza 340334 ATAK Atak’ta uygulanır.', tried: (muleTried || []).concat(okta.tried || []), tokens: okta.tokens || null };
     }
-    return { ok: false, error: okta.error || 'çekilemedi', tried: okta.tried || [], tokens: okta.tokens || null };
+    return { ok: false, error: okta.error || muleErr || 'çekilemedi', tried: (muleTried || []).concat(okta.tried || []), parsed: muleParsed, tokens: okta.tokens || null };
   }catch(e){
     return { ok: false, error: e.message || 'çekilemedi', tried: e.tried || [] };
   }

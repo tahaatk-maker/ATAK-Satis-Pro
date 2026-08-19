@@ -16,9 +16,11 @@ const MAX_PAGES = 15;
 const PREFERRED_ENTITIES = [
   'DmrDetailedSalesReports',
   'DmrDetailedSalesReportLines',
+  'DmrDetailedSalesReport',
   'DmrDetailedSales',
   'DmrSalesLines',
   'DmrSatisBilgileri',
+  'DmrDetayliSatisBilgileri',
   'RetailTransactionSalesTrans',
   'RetailTransactionSalesLines',
   'RetailTransactions',
@@ -81,6 +83,15 @@ function isoBound(d, end){
   return end ? `${s}T23:59:59Z` : `${s}T00:00:00Z`;
 }
 
+function storeFilter(storeKey, store){
+  const magaza = String(store || '').trim();
+  if(!storeKey || !magaza) return '';
+  if(magaza === '340334' || magaza === '340344'){
+    return `(${storeKey} eq ${odataQuote('340334')} or ${storeKey} eq ${odataQuote('340344')})`;
+  }
+  return `${storeKey} eq ${odataQuote(magaza)}`;
+}
+
 function buildFilters(sample, { company, store, startDate, endDate }){
   const dateKey = findKey(sample, [
     'OrderDate', 'TransDate', 'InvoiceDate', 'ReceiptDate', 'CreatedDateTime',
@@ -92,22 +103,30 @@ function buildFilters(sample, { company, store, startDate, endDate }){
   ]);
   const companyKey = findKey(sample, ['dataAreaId', 'DataAreaId', 'Company']);
   const variants = [];
-  const parts = [];
-  if(companyKey && company) parts.push(`${companyKey} eq ${odataQuote(company)}`);
-  if(storeKey && store) parts.push(`${storeKey} eq ${odataQuote(store)}`);
-  if(dateKey && startDate){
-    parts.push(`${dateKey} ge ${isoBound(startDate, false)}`);
-    if(endDate) parts.push(`${dateKey} le ${isoBound(endDate, true)}`);
+  const storeEq = storeFilter(storeKey, store);
+  const from = String(startDate || '').slice(0, 10);
+  const to = String(endDate || '').slice(0, 10);
+  const dateDt = dateKey && from
+    ? `${dateKey} ge ${isoBound(from, false)}${to ? ` and ${dateKey} le ${isoBound(to, true)}` : ''}`
+    : '';
+  const dateDay = dateKey && from
+    ? `${dateKey} ge ${odataQuote(from)}${to ? ` and ${dateKey} le ${odataQuote(to)}` : ''}`
+    : '';
+  const companyEq = companyKey && company ? `${companyKey} eq ${odataQuote(company)}` : '';
+  const combos = [
+    [companyEq, storeEq, dateDt],
+    [storeEq, dateDt],
+    [companyEq, storeEq, dateDay],
+    [storeEq, dateDay],
+    [dateDt],
+    [dateDay],
+    [storeEq],
+    [companyEq]
+  ];
+  for(const parts of combos){
+    const f = parts.filter(Boolean).join(' and ');
+    if(f) variants.push(f);
   }
-  if(parts.length) variants.push(parts.join(' and '));
-  if(storeKey && store && dateKey && startDate){
-    variants.push(`${storeKey} eq ${odataQuote(store)} and ${dateKey} ge ${isoBound(startDate, false)}${endDate ? ` and ${dateKey} le ${isoBound(endDate, true)}` : ''}`);
-  }
-  if(dateKey && startDate){
-    variants.push(`${dateKey} ge ${isoBound(startDate, false)}${endDate ? ` and ${dateKey} le ${isoBound(endDate, true)}` : ''}`);
-  }
-  if(storeKey && store) variants.push(`${storeKey} eq ${odataQuote(store)}`);
-  if(companyKey && company) variants.push(`${companyKey} eq ${odataQuote(company)}`);
   variants.push('');
   return [...new Set(variants)];
 }
@@ -224,7 +243,9 @@ async function queryEntity(base, token, entity, range, fetchImpl){
 async function fetchWithToken(opts = {}){
   const token = String(opts.token || '').trim();
   if(!token) return { ok: false, needsOkta: true, error: 'Okta Verify gerekli.' };
-  const base = d365Auth.normalizeDynamicsUrl(opts.dynamicsUrl);
+  const base = d365Auth.isMuleUrl(d365Auth.normalizeDynamicsUrl(opts.dynamicsUrl))
+    ? d365Auth.DEFAULT_DYNAMICS_URL
+    : d365Auth.normalizeDynamicsUrl(opts.dynamicsUrl);
   if(d365Auth.isMuleUrl(base)){
     return { ok: false, error: 'Rapid360 Dynamics adresi mule geteinvoices olamaz.' };
   }
@@ -255,7 +276,7 @@ async function fetchWithToken(opts = {}){
   }
 
   let authFail = false;
-  for(const entity of names.slice(0, 24)){
+  for(const entity of names.slice(0, 40)){
     try{
       const got = await queryEntity(base, token, entity, range, opts.fetchImpl);
       tried.push({ entity, status: got.status || (got.ok ? 200 : 0), count: (got.records || []).length });

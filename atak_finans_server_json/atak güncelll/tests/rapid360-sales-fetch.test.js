@@ -155,8 +155,8 @@ async function run() {
       endDate: '2026-03-18',
     });
     assert.equal(out.ok, false);
-    assert.ok(!out.needsOkta);
-    assert.ok(/XML|satış/i.test(out.error));
+    assert.equal(out.needsOkta, true);
+    assert.ok(/Okta/i.test(out.error));
   } finally {
     global.fetch = orig2;
   }
@@ -170,11 +170,60 @@ async function run() {
       endDate: '2026-08-18',
     });
     assert.equal(empty.ok, false);
-    assert.ok(!empty.needsOkta);
-    assert.ok(/XML|satış|Mağaza/i.test(empty.error));
+    assert.equal(empty.needsOkta, true);
+    assert.ok(/Okta/i.test(empty.error));
     assert.ok(!/Servis URL, Client ID ve Client secret kaydedin/i.test(empty.error));
   } finally {
     global.fetch = origEmpty;
+  }
+
+  const origOkta = global.fetch;
+  let muleHits = 0;
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (/getdetailedsales|getsales|geteinvoices/i.test(u)) {
+      muleHits += 1;
+      return { ok: false, status: 404, text: async () => '' };
+    }
+    if (u.includes('/data/') && !u.includes('SalesOrderLines')) {
+      return { ok: true, status: 200, text: async () => JSON.stringify({ value: [{ name: 'SalesOrderLinesV3' }] }) };
+    }
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        value: [{
+          SalesOrderNumber: 'S1',
+          ItemNumber: 'P1',
+          ItemName: 'Buzdolabi',
+          InventLocationId: '340334',
+          OrderDate: '2026-08-18',
+          LineAmount: 100,
+          OrderedSalesQuantity: 1,
+          OrderingCustomerAccountNumber: 'C1',
+          CustomerName: 'ALI SEZER'
+        }]
+      })
+    };
+  };
+  try {
+    const out = await fetchRapid360Sales({
+      store: makeStore({
+        d365Auth: {
+          accessToken: 'tok',
+          expiresAt: new Date(Date.now() + 3600000).toISOString(),
+          dynamicsUrl: 'https://liverapid360.operations.dynamics.com'
+        }
+      }),
+      startDate: '2026-08-18',
+      endDate: '2026-08-18',
+    });
+    assert.equal(out.ok, true, out.error);
+    assert.equal(out.via, 'okta');
+    assert.equal(out.parsed.sales[0].salesId, 'S1');
+    assert.equal(muleHits, 0);
+  } finally {
+    global.fetch = origOkta;
   }
 
   console.log('rapid360-sales-fetch tests OK');

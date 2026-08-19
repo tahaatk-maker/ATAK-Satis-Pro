@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.197-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.198-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.197-atak-geteinvoices
-EXPECT_BUILD=fix-v197
+EXPECT_HEALTH=6.3.198-atak-geteinvoices
+EXPECT_BUILD=fix-v198
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -97,7 +97,7 @@ check "musteri kodu next api" grep -q "customer-code-next" "$SRC/server.js"
 check "person name lib" test -f "$SRC/lib/person-name.js"
 check "rapid360 satis fetch" test -f "$SRC/lib/rapid360-sales-fetch.js"
 check "rapid360 getdetailedsales" grep -q "getdetailedsales" "$SRC/lib/rapid360-sales-fetch.js"
-check "rapid360 pull api" grep -q "rapid360-sales-pull" "$SRC/server.js"
+check "rapid360 okta once" grep -q "oktaReady" "$SRC/lib/rapid360-sales-fetch.js"
 check "rapid360 atak bayi 340344" grep -q "DEFAULT_DEALER" "$SRC/lib/rapid360-sales-fetch.js"
 check "rapid360 sales query variants" grep -q "salesQueryVariants" "$SRC/lib/rapid360-sales-fetch.js"
 if grep -q "Sirket', magaza" "$SRC/lib/rapid360-sales-fetch.js"; then
