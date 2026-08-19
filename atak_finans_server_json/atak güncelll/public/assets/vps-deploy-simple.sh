@@ -7,8 +7,8 @@ die(){ log "FAIL: $*"; exit 1; }
 
 log "=== ATAK DEPLOY ==="
 BRANCH="cursor/fatura-ayri-sekme-474e"
-EXPECT_V="6.3.186-atak-geteinvoices"
-EXPECT_B="fix-v186"
+EXPECT_V="6.3.187-atak-geteinvoices"
+EXPECT_B="fix-v187"
 APP="${APP_DIR:-/root/atak-v10}"
 [ -d /root/atakhome-platform ] && [ ! -f "$APP/server.js" ] && APP=/root/atakhome-platform
 

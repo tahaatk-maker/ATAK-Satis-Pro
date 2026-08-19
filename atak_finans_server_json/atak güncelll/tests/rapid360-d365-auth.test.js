@@ -25,8 +25,43 @@ async function run(){
   assert.equal(pub.account, 'taha@atakhome.com.tr');
   assert.ok(!JSON.stringify(pub).includes('secret-token'));
 
+  const interactive = await auth.startInteractiveLogin({
+    sessionId: 'sess-pkce',
+    loginHint: 'taha@atakhome.com.tr',
+    redirectUri: 'https://panel.atakhome.com.tr/web-api/admin/rapid360-okta-callback'
+  });
+  assert.ok(interactive.loginUrl.includes('login.microsoftonline.com'));
+  assert.ok(interactive.loginUrl.includes('login_hint=taha'));
+  assert.ok(interactive.loginUrl.includes('code_challenge'));
+  assert.equal(interactive.userCode, undefined);
+  assert.ok(!JSON.stringify(interactive).includes('user_code'));
+  assert.ok(/kod yazılmaz/i.test(interactive.message));
+
+  const pendingPkce = await auth.pollDeviceLogin({
+    sessionId: 'sess-pkce',
+    pollId: interactive.pollId
+  });
+  assert.equal(pendingPkce.pending, true);
+
+  const authed = await auth.completeAuthorizationCode({
+    sessionId: 'sess-pkce',
+    state: interactive.pollId,
+    code: 'auth-code-1',
+    fetchImpl: async () => jsonRes(200, {
+      access_token: `${header}.${payload}.x`,
+      refresh_token: 'r1',
+      expires_in: 3600
+    })
+  });
+  assert.equal(authed.ok, true);
+  const polled = await auth.pollDeviceLogin({ sessionId: 'sess-pkce', pollId: interactive.pollId });
+  assert.equal(polled.ok, true);
+  assert.equal(polled.tokens.account, 'taha@atakhome.com.tr');
+
+  auth.resetPendingForTests();
   const started = await auth.startDeviceLogin({
     sessionId: 'sess-1',
+    loginHint: 'taha@atakhome.com.tr',
     fetchImpl: async (url) => {
       if(String(url).includes('v2.0/devicecode')){
         return jsonRes(400, { error: 'invalid_client' });
@@ -41,10 +76,12 @@ async function run(){
       });
     }
   });
-  assert.equal(started.userCode, 'ABCD-EFGH');
+  assert.equal(started.userCode, undefined);
+  assert.ok(started.loginUrl);
   assert.ok(started.pollId);
   assert.ok(/Okta Verify/.test(started.message));
   assert.ok(!JSON.stringify(started).includes('dev-1'));
+  assert.ok(!('userCode' in started));
 
   const pending = await auth.pollDeviceLogin({
     sessionId: 'sess-1',

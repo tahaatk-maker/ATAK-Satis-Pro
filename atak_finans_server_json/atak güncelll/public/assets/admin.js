@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v186 */
+/* ATAK_ADMIN_BUILD=fix-v187 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6267,6 +6267,7 @@ function rapid360PullBody(extra={}){
     store:q('#rapid360SalesStoreFilter')?.value||'340334',
     company:q('#rapid360SalesCompanyFilter')?.value||'2521',
     dealerId:q('#rapid360SalesXmlDealer')?.value||'atak-beko',
+    loginHint:String(q('#rapid360OktaUser')?.value||'').trim(),
     pullToken:rapid360PullToken||undefined,
     ...extra
   };
@@ -6282,57 +6283,90 @@ function rapidOktaEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;
 function showRapidOktaBox(d){
   const box=q('#rapid360OktaBox');
   if(!box) return;
-  const uri=rapidOktaEsc(d.verificationUriComplete||d.verificationUri||'https://microsoft.com/devicelogin');
   box.classList.remove('hidden');
-  box.innerHTML=`<div style="font-weight:700;color:#1e3a8a;margin-bottom:6px">Okta Verify’ı onaylayın</div>
-    <div style="font-size:28px;letter-spacing:2px;font-weight:800;color:#111827;margin:4px 0">${rapidOktaEsc(d.userCode||'')}</div>
-    <p style="margin:6px 0 0;font-size:13px;color:#334155">Microsoft sayfası açılmazsa <a href="${uri}" target="_blank" rel="noopener">bu bağlantıyı</a> açın, kodu yazın, telefonda Okta Verify’ı onaylayın. Atak yalnız ürünleri okur.</p>`;
-  try{window.open(d.verificationUriComplete||d.verificationUri||'https://microsoft.com/devicelogin','_blank','noopener')}catch(_){}
+  box.innerHTML=`<div style="font-weight:700;color:#1e3a8a;margin-bottom:6px">Okta Verify telefona gidiyor</div>
+    <p style="margin:6px 0 0;font-size:13px;color:#334155">${rapidOktaEsc(d.message||'Açılan pencerede Rapid360 kullanıcınızı girin. Kod yazılmaz; onay telefona gelir.')}</p>`;
 }
 async function loadRapidOktaStatus(){
   const el=q('#rapid360OktaStatus');
   if(!el) return;
   try{
     const d=await api('/web-api/admin/rapid360-okta-status');
+    const user=d.okta&&(d.okta.lastUser||d.okta.account);
+    if(q('#rapid360OktaUser') && user && !q('#rapid360OktaUser').value) q('#rapid360OktaUser').value=user;
     if(d.okta&&d.okta.connected){
       el.textContent=`Rapid360 bağlı${d.okta.account?`: ${d.okta.account}`:''}. Rapid Aktar yalnız ürünleri okur.`;
       el.className='form-status success';
     }else{
-      el.textContent='Rapid Aktar Okta Verify gönderir; Client secret gerekmez.';
+      el.textContent='Kullanıcıyı yazın — Okta Verify otomatik gelir, kod yazılmaz.';
       el.className='note';
     }
   }catch(_){
-    el.textContent='Rapid Aktar Okta Verify gönderir; Client secret gerekmez.';
+    el.textContent='Kullanıcıyı yazın — Okta Verify otomatik gelir, kod yazılmaz.';
   }
 }
-async function waitRapidOkta(st, payload){
+async function waitRapidOkta(st, payload, popup){
   showRapidOktaBox(payload||{});
   if(st){
-    st.textContent=payload.error||payload.message||'Telefonda Okta Verify’ı onaylayın';
+    st.textContent=payload.message||'Telefonda Okta Verify’ı onaylayın';
     st.className='form-status';
   }
-  const interval=Math.max(3000,(Number(payload.interval)||5)*1000);
-  const until=Date.now()+Math.min(14*60*1000,(Number(payload.expiresIn)||900)*1000);
-  while(Date.now()<until){
-    await new Promise(r=>setTimeout(r,interval));
-    const p=await api('/web-api/admin/rapid360-okta-poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pollId:payload.pollId})});
-    if(p.ok||p.connected){
-      hideRapidOktaBox();
-      await loadRapidOktaStatus();
-      return p;
+  const loginUrl=payload.loginUrl||'';
+  if(loginUrl){
+    try{
+      if(popup && !popup.closed) popup.location.href=loginUrl;
+      else window.open(loginUrl,'rapid360okta','popup=yes,width=520,height=740');
+    }catch(_){
+      window.open(loginUrl,'_blank','noopener');
     }
-    if(st) st.textContent=`Okta Verify bekleniyor… Kod: ${payload.userCode||''}`;
+  }
+  let done=false;
+  const onMsg=(ev)=>{
+    if(ev.origin!==window.location.origin) return;
+    if(ev.data && ev.data.type==='atak-rapid360-okta' && ev.data.ok) done=true;
+  };
+  window.addEventListener('message',onMsg);
+  const interval=Math.max(2000,(Number(payload.interval)||3)*1000);
+  const until=Date.now()+Math.min(14*60*1000,(Number(payload.expiresIn)||900)*1000);
+  try{
+    while(Date.now()<until){
+      if(done){
+        hideRapidOktaBox();
+        await loadRapidOktaStatus();
+        return {ok:true,connected:true};
+      }
+      const p=await api('/web-api/admin/rapid360-okta-poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pollId:payload.pollId})});
+      if(p.ok||p.connected){
+        hideRapidOktaBox();
+        await loadRapidOktaStatus();
+        return p;
+      }
+      if(st) st.textContent='Okta Verify bekleniyor… telefonda onaylayın.';
+      await new Promise(r=>setTimeout(r,interval));
+    }
+  }finally{
+    window.removeEventListener('message',onMsg);
   }
   throw new Error('Okta Verify süresi doldu. Rapid Aktar’a tekrar basın.');
 }
 async function pullRapid360Live(autoImport, st){
+  const user=String(q('#rapid360OktaUser')?.value||'').trim();
+  if(!user){
+    throw new Error('Rapid360 kullanıcısını yazın. Kod gelmez; Okta Verify telefona gider.');
+  }
+  const popup=window.open('about:blank','rapid360okta','popup=yes,width=520,height=740');
+  try{ if(popup) popup.document.write('<p style="font-family:sans-serif;padding:24px">Rapid360 açılıyor…</p>'); }catch(_){}
   try{
-    return await api('/web-api/admin/rapid360-sales-pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody(autoImport?{autoImport:true}:{}))});
+    const d=await api('/web-api/admin/rapid360-sales-pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody(autoImport?{autoImport:true}:{}))});
+    try{ if(popup && !popup.closed) popup.close(); }catch(_){}
+    return d;
   }catch(e){
     if(e.status===409 && e.payload && e.payload.needsOkta){
-      await waitRapidOkta(st, e.payload);
+      await waitRapidOkta(st, e.payload, popup);
+      try{ if(popup && !popup.closed) popup.close(); }catch(_){}
       return await api('/web-api/admin/rapid360-sales-pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody(autoImport?{autoImport:true}:{}))});
     }
+    try{ if(popup && !popup.closed) popup.close(); }catch(_){}
     throw e;
   }
 }

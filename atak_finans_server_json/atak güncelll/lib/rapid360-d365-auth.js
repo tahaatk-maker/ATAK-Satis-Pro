@@ -76,22 +76,62 @@ function accountFromToken(token){
   return String(p.upn || p.unique_name || p.preferred_username || p.email || p.name || '').trim();
 }
 
-function publicDeviceStart(row){
+function loginMessage(loginHint){
+  const who = String(loginHint || '').trim();
+  return who
+    ? `Açılan pencerede ${who} ile girin. Okta Verify telefona gelecek; kod yazılmaz.`
+    : 'Açılan pencerede Rapid360 kullanıcınızı girin. Okta Verify telefona gelecek; kod yazılmaz.';
+}
+
+function withLoginHint(url, loginHint){
+  const hint = String(loginHint || '').trim();
+  const base = String(url || '').trim();
+  if(!base) return '';
+  if(!hint) return base;
+  try{
+    const u = new URL(base);
+    u.searchParams.set('login_hint', hint);
+    u.searchParams.set('username', hint);
+    if(hint.includes('@')) u.searchParams.set('whr', hint.split('@').pop());
+    return u.toString();
+  }catch{
+    return base;
+  }
+}
+
+function pkceVerifier(){
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function pkceChallenge(verifier){
+  return crypto.createHash('sha256').update(String(verifier || '')).digest('base64url');
+}
+
+function buildAuthorizeUrl({ tenant, clientId, resource, redirectUri, loginHint, challenge, state }){
+  const q = new URLSearchParams({
+    client_id: clientId,
+    response_type: 'code',
+    redirect_uri: redirectUri,
+    response_mode: 'query',
+    scope: `${resource}/.default offline_access openid profile`,
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    state,
+    prompt: 'login'
+  });
+  if(loginHint) q.set('login_hint', loginHint);
+  return `${LOGIN_HOST}/${tenant}/oauth2/v2.0/authorize?${q.toString()}`;
+}
+
+function publicLoginStart(row){
   if(!row) return null;
   return {
     pollId: row.pollId,
-    userCode: row.userCode,
-    verificationUri: row.verificationUri,
-    verificationUriComplete: row.verificationUriComplete,
+    loginUrl: row.loginUrl || '',
     expiresIn: Math.max(0, Math.round((row.expiresAt - Date.now()) / 1000)),
     interval: row.interval,
     message: row.message
   };
-}
-
-function deviceMessage(userCode, verificationUri){
-  const uri = verificationUri || 'https://microsoft.com/devicelogin';
-  return `Telefonda Okta Verify’ı onaylayın. Açılmazsa ${uri} adresine gidin, kodu yazın: ${userCode}`;
 }
 
 function sweepPending(){
@@ -169,6 +209,7 @@ function publicAuth(rapid, env){
   return {
     connected,
     account: c.account,
+    lastUser: c.account || String((rapid && rapid.d365Auth && rapid.d365Auth.lastUser) || '').trim(),
     expiresAt: c.expiresAt,
     dynamicsUrl: isMuleUrl(c.dynamicsUrl) ? DEFAULT_DYNAMICS_URL : c.dynamicsUrl,
     odataEntity: c.odataEntity,
@@ -193,6 +234,7 @@ function persistTokens(prevRapid, tokens){
       refreshToken: String(tokens.refresh_token || tokens.refreshToken || cfg.refreshToken || '').trim(),
       expiresAt,
       account: tokens.account || accountFromToken(accessToken) || cfg.account,
+      lastUser: tokens.account || tokens.loginHint || cfg.account || '',
       protocol: tokens.protocol || cfg.protocol,
       clientIdUsed: tokens.clientId || tokens.clientIdUsed || cfg.clientIdUsed
     }
@@ -226,21 +268,67 @@ function tokenFresh(cfg){
   return exp > Date.now() + 15000;
 }
 
-async function startDeviceLogin(opts = {}){
+async function startInteractiveLogin(opts = {}){
   const sessionId = String(opts.sessionId || '');
   if(!sessionId) throw new Error('Oturum yok');
+  const loginHint = String(opts.loginHint || opts.username || '').trim();
+  const redirectUri = String(opts.redirectUri || '').trim();
   const existing = findPendingForSession(sessionId);
-  if(existing) return publicDeviceStart(existing);
+  if(existing){
+    if(loginHint) existing.loginHint = loginHint;
+    existing.loginUrl = existing.authorizeUrl
+      ? withLoginHint(existing.authorizeUrl, loginHint)
+      : withLoginHint(existing.verificationUriComplete || existing.verificationUri || existing.loginUrl, loginHint);
+    existing.message = loginMessage(loginHint);
+    return publicLoginStart(existing);
+  }
 
   const rapid = opts.rapid || {};
   const cfg = configFromRapid(rapid, opts.env);
   const resource = isMuleUrl(cfg.dynamicsUrl) ? DEFAULT_DYNAMICS_URL : cfg.dynamicsUrl;
   const tenant = cfg.tenant || DEFAULT_TENANT;
-  let lastErr = 'Okta cihaz kodu alınamadı';
-  for(const clientId of clientIdsFrom(cfg)){
-    const got = await requestDeviceCode({
+  const clientId = clientIdsFrom(cfg)[0];
+
+  if(redirectUri){
+    const pollId = crypto.randomBytes(16).toString('hex');
+    const verifier = pkceVerifier();
+    const authorizeUrl = buildAuthorizeUrl({
       tenant,
       clientId,
+      resource,
+      redirectUri,
+      loginHint,
+      challenge: pkceChallenge(verifier),
+      state: pollId
+    });
+    const row = {
+      pollId,
+      sessionId,
+      deviceCode: '',
+      clientId,
+      tenant,
+      resource,
+      protocol: 'v2',
+      verificationUri: '',
+      verificationUriComplete: '',
+      authorizeUrl,
+      redirectUri,
+      codeVerifier: verifier,
+      loginHint,
+      loginUrl: authorizeUrl,
+      interval: 3,
+      expiresAt: Date.now() + 15 * 60 * 1000,
+      message: loginMessage(loginHint)
+    };
+    pendingById.set(pollId, row);
+    return publicLoginStart(row);
+  }
+
+  let lastErr = 'Okta girişi başlatılamadı';
+  for(const id of clientIdsFrom(cfg)){
+    const got = await requestDeviceCode({
+      tenant,
+      clientId: id,
       resource,
       fetchImpl: opts.fetchImpl
     });
@@ -249,39 +337,47 @@ async function startDeviceLogin(opts = {}){
       const pollId = crypto.randomBytes(16).toString('hex');
       const expiresIn = Number(json.expires_in || 900);
       const interval = Math.max(3, Number(json.interval || 5));
-      const userCode = String(json.user_code);
       const verificationUri = String(json.verification_uri || json.verification_url || 'https://microsoft.com/devicelogin');
       const verificationUriComplete = String(json.verification_uri_complete || '');
+      const loginUrl = withLoginHint(verificationUriComplete || verificationUri, loginHint);
       const row = {
         pollId,
         sessionId,
         deviceCode: String(json.device_code || json.code || ''),
-        clientId,
+        clientId: id,
         tenant,
         resource,
         protocol: got.protocol,
-        userCode,
         verificationUri,
         verificationUriComplete,
+        authorizeUrl: '',
+        redirectUri: '',
+        codeVerifier: '',
+        loginHint,
+        loginUrl,
         interval,
         expiresAt: Date.now() + expiresIn * 1000,
-        message: deviceMessage(userCode, verificationUri)
+        message: loginMessage(loginHint)
       };
       pendingById.set(pollId, row);
-      return publicDeviceStart(row);
+      return publicLoginStart(row);
     }
     lastErr = (got && got.error) || lastErr;
   }
-  throw new Error(`Okta Verify başlatılamadı (${lastErr}). Rapid360 hesabınızla Microsoft girişinin açık olduğundan emin olun.`);
+  throw new Error(`Okta Verify başlatılamadı (${lastErr}). Rapid360 kullanıcınızı yazıp tekrar deneyin.`);
+}
+
+async function startDeviceLogin(opts = {}){
+  return startInteractiveLogin(opts);
 }
 
 function aadErrorMessage(json){
   const code = String(json && json.error || '').toLowerCase();
   if(code === 'authorization_pending') return { pending: true };
   if(code === 'slow_down') return { pending: true, slowDown: true };
+  if(code === 'expired_token' || code === 'code_expired') return { error: 'Giriş süresi doldu. Rapid Aktar’a tekrar basın.' };
   if(code === 'authorization_declined') return { error: 'Okta Verify reddedildi. Rapid Aktar’a tekrar basın.' };
-  if(code === 'expired_token' || code === 'code_expired') return { error: 'Kodun süresi doldu. Rapid Aktar’a tekrar basın.' };
-  if(code === 'bad_verification_code') return { error: 'Kod geçersiz. Rapid Aktar’a tekrar basın.' };
+  if(code === 'bad_verification_code') return { error: 'Giriş iptal. Rapid Aktar’a tekrar basın.' };
   const desc = String((json && (json.error_description || json.error)) || 'Okta doğrulanamadı').slice(0, 400);
   return { error: desc };
 }
@@ -296,7 +392,15 @@ async function pollDeviceLogin(opts = {}){
   }
   if(Date.now() > row.expiresAt){
     pendingById.delete(pollId);
-    return { ok: false, error: 'Kodun süresi doldu. Rapid Aktar’a tekrar basın.' };
+    return { ok: false, error: 'Giriş süresi doldu. Rapid Aktar’a tekrar basın.' };
+  }
+  if(row.callbackTokens && row.callbackTokens.access_token){
+    const tokens = row.callbackTokens;
+    pendingById.delete(pollId);
+    return { ok: true, pending: false, tokens };
+  }
+  if(!row.deviceCode){
+    return { ok: false, pending: true };
   }
   const fields = row.protocol === 'v2'
     ? {
@@ -388,6 +492,73 @@ async function ensureAccessToken(rapid, { fetchImpl, env } = {}){
   return { ok: false, needsOkta: true, cfg };
 }
 
+async function completeAuthorizationCode(opts = {}){
+  const sessionId = String(opts.sessionId || '');
+  const state = String(opts.state || opts.pollId || '');
+  const code = String(opts.code || '').trim();
+  const err = String(opts.error || '').trim();
+  sweepPending();
+  const row = pendingById.get(state);
+  if(!row || row.sessionId !== sessionId){
+    return { ok: false, error: 'Giriş oturumu bulunamadı. Rapid Aktar’a tekrar basın.' };
+  }
+  if(err){
+    return { ok: false, error: err === 'access_denied' ? 'Giriş iptal edildi.' : 'Rapid360 girişi tamamlanamadı.' };
+  }
+  if(!code){
+    return { ok: false, error: 'Giriş tamamlanamadı.' };
+  }
+  const tryExchange = async (url, fields) => postForm(url, fields, opts.fetchImpl);
+  let res = await tryExchange(`${LOGIN_HOST}/${row.tenant}/oauth2/v2.0/token`, {
+    grant_type: 'authorization_code',
+    client_id: row.clientId,
+    code,
+    redirect_uri: row.redirectUri,
+    code_verifier: row.codeVerifier
+  });
+  if(!(res.ok && res.json && res.json.access_token)){
+    res = await tryExchange(`${LOGIN_HOST}/${row.tenant}/oauth2/token`, {
+      grant_type: 'authorization_code',
+      client_id: row.clientId,
+      code,
+      redirect_uri: row.redirectUri,
+      resource: row.resource
+    });
+  }
+  if(!(res.ok && res.json && res.json.access_token)){
+    const desc = String((res.json && (res.json.error_description || res.json.error)) || 'token alınamadı').slice(0, 300);
+    return { ok: false, error: `Rapid360 girişi tamamlanamadı (${desc}).` };
+  }
+  const json = res.json;
+  const tokens = {
+    access_token: json.access_token,
+    refresh_token: json.refresh_token || '',
+    expires_in: json.expires_in,
+    account: accountFromToken(json.access_token) || accountFromToken(json.id_token) || row.loginHint,
+    protocol: 'v2',
+    clientId: row.clientId,
+    tenant: row.tenant,
+    resource: row.resource,
+    loginHint: row.loginHint
+  };
+  row.callbackTokens = tokens;
+  return { ok: true, tokens };
+}
+
+function popupResultHtml(ok, error){
+  const msg = ok
+    ? 'Giriş tamam. Okta onaylandı, bu pencere kapanıyor.'
+    : String(error || 'Giriş olmadı. Pencereyi kapatıp Rapid Aktar’a tekrar basın.');
+  const payload = JSON.stringify({ type: 'atak-rapid360-okta', ok: !!ok });
+  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Rapid360</title></head><body style="font-family:sans-serif;padding:28px;color:#0f172a">
+<p>${String(msg).replace(/[<>]/g, '')}</p>
+<script>
+try{ if(window.opener) window.opener.postMessage(${payload}, window.location.origin); }catch(e){}
+setTimeout(function(){ window.close(); }, 700);
+</script>
+</body></html>`;
+}
+
 function resetPendingForTests(){
   pendingById.clear();
 }
@@ -405,9 +576,12 @@ module.exports = {
   clearTokens,
   tokenFresh,
   startDeviceLogin,
+  startInteractiveLogin,
   pollDeviceLogin,
+  completeAuthorizationCode,
+  popupResultHtml,
   refreshAccessToken,
   ensureAccessToken,
   resetPendingForTests,
-  deviceMessage
+  loginMessage
 };

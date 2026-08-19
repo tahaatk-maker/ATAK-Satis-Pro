@@ -1900,8 +1900,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.186-atak-geteinvoices',
-  build:'fix-v186',
+  version:'6.3.187-atak-geteinvoices',
+  build:'fix-v187',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5040,9 +5040,12 @@ function saveRapidOktaTokens(s, tokens){
   return true;
 }
 async function startRapidOktaChallenge(req, s){
-  return d365Auth.startDeviceLogin({
+  const body=req.body||{};
+  return d365Auth.startInteractiveLogin({
     sessionId:req.sessionID||'',
-    rapid:(s.invoiceIntegration||{}).rapid360||{}
+    rapid:(s.invoiceIntegration||{}).rapid360||{},
+    loginHint:body.loginHint||body.username||'',
+    redirectUri:`${publicBaseUrl(req)}/web-api/admin/rapid360-okta-callback`
   });
 }
 function parseRapid360SalesUpload(file){
@@ -5342,9 +5345,7 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
         needsOkta:true,
         error:started.message||out.error||'Okta Verify gerekli.',
         pollId:started.pollId,
-        userCode:started.userCode,
-        verificationUri:started.verificationUri,
-        verificationUriComplete:started.verificationUriComplete,
+        loginUrl:started.loginUrl,
         expiresIn:started.expiresIn,
         interval:started.interval,
         tried:out.tried||[]
@@ -5385,6 +5386,28 @@ app.post('/web-api/admin/rapid360-okta-start',rapidSalesPerm,async(req,res)=>{
     res.json({needsOkta:true,...started,okta:d365Auth.publicAuth((s.invoiceIntegration||{}).rapid360)});
   }catch(e){
     res.status(400).json({error:e.message||'Okta Verify başlatılamadı'});
+  }
+});
+app.get('/web-api/admin/rapid360-okta-callback',async(req,res)=>{
+  const send=(ok,error)=>res.status(ok?200:400).type('html').send(d365Auth.popupResultHtml(ok,error));
+  if(!req.session||!(req.session.admin===true||req.session.systemOwner===true||req.session.staffUser||req.session.user)){
+    return send(false,'Atak oturumu yok. Panele girip Rapid Aktar’a tekrar basın.');
+  }
+  try{
+    const result=await d365Auth.completeAuthorizationCode({
+      sessionId:req.sessionID||'',
+      code:req.query.code,
+      state:req.query.state,
+      error:req.query.error
+    });
+    if(result.ok){
+      const s=readStore();
+      saveRapidOktaTokens(s,result.tokens);
+      writeStore(s);
+    }
+    return send(!!result.ok,result.error);
+  }catch(e){
+    return send(false,e.message||'Giriş tamamlanamadı');
   }
 });
 app.post('/web-api/admin/rapid360-okta-poll',rapidSalesPerm,async(req,res)=>{
