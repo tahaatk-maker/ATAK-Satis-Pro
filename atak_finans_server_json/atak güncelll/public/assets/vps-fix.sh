@@ -1,4 +1,5 @@
-# ATAK VPS kesin deploy (fix-v89) — health 6.3.90-mobilya-alis-v2 olmadan DONE yazmaz
+echo "VPS-FIX START $(date -Is)"
+# ATAK VPS kesin deploy — health 6.3.171-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
 EXPECT_HEALTH=6.3.171-atak-geteinvoices
@@ -10,26 +11,16 @@ STEP="baslangic"
 trap 'code=$?; echo ""; echo "HATA: islem durdu (exit=$code)"; echo "Son adim: $STEP"; echo "Log: $OUT"; exit $code' ERR
 step(){ STEP="$1"; echo "-- $1"; }
 
-echo "START $(date -Is)"
 echo "EXPECT $EXPECT_HEALTH / $EXPECT_BUILD"
 echo "BRANCH $BRANCH"
 echo "BASH=${BASH_VERSION:-unknown}"
 
 step "gerekli araclar kontrol ediliyor"
-install_pkg(){
-  echo "   kuruluyor: $1"
-  (apt-get update -y >/dev/null 2>&1 && apt-get install -y "$1" >/dev/null 2>&1) \
-    || yum install -y "$1" >/dev/null 2>&1 \
-    || dnf install -y "$1" >/dev/null 2>&1 \
-    || true
-}
-for BIN in curl tar python3 rsync; do
+for BIN in curl tar python3 rsync git; do
   if command -v "$BIN" >/dev/null 2>&1; then
     echo "   ok: $BIN"
   else
-    echo "   eksik: $BIN"
-    install_pkg "$BIN"
-    if command -v "$BIN" >/dev/null 2>&1; then echo "   kuruldu: $BIN"; else echo "   KURULAMADI: $BIN"; fi
+    echo "   yok: $BIN"
   fi
 done
 for BIN in curl tar; do
@@ -41,27 +32,35 @@ HAVE_RSYNC=0; command -v rsync >/dev/null 2>&1 && HAVE_RSYNC=1
 HAVE_PY=0; command -v python3 >/dev/null 2>&1 && HAVE_PY=1
 echo "   rsync=$HAVE_RSYNC python3=$HAVE_PY"
 
-step "kaynak indiriliyor"
-mkdir -p "$TMP" && cd "$TMP"
-BRANCH_URLENC=${BRANCH//\//%2F}
-curl_get(){
-  curl -4 -fL --connect-timeout 20 --max-time 180 --retry 2 --retry-delay 2 --progress-bar "$@"
-}
-echo "   GitHub paket indiriliyor (IPv4, ilerleme cubugu)..."
-if ! curl_get "https://codeload.github.com/tahaatk-maker/ATAK-Satis-Pro/tar.gz/refs/heads/$BRANCH" -o src.tgz; then
-  echo "   ana adres olmadi, alternatif deneniyor"
-  curl_get "https://codeload.github.com/tahaatk-maker/ATAK-Satis-Pro/tar.gz/$BRANCH_URLENC" -o src.tgz
+step "kaynak bulunuyor"
+SRC=""
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+LOCAL_SRC=$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd || true)
+if [ -n "${LOCAL_SRC:-}" ] && [ -f "$LOCAL_SRC/server.js" ]; then
+  SRC="$LOCAL_SRC"
+  echo "   yerel klon kullaniliyor: $SRC"
 fi
-if [ ! -s src.tgz ] && command -v git >/dev/null 2>&1; then
-  echo "   curl paket bos, git clone deneniyor"
-  git clone --depth 1 --branch "$BRANCH" https://github.com/tahaatk-maker/ATAK-Satis-Pro.git repo
-  ln -s repo src-clone 2>/dev/null || true
+if [ -z "$SRC" ]; then
+  CAND=$(find /tmp/ATAK-Satis-Pro -type d -name 'atak güncelll' 2>/dev/null | head -1 || true)
+  if [ -n "${CAND:-}" ] && [ -f "$CAND/server.js" ]; then
+    SRC="$CAND"
+    echo "   /tmp klon kullaniliyor: $SRC"
+  fi
 fi
-if [ -s src.tgz ]; then
-  tar -xzf src.tgz
+if [ -z "$SRC" ]; then
+  mkdir -p "$TMP" && cd "$TMP"
+  echo "   GitHub paket indiriliyor (IPv4)..."
+  curl_get(){
+    curl -4 -fL --connect-timeout 15 --max-time 90 --retry 1 --progress-bar "$@"
+  }
+  BRANCH_URLENC=${BRANCH//\//%2F}
+  curl_get "https://codeload.github.com/tahaatk-maker/ATAK-Satis-Pro/tar.gz/refs/heads/$BRANCH" -o src.tgz || true
+  if [ -s src.tgz ]; then
+    tar -xzf src.tgz
+    SRC=$(find "$TMP" -type d -name 'atak güncelll' | head -1)
+  fi
 fi
-SRC=$(find "$TMP" -type d -name 'atak güncelll' | head -1)
-if [ -z "${SRC:-}" ]; then echo "KAYNAK KLASOR BULUNAMADI"; ls -la "$TMP"; exit 1; fi
+if [ -z "${SRC:-}" ]; then echo "KAYNAK KLASOR BULUNAMADI"; exit 1; fi
 
 step "surum dogrulaniyor"
 check(){
