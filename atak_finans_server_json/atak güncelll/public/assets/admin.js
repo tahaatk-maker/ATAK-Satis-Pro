@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v163 */
+/* ATAK_ADMIN_BUILD=fix-v164 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1049,6 +1049,7 @@ function resetUserForm(){
   q('#userRole').value='viewer';
   q('#userPassword').value='';
   q('#userActive').checked=true;
+  if(q('#userHireDate'))q('#userHireDate').value='';
   fillUserStoreOptions('');
   syncUserStatusUi();
   setTimeout(applyRoleDefaultPermissions,0);
@@ -1063,6 +1064,7 @@ function fillUserForm(u){
   q('#userPassword').value='';
   q('#userActive').checked=u.active!==false;
   fillUserStoreOptions(u.storeId||'');
+  if(q('#userHireDate'))q('#userHireDate').value=String(u.hireDate||'').slice(0,10);
   renderPermissionEditor((u.permissions||[]).includes('*')?permissionDefs.map(p=>p.id):(u.permissions||[]));
   syncUserStatusUi();
   if(u.fromStaff)setTimeout(applyRoleDefaultPermissions,0);
@@ -1124,6 +1126,7 @@ function usersForList(){
       role:ROLE_LABELS[st.role]?st.role:'sales',
       roleName:'Personel kaydı',
       storeId:st.storeId||'',storeName,
+      hireDate:st.hireDate||'',
       active:st.active!==false,fromStaff:true
     });
     if(key)seen.add(key);
@@ -1141,6 +1144,7 @@ function renderUsers(){
       <h3>${u.name}</h3>
       <p>${u.username?('@'+u.username):'Kullanıcı adı yok'} · ${u.roleName||ROLE_LABELS[u.role]||'Personel'}</p>
       <p style="margin:2px 0 0;font-size:12px;color:#0b4f96;font-weight:750">${u.storeName?('Mağaza: '+u.storeName):'Mağaza seçilmedi'}</p>
+      ${u.hireDate?`<p style="margin:2px 0 0;font-size:12px;color:#9a3412;font-weight:750">İşe başlama: ${String(u.hireDate).slice(0,10)}</p>`:''}
       <p style="margin:2px 0 0;font-size:12px;color:#64748b">${u.email?u.email:'<span style="color:#b91c1c">E-posta yok — şifre unuttum çalışmaz</span>'}</p>
       <small style="font-weight:800;color:${u.active!==false?'#15803d':'#b91c1c'}">${u.active!==false?'AKTİF':'PASİF'}${u.fromStaff?' · Personel kartından':''}</small>
     </div>
@@ -1168,6 +1172,7 @@ q('#userForm').onsubmit=async e=>{
     email:q('#userEmail')?.value.trim()||'',
     role:q('#userRole').value,
     storeId:q('#userStore')?.value||'',
+    hireDate:q('#userHireDate')?.value||'',
     password:q('#userPassword').value,
     active:q('#userActive').checked,
     permissions:currentCheckedPermissions()
@@ -6549,7 +6554,16 @@ q('#trainingUploadForm')?.addEventListener('submit',async e=>{
 
 /* ——— Para & Maaş (tek ekran) ——— */
 let moneyState={month:'',summary:null,accounts:[],people:[],recent:[],expenseCategories:[],selectedStaffId:''};
-function moneyMonthDefault(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}
+function moneyMonthDefault(){
+  const d=new Date();
+  const day=d.getDate();
+  // Maaş ayın 1'inde ödenir → ayın ilk haftasında önceki ayın bordrosu
+  if(day<=7){
+    const p=new Date(d.getFullYear(),d.getMonth()-1,1);
+    return `${p.getFullYear()}-${String(p.getMonth()+1).padStart(2,'0')}`;
+  }
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
 function moneyStatusLabel(s){return({due:'Ödenecek',partial:'Kısmi / Avanslı',paid:'Kapandı',unset:'Maaş yok',none:'—'}[s]||s||'—')}
 function fillMoneyAccounts(selId,preferCash=true){
   const el=q(selId); if(!el)return;
@@ -6579,7 +6593,10 @@ function renderMoneySalaryBreakdown(p,type){
   }
   box.innerHTML=`
     <div><b>${p.name}</b> · ${moneyState.month||''}</div>
-    <div>Maaş: <b>${money2(p.salaryMonthly)}</b> + Prim (satıştan): <b>${money2(p.monthCommission)}</b>${p.saleCount?` <small>(${p.saleCount} satış)</small>`:''}</div>
+    ${p.prorated
+      ? `<div class="money-prorate">Kısmi ay: ${p.rangeLabel||''} (${p.ratioLabel||''} gün) · hak edilen maaş ${money2(p.salaryEarned)} (sözleşme ${money2(p.salaryMonthly)})</div>
+         <div>Prim (satıştan): <b>${money2(p.monthCommission)}</b>${p.saleCount?` <small>(${p.saleCount} satış)</small>`:''}</div>`
+      : `<div>Maaş: <b>${money2(p.salaryMonthly)}</b> + Prim (satıştan): <b>${money2(p.monthCommission)}</b>${p.saleCount?` <small>(${p.saleCount} satış)</small>`:''}</div>`}
     <div>Hak edilen: <b>${money2(p.grossEarned)}</b> − Avans: <b>${money2(p.advances)}</b> − Ödenen: <b>${money2(p.paidTotal)}</b></div>
     <span class="net">Ödenecek: ${money2(p.netDue)}</span>
     <small class="formula">${p.formula||''}</small>`;
@@ -6604,7 +6621,11 @@ function renderMoneyCenter(){
             <b>${p.name||'—'}</b><br><small>${p.storeName||''}</small>
             <span class="money-status ${p.status}">${moneyStatusLabel(p.status)}</span>
           </td>
-          <td>${money2(p.salaryMonthly)} <button type="button" class="secondary-btn" data-set-salary="${p.id}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" data-sal="${p.salaryMonthly}">Ayarla</button></td>
+          <td>
+            ${money2(p.salaryMonthly)}
+            ${p.prorated?`<small class="money-prorate">Kısmi ${p.rangeLabel||''} (${p.ratioLabel||''}) · ${money2(p.salaryEarned)}</small>`:''}
+            <button type="button" class="secondary-btn" data-set-salary="${p.id}" data-name="${(p.name||'').replace(/"/g,'&quot;')}" data-sal="${p.salaryMonthly}" data-hire="${(p.hireDate||'').replace(/"/g,'&quot;')}">Ayarla</button>
+          </td>
           <td><b>${money2(p.monthCommission)}</b>${p.saleCount?`<br><small>${p.saleCount} satış · ${money2(p.monthSales)}</small>`:''}</td>
           <td>${p.advances>0.009?`<b style="color:#a52222">${money2(p.advances)}</b>`:money2(0)}</td>
           <td>${money2(p.grossEarned)}<br><small>ödenecekten avans düşülür</small></td>
@@ -6619,6 +6640,7 @@ function renderMoneyCenter(){
       q('#moneySetStaffId').value=b.dataset.setSalary;
       q('#moneySetStaffName').textContent=b.dataset.name||'';
       q('#moneySetAmount').value=Number(b.dataset.sal||0)||'';
+      if(q('#moneySetHireDate'))q('#moneySetHireDate').value=b.dataset.hire||'';
       q('#moneySetSalaryModal')?.classList.remove('hidden');
     });
     qa('[data-pay-payroll]').forEach(b=>b.onclick=()=>openMoneySalaryModal(b.dataset.payPayroll,'payroll',Number(b.dataset.amt||0)));
@@ -6747,7 +6769,8 @@ q('#moneySetSalaryForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
   try{
     await api('/web-api/admin/staff-salary',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      staffId:q('#moneySetStaffId').value,salaryMonthly:q('#moneySetAmount').value
+      staffId:q('#moneySetStaffId').value,salaryMonthly:q('#moneySetAmount').value,
+      hireDate:q('#moneySetHireDate')?q('#moneySetHireDate').value:undefined
     })});
     toast('Maaş kaydedildi');
     q('#moneySetSalaryModal')?.classList.add('hidden');

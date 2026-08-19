@@ -16,6 +16,7 @@ const customerExcel = require('./customer-excel-import');
 const invoicePrint = require('./lib/invoice-print');
 const branchLock = require('./lib/branch-lock');
 const customerComms = require('./lib/customer-comms');
+const salaryProrate = require('./lib/salary-prorate');
 
 const app = express();
 const ROOT = __dirname;
@@ -313,9 +314,11 @@ function ensureStore(store) {
     if(!u)continue;
     if(!u.storeId && st.storeId)u.storeId=st.storeId;
     if(!(Number(u.salaryMonthly||0)>0) && Number(st.salaryMonthly||0)>0)u.salaryMonthly=st.salaryMonthly;
+    if(!u.hireDate && st.hireDate)u.hireDate=salaryProrate.normalizeHireDate(st.hireDate);
     st.userId=u.id;
     if(u.storeId)st.storeId=u.storeId;
     if(Number(u.salaryMonthly||0)>0)st.salaryMonthly=u.salaryMonthly;
+    if(u.hireDate)st.hireDate=salaryProrate.normalizeHireDate(u.hireDate);
   }
   return store;
 }
@@ -879,6 +882,7 @@ function publicUser(user,store){
     storeId:user.storeId||'',storeName:branch?.name||'',
     brand:branchLock.personBrand({id:user.id,role:user.role,storeId:user.storeId},store?.stores||[]),
     salaryMonthly:Math.round(Number(user.salaryMonthly||0)*100)/100,
+    hireDate:salaryProrate.normalizeHireDate(user.hireDate),
     createdAt:user.createdAt||'',updatedAt:user.updatedAt||''
   };
 }
@@ -938,6 +942,7 @@ function promoteStaffToUsers(s){
     if(u){
       if(!u.storeId && st.storeId)u.storeId=st.storeId;
       if(!(Number(u.salaryMonthly||0)>0) && Number(st.salaryMonthly||0)>0)u.salaryMonthly=st.salaryMonthly;
+      if(!u.hireDate && st.hireDate)u.hireDate=salaryProrate.normalizeHireDate(st.hireDate);
       if(!u.passwordHash && st.passwordHash)u.passwordHash=st.passwordHash;
       if(u.active===undefined)u.active=st.active!==false;
       st.userId=u.id;
@@ -957,6 +962,7 @@ function promoteStaffToUsers(s){
       passwordHash:st.passwordHash||'',
       storeId:String(st.storeId||''),
       salaryMonthly:Math.round(Number(st.salaryMonthly||0)*100)/100,
+      hireDate:salaryProrate.normalizeHireDate(st.hireDate),
       createdAt:st.createdAt||new Date().toISOString(),
       updatedAt:new Date().toISOString(),
       promotedFromStaff:true
@@ -978,6 +984,7 @@ function syncStaffFromUser(s,user){
     role:String(user.role||'staff'),
     active:user.active!==false,
     salaryMonthly:Math.round(Number(user.salaryMonthly||0)*100)/100,
+    hireDate:salaryProrate.normalizeHireDate(user.hireDate),
     updatedAt:new Date().toISOString()
   };
   if(row){
@@ -998,7 +1005,8 @@ function peopleForPayroll(s){
     out.push({
       id:u.id,name:u.name,username:u.username,storeId:u.storeId||'',
       storeName:branch?.name||'',active:true,role:u.role||'',
-      salaryMonthly:Math.round(Number(u.salaryMonthly||0)*100)/100
+      salaryMonthly:Math.round(Number(u.salaryMonthly||0)*100)/100,
+      hireDate:salaryProrate.normalizeHireDate(u.hireDate)
     });
   }
   for(const st of (s.staff||[]).filter(x=>x.active!==false)){
@@ -1009,7 +1017,8 @@ function peopleForPayroll(s){
     out.push({
       id:st.id,name:st.name,username:st.username,storeId:st.storeId||'',
       storeName:branch?.name||'',active:true,role:st.role||'',
-      salaryMonthly:Math.round(Number(st.salaryMonthly||0)*100)/100
+      salaryMonthly:Math.round(Number(st.salaryMonthly||0)*100)/100,
+      hireDate:salaryProrate.normalizeHireDate(st.hireDate)
     });
   }
   return out;
@@ -1542,7 +1551,7 @@ function staffSession(req){return req.session?.staffUser||null}
 function cleanMoney(v){return Math.max(0,Math.round(normalizeNumber(v)*100)/100)}
 function publicStaff(x,store){
   const branch=(store.stores||[]).find(s=>s.id===x.storeId);
-  return{id:x.id,name:x.name,username:x.username,role:x.role||'staff',storeId:x.storeId,storeName:branch?.name||'Mağaza',active:x.active!==false,salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100};
+  return{id:x.id,name:x.name,username:x.username,role:x.role||'staff',storeId:x.storeId,storeName:branch?.name||'Mağaza',active:x.active!==false,salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100,hireDate:salaryProrate.normalizeHireDate(x.hireDate)};
 }
 function todayISO(){return new Date().toISOString().slice(0,10)}
 /** Satışı yapan personelden mağazayı bul — ciro artık elle girilmiyor, satıştan türetiliyor */
@@ -1803,8 +1812,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.163-comm-del',
-  build:'fix-v163',
+  version:'6.3.164-maas-kismi',
+  build:'fix-v164',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   mfa:mfaEnabled(),
@@ -1887,6 +1896,11 @@ app.post('/web-api/admin/user',requirePermission('users_manage'),(req,res)=>{
   else{if(!String(x.password||'').trim())return res.status(400).json({error:'Yeni kullanıcı için şifre zorunludur'});user={id:crypto.randomUUID(),name,username,email,role,permissions,active:x.active!==false,passwordHash:hashPassword(x.password),createdAt:now,updatedAt:now};s.users.push(user)}
   if(x.storeId!=null)user.storeId=String(x.storeId||'');
   if(x.salaryMonthly!=null && x.salaryMonthly!=='')user.salaryMonthly=Math.round(Number(x.salaryMonthly||0)*100)/100;
+  if(x.hireDate!=null){
+    const hd=salaryProrate.normalizeHireDate(x.hireDate);
+    if(String(x.hireDate||'').trim() && !hd)return res.status(400).json({error:'İşe başlama tarihi geçersiz (YYYY-AA-GG)'});
+    user.hireDate=hd;
+  }
   syncStaffFromUser(s,user);
   audit(s,x.id?'Kullanıcı güncellendi':'Kullanıcı eklendi',username,{role,permissions,email,storeId:user.storeId||''});writeStore(s);res.json({ok:true,user:publicUser(user,s)});
 });
@@ -2696,6 +2710,11 @@ app.post('/web-api/admin/staff-member',requireAdmin,(req,res)=>{
   if(!row&&!String(x.password||'').trim())return res.status(400).json({error:'Yeni personel için şifre zorunludur'});
   const data={name,username,storeId:String(x.storeId),role:String(x.role||'staff'),active:x.active!==false,updatedAt:new Date().toISOString()};
   if(x.salaryMonthly!=null && x.salaryMonthly!=='')data.salaryMonthly=Math.round(Number(x.salaryMonthly||0)*100)/100;
+  if(x.hireDate!=null){
+    const hd=salaryProrate.normalizeHireDate(x.hireDate);
+    if(String(x.hireDate||'').trim() && !hd)return res.status(400).json({error:'İşe başlama tarihi geçersiz (YYYY-AA-GG)'});
+    data.hireDate=hd;
+  }
   if(row){Object.assign(row,data);if(String(x.password||'').trim())row.passwordHash=hashPassword(x.password)}
   else{row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),passwordHash:hashPassword(x.password),salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100,...data};s.staff.push(row)}
   promoteStaffToUsers(s);
@@ -2704,6 +2723,7 @@ app.post('/web-api/admin/staff-member',requireAdmin,(req,res)=>{
     linked.name=row.name;linked.username=row.username;linked.storeId=row.storeId;linked.active=row.active!==false;
     if(row.passwordHash)linked.passwordHash=row.passwordHash;
     if(row.salaryMonthly!=null)linked.salaryMonthly=row.salaryMonthly;
+    if(row.hireDate!=null)linked.hireDate=row.hireDate;
     linked.updatedAt=row.updatedAt;
     row.userId=linked.id;
   }
@@ -3600,27 +3620,38 @@ function buildMoneyCenter(s,{month=''}={}){
   const people=[];
   for(const st of peopleForPayroll(s)){
     const salary=round(Number(st.salaryMonthly||0));
+    const hireDate=salaryProrate.normalizeHireDate(st.hireDate);
+    const pr=salaryProrate.prorateMonthlySalary({salaryMonthly:salary,hireDate,month:m});
+    const salaryEarned=round(pr.salaryEarned);
     const paid=paidByStaff.get(String(st.id))||{salary:0,commission:0,payroll:0,advance:0,total:0,count:0};
     const prim=primByStaff.get(String(st.id))||[...primByStaff.values()].find(p=>String(p.staffName||'').toLocaleLowerCase('tr-TR')===String(st.name||'').toLocaleLowerCase('tr-TR'))||{commission:0,sales:0,saleCount:0};
     const monthCommission=round(prim.commission||0);
-    const grossEarned=round(salary+monthCommission);
+    const grossEarned=round(salaryEarned+monthCommission);
     const advances=round(paid.advance||0);
     const paidTotal=round(paid.total||0);
     // Avans + yapılan ödemeler hak edişten düşülür
     const netDue=round(Math.max(0,grossEarned-advances-paidTotal));
-    // Geriye uyum alanları
-    const salaryDue=round(Math.max(0,salary-paid.salary));
+    // Geriye uyum alanları — maaş kalanı kısmi hak edişe göre
+    const salaryDue=round(Math.max(0,salaryEarned-paid.salary));
     const commissionDue=round(Math.max(0,monthCommission-paid.commission));
     let status='unset';
     if(grossEarned<=0.009 && advances<=0.009)status='unset';
     else if(netDue<=0.009)status='paid';
     else if(paidTotal>0.009||advances>0.009)status='partial';
     else status='due';
-    const formula=`Maaş ${salary.toLocaleString('tr-TR')} + Prim ${monthCommission.toLocaleString('tr-TR')} − Avans ${advances.toLocaleString('tr-TR')} − Ödenen ${paidTotal.toLocaleString('tr-TR')} = ${netDue.toLocaleString('tr-TR')}`;
+    const formula=`${salaryProrate.formulaSalaryPart(pr)} + Prim ${monthCommission.toLocaleString('tr-TR')} − Avans ${advances.toLocaleString('tr-TR')} − Ödenen ${paidTotal.toLocaleString('tr-TR')} = ${netDue.toLocaleString('tr-TR')}`;
     people.push({
       id:st.id,name:st.name,username:st.username,storeId:st.storeId,
       storeName:(s.stores||[]).find(v=>v.id===st.storeId)?.name||'',
       salaryMonthly:salary,
+      salaryEarned,
+      hireDate:pr.hireDate,
+      hireDay:pr.hireDay,
+      daysWorked:pr.daysWorked,
+      daysInMonth:pr.daysInMonth,
+      prorated:pr.prorated,
+      rangeLabel:pr.rangeLabel,
+      ratioLabel:pr.ratioLabel,
       monthCommission,
       monthSales:round(prim.sales||0),
       saleCount:Number(prim.saleCount||0),
@@ -3682,9 +3713,24 @@ app.post('/web-api/admin/staff-salary',requireAdminOrStaffAny('finance_manage','
   const staff=(s.staff||[]).find(v=>String(v.id)===id || (user && String(v.username||'').toLocaleLowerCase('tr-TR')===String(user.username||'').toLocaleLowerCase('tr-TR')));
   if(!user && !staff)return res.status(404).json({error:'Personel bulunamadı'});
   const salary=Math.round(Number(x.salaryMonthly||0)*100)/100;
-  if(user){user.salaryMonthly=salary;user.updatedAt=new Date().toISOString();syncStaffFromUser(s,user)}
-  if(staff){staff.salaryMonthly=salary;staff.updatedAt=new Date().toISOString()}
-  audit(s,'Personel maaşı güncellendi',(user||staff).name,{salaryMonthly:salary});
+  let hireDate;
+  if(x.hireDate!=null){
+    const hd=salaryProrate.normalizeHireDate(x.hireDate);
+    if(String(x.hireDate||'').trim() && !hd)return res.status(400).json({error:'İşe başlama tarihi geçersiz (YYYY-AA-GG)'});
+    hireDate=hd;
+  }
+  if(user){
+    user.salaryMonthly=salary;
+    if(hireDate!==undefined)user.hireDate=hireDate;
+    user.updatedAt=new Date().toISOString();
+    syncStaffFromUser(s,user);
+  }
+  if(staff){
+    staff.salaryMonthly=salary;
+    if(hireDate!==undefined)staff.hireDate=hireDate;
+    staff.updatedAt=new Date().toISOString();
+  }
+  audit(s,'Personel maaşı güncellendi',(user||staff).name,{salaryMonthly:salary,hireDate:hireDate!==undefined?hireDate:((user||staff).hireDate||'')});
   writeStore(s);
   res.json({ok:true,row:user?publicUser(user,s):publicStaff(staff,s)});
 });

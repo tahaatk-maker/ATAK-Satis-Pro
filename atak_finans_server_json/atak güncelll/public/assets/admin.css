@@ -539,6 +539,7 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .money-breakdown{margin:0 0 12px;padding:12px;border-radius:10px;background:#f8fafc;border:1px solid var(--line);font-size:13px;line-height:1.55}
 .money-breakdown b{color:var(--navy)}
 .money-breakdown .net{display:block;margin-top:6px;font-size:16px;font-weight:900;color:#0b4f96}
+.money-prorate{display:block;color:#9a3412;font-size:11px;font-weight:700;margin:3px 0 2px;line-height:1.35}
 .money-status{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800}
 .money-status.due{background:#ffe7e7;color:#a52222}
 .money-status.partial{background:#fff4d7;color:#8b6200}

@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v163" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v163" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v163" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v163" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v164" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v164" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v164" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v164" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1281,6 +1281,10 @@ body.inv-full #pageTitle{font-size:18px}
   <select id="userStore"><option value="">Mağaza seçilmedi</option></select>
   <small class="field-hint">Personel hangi fiziksel mağazada çalışıyor (BEKO ATAK, Atak İstikbal…). Prim ve ciro buradan bağlanır. İkinci bir Personel Kartı açmanıza gerek yok.</small>
 </label>
+<label>İşe başlama tarihi
+  <input id="userHireDate" type="date"/>
+  <small class="field-hint">Ayın ortasında başlayan tam maaş almaz. Örn. 8’inde başladıysa o ay 8–ay sonu kadar hak eder; sonraki aylar tam maaş. Maaş ayın 1’inde ödenir.</small>
+</label>
 <div class="permission-editor">
   <div class="permission-editor-head"><div><b>Ekran & İşlem Yetkileri</b><small>Butona tıklayarak aç/kapa. Grup başlığına basınca katlanır.</small></div><button id="applyRolePermissions" class="secondary-btn" type="button">Rol Varsayılanını Uygula</button></div>
   <div id="userPermissionList" class="permission-grid"></div>
@@ -1810,13 +1814,14 @@ Bulunamayan → Diğer.
     <div>
       <small class="eyebrow">TEK EKRAN</small>
       <h2>Para &amp; Maaş</h2>
-      <p>Maaş + satış primi otomatik · avans düşülür · ay ay ne ödeyeceğiniz görünür.</p>
+      <p>Maaş + satış primi otomatik · ayın ortasında başlayan kısmi gün · avans düşülür.</p>
     </div>
     <div class="money-head-actions">
       <label>Ay<input id="moneyMonth" type="month"/></label>
       <button id="moneyRefresh" class="secondary-btn" type="button">Yenile</button>
     </div>
   </div>
+  <p class="note" id="moneyMonthHint">Maaş ayın 1’inde ödenir (Ağustos hak edişi 1 Eylül’de). Ayın ilk haftasında önceki ay açılır. İşe 8’inde başlayan 56.000 TL değil, o ayın 8–son günü kadar hak eder.</p>
   <div id="moneySummary" class="sales-kpi-grid"></div>
   <div class="money-action-grid">
     <button type="button" class="money-action-btn" id="moneyOpenExpense">🧾 Masraf Yaz</button>
@@ -1828,7 +1833,7 @@ Bulunamayan → Diğer.
 <div class="pay-track-layout money-split">
   <div class="panel">
     <div class="panel-head"><h2>Aylık Bordro (otomatik)</h2><span id="moneyPeopleCount"></span></div>
-    <p class="note">Formül: <b>Maaş + Bu ay satış primi − Avans − Ödenen = Ödenecek</b>. Prim satışlardan otomatik hesaplanır.</p>
+    <p class="note">Formül: <b>Kısmi/tam maaş + Bu ay satış primi − Avans − Ödenen = Ödenecek</b>. İşe başlama tarihi varsa maaş o ayın takvim gününe bölünür (8–31 için 24/31).</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Personel</th><th>Maaş</th><th>Prim (otomatik)</th><th>Avans</th><th>Hak edilen</th><th>Ödenecek</th><th></th></tr></thead>
@@ -1870,7 +1875,7 @@ Bulunamayan → Diğer.
   <form class="modal-card" id="moneySalaryForm">
     <button class="x" id="moneySalaryClose" type="button">×</button>
     <h2 id="moneySalaryTitle">💵 Ay Sonu Öde</h2>
-    <p class="note" id="moneySalaryHint">Personel seçin — tutar otomatik hesaplanır (maaş + prim − avans).</p>
+    <p class="note" id="moneySalaryHint">Personel seçin — tutar otomatik hesaplanır (kısmi/tam maaş + prim − avans).</p>
     <div id="moneySalaryBreakdown" class="money-breakdown"></div>
     <input type="hidden" id="moneySalaryStaffId"/>
     <div class="two-cols">
@@ -1904,6 +1909,10 @@ Bulunamayan → Diğer.
     <input type="hidden" id="moneySetStaffId"/>
     <p id="moneySetStaffName" class="note"></p>
     <label>Aylık maaş (₺)<input id="moneySetAmount" type="number" min="0" step="0.01" required></label>
+    <label>İşe başlama tarihi
+      <input id="moneySetHireDate" type="date"/>
+      <small class="field-hint">Boşsa her ay tam maaş. 8 Ağustos girilirse Ağustos’ta 8–31 günü kadar hak eder.</small>
+    </label>
     <button class="primary" type="submit">Kaydet</button>
   </form>
 </div>
@@ -2752,6 +2761,6 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v163"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v163"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v164"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v164"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
