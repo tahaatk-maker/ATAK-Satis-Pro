@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.192-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.193-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.192-atak-geteinvoices
-EXPECT_BUILD=fix-v192
+EXPECT_HEALTH=6.3.193-atak-geteinvoices
+EXPECT_BUILD=fix-v193
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -104,6 +104,12 @@ check "rapid360 okta poll api" grep -q "rapid360-okta-poll" "$SRC/server.js"
 check "rapid360 okta callback" grep -q "rapid360-okta-callback" "$SRC/server.js"
 check "rapid360 detayli satis url" grep -q "DmrDetailedSalesReport" "$SRC/lib/rapid360-d365-auth.js"
 check "rapid360 nativeclient yok" grep -q "isBlockedMicrosoftUrl" "$SRC/lib/rapid360-d365-auth.js"
+check "rapid360 kod kutusu yok" grep -q "microsoft.com/devicelogin" "$SRC/lib/rapid360-d365-auth.js"
+check "rapid360 ikinci kod penceresi yok" grep -q "continueRapidDeviceLogin" "$SRC/public/assets/admin.js"
+if grep -q "rapid360finish" "$SRC/public/assets/admin.js" "$SRC/public/assets/personel.js"; then
+  echo "   HATALI: Rapid Aktar hâlâ ikinci Kod penceresi açıyor"; exit 1
+fi
+echo "   ok: Rapid Aktar ikinci Kod penceresi yok"
 check "rapid360 satis aktar ui" grep -q "Rapid Aktar" "$SRC/public/admin.html"
 check "rapid360 magaza 340334" grep -q 'value="340334"' "$SRC/public/admin.html"
 check "rapid360 auto import" grep -q "autoImport:true" "$SRC/public/assets/admin.js"

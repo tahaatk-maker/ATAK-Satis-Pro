@@ -36,8 +36,8 @@ async function run(){
   assert.ok(interactive.loginUrl.includes('code_challenge'));
   assert.equal(interactive.userCode, undefined);
   assert.ok(!JSON.stringify(interactive).includes('user_code'));
-  assert.ok(/Okta Verify/.test(interactive.message));
-  assert.ok(!/kod yazılmaz/i.test(JSON.stringify(interactive)));
+  assert.ok(/Okta/.test(interactive.message));
+  assert.ok(/Kod yazılmaz/i.test(interactive.message));
 
   const pendingPkce = await auth.pollDeviceLogin({
     sessionId: 'sess-pkce',
@@ -83,6 +83,8 @@ async function run(){
   assert.ok(!noAzureApp.loginUrl.includes('deviceauth'));
   assert.ok(noAzureApp.deviceLoginUrl.includes('otc=HIDE-ME'));
   assert.ok(!noAzureApp.deviceLoginUrl.includes('login_hint'));
+  assert.ok(!noAzureApp.deviceLoginUrl.includes('deviceauth'));
+  assert.ok(noAzureApp.deviceLoginUrl.includes('microsoft.com/devicelogin'));
   assert.equal(noAzureApp.userCode, undefined);
 
   auth.resetPendingForTests();
@@ -106,7 +108,8 @@ async function run(){
   assert.equal(started.userCode, undefined);
   assert.ok(started.loginUrl);
   assert.ok(started.pollId);
-  assert.ok(/Okta Verify/.test(started.message));
+  assert.ok(/Okta/.test(started.message));
+  assert.ok(/Kod yazılmaz/i.test(started.message));
   assert.ok(!JSON.stringify(started).includes('dev-1'));
   assert.ok(!started.loginUrl.includes('rapid360-okta-callback'));
   assert.ok(started.loginUrl.includes('DmrDetailedSalesReport'));
@@ -116,6 +119,8 @@ async function run(){
   assert.ok(!started.loginUrl.includes('deviceauth'));
   assert.ok(started.deviceLoginUrl.includes('otc=ABCD-EFGH'));
   assert.ok(!started.deviceLoginUrl.includes('login_hint'));
+  assert.ok(!started.deviceLoginUrl.includes('deviceauth'));
+  assert.ok(started.deviceLoginUrl.includes('microsoft.com/devicelogin'));
   assert.ok(!('userCode' in started));
   assert.equal(
     auth.dynamicsReportUrl({ company: '2521', store: '340334' }),
@@ -130,8 +135,12 @@ async function run(){
       verification_uri: 'https://login.microsoftonline.com/common/oauth2/deviceauth',
       user_code: 'OKTA-OK'
     }),
-    'https://login.microsoftonline.com/common/oauth2/deviceauth?otc=OKTA-OK'
+    'https://microsoft.com/devicelogin?otc=OKTA-OK'
   );
+  assert.ok(!auth.deviceLoginUrl({
+    verification_uri_complete: 'https://login.microsoftonline.com/common/oauth2/deviceauth?otc=KEEP-ME',
+    user_code: 'KEEP-ME'
+  }).includes('deviceauth'));
   assert.ok(!auth.deviceLoginUrl({
     verification_uri_complete: 'https://microsoft.com/devicelogin?otc=KEEP-ME',
     user_code: 'KEEP-ME'
@@ -189,6 +198,7 @@ async function run(){
   assert.ok(!onlyUri.loginUrl.includes('deviceauth'));
   assert.ok(onlyUri.deviceLoginUrl.includes('otc=ZZZZ-YYYY'));
   assert.ok(!onlyUri.deviceLoginUrl.includes('login_hint'));
+  assert.ok(!onlyUri.deviceLoginUrl.includes('deviceauth'));
 
   const reused = await auth.startDeviceLogin({
     sessionId: 'sess-otc',
@@ -199,6 +209,7 @@ async function run(){
   assert.ok(reused.loginUrl.includes('DmrDetailedSalesReport'));
   assert.ok(reused.deviceLoginUrl.includes('otc=ZZZZ-YYYY'));
   assert.ok(!reused.deviceLoginUrl.includes('login_hint'));
+  assert.ok(!reused.deviceLoginUrl.includes('deviceauth'));
 
   console.log('rapid360-d365-auth tests OK');
 }

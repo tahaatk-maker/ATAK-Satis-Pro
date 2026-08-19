@@ -12,12 +12,14 @@ const crypto = require('crypto');
 const DEFAULT_DYNAMICS_URL = 'https://liverapid360.operations.dynamics.com';
 const LOGIN_HOST = 'https://login.microsoftonline.com';
 const DEFAULT_TENANT = 'organizations';
+const DEFAULT_ACCOUNT = 'W340334.1@rapid360.arcelikpazarlama.com.tr';
 /** Azure PowerShell (d365fo.integrations) + Microsoft örnek public client. */
 const DEFAULT_CLIENT_IDS = [
   '1950a258-227b-4e31-a9cf-717495945fc2',
   '51f81489-12ee-4a9e-aaae-a2591f45987d'
 ];
 const NATIVE_REDIRECT = 'https://login.microsoftonline.com/common/oauth2/nativeclient';
+const DEVICE_COMPLETE_HOST = 'https://microsoft.com/devicelogin';
 
 const pendingById = new Map();
 
@@ -80,10 +82,8 @@ function accountFromToken(token){
 }
 
 function loginMessage(loginHint){
-  const who = String(loginHint || '').trim();
-  return who
-    ? `Açılan pencerede Rapid360 detaylı satış açılır (${who}). Okta Verify telefona gider; mağaza 340334 arka planda uygulanır.`
-    : 'Açılan pencerede Rapid360 detaylı satış açılır. Okta Verify telefona gider; mağaza 340334 arka planda uygulanır.';
+  const who = String(loginHint || DEFAULT_ACCOUNT).trim();
+  return `Açılan pencerede Rapid360 açılır (${who}). Telefona Okta bildirimi gelir; onaylayın. Kod yazılmaz. Mağaza 340334 arka planda uygulanır.`;
 }
 
 function dynamicsReportUrl({ dynamicsUrl, company, store } = {}){
@@ -116,33 +116,37 @@ function withLoginHint(url, loginHint){
   }
 }
 
-/** Cihaz otc’si yalnızca Okta’dan sonra, aynı tarayıcıda sessiz tamamlamak için. */
+/** microsoft.com/devicelogin?otc= kod kutusunu atlar. deviceauth Kod sayfası açmaz. */
 function deviceLoginUrl(json){
   const userCode = String((json && json.user_code) || '').trim();
   const complete = String((json && (json.verification_uri_complete || json.verificationUriComplete)) || '').trim();
   const uri = String((json && (json.verification_uri || json.verification_url || json.verificationUri)) || '').trim();
   let code = userCode;
-  const url = complete || uri || '';
-  try{
-    if(url){
-      const u = new URL(url);
-      code = String(u.searchParams.get('otc') || userCode || '').trim();
-    }
-  }catch(_){}
-  if(code) return `${LOGIN_HOST}/common/oauth2/deviceauth?otc=${encodeURIComponent(code)}`;
-  return url || 'https://microsoft.com/devicelogin';
+  for(const raw of [complete, uri]){
+    if(!raw) continue;
+    try{
+      const u = new URL(raw);
+      if(u.searchParams.has('login_hint') || u.searchParams.has('username') || u.searchParams.has('whr')) continue;
+      const otc = String(u.searchParams.get('otc') || '').trim();
+      if(otc) code = otc;
+      if(otc && /microsoft\.com\/devicelogin/i.test(raw)) return `${DEVICE_COMPLETE_HOST}?otc=${encodeURIComponent(otc)}`;
+    }catch(_){}
+  }
+  if(code) return `${DEVICE_COMPLETE_HOST}?otc=${encodeURIComponent(code)}`;
+  return '';
 }
 
 function isBrokenDeviceLoginUrl(url){
   const s = String(url || '');
   if(!s) return true;
+  if(/deviceauth/i.test(s)) return true;
   if(/oauth2\/v2\.0\/authorize|rapid360-okta-callback/i.test(s)) return false;
   try{
     const u = new URL(s);
     const otc = String(u.searchParams.get('otc') || '').trim();
     const extra = u.searchParams.has('login_hint') || u.searchParams.has('username') || u.searchParams.has('whr');
     if(extra) return true;
-    if(/deviceauth|devicelogin/i.test(s) && !otc) return true;
+    if(/devicelogin/i.test(s) && !otc) return true;
     return false;
   }catch{
     return true;
@@ -201,7 +205,7 @@ function publicLoginStart(row){
     interval: row.interval,
     message: row.message
   };
-  if(row.deviceCode && deviceUrl && !isBlockedMicrosoftUrl(loginUrl)){
+  if(row.deviceCode && deviceUrl && !isBrokenDeviceLoginUrl(deviceUrl) && !isBlockedMicrosoftUrl(loginUrl)){
     out.deviceLoginUrl = deviceUrl;
   }
   return out;
@@ -344,7 +348,7 @@ function tokenFresh(cfg){
 async function startInteractiveLogin(opts = {}){
   const sessionId = String(opts.sessionId || '');
   if(!sessionId) throw new Error('Oturum yok');
-  const loginHint = String(opts.loginHint || opts.username || '').trim();
+  const loginHint = String(opts.loginHint || opts.username || DEFAULT_ACCOUNT).trim() || DEFAULT_ACCOUNT;
   const redirectUri = String(opts.redirectUri || '').trim();
   const rapid = opts.rapid || {};
   const cfg = configFromRapid(rapid, opts.env);
@@ -673,6 +677,7 @@ function resetPendingForTests(){
 module.exports = {
   DEFAULT_DYNAMICS_URL,
   DEFAULT_TENANT,
+  DEFAULT_ACCOUNT,
   DEFAULT_CLIENT_IDS,
   NATIVE_REDIRECT,
   dynamicsReportUrl,
