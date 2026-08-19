@@ -5463,7 +5463,7 @@ q('#dynamicsImportBtn')?.addEventListener('click',async()=>{
 /** e-Fatura Merkezi — modül: e-Fatura / e-Arşiv / Kurulum */
 let invoiceCenterState={module:'efatura',view:'ef_out_pending',data:null,selected:new Set()};
 const INV_VIEW_META={
-  ef_out_pending:{title:'e-Fatura · Gönderilecek',hint:'Giden e-Fatura kuyruğu. Satıştan Fatura Kes ile düşer; WSDL bağlanınca portala gider.'},
+  ef_out_pending:{title:'e-Fatura · Gönderilecek',hint:'Satıştan kuyruğa düşen giden e-Faturalar.'},
   ef_out_sent:{title:'e-Fatura · Gönderilen',hint:'Kuyruğa alınan / taslak / kesilmiş e-Faturalar.'},
   ef_out_error:{title:'e-Fatura · Hatalı',hint:'Gönderim veya doğrulama hatası. Tekrar deneyebilirsiniz.'},
   ef_out_archive:{title:'e-Fatura · Giden Arşiv',hint:'İptal / arşivlenmiş giden e-Faturalar.'},
@@ -5476,9 +5476,9 @@ const INV_VIEW_META={
   ea_out_archive:{title:'e-Arşiv · Giden Arşiv',hint:'Arşivlenmiş giden e-Arşiv.'},
   ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv (portal bağlanınca).'},
   ea_in_archive:{title:'e-Arşiv · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Arşiv.'},
-  pending_sales:{title:'Kesilmeyen Faturalar',hint:'Geç kesilen satışlar. Manuel kesebilir veya QNB kuyruğuna alabilirsiniz.'},
-  setup_ready:{title:'Kurulum / Hazırlık',hint:'QNB checklist. Senet ve bayi ayarları Ayarlar menüsünde.'},
-  setup_settings:{title:'QNB Ayarları',hint:'Yalnız e-Fatura / QNB Solist entegrasyonu. Form tam genişliktedir.'}
+  pending_sales:{title:'Kesilmeyen Faturalar',hint:'Geç kesilen satışlar. Kuyruğa alın veya manuel işaretleyin.'},
+  setup_ready:{title:'Kurulum / Hazırlık',hint:'Firma, Rapid360 ve Atak geteinvoices kontrolü.'},
+  setup_settings:{title:'Firma ve servis',hint:'Atak fatura ayarları.'}
 };
 function invEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function invStatusBadge(st){

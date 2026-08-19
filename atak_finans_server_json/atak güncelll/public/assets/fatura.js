@@ -4,22 +4,22 @@ const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={module:'efatura',view:'ef_out_pending',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
 
 const INV_VIEW_META={
-  ef_out_pending:{title:'e-Fatura · Gönderilecek',hint:'Giden e-Fatura kuyruğu. Satıştan Fatura Kes ile düşer; WSDL bağlanınca portala gider. Satıra tıklayınca belge açılır.'},
-  ef_out_sent:{title:'e-Fatura · Gönderilen',hint:'Kuyruğa alınan / taslak / kesilmiş e-Faturalar.'},
-  ef_out_error:{title:'e-Fatura · Hatalı',hint:'Gönderim veya doğrulama hatası. Tekrar deneyebilirsiniz.'},
+  ef_out_pending:{title:'e-Fatura · Gönderilecek',hint:'Satıştan kuyruğa düşen giden e-Faturalar. Satıra tıklayınca belge açılır.'},
+  ef_out_sent:{title:'e-Fatura · Gönderilen',hint:'Kuyruğa alınan / kesilmiş e-Faturalar.'},
+  ef_out_error:{title:'e-Fatura · Hatalı',hint:'Doğrulama hatası. Tekrar deneyebilirsiniz.'},
   ef_out_archive:{title:'e-Fatura · Giden Arşiv',hint:'İptal / arşivlenmiş giden e-Faturalar.'},
-  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Arçelik Rapid360 geteinvoices. Portaldan Sorgula son 14 günü çeker.'},
+  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Arçelik Rapid360 geteinvoices. Rapid360’dan çek son 14 günü alır.'},
   ef_in_responses:{title:'e-Fatura · Uygulama Yanıtları',hint:'Ticari fatura kabul/red yanıtları.'},
   ef_in_archive:{title:'e-Fatura · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Faturalar.'},
   ea_out_pending:{title:'e-Arşiv · Gönderilecek',hint:'Giden e-Arşiv kuyruğu.'},
-  ea_out_sent:{title:'e-Arşiv · Gönderilen',hint:'Gönderilmiş / kuyruğa alınmış e-Arşiv faturaları.'},
+  ea_out_sent:{title:'e-Arşiv · Gönderilen',hint:'Kuyruğa alınmış e-Arşiv faturaları.'},
   ea_out_error:{title:'e-Arşiv · Hatalı',hint:'Hatalı e-Arşiv kayıtları.'},
   ea_out_archive:{title:'e-Arşiv · Giden Arşiv',hint:'Arşivlenmiş giden e-Arşiv.'},
-  ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv (portal bağlanınca).'},
+  ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv kayıtları.'},
   ea_in_archive:{title:'e-Arşiv · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Arşiv.'},
-  pending_sales:{title:'Kesilmeyen Faturalar',hint:'Geç kesilen satışlar. Manuel kesebilir veya QNB kuyruğuna alabilirsiniz. Satıra tıklayınca belge açılır.'},
-  setup_ready:{title:'Kurulum / Hazırlık',hint:'QNB checklist. Senet ve bayi ayarları Ayarlar menüsünde.'},
-  setup_settings:{title:'QNB Ayarları',hint:'Yalnız e-Fatura / QNB Solist entegrasyonu. Form tam genişliktedir.'}
+  pending_sales:{title:'Kesilmeyen Faturalar',hint:'Geç kesilen satışlar. Kuyruğa alın veya manuel işaretleyin. Satıra tıklayınca belge açılır.'},
+  setup_ready:{title:'Kurulum / Hazırlık',hint:'Firma, Rapid360 ve Atak geteinvoices kontrolü.'},
+  setup_settings:{title:'Firma ve servis',hint:'Atak fatura ayarları.'}
 };
 
 function toast(t){const el=q('#toast');if(!el)return;el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
@@ -118,9 +118,9 @@ function invSetCounts(c={}){
 }
 function invUpdateEnvBadge(settings={}){
   const el=q('#invEnvBadge');if(!el)return;
-  if(!settings.enabled){el.textContent='Bağlantı Kapalı';el.className='inv-env off';return}
-  if(settings.environment==='live'){el.textContent='Canlı Ortam';el.className='inv-env';return}
-  el.textContent='Test Ortamı';el.className='inv-env test';
+  const dms=settings.atakDms||{};
+  if(dms.enabled===false){el.textContent='Servis Kapalı';el.className='inv-env off';return}
+  el.textContent='ATAK';el.className='inv-env';
 }
 function invoicePrintUrl(row,view){
   if(view==='pending_sales')return `/web-api/admin/sale/${encodeURIComponent(row.id)}/invoice-print`;
@@ -154,7 +154,7 @@ function invRenderSetup(checks=[]){
   if(q('#invReadyChecks')){
     q('#invReadyChecks').innerHTML=(checks||[]).map(c=>`<div class="inv-check ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${invEsc(c.name)}</b><span>${invEsc(c.detail||'')}</span></div>`).join('')||'<div class="inv-empty">Test çalıştırılmadı — “Altyapıyı Test Et”e basın</div>';
   }
-  q('#invFootCount').textContent=(checks||[]).length?`${(checks||[]).filter(c=>c.ok).length}/${(checks||[]).length} hazır`:'QNB kurulum';
+  q('#invFootCount').textContent=(checks||[]).length?`${(checks||[]).filter(c=>c.ok).length}/${(checks||[]).length} hazır`:'Kurulum';
 }
 function invRenderTable(rows){
   q('#invSetupBox')?.classList.add('hidden');
@@ -174,7 +174,7 @@ function invRenderTable(rows){
       <td>${invEsc(r.paymentMethod||'-')}</td>
       <td>${invStatusBadge(r.invoiceStatus)}</td>
       <td style="display:flex;gap:6px;flex-wrap:wrap">
-        ${issueBtns?`<button type="button" class="inv-btn" data-inv-qnb="${invEsc(r.id)}">QNB’ye Al</button>
+        ${issueBtns?`<button type="button" class="inv-btn" data-inv-qnb="${invEsc(r.id)}">Kuyruğa al</button>
         <button type="button" class="inv-btn" data-mark-invoiced="${invEsc(r.id)}">Manuel Kes</button>`:''}
         <button type="button" class="inv-btn" data-inv-print="${invEsc(r.id)}">Belgeyi aç</button>
       </td>
@@ -190,7 +190,7 @@ function invRenderTable(rows){
     qa('[data-inv-qnb]').forEach(btn=>btn.onclick=async()=>{
       try{
         const out=await api('/web-api/admin/sale/'+encodeURIComponent(btn.dataset.invQnb)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-        toast(`QNB kuyruk: ${out.result?.docType||''}`);await loadInvoiceCenter();
+        toast(`Kuyruk: ${out.result?.docType||''}`);await loadInvoiceCenter();
       }catch(e){toast(e.message)}
     });
     qa('[data-mark-invoiced]').forEach(btn=>btn.onclick=async()=>{
@@ -281,7 +281,7 @@ function invPaintCurrentView(){
   if(view==='setup_settings'||view==='setup_ready'){
     if(!state.canSetup){invSetModule('efatura');return}
     invRenderSetup([]);
-    q('#invFootStatus').textContent=view==='setup_ready'?'Hazırlık kontrolü':'QNB ayarları';
+    q('#invFootStatus').textContent=view==='setup_ready'?'Hazırlık kontrolü':'Firma ve servis';
     if(view==='setup_ready')invoiceConnectionTestForCenter();
     else setTimeout(()=>q('#invoiceIntegrationForm')?.scrollIntoView({behavior:'smooth',block:'start'}),40);
     return;
@@ -445,7 +445,7 @@ q('#invIssueSelectedBtn')?.addEventListener('click',async()=>{
     for(const id of ids){
       try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})}catch(_){}
     }
-    toast(`${ids.length} satış QNB kuyruğuna alındı`);
+    toast(`${ids.length} satış kuyruğa alındı`);
   }else{
     for(const id of ids){
       try{await api('/web-api/admin/invoice-queue/'+encodeURIComponent(id)+'/retry',{method:'POST',body:'{}'})}catch(_){}
@@ -465,7 +465,7 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
   try{
     await api('/web-api/admin/invoice-integration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       provider:q('#invoiceProvider')?.value||'qnb-solist',
-      environment:q('#invoiceEnvironment').value,
+      environment:'live',
       companyVkn:q('#invoiceCompanyVkn').value,
       companyTitle:q('#invoiceCompanyTitle').value,
       companyTaxOffice:q('#invoiceCompanyTaxOffice')?.value||'',
@@ -485,9 +485,9 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       webServiceUrl:q('#invoiceServiceUrl').value,
       username:q('#invoiceUsername').value,
       password:q('#invoicePassword').value,
-      enabled:q('#invoiceEnabled').checked,
-      draftMode:q('#invoiceDraftMode').checked,
-      autoDetectType:q('#invoiceAutoDetect').checked,
+      enabled:true,
+      draftMode:q('#invoiceDraftMode')?.checked!==false,
+      autoDetectType:q('#invoiceAutoDetect')?.checked!==false,
       rapid360Url:q('#rapid360Url')?.value||'',
       rapid360ClientId:q('#rapid360ClientId')?.value||'',
       rapid360Secret:q('#rapid360Secret')?.value||'',
@@ -497,7 +497,7 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       rapid360AddReturns:!!q('#rapid360AddReturns')?.checked,
       ...atakDmsPayload()
     })});
-    st.textContent='QNB ayarları kaydedildi · e-Fatura ATK / e-Arşiv ATA.';
+    st.textContent='Atak fatura ayarları kaydedildi.';
     st.className='form-status success';
     await loadInvoiceIntegration();
     invoiceConnectionTestForCenter();

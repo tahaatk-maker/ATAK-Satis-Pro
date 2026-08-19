@@ -584,7 +584,7 @@ const PERMISSION_CATALOG=[
   {id:'screen_manager_approvals',name:'Yönetici Onayları',group:'Finans & Cari'},
   {id:'screen_profit',name:'Kâr & Maliyet',group:'Finans & Cari'},
   {id:'screen_reports',name:'Raporlar',group:'Finans & Cari'},
-  {id:'screen_invoice_center',name:'e-Fatura Merkezi',group:'Finans & Cari'},
+  {id:'screen_invoice_center',name:'Faturalar',group:'Finans & Cari'},
   {id:'orders_manage',name:'Satış kaydı yap (POS API)',group:'Satış işlemleri'},
   {id:'sale_docs',name:'Sözleşme / Senet bas',group:'Satış işlemleri'},
   {id:'sale_offer',name:'Teklif WhatsApp / PDF',group:'Satış işlemleri'},
@@ -2364,8 +2364,8 @@ function defaultTrainingCatalog(){
     row({id:'products',category:'stok',title:'Ürün kartları ve fiyatlar',screen:'products',screenLabel:'Tüm Ürünler',
       description:'Ürün arama, ürün kartı ve alış / liste / nakit / kart fiyatlarının düzenlenmesi.',
       url:'/assets/egitim/products.mp4',status:'ready',duration:'~43 sn',sort:110}),
-    row({id:'invoice-center',category:'efatura',title:'e-Fatura Merkezi',screen:'invoiceCenter',screenLabel:'e-Fatura Merkezi',
-      description:'QNB bağlantısı, Giden Kutusu klasörleri ve kesilmeyen faturalar.',
+    row({id:'invoice-center',category:'efatura',title:'Faturalar',screen:'invoiceCenter',screenLabel:'Faturalar',
+      description:'Atak fatura kuyruğu, Rapid360 gelen kutusu ve geteinvoices.',
       url:'/assets/egitim/invoice-center.mp4',status:'ready',duration:'~21 sn',sort:120}),
     row({id:'approvals',category:'yonetim',title:'Yönetici Onayları',screen:'managerApprovals',screenLabel:'Yönetici Onayları',
       description:'Personel iptal ve düzenleme taleplerinin onay veya ret akışı.',
@@ -5865,14 +5865,20 @@ app.post('/web-api/admin/invoice-integration/atak-dms-rotate',requireAdminOrStaf
 });
 app.post('/web-api/admin/invoice-integration/test',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS,'settings_manage'),(req,res)=>{
   const s=readStore(),c=s.invoiceIntegration||{};
-  const checks=qnbSolist.readinessChecks(c);
   const dms=atakGetE.publicConfig(c.atakDms,{reveal:false,baseUrl:publicBaseUrl(req)});
-  checks.push({name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} hazır (DealerID ${dms.dealerId})`:'Anahtar üretilemedi'});
-  const ep=qnbSolist.defaultEndpoints(c.environment||'test');
-  res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,endpoints:ep,atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Dış servise belge göndermez. QNB Solist WSDL/kullanıcı gelince SOAP gönderim açılır. Atak geteinvoices e-fatura firmasının çağıracağı yerel uçtur.'});
+  const rz=rapid360.publicConfig(c.rapid360);
+  const vkn=String(c.companyVkn||'').replace(/\D/g,'');
+  const checks=[
+    {name:'Firma VKN',ok:vkn.length>=10,detail:vkn||'Yazın'},
+    {name:'Firma ünvanı',ok:!!String(c.companyTitle||'').trim(),detail:c.companyTitle||'Yazın'},
+    {name:'e-Fatura seri',ok:!!String(c.efaturaSeries||c.earsivSeries||'').trim(),detail:`${c.efaturaSeries||'ATK'} / ${c.earsivSeries||'ATA'}`},
+    {name:'Arçelik Rapid360',ok:!!(rz.url&&rz.clientId&&rz.dealerId),detail:rz.dealerId?`DealerID ${rz.dealerId}`:'Tanımsız'},
+    {name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} · DealerID ${dms.dealerId}`:'Eksik'}
+  ];
+  res.json({ok:checks.every(x=>x.ok),mode:'atak',checks,atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Atak fatura merkezi. Gelen Rapid360, giden yerel kuyruk ve geteinvoices.'});
 });
 app.get('/web-api/admin/invoice-queue',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
-/** e-Fatura Merkezi özet: QNB kutusu klasör sayıları + kuyruk + gelen (placeholder) */
+/** Faturalar özet: kuyruk klasörleri + Rapid360 gelen + kesilmeyen satışlar */
 app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{
   const s=readStore();
   const cfg=s.invoiceIntegration||{};
@@ -5927,7 +5933,7 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
     portal:isStaffPortalReq(req)?'staff':'admin',
     canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),
     canIssue:req.session?.admin===true||staffCanInvoice(req),
-    note:'Gelen kutusu Rapid360 geteinvoices ile dolar. Giden kutu yerel kuyruk + UBL taslağıdır. Atak geteinvoices URL’sini e-fatura firmasına Kurulum’dan verin.'
+    note:'Gelen kutusu Rapid360 ile dolar. Giden kutu Atak kuyruğudur. geteinvoices URL’sini Kurulum’dan e-fatura firmasına verin.'
   });
 });
 app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),async(req,res)=>{

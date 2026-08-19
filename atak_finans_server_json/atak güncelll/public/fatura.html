@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>e-Fatura Merkezi · ATAK Pazarlama</title>
+  <title>Faturalar · ATAK Pazarlama</title>
   <link rel="stylesheet" href="/assets/fatura.css?v=fix-v175"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
     <small>ATAK PAZARLAMA</small>
-    <h1>e-Fatura Merkezi</h1>
-    <p>Personel veya yönetim girişi gerekir. Önce panele girin; fatura yine ayrı sekmede açılır.</p>
+    <h1>Faturalar</h1>
+    <p>Personel veya yönetim girişi gerekir. Önce panele girin; faturalar ayrı sekmede açılır.</p>
     <a class="inv-btn primary" href="/personel">Personel girişi</a>
     <a class="inv-btn" href="/web-admin">Yönetim paneli</a>
   </div>
@@ -20,15 +20,15 @@
   <div class="inv-shell">
     <aside class="inv-side">
       <div class="inv-side-brand">
-        <small>QNB SOLIST · ATAK</small>
-        <b>e-Fatura Merkezi</b>
-        <span class="inv-env test" id="invEnvBadge">Test Ortamı</span>
+        <small>ATAK PAZARLAMA</small>
+        <b>Faturalar</b>
+        <span class="inv-env" id="invEnvBadge">ATAK</span>
       </div>
       <div class="inv-modules">
         <button type="button" class="inv-mod-btn active" data-inv-module="efatura"><span>e-Fatura</span><b>›</b></button>
         <button type="button" class="inv-mod-btn" data-inv-module="earsiv"><span>e-Arşiv</span><b>›</b></button>
         <button type="button" class="inv-mod-btn" data-inv-module="pending"><span>Kesilmeyen Faturalar</span><b id="invCountPendingMod">0</b></button>
-        <button type="button" class="inv-mod-btn" data-inv-module="setup" id="invSetupModBtn"><span>Kurulum / QNB</span><b>›</b></button>
+        <button type="button" class="inv-mod-btn" data-inv-module="setup" id="invSetupModBtn"><span>Kurulum</span><b>›</b></button>
       </div>
       <div class="inv-tree">
         <div class="inv-mod-pane" data-inv-pane="pending">
@@ -78,10 +78,10 @@
         </div>
         <div class="inv-mod-pane" data-inv-pane="setup">
           <div class="inv-folder open" data-inv-folder="setup">
-            <button type="button" data-inv-toggle="setup"><span>QNB Kurulum</span><span>▾</span></button>
+            <button type="button" data-inv-toggle="setup"><span>Atak kurulum</span><span>▾</span></button>
             <div class="inv-sub">
-              <button type="button" data-inv-view="setup_settings">QNB Ayarları</button>
-              <button type="button" data-inv-view="setup_ready">Hazırlık Kontrolü</button>
+              <button type="button" data-inv-view="setup_settings">Firma ve servis</button>
+              <button type="button" data-inv-view="setup_ready">Hazırlık</button>
             </div>
           </div>
         </div>
@@ -90,9 +90,9 @@
     <div class="inv-main">
       <div class="inv-head">
         <div>
-          <small>ATAK PAZARLAMA · QNB ESOLUTIONS / SOLIST</small>
+          <small>ATAK PAZARLAMA · FATURALAR</small>
           <h2 id="invViewTitle">Gönderilecek Faturalar</h2>
-          <p id="invViewHint">Satıştan kesilen faturalar burada kuyruğa düşer. QNB WSDL bağlanınca portala gider.</p>
+          <p id="invViewHint">Satıştan kesilen faturalar burada kuyruğa düşer. Gelen kutusu Rapid360’dan dolar.</p>
         </div>
         <div class="inv-head-actions">
           <a class="inv-btn ghost" href="/web-admin" id="backLink">← Panele dön</a>
@@ -109,7 +109,7 @@
         </select>
         <label class="check" style="margin:0;font-size:12px;font-weight:700;color:#475569"><input id="invUnreadOnly" type="checkbox"/> Okunmamışları göster</label>
         <button class="inv-btn" id="invRetrySelectedBtn" type="button">Seçilileri Tekrar Dene</button>
-        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri QNB’ye Al</button>
+        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri kuyruğa al</button>
       </div>
       <div class="inv-panel">
         <div id="invTableWrap">
@@ -122,10 +122,19 @@
         <div class="inv-settings-box hidden" id="invSetupBox">
           <form class="form-stack" id="invoiceIntegrationForm" style="margin:0;padding:0;border:0;background:transparent;box-shadow:none">
             <div class="panel-head" style="padding:0;margin:0 0 10px"><div>
-              <h2 style="margin:0;font-size:18px;color:#0b2a4a">QNB Solist / eSolutions Ayarları</h2>
-              <p class="note">Yalnız e-Fatura entegrasyonu. Senet ve bayi/prim ayarları Ayarlar menüsündedir.</p>
+              <h2 style="margin:0;font-size:18px;color:#0b2a4a">Atak fatura ayarları</h2>
+              <p class="note">Atak’a özel fatura ekranı: satış kuyruğu, Arçelik Rapid360 çekimi ve e-fatura firmasına verilen geteinvoices linki.</p>
             </div></div>
-            <div class="two-col"><label>Sağlayıcı<select id="invoiceProvider"><option value="qnb-solist">QNB Solist</option><option value="qnb-esolutions">QNB eSolutions</option><option value="qnb-efinans">QNB eFinans</option></select></label><label>Ortam<select id="invoiceEnvironment"><option value="test">Test</option><option value="live">Canlı</option></select></label></div>
+            <input type="hidden" id="invoiceProvider" value="qnb-solist"/>
+            <input type="hidden" id="invoiceEnvironment" value="live"/>
+            <input type="hidden" id="invoiceSenderAlias" value=""/>
+            <input type="hidden" id="invoicePkAlias" value=""/>
+            <input type="hidden" id="invoiceServiceUrl" value=""/>
+            <input type="hidden" id="invoiceUsername" value=""/>
+            <input type="hidden" id="invoicePassword" value=""/>
+            <label class="check hidden"><input id="invoiceEnabled" type="checkbox" checked/></label>
+            <label class="check hidden"><input id="invoiceDraftMode" type="checkbox" checked/></label>
+            <label class="check hidden"><input id="invoiceAutoDetect" type="checkbox" checked/></label>
             <div class="two-col"><label>Firma VKN<input id="invoiceCompanyVkn" placeholder="10 haneli VKN"/></label><label>Firma Ünvanı<input id="invoiceCompanyTitle"/></label></div>
             <div class="two-col"><label>Vergi dairesi<input id="invoiceCompanyTaxOffice" placeholder="Sarıyer"/></label><label>MERSİS no<input id="invoiceMersisNo" placeholder="Opsiyonel"/></label></div>
             <div class="two-col"><label>Telefon<input id="invoiceCompanyPhone" placeholder="0212…"/></label><label>E-posta<input id="invoiceCompanyEmail" type="email" placeholder="fatura@firma.com"/></label></div>
@@ -139,19 +148,12 @@
               <label>e-Fatura sonraki no<input id="invoiceEfaturaNext" type="number" min="1" max="999999999" step="1" value="1"/><small class="field-hint" id="invoiceEfaturaPreview">Önizleme: ATK…</small></label>
               <label>e-Arşiv sonraki no<input id="invoiceEarsivNext" type="number" min="1" max="999999999" step="1" value="1"/><small class="field-hint" id="invoiceEarsivPreview">Önizleme: ATA…</small></label>
             </div>
-            <label>Gönderici Birim Etiketi / GB Alias<input id="invoiceSenderAlias" placeholder="QNB Solist GB alias"/></label>
-            <label>Posta Kutusu / PK Alias<input id="invoicePkAlias" placeholder="Opsiyonel PK alias"/></label>
-            <label>QNB WSDL / Web Servis Adresi<input id="invoiceServiceUrl" placeholder="QNB’nin vereceği test/canlı WSDL"/></label>
-            <div class="two-col"><label>Kullanıcı<input id="invoiceUsername" autocomplete="off"/></label><label>Şifre<input id="invoicePassword" type="password" autocomplete="new-password"/></label></div>
-            <label class="check"><input id="invoiceEnabled" type="checkbox"/> QNB bağlantısını etkinleştir</label>
-            <label class="check"><input id="invoiceDraftMode" type="checkbox" checked/> Önce taslak olarak hazırla/gönder</label>
-            <label class="check"><input id="invoiceAutoDetect" type="checkbox" checked/> e-Fatura / e-Arşiv tipini otomatik belirle</label>
-            <div class="button-row"><button class="primary" type="submit">QNB Ayarlarını Kaydet</button><button id="invoiceConnectionTestBtn" class="secondary-btn" type="button">Altyapıyı Test Et</button></div>
+            <div class="button-row"><button class="primary" type="submit">Ayarları Kaydet</button><button id="invoiceConnectionTestBtn" class="secondary-btn" type="button">Hazırlığı kontrol et</button></div>
             <div class="form-status" id="invoiceIntegrationStatus"></div>
             <div class="self-test-result" id="invoiceConnectionTestResult"></div>
             <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
-            <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Rapid360 / Arçelik e-Fatura</h2>
-            <p class="note">Bayiye kesilen e-faturalar <b>geteinvoices</b> servisinden çekilir. <b>Portaldan Sorgula</b> bu adresi çağırır.</p>
+            <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Arçelik Rapid360 (gelen fatura)</h2>
+            <p class="note">Bayiye kesilen e-faturalar geteinvoices’tan çekilir. <b>Rapid360’dan çek</b> bu adresi çağırır.</p>
             <label>Servis URL<input id="rapid360Url" placeholder="https://arc-p-ms-op.arcelik.com/exp/dms/dms/geteinvoices"/></label>
             <div class="two-col"><label>Client ID<input id="rapid360ClientId" autocomplete="off"/></label><label>Client secret<input id="rapid360Secret" type="password" autocomplete="new-password"/></label></div>
             <div class="two-col"><label>Dealer ID<input id="rapid360DealerId" placeholder="21134761"/></label><label>EInvoiceCode<input id="rapid360Code" placeholder="2E1N1D3E4"/></label></div>
@@ -168,7 +170,7 @@
             <label class="check"><input id="atakDmsIncludeInbox" type="checkbox" checked/> Gelen kutuyu (Rapid360 çekimleri) de dahil et</label>
           </form>
           <hr style="border:0;border-top:1px solid #e2e8f0;margin:8px 0 4px"/>
-          <p class="note">Hazırlık checklist — QNB Çözüm Merkezi kurulunda yeşile döner.</p>
+          <p class="note">Hazırlık — firma bilgisi, Rapid360 ve Atak geteinvoices.</p>
           <div class="inv-checks" id="invReadyChecks"></div>
           <button class="inv-btn primary" id="invRunReadyTestBtn" type="button" style="display:none">Altyapıyı Test Et</button>
         </div>
