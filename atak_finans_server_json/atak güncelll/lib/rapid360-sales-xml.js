@@ -509,6 +509,16 @@ function extractSalesFromRecords(records){
   return groupRecords(records).sales;
 }
 
+function extractSalesFromJson(payload){
+  if(payload == null) return { sales: [], cancelledCount: 0, recordCount: 0, format: 'empty' };
+  if(Buffer.isBuffer(payload)) return extractSales(decodeBuffer(payload));
+  if(typeof payload === 'string') return extractSales(payload);
+  const records = [];
+  walkRecords(payload, records);
+  const grouped = groupRecords(records);
+  return { sales: grouped.sales, cancelledCount: grouped.cancelledCount, recordCount: records.length, format: 'json' };
+}
+
 function extractSales(text){
   const raw = String(text || '').replace(/^\uFEFF/, '');
   if(!raw.trim()) return { sales: [], cancelledCount: 0, recordCount: 0, format: 'empty' };
@@ -549,6 +559,7 @@ module.exports = {
   toIsoDate,
   mapPaymentMethod,
   extractSales,
+  extractSalesFromJson,
   extractSalesFromRecords,
   recordsFromXlsxWorkbook,
   parseXmlTree,

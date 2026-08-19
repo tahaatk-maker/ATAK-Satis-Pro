@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v182 */
+/* ATAK_ADMIN_BUILD=fix-v183 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4706,6 +4706,9 @@ async function loadInvoiceIntegration(){
   if(q('#rapid360Code'))q('#rapid360Code').value=rz.eInvoiceCode||'';
   if(q('#rapid360SystemId'))q('#rapid360SystemId').value=rz.systemId||'1';
   if(q('#rapid360AddReturns'))q('#rapid360AddReturns').checked=rz.addReturns!==false;
+  if(q('#rapid360SalesUrl'))q('#rapid360SalesUrl').value=rz.salesUrl||'';
+  if(q('#rapid360SalesStore'))q('#rapid360SalesStore').value=rz.salesStore||'';
+  if(q('#rapid360SalesCompany'))q('#rapid360SalesCompany').value=rz.salesCompany||'2521';
   const dms=s.atakDms||{};
   if(q('#atakDmsClientId'))q('#atakDmsClientId').value=dms.clientId||'';
   if(q('#atakDmsSecret'))q('#atakDmsSecret').value=dms.clientSecret||'';
@@ -4751,6 +4754,9 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       rapid360Code:q('#rapid360Code')?.value||'',
       rapid360SystemId:q('#rapid360SystemId')?.value||'1',
       rapid360AddReturns:!!q('#rapid360AddReturns')?.checked,
+      rapid360SalesUrl:q('#rapid360SalesUrl')?.value||'',
+      rapid360SalesStore:q('#rapid360SalesStore')?.value||'',
+      rapid360SalesCompany:q('#rapid360SalesCompany')?.value||'2521',
       atakDmsEnabled:!!q('#atakDmsEnabled')?.checked,
       atakDmsIncludeInbox:!!q('#atakDmsIncludeInbox')?.checked,
       atakDmsDealerId:q('#atakDmsDealerId')?.value||'',
@@ -6218,6 +6224,11 @@ q('#salesTrackingRefresh')?.addEventListener('click',loadSalesTracking);
 q('#salesTrackingStatusFilter')?.addEventListener('change',renderSalesTracking);
 q('#salesTrackingSearch')?.addEventListener('input',renderSalesTracking);
 
+function isoDaysAgo(n){
+  const d=new Date();
+  d.setDate(d.getDate()-n);
+  return d.toISOString().slice(0,10);
+}
 function rapid360SalesXmlForm(){
   const file=q('#rapid360SalesXmlFile')?.files?.[0];
   if(!file)return null;
@@ -6226,9 +6237,23 @@ function rapid360SalesXmlForm(){
   fd.append('dealerId',q('#rapid360SalesXmlDealer')?.value||'atak-beko');
   return fd;
 }
+let rapid360PullToken='';
+function rapid360PullBody(){
+  return{
+    startDate:q('#rapid360SalesStart')?.value||isoDaysAgo(7),
+    endDate:q('#rapid360SalesEnd')?.value||isoDaysAgo(0),
+    store:q('#rapid360SalesStoreFilter')?.value||'',
+    company:q('#rapid360SalesCompanyFilter')?.value||'2521',
+    dealerId:q('#rapid360SalesXmlDealer')?.value||'atak-beko',
+    pullToken:rapid360PullToken||undefined
+  };
+}
 function openRapid360SalesXmlModal(){
   q('#rapid360SalesXmlModal')?.classList.remove('hidden');
   q('#rapid360SalesXmlImportBtn')&&(q('#rapid360SalesXmlImportBtn').disabled=true);
+  rapid360PullToken='';
+  if(q('#rapid360SalesStart') && !q('#rapid360SalesStart').value) q('#rapid360SalesStart').value=isoDaysAgo(7);
+  if(q('#rapid360SalesEnd') && !q('#rapid360SalesEnd').value) q('#rapid360SalesEnd').value=isoDaysAgo(0);
 }
 function closeRapid360SalesXmlModal(){q('#rapid360SalesXmlModal')?.classList.add('hidden')}
 function renderRapid360SalesXmlPreview(d){
@@ -6243,10 +6268,23 @@ function renderRapid360SalesXmlPreview(d){
 q('#rapid360SalesXmlBtn')?.addEventListener('click',openRapid360SalesXmlModal);
 q('#rapid360SalesXmlBtn2')?.addEventListener('click',openRapid360SalesXmlModal);
 q('#rapid360SalesXmlClose')?.addEventListener('click',closeRapid360SalesXmlModal);
+q('#rapid360SalesPullBtn')?.addEventListener('click',async()=>{
+  const st=q('#rapid360SalesXmlStatus');
+  rapid360PullToken='';
+  st.textContent='Rapid360 satışları çekiliyor…';st.className='form-status';
+  q('#rapid360SalesXmlImportBtn')&&(q('#rapid360SalesXmlImportBtn').disabled=true);
+  try{
+    const d=await api('/web-api/admin/rapid360-sales-pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
+    rapid360PullToken=d.pullToken||'';
+    renderRapid360SalesXmlPreview(d);
+    st.textContent=`${d.importable||0} satış aktarılabilir${d.cancelled?` · ${d.cancelled} iptal atlandı`:''}${d.sourceUrl?` · canlı çekim`:''}.`;st.className='form-status success';
+  }catch(e){st.textContent=e.message;st.className='form-status error'}
+});
 q('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
   const st=q('#rapid360SalesXmlStatus');
   const fd=rapid360SalesXmlForm();
-  if(!fd){st.textContent='XML dosyası seçin';st.className='form-status error';return}
+  if(!fd){st.textContent='XML dosyası seçin veya Rapid Aktar kullanın';st.className='form-status error';return}
+  rapid360PullToken='';
   st.textContent='XML okunuyor…';st.className='form-status';
   try{
     const d=await api('/web-api/admin/rapid360-sales-preview',{method:'POST',body:fd});
@@ -6256,13 +6294,18 @@ q('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
 });
 q('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
   const st=q('#rapid360SalesXmlStatus');
-  const fd=rapid360SalesXmlForm();
-  if(!fd)return;
   if(!confirm('Seçilen Rapid360 satışları Atak satış listesine eklensin mi?\nKasa ve stok değişmez. Aynı sipariş numaraları atlanır.'))return;
   st.textContent='Aktarılıyor…';st.className='form-status';
   q('#rapid360SalesXmlImportBtn').disabled=true;
   try{
-    const r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
+    let r;
+    if(rapid360PullToken){
+      r=await api('/web-api/admin/rapid360-sales-pull-import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
+    }else{
+      const fd=rapid360SalesXmlForm();
+      if(!fd){st.textContent='Önce Rapid Aktar veya XML seçin';st.className='form-status error';q('#rapid360SalesXmlImportBtn').disabled=false;return}
+      r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
+    }
     st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı · ${r.customersCreated||0} yeni müşteri${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}`;
     st.className='form-status success';
     toast(st.textContent);

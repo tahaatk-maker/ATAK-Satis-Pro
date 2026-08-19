@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v182 */
+/* ATAK_PERSONEL_BUILD=fix-v183 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1731,12 +1731,47 @@ $('#salesNext2')?.addEventListener('click',()=>{
 $('#salesBack2')?.addEventListener('click',()=>setSalesStep(1));
 $('#salesBack3')?.addEventListener('click',()=>setSalesStep(2));
 $('#salesResetBtn')?.addEventListener('click',salesReset);
-$('#rapid360SalesXmlBtn')?.addEventListener('click',()=>$('#rapid360SalesXmlModal')?.classList.remove('hidden'));
+function isoDaysAgo(n){
+  const d=new Date();
+  d.setDate(d.getDate()-n);
+  return d.toISOString().slice(0,10);
+}
+let rapid360PullToken='';
+function rapid360PullBody(){
+  return{
+    startDate:$('#rapid360SalesStart')?.value||isoDaysAgo(7),
+    endDate:$('#rapid360SalesEnd')?.value||isoDaysAgo(0),
+    store:$('#rapid360SalesStoreFilter')?.value||'',
+    company:$('#rapid360SalesCompanyFilter')?.value||'2521',
+    dealerId:$('#rapid360SalesXmlDealer')?.value||'atak-beko',
+    pullToken:rapid360PullToken||undefined
+  };
+}
+$('#rapid360SalesXmlBtn')?.addEventListener('click',()=>{
+  $('#rapid360SalesXmlModal')?.classList.remove('hidden');
+  rapid360PullToken='';
+  if($('#rapid360SalesStart') && !$('#rapid360SalesStart').value) $('#rapid360SalesStart').value=isoDaysAgo(7);
+  if($('#rapid360SalesEnd') && !$('#rapid360SalesEnd').value) $('#rapid360SalesEnd').value=isoDaysAgo(0);
+});
 $('#rapid360SalesXmlClose')?.addEventListener('click',()=>$('#rapid360SalesXmlModal')?.classList.add('hidden'));
+$('#rapid360SalesPullBtn')?.addEventListener('click',async()=>{
+  const st=$('#rapid360SalesXmlStatus');
+  rapid360PullToken='';
+  st.textContent='Rapid360 satışları çekiliyor…';
+  $('#rapid360SalesXmlImportBtn')&&($('#rapid360SalesXmlImportBtn').disabled=true);
+  try{
+    const d=await api('/web-api/admin/rapid360-sales-pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
+    rapid360PullToken=d.pullToken||'';
+    $('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.salesId||''}</td><td>${r.customerName||''}</td><td>${money(r.total)}</td><td>${r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok')}</td></tr>`).join('');
+    $('#rapid360SalesXmlImportBtn').disabled=!d.importable;
+    st.textContent=`${d.importable||0} satış aktarılabilir${d.cancelled?` · ${d.cancelled} iptal atlandı`:''}`;
+  }catch(e){st.textContent=e.message}
+});
 $('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
   const st=$('#rapid360SalesXmlStatus');
   const file=$('#rapid360SalesXmlFile')?.files?.[0];
-  if(!file){st.textContent='XML seçin';return}
+  if(!file){st.textContent='XML seçin veya Rapid Aktar kullanın';return}
+  rapid360PullToken='';
   const fd=new FormData();fd.append('file',file);fd.append('dealerId',$('#rapid360SalesXmlDealer')?.value||'atak-beko');
   st.textContent='XML okunuyor…';
   try{
@@ -1748,13 +1783,18 @@ $('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
 });
 $('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
   const st=$('#rapid360SalesXmlStatus');
-  const file=$('#rapid360SalesXmlFile')?.files?.[0];
-  if(!file)return;
   if(!confirm('Rapid360 satışları Atak listesine eklensin mi?'))return;
-  const fd=new FormData();fd.append('file',file);fd.append('dealerId',$('#rapid360SalesXmlDealer')?.value||'atak-beko');
   st.textContent='Aktarılıyor…';
   try{
-    const r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
+    let r;
+    if(rapid360PullToken){
+      r=await api('/web-api/admin/rapid360-sales-pull-import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
+    }else{
+      const file=$('#rapid360SalesXmlFile')?.files?.[0];
+      if(!file){st.textContent='Önce Rapid Aktar veya XML seçin';return}
+      const fd=new FormData();fd.append('file',file);fd.append('dealerId',$('#rapid360SalesXmlDealer')?.value||'atak-beko');
+      r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
+    }
     st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}`;
     stToast(st.textContent);
   }catch(e){st.textContent=e.message}

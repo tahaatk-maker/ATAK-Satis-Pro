@@ -139,6 +139,14 @@ const trCols = xml.extractSales(`<?xml version="1.0" encoding="utf-8"?>
 </Satislar>`);
 assert(trCols.sales[0].custName === 'ELİF KAYA', 'türkçe sütun Adı/Soyadı ' + (trCols.sales[0] && trCols.sales[0].custName));
 
+const fromJson = xml.extractSalesFromJson({
+  SatisBilgileri: {
+    SiparisNo: 'J-1', SiparisTarihi: '18/03/2026', Ad: 'CAN', Soyad: 'DEMIR', MusteriKodu: 'M1', ToplamTutar: '10',
+    SatisSatirlari: { SatisSatiri: { MalzemeKodu: 'P', MalzemeAdi: 'Urun', Miktar: '1', Tutar: '10' } }
+  }
+});
+assert(fromJson.sales.length === 1 && fromJson.sales[0].custName === 'CAN DEMIR', 'json ad soyad');
+
 const utf16 = Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from(sample, 'utf16le')]);
 const decoded = xml.extractSales(xml.decodeBuffer(utf16));
 assert(decoded.sales.length === 2, 'utf16');
