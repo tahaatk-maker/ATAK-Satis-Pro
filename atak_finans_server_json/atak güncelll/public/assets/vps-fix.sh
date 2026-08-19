@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.179-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.180-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.179-atak-geteinvoices
-EXPECT_BUILD=fix-v179
+EXPECT_HEALTH=6.3.180-atak-geteinvoices
+EXPECT_BUILD=fix-v180
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -87,6 +87,8 @@ check "e-fatura giden kutu" grep -q 'data-inv-view="ef_out_pending"' "$SRC/publi
 check "baskan inbox kapali" grep -q "isChairmanMuleConsume" "$SRC/lib/rapid360-einvoice.js"
 check "baskan dealer kilidi" grep -q "CHAIRMAN_DEALER_ID" "$SRC/lib/rapid360-einvoice.js"
 check "rapid360 satis xml" test -f "$SRC/lib/rapid360-sales-xml.js"
+check "rapid360 xml oz nitelik" grep -q "function parseAttrs" "$SRC/lib/rapid360-sales-xml.js"
+check "rapid360 siparisno" grep -q "siparisno" "$SRC/lib/rapid360-sales-xml.js"
 check "rapid360 satis aktar ui" grep -q "Rapid360 XML Aktar" "$SRC/public/admin.html"
 check "vkn lookup api" grep -q "vkn-lookup" "$SRC/server.js"
 check "vkn lookup admin ui" grep -q 'data-vkn-lookup="customerPage"' "$SRC/public/admin.html"

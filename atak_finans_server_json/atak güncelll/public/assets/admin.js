@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v179 */
+/* ATAK_ADMIN_BUILD=fix-v180 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6221,7 +6221,7 @@ function openRapid360SalesXmlModal(){
 function closeRapid360SalesXmlModal(){q('#rapid360SalesXmlModal')?.classList.add('hidden')}
 function renderRapid360SalesXmlPreview(d){
   const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(Number(n||0));
-  q('#rapid360SalesXmlSummary').innerHTML=`<article><b>${d.count||0}</b><span>Sipariş</span></article><article><b>${d.importable||0}</b><span>Aktarılacak</span></article><article><b>${d.duplicate||0}</b><span>Zaten var</span></article><article><b>${d.customersNew||0}</b><span>Yeni müşteri</span></article>`;
+  q('#rapid360SalesXmlSummary').innerHTML=`<article><b>${d.count||0}</b><span>Sipariş</span></article><article><b>${d.importable||0}</b><span>Aktarılacak</span></article><article><b>${d.duplicate||0}</b><span>Zaten var</span></article><article><b>${d.cancelled||0}</b><span>İptal atlandı</span></article><article><b>${d.customersNew||0}</b><span>Yeni müşteri</span></article>`;
   q('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>{
     const st=r.duplicate?'Kayıtlı':(!r.itemCount?'Kalem yok':(r.customerStatus==='new'?'Yeni müşteri':'Hazır'));
     return `<tr><td><b>${r.salesId||''}</b></td><td>${r.date||'-'}</td><td>${r.customerName||r.custAccount||'-'}<div style="font-size:11px;color:#667890">${r.custAccount||''}</div></td><td>${r.itemCount||0}</td><td>${money(r.total)}</td><td>${st}</td></tr>`;
@@ -6239,7 +6239,7 @@ q('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
   try{
     const d=await api('/web-api/admin/rapid360-sales-preview',{method:'POST',body:fd});
     renderRapid360SalesXmlPreview(d);
-    st.textContent=`${d.importable||0} satış aktarılabilir.`;st.className='form-status success';
+    st.textContent=`${d.importable||0} satış aktarılabilir${d.cancelled?` · ${d.cancelled} iptal atlandı`:''}.`;st.className='form-status success';
   }catch(e){st.textContent=e.message;st.className='form-status error'}
 });
 q('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{

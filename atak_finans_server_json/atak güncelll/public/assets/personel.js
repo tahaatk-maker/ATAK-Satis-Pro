@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v179 */
+/* ATAK_PERSONEL_BUILD=fix-v180 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1743,7 +1743,7 @@ $('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
     const d=await api('/web-api/admin/rapid360-sales-preview',{method:'POST',body:fd});
     $('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.salesId||''}</td><td>${r.customerName||''}</td><td>${money(r.total)}</td><td>${r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok')}</td></tr>`).join('');
     $('#rapid360SalesXmlImportBtn').disabled=!d.importable;
-    st.textContent=`${d.importable||0} satış aktarılabilir`;
+    st.textContent=`${d.importable||0} satış aktarılabilir${d.cancelled?` · ${d.cancelled} iptal atlandı`:''}`;
   }catch(e){st.textContent=e.message}
 });
 $('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{

@@ -36,6 +36,18 @@ function decodeBuffer(buf){
   return b.toString('utf8');
 }
 
+function parseAttrs(tok){
+  const attrs = {};
+  const re = /([:\w.-]+)\s*=\s*"([^"]*)"|([:\w.-]+)\s*=\s*'([^']*)'/g;
+  let m;
+  while((m = re.exec(String(tok || '')))){
+    const name = String(m[1] || m[3] || '').replace(/^.*:/, '');
+    if(!name) continue;
+    attrs[name] = decodeEntities(m[2] != null ? m[2] : m[4]);
+  }
+  return attrs;
+}
+
 function parseXmlTree(text){
   const src = String(text || '')
     .replace(/^\uFEFF/, '')
@@ -43,7 +55,7 @@ function parseXmlTree(text){
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (_, c) => c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
   const tokens = src.match(/<[^>]+>|[^<]+/g) || [];
-  const root = { name: 'root', children: [], text: '' };
+  const root = { name: 'root', children: [], text: '', attrs: {} };
   const stack = [root];
   for(const tok of tokens){
     if(tok.startsWith('<?') || tok.startsWith('<!')) continue;
@@ -56,7 +68,7 @@ function parseXmlTree(text){
       const m = tok.match(/^<\s*\/?\s*([^>\s\/]+)/);
       if(!m) continue;
       const name = String(m[1]).replace(/^.*:/, '');
-      const node = { name, children: [], text: '' };
+      const node = { name, children: [], text: '', attrs: parseAttrs(tok) };
       stack[stack.length - 1].children.push(node);
       if(!selfClose) stack.push(node);
       continue;
@@ -68,8 +80,16 @@ function parseXmlTree(text){
 
 function nodeValue(node){
   const kids = node.children || [];
-  if(!kids.length) return decodeEntities(node.text).trim();
   const out = {};
+  for(const [k, v] of Object.entries(node.attrs || {})){
+    if(v != null && String(v).trim() !== '') out[k] = String(v).trim();
+  }
+  if(!kids.length){
+    const t = decodeEntities(node.text).trim();
+    if(t && !Object.keys(out).length) return t;
+    if(t && out._text == null) out._text = t;
+    return Object.keys(out).length ? out : t;
+  }
   for(const c of kids){
     const k = c.name;
     const v = nodeValue(c);
@@ -96,16 +116,22 @@ function flattenRecord(obj){
   return Object.keys(out).length ? out : null;
 }
 
-function walkRecords(val, acc){
+function walkRecords(val, acc, inherit = {}){
   if(val == null) return;
   if(Array.isArray(val)){
-    for(const x of val) walkRecords(x, acc);
+    for(const x of val) walkRecords(x, acc, inherit);
     return;
   }
   if(typeof val !== 'object') return;
-  const flat = flattenRecord(val);
-  if(flat) acc.push(flat);
-  for(const v of Object.values(val)) walkRecords(v, acc);
+  const flat = flattenRecord(val) || {};
+  const merged = { ...inherit, ...flat };
+  const next = { ...inherit };
+  const sid = pick(merged, KEY.salesId);
+  if(sid) next.siparisno = sid;
+  if(Object.keys(flat).length && (sid || pick(merged, KEY.itemCode) || pick(merged, KEY.itemName) || pick(merged, KEY.custAccount) || pick(merged, KEY.custName) || merged.odemetarihi || merged.toplamtutar)){
+    acc.push(merged);
+  }
+  for(const v of Object.values(val)) walkRecords(v, acc, next);
 }
 
 const KEY = {
@@ -119,10 +145,18 @@ const KEY = {
   eInvoice: ['iseinvoice','efaturami','einvoice','efatura'],
   webOrder: ['isweborder','websiparisimi','weborder'],
   itemCode: ['itemid','itemcode','malzemekodu','maddekodu','itemnumber','productcode','urunkodu'],
-  itemName: ['itemname','name','metin','text','urunadi','itemtext','salesdetail','satisdetayi','searchname','aramaadi'],
+  itemName: ['malzemeadi','itemname','name','metin','text','urunadi','itemtext','salesdetail','satisdetayi','searchname','aramaadi'],
   qty: ['qty','quantity','salesqty','adet','miktar','orderedqty','lineqty'],
   unitPrice: ['salesprice','birimfiyat','price','unitprice','satisprice'],
-  lineAmount: ['lineamount','lineamountmst','tutar','amount','satistutari','linenetamount','amountmst'],
+  lineAmount: ['lineamount','lineamountmst','satistutari','linenetamount','amountmst','kalemtutar'],
+  headerTotal: ['toplamtutar','faturatutari','kdvtutartoplami'],
+  cancelled: ['faturasinifi','faturaasama','status','iptal'],
+  salesperson: ['satistemsilcisi','salesperson','satici','personel'],
+  tckn: ['tckimlik','tckn','tcno'],
+  address: ['adres','address'],
+  city: ['sehir','city','il'],
+  district: ['ilce','district'],
+  email: ['eposta','email','mail'],
   payMethod: ['paymmode','odemeyontemi','paymentmethod','paymterm','paymmethod'],
   payName: ['paymmodename','odemeyontemiadi','paymentmethodname','paymname'],
   payAmount: ['odenecektutar','amountcur','paymamount','paymentamount','tutarodenecek'],
@@ -180,6 +214,10 @@ function mapPaymentMethod(raw){
   return String(raw || '').trim() || 'Karma';
 }
 
+function isCancelledFlag(v){
+  return /iptal/.test(String(v || '').toLocaleLowerCase('tr-TR'));
+}
+
 function recKind(rec){
   const item = pick(rec, KEY.itemCode);
   const itemName = pick(rec, KEY.itemName);
@@ -187,12 +225,14 @@ function recKind(rec){
   const pay = pick(rec, KEY.payMethod) || pick(rec, KEY.payName);
   const payAmt = asNumber(pick(rec, KEY.payAmount));
   const cust = pick(rec, KEY.custAccount) || pick(rec, KEY.custName);
-  const hasLine = !!(item || ((itemName || qty) && !pay));
+  const isPayNode = !!(rec.odemetarihi || rec.vadetarihi || rec.taksitsayisi);
+  if(isPayNode && !item) return 'payment';
+  const hasLine = !!(item || ((itemName || qty) && !pay && !cust));
   const hasPay = !!(pay || (payAmt && !item && !cust));
   if(hasLine && cust) return 'both';
   if(hasPay && !hasLine) return 'payment';
   if(hasLine) return 'line';
-  if(cust || pick(rec, KEY.orderDate) || pick(rec, KEY.invoiceDate)) return 'header';
+  if(cust || pick(rec, KEY.orderDate) || pick(rec, KEY.invoiceDate) || rec.toplamtutar) return 'header';
   if(payAmt) return 'payment';
   return '';
 }
@@ -211,6 +251,14 @@ function ensureSale(map, id){
       store: '',
       eInvoice: false,
       webOrder: false,
+      cancelled: false,
+      salespersonName: '',
+      tckn: '',
+      address: '',
+      city: '',
+      district: '',
+      email: '',
+      headerTotal: 0,
       lines: [],
       payments: []
     });
@@ -227,14 +275,25 @@ function applyHeader(sale, rec){
   if(!name && !pick(rec, KEY.itemCode)) name = rec.name || '';
   if(name) sale.custName = sale.custName || name;
   sale.store = sale.store || pick(rec, KEY.store);
+  sale.salespersonName = sale.salespersonName || pick(rec, KEY.salesperson);
+  sale.tckn = sale.tckn || pick(rec, KEY.tckn);
+  sale.address = sale.address || pick(rec, KEY.address);
+  sale.city = sale.city || String(pick(rec, KEY.city) || '').replace(/\s*\/\s*TUR\s*$/i, '').trim();
+  sale.district = sale.district || pick(rec, KEY.district);
+  sale.email = sale.email || pick(rec, KEY.email);
+  const headerTotal = asNumber(pick(rec, KEY.headerTotal));
+  if(headerTotal) sale.headerTotal = headerTotal;
+  if(isCancelledFlag(pick(rec, KEY.cancelled))) sale.cancelled = true;
   if(truthy(pick(rec, KEY.eInvoice))) sale.eInvoice = true;
   if(truthy(pick(rec, KEY.webOrder))) sale.webOrder = true;
 }
 
 function applyLine(sale, rec){
-  const qty = Math.max(1, Math.round(asNumber(pick(rec, KEY.qty)) || 1));
-  let amount = asNumber(pick(rec, KEY.lineAmount));
+  const qtyRaw = asNumber(pick(rec, KEY.qty));
+  const qty = Math.max(1, Math.round(qtyRaw || 1));
+  let amount = asNumber(pick(rec, KEY.lineAmount) || rec.tutar);
   let unit = asNumber(pick(rec, KEY.unitPrice));
+  sale.salespersonName = sale.salespersonName || pick(rec, KEY.salesperson);
   if(!amount && unit) amount = Math.round(unit * qty * 100) / 100;
   if(!unit && amount) unit = Math.round((amount / qty) * 100) / 100;
   const code = pick(rec, KEY.itemCode);
@@ -253,7 +312,7 @@ function applyLine(sale, rec){
 
 function applyPayment(sale, rec){
   const label = pick(rec, KEY.payName) || pick(rec, KEY.payMethod);
-  const amount = asNumber(pick(rec, KEY.payAmount) || pick(rec, KEY.lineAmount));
+  const amount = asNumber(pick(rec, KEY.payAmount) || rec.tutar);
   if(!label && !amount) return;
   sale.payments.push({
     method: mapPaymentMethod(label),
@@ -277,20 +336,29 @@ function groupRecords(records){
     if(!kind) applyHeader(sale, rec);
   }
   const sales = [];
+  let cancelledCount = 0;
   for(const sale of map.values()){
+    if(sale.cancelled){ cancelledCount += 1; continue; }
     if(!sale.lines.length && sale.payments.length){
       const sum = Math.round(sale.payments.reduce((a, p) => a + Number(p.amount || 0), 0) * 100) / 100;
       if(sum > 0){
         sale.lines.push({ itemCode: '', name: 'Rapid360 satış', quantity: 1, unitPrice: sum, total: sum, lineNo: '', paro: '' });
       }
     }
-    const total = Math.round(sale.lines.reduce((a, l) => a + Number(l.total || 0), 0) * 100) / 100;
+    let total = Math.round(sale.lines.reduce((a, l) => a + Number(l.total || 0), 0) * 100) / 100;
+    if((!total || total < 0.01) && sale.headerTotal > 0){
+      total = sale.headerTotal;
+      if(!sale.lines.length){
+        sale.lines.push({ itemCode: '', name: 'Rapid360 satış', quantity: 1, unitPrice: total, total, lineNo: '', paro: '' });
+      }
+    }else if(sale.headerTotal > total) total = sale.headerTotal;
     sale.total = total;
     if(!sale.orderDate) sale.orderDate = sale.invoiceDate;
     if(!sale.custName) sale.custName = sale.custAccount || 'Rapid360 müşteri';
-    sales.push(sale);
+    if(sale.total > 0 || sale.lines.length) sales.push(sale);
   }
-  return sales.sort((a, b) => String(b.orderDate).localeCompare(String(a.orderDate)) || String(b.salesId).localeCompare(String(a.salesId)));
+  sales.sort((a, b) => String(b.orderDate).localeCompare(String(a.orderDate)) || String(b.salesId).localeCompare(String(a.salesId)));
+  return { sales, cancelledCount };
 }
 
 function parseSpreadsheetRows(text){
@@ -343,21 +411,23 @@ function isSpreadsheetXml(text){
 }
 
 function extractSalesFromRecords(records){
-  return groupRecords(records);
+  return groupRecords(records).sales;
 }
 
 function extractSales(text){
   const raw = String(text || '').replace(/^\uFEFF/, '');
-  if(!raw.trim()) return { sales: [], recordCount: 0, format: 'empty' };
+  if(!raw.trim()) return { sales: [], cancelledCount: 0, recordCount: 0, format: 'empty' };
   if(isSpreadsheetXml(raw)){
     const sheets = parseSpreadsheetRows(raw);
     const records = sheets.flatMap(recordsFromSheet);
-    return { sales: groupRecords(records), recordCount: records.length, format: 'spreadsheet-xml', sheets: sheets.map(s => s.name) };
+    const grouped = groupRecords(records);
+    return { sales: grouped.sales, cancelledCount: grouped.cancelledCount, recordCount: records.length, format: 'spreadsheet-xml', sheets: sheets.map(s => s.name) };
   }
   const tree = parseXmlTree(raw);
   const records = [];
   walkRecords(nodeValue(tree), records);
-  return { sales: groupRecords(records), recordCount: records.length, format: 'xml' };
+  const grouped = groupRecords(records);
+  return { sales: grouped.sales, cancelledCount: grouped.cancelledCount, recordCount: records.length, format: 'xml' };
 }
 
 function recordsFromXlsxWorkbook(wb, XLSX){

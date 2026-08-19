@@ -1893,8 +1893,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.179-atak-geteinvoices',
-  build:'fix-v179',
+  version:'6.3.180-atak-geteinvoices',
+  build:'fix-v180',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5002,6 +5002,15 @@ function rapidSaleDuplicate(s,salesId){
     String(t.rapidSalesId||'')===id||String(t.reference||'')===id||String(t.reference||'')===`R360-${id}`
   ));
 }
+function matchRapidSalesperson(s,name){
+  const n=String(name||'').trim().toLocaleLowerCase('tr-TR');
+  if(!n)return null;
+  const staff=(s.staff||[]).find(x=>x.active!==false&&String(x.name||'').trim().toLocaleLowerCase('tr-TR')===n);
+  if(staff)return {id:staff.userId||staff.id,name:staff.name};
+  const user=(s.users||[]).find(x=>x.active!==false&&String(x.name||'').trim().toLocaleLowerCase('tr-TR')===n);
+  if(user)return {id:user.id,name:user.name};
+  return null;
+}
 function matchRapidCustomer(s,account,name){
   const acc=String(account||'').trim().toLocaleLowerCase('tr-TR');
   const nm=String(name||'').trim().toLocaleLowerCase('tr-TR');
@@ -5020,16 +5029,24 @@ function ensureRapidCustomer(s,sale){
   const existing=matchRapidCustomer(s,sale.custAccount,sale.custName);
   if(existing){
     if(sale.custAccount&&!existing.rapidCustAccount)existing.rapidCustAccount=sale.custAccount;
+    if(sale.tckn&&!existing.tckn)existing.tckn=String(sale.tckn).replace(/\D/g,'');
+    if(sale.email&&!existing.email)existing.email=String(sale.email).trim();
+    if(sale.address&&(!existing.address||existing.address==='Rapid360 satış aktarımı'))existing.address=String(sale.address).trim();
+    if(sale.city&&existing.city==='İstanbul')existing.city=String(sale.city).trim();
+    if(sale.district&&existing.district==='Sarıyer')existing.district=String(sale.district).trim();
     return {customer:existing,created:false};
   }
+  const city=String(sale.city||'İstanbul').trim()||'İstanbul';
+  const district=String(sale.district||'Sarıyer').trim()||'Sarıyer';
+  const address=String(sale.address||'Rapid360 satış aktarımı').trim()||'Rapid360 satış aktarımı';
   const row={
     id:crypto.randomUUID(),
     name:String(sale.custName||sale.custAccount||'Rapid360 müşteri').trim(),
     phone:'',
-    email:'',
-    taxNo:'',tckn:'',
-    city:'İstanbul',district:'Sarıyer',address:'Rapid360 satış aktarımı',
-    deliverySameAsBilling:true,deliveryCity:'İstanbul',deliveryDistrict:'Sarıyer',deliveryAddress:'Rapid360 satış aktarımı',
+    email:String(sale.email||'').trim(),
+    taxNo:'',tckn:String(sale.tckn||'').replace(/\D/g,''),
+    city,district,address,
+    deliverySameAsBilling:true,deliveryCity:city,deliveryDistrict:district,deliveryAddress:address,
     invoiceType:'individual',companyName:'',taxOffice:'',
     rapidCustAccount:String(sale.custAccount||'').trim(),
     customerCode:String(sale.custAccount||'').trim(),
@@ -5065,7 +5082,11 @@ function mapRapidSaleItems(s,sale){
 app.post('/web-api/admin/rapid360-sales-preview',requireAdminOrStaffAny('orders_manage','screen_sales_center','screen_sales_tracking'),dynamicsUpload.single('file'),(req,res)=>{
   try{
     const parsed=parseRapid360SalesUpload(req.file);
-    if(!parsed.sales.length)return res.status(400).json({error:'XML içinde satış siparişi bulunamadı. Rapid360 → Detaylı satış bilgileri XML → XML Aktar dosyasını seçin.'});
+    if(!parsed.sales.length){
+      const cancelled=Number(parsed.cancelledCount||0);
+      if(cancelled)return res.status(400).json({error:`XML okundu: ${cancelled} satış İPTAL işaretli, aktarılacak kayıt yok.`});
+      return res.status(400).json({error:'XML içinde satış siparişi bulunamadı. Rapid360 Detaylı satış bilgileri XML dosyasını seçin (SiparisNo öznitelik olarak gelir).'});
+    }
     const s=readStore();
     const rows=parsed.sales.map(sale=>{
       const customer=matchRapidCustomer(s,sale.custAccount,sale.custName);
@@ -5094,6 +5115,7 @@ app.post('/web-api/admin/rapid360-sales-preview',requireAdminOrStaffAny('orders_
       ok:true,
       format:parsed.format||'xml',
       count:rows.length,
+      cancelled:Number(parsed.cancelledCount||0),
       importable:rows.filter(r=>!r.skip).length,
       duplicate:rows.filter(r=>r.duplicate).length,
       customersNew:rows.filter(r=>r.customerStatus==='new'&&!r.duplicate).length,
@@ -5106,7 +5128,11 @@ app.post('/web-api/admin/rapid360-sales-preview',requireAdminOrStaffAny('orders_
 app.post('/web-api/admin/rapid360-sales-import',requireAdminOrStaffAny('orders_manage','screen_sales_center','screen_sales_tracking'),dynamicsUpload.single('file'),(req,res)=>{
   try{
     const parsed=parseRapid360SalesUpload(req.file);
-    if(!parsed.sales.length)return res.status(400).json({error:'XML içinde satış siparişi bulunamadı.'});
+    if(!parsed.sales.length){
+      const cancelled=Number(parsed.cancelledCount||0);
+      if(cancelled)return res.status(400).json({error:`XML okundu: ${cancelled} satış İPTAL işaretli, aktarılacak kayıt yok.`});
+      return res.status(400).json({error:'XML içinde satış siparişi bulunamadı.'});
+    }
     const s=readStore();
     const dealer=(s.dealerSettings||[]).find(d=>String(d.id)===String(req.body?.dealerId||'atak-beko')&&d.active!==false)
       ||(s.dealerSettings||[]).find(d=>d.active!==false);
@@ -5145,8 +5171,9 @@ app.post('/web-api/admin/rapid360-sales-import',requireAdminOrStaffAny('orders_m
       row.impliedCost=impliedCost;
       row.commissionPct=commissionPct;
       row.commissionAmount=commissionAmount;
-      row.salespersonId=actorId;
-      row.salespersonName=actorName||'Rapid360';
+      const sp=matchRapidSalesperson(s,src.salespersonName);
+      row.salespersonId=sp?.id||actorId;
+      row.salespersonName=src.salespersonName||sp?.name||actorName||'Rapid360';
       row.deliveryStatus=src.invoiceDate?'delivered':'order_received';
       row.deliveryNote=src.webOrder?'Rapid360 web siparişi':'Rapid360 XML aktarım';
       row.paymentMethod=payLabel;
