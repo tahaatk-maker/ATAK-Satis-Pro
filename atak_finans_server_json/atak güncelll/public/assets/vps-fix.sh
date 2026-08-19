@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.191-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.192-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.191-atak-geteinvoices
-EXPECT_BUILD=fix-v191
+EXPECT_HEALTH=6.3.192-atak-geteinvoices
+EXPECT_BUILD=fix-v192
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -107,6 +107,11 @@ check "rapid360 nativeclient yok" grep -q "isBlockedMicrosoftUrl" "$SRC/lib/rapi
 check "rapid360 satis aktar ui" grep -q "Rapid Aktar" "$SRC/public/admin.html"
 check "rapid360 magaza 340334" grep -q 'value="340334"' "$SRC/public/admin.html"
 check "rapid360 auto import" grep -q "autoImport:true" "$SRC/public/assets/admin.js"
+check "rapid360 satis katalog" test -f "$SRC/lib/rapid360-sales-catalog.js"
+check "rapid360 missing products" grep -q "collectMissingProducts" "$SRC/lib/rapid360-sales-catalog.js"
+check "rapid360 yeni urun kategori" grep -q "createRapidMissingProducts" "$SRC/server.js"
+check "admin yeni urun kutu" grep -q 'id="rapid360NewProductsBox"' "$SRC/public/admin.html"
+check "personel yeni urun kutu" grep -q 'id="rapid360NewProductsBox"' "$SRC/public/personel.html"
 check "vkn lookup api" grep -q "vkn-lookup" "$SRC/server.js"
 check "vkn lookup admin ui" grep -q 'data-vkn-lookup="customerPage"' "$SRC/public/admin.html"
 check "vkn lookup personel ui" grep -q 'id="qcVknLookupBtn"' "$SRC/public/personel.html"

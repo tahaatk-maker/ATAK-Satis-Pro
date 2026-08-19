@@ -22,6 +22,7 @@ const rapid360 = require('./lib/rapid360-einvoice');
 const atakGetE = require('./lib/atak-geteinvoices');
 const rapidSalesXml = require('./lib/rapid360-sales-xml');
 const rapidSalesFetch = require('./lib/rapid360-sales-fetch');
+const rapidSalesCatalog = require('./lib/rapid360-sales-catalog');
 const d365Auth = require('./lib/rapid360-d365-auth');
 const personName = require('./lib/person-name');
 const customerCode = require('./lib/customer-code');
@@ -1900,8 +1901,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.191-atak-geteinvoices',
-  build:'fix-v191',
+  version:'6.3.192-atak-geteinvoices',
+  build:'fix-v192',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5072,7 +5073,67 @@ function emptyRapidSalesError(parsed, fileMode){
     ? 'XML içinde satış siparişi bulunamadı. Rapid360 Detaylı satış bilgileri XML dosyasını seçin (SiparisNo öznitelik olarak gelir).'
     : 'Rapid360 yanıtında satış yok. Tarih aralığını kontrol edin.';
 }
-function buildRapidSalesPreview(s, parsed){
+function rapidDealerIsFurniture(dealer){
+  return /istikbal/i.test(String(dealer&&(dealer.id||dealer.name)||''));
+}
+function rapidPublicCategories(s){
+  ensureDynamicsCoreCategories(s);
+  return (s.categories||[])
+    .filter(c=>c&&c.active!==false)
+    .map(c=>({id:c.id,name:c.name}))
+    .sort((a,b)=>{
+      if(String(a.name).toLocaleLowerCase('tr-TR')==='diğer')return 1;
+      if(String(b.name).toLocaleLowerCase('tr-TR')==='diğer')return -1;
+      return String(a.name).localeCompare(String(b.name),'tr');
+    });
+}
+function collectRapidMissingProducts(s, parsed, dealer){
+  const skip=new Set((parsed.sales||[]).filter(sale=>rapidSaleDuplicate(s,sale.salesId)).map(sale=>String(sale.salesId||'').trim()).filter(Boolean));
+  const furniture=rapidDealerIsFurniture(dealer);
+  return rapidSalesCatalog.collectMissingProducts(parsed, s.products, {
+    skipSalesIds:skip,
+    furniture,
+    suggestCategoryId:(hint)=>dynamicsSuggestedCategoryId(s, hint)
+  });
+}
+function createRapidMissingProducts(s, missing, {dealer, categoryMap, categoryId}={}){
+  const furniture=rapidDealerIsFurniture(dealer);
+  const map=rapidSalesCatalog.parseCategoryMap(categoryMap);
+  const fallback=String(categoryId||'').trim();
+  const valid=new Set((s.categories||[]).filter(c=>c&&c.active!==false).map(c=>String(c.id)));
+  const created=[];
+  for(const item of missing||[]){
+    if(rapidSalesCatalog.findCatalogProduct(s.products, item)) continue;
+    let cat=rapidSalesCatalog.lookupCategory(map, item, fallback || item.categoryId || item.suggestedCategoryId);
+    if(furniture && !cat){
+      cat=dynamicsSuggestedCategoryId(s, `mobilya ${item.name||''} ${item.itemCode||''}`);
+    }
+    if(!cat || !valid.has(String(cat))){
+      throw new Error(`${missing.length} yeni ürünün kategorisi eksik — tabloda her ürüne kategori seçin`);
+    }
+    const name=String(item.name||item.itemCode||item.key||'').trim();
+    const code=String(item.itemCode||name).trim();
+    const product=sanitizeProduct({
+      code,
+      name:name||code,
+      itemCode:String(item.itemCode||code).trim(),
+      searchName:name||code,
+      dynamicsProductId:String(item.itemCode||'').trim(),
+      brand:furniture?'İstikbal':dynamicsBrand(name, item.itemCode),
+      category:cat,
+      purchasePrice:0,
+      stock:0,
+      active:true,
+      tags:furniture?['rapid360','auto-created','istikbal']:['rapid360','auto-created']
+    });
+    s.products.unshift(product);
+    created.push(product.code);
+  }
+  return created;
+}
+function buildRapidSalesPreview(s, parsed, dealer){
+  ensureDynamicsCoreCategories(s);
+  const missingProducts=collectRapidMissingProducts(s, parsed, dealer);
   const rows=(parsed.sales||[]).map(sale=>{
     const customer=matchRapidCustomer(s,sale.custAccount,sale.custName,sale.tckn);
     const duplicate=rapidSaleDuplicate(s,sale.salesId);
@@ -5104,6 +5165,10 @@ function buildRapidSalesPreview(s, parsed){
     importable:rows.filter(r=>!r.skip).length,
     duplicate:rows.filter(r=>r.duplicate).length,
     customersNew:rows.filter(r=>r.customerStatus==='new'&&!r.duplicate).length,
+    missingProductCount:missingProducts.length,
+    missingProducts,
+    categories:rapidPublicCategories(s),
+    needsProductCategories:missingProducts.length>0,
     rows
   };
 }
@@ -5111,11 +5176,15 @@ function pickRapidDealer(s, dealerId){
   return (s.dealerSettings||[]).find(d=>String(d.id)===String(dealerId||'atak-beko')&&d.active!==false)
     ||(s.dealerSettings||[]).find(d=>d.active!==false);
 }
-function applyRapidSalesImport(s, parsed, {dealer, actorName, actorId, source}={}){
+function applyRapidSalesImport(s, parsed, {dealer, actorName, actorId, source, categoryMap, categoryId}={}){
   const live=source==='rapid360-pull';
   const label=live?'Rapid360 Aktar':'Rapid360 XML';
   let imported=0,skippedDuplicate=0,skippedEmpty=0,customersCreated=0,customersUpdated=0;
   const errors=[];
+  ensureDynamicsCoreCategories(s);
+  const missing=collectRapidMissingProducts(s, parsed, dealer);
+  const productsCreatedList=createRapidMissingProducts(s, missing, {dealer, categoryMap, categoryId});
+  const productsCreated=productsCreatedList.length;
   for(const src of parsed.sales||[]){
     const before=matchRapidCustomer(s,src.custAccount,src.custName,src.tckn);
     const beforeName=before?String(before.name||''):'';
@@ -5172,7 +5241,7 @@ function applyRapidSalesImport(s, parsed, {dealer, actorName, actorId, source}={
     row.cashPosted=false;
     imported++;
   }
-  return {imported,skippedDuplicate,skippedEmpty,customersCreated,customersUpdated,errors};
+  return {imported,skippedDuplicate,skippedEmpty,customersCreated,customersUpdated,productsCreated,errors};
 }
 function rapidSaleDuplicate(s,salesId){
   const id=String(salesId||'').trim();
@@ -5307,7 +5376,11 @@ app.post('/web-api/admin/rapid360-sales-preview',rapidSalesPerm,dynamicsUpload.s
   try{
     const parsed=parseRapid360SalesUpload(req.file);
     if(!parsed.sales.length) return res.status(400).json({error:emptyRapidSalesError(parsed,true)});
-    res.json(buildRapidSalesPreview(readStore(),parsed));
+    const s=readStore();
+    const dealer=pickRapidDealer(s,req.body?.dealerId);
+    const preview=buildRapidSalesPreview(s,parsed,dealer);
+    writeStore(s);
+    res.json(preview);
   }catch(e){
     res.status(400).json({error:e.message||'XML okunamadı'});
   }
@@ -5320,7 +5393,10 @@ app.post('/web-api/admin/rapid360-sales-import',rapidSalesPerm,dynamicsUpload.si
     const dealer=pickRapidDealer(s,req.body?.dealerId);
     if(!dealer)return res.status(400).json({error:'Satış bayisi bulunamadı (Atak Beko).'});
     const actor=currentActor(req);
-    const stats=applyRapidSalesImport(s,parsed,{dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-xml'});
+    const stats=applyRapidSalesImport(s,parsed,{
+      dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-xml',
+      categoryMap:req.body?.categoryMap,categoryId:req.body?.categoryId
+    });
     audit(s,'Rapid360 XML satış aktarıldı',`${stats.imported} satış`,stats);
     writeStore(s);
     res.json({ok:true,...stats});
@@ -5361,7 +5437,8 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
     if(!out.parsed || !out.parsed.sales.length){
       return res.status(400).json({error:emptyRapidSalesError(out.parsed||{},false),tried:out.tried||[]});
     }
-    const preview=buildRapidSalesPreview(s,out.parsed);
+    const dealer=pickRapidDealer(s,body.dealerId);
+    const preview=buildRapidSalesPreview(s,out.parsed,dealer);
     const pullToken=rememberRapidPull(out.parsed,{
       dealerId:body.dealerId,
       startDate:body.startDate,
@@ -5370,14 +5447,24 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
       company
     });
     const autoImport=body.autoImport===true||body.autoImport==='true'||body.autoImport==='1';
+    if(autoImport && preview.needsProductCategories){
+      if(out.tokens) writeStore(s);
+      else if((s.categories||[]).length) writeStore(s);
+      return res.json({
+        ...preview,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,autoImported:false,
+        needsProductCategories:true,tried:out.tried||[],store:magaza,company,via:out.via||''
+      });
+    }
     if(!autoImport){
       if(out.tokens) writeStore(s);
       return res.json({...preview,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,tried:out.tried||[],store:magaza,company,via:out.via||''});
     }
-    const dealer=pickRapidDealer(s,body.dealerId);
     if(!dealer)return res.status(400).json({error:'Satış bayisi bulunamadı (Atak Beko).'});
     const actor=currentActor(req);
-    const stats=applyRapidSalesImport(s,out.parsed,{dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-pull'});
+    const stats=applyRapidSalesImport(s,out.parsed,{
+      dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-pull',
+      categoryMap:body.categoryMap,categoryId:body.categoryId
+    });
     audit(s,'Rapid360 canlı satış aktarıldı',`${stats.imported} satış`,stats);
     writeStore(s);
     res.json({...preview,...stats,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,autoImported:true,tried:out.tried||[],store:magaza,company,via:out.via||''});
@@ -5470,7 +5557,10 @@ app.post('/web-api/admin/rapid360-sales-pull-import',rapidSalesPerm,async(req,re
     const dealer=pickRapidDealer(s,body.dealerId||(cached&&cached.meta&&cached.meta.dealerId));
     if(!dealer)return res.status(400).json({error:'Satış bayisi bulunamadı (Atak Beko).'});
     const actor=currentActor(req);
-    const stats=applyRapidSalesImport(s,parsed,{dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-pull'});
+    const stats=applyRapidSalesImport(s,parsed,{
+      dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-pull',
+      categoryMap:body.categoryMap,categoryId:body.categoryId
+    });
     audit(s,'Rapid360 canlı satış aktarıldı',`${stats.imported} satış`,stats);
     writeStore(s);
     res.json({ok:true,...stats,fetched:true});

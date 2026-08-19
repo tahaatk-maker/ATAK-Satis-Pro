@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v191 */
+/* ATAK_PERSONEL_BUILD=fix-v192 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1753,6 +1753,7 @@ function isoDaysAgo(n){
   return d.toISOString().slice(0,10);
 }
 let rapid360PullToken='';
+let rapid360PreviewData=null;
 function rapid360PullBody(extra={}){
   return{
     startDate:$('#rapid360SalesStart')?.value||isoDaysAgo(7),
@@ -1761,8 +1762,52 @@ function rapid360PullBody(extra={}){
     company:$('#rapid360SalesCompanyFilter')?.value||'2521',
     dealerId:$('#rapid360SalesXmlDealer')?.value||'atak-beko',
     pullToken:rapid360PullToken||undefined,
+    categoryId:$('#rapid360NewProductCategory')?.value||undefined,
+    categoryMap:rapid360CollectCategoryMap(),
     ...extra
   };
+}
+function rapid360CategoryOptionsHtml(selected){
+  const cats=rapid360PreviewData?.categories||[];
+  const sel=String(selected||'');
+  return `<option value="">Kategori seçin</option>`+cats.map(c=>`<option value="${rapidOktaEsc(c.id)}"${c.id===sel?' selected':''}>${rapidOktaEsc(c.name)}</option>`).join('');
+}
+function rapid360CollectCategoryMap(){
+  const map={};
+  $$('#rapid360NewProductsTable select[data-rapid-cat]').forEach(sel=>{
+    const key=sel.dataset.rapidCat;
+    const val=String(sel.value||'').trim();
+    if(key&&val) map[key]=val;
+  });
+  return map;
+}
+function rapid360MissingCategoryCount(){
+  return $$('#rapid360NewProductsTable select[data-rapid-cat]').filter(sel=>!String(sel.value||'').trim()).length;
+}
+function renderRapid360NewProducts(d){
+  const box=$('#rapid360NewProductsBox');
+  const list=d.missingProducts||[];
+  const catSel=$('#rapid360NewProductCategory');
+  if(catSel){
+    const cur=String(catSel.value||'');
+    catSel.innerHTML='<option value="">Satır satır seç…</option>'+(d.categories||[]).map(c=>`<option value="${rapidOktaEsc(c.id)}">${rapidOktaEsc(c.name)}</option>`).join('');
+    if(cur && [...catSel.options].some(o=>o.value===cur)) catSel.value=cur;
+  }
+  if(!box) return;
+  if(!list.length){box.classList.add('hidden');$('#rapid360NewProductsTable')&&($('#rapid360NewProductsTable').innerHTML='');return}
+  box.classList.remove('hidden');
+  const def=String(catSel?.value||'');
+  $('#rapid360NewProductsTable').innerHTML=list.map(p=>{
+    const selected=String(p.categoryId||p.suggestedCategoryId||def||'');
+    p.categoryId=selected;
+    return `<tr><td><b>${rapidOktaEsc(p.name||p.key)}</b><div class="muted">${rapidOktaEsc(p.itemCode||'')}</div></td><td><select data-rapid-cat="${rapidOktaEsc(p.key)}">${rapid360CategoryOptionsHtml(selected)}</select></td></tr>`;
+  }).join('');
+  $$('#rapid360NewProductsTable select[data-rapid-cat]').forEach(sel=>{
+    sel.addEventListener('change',()=>{
+      const row=(rapid360PreviewData?.missingProducts||[]).find(p=>p.key===sel.dataset.rapidCat);
+      if(row) row.categoryId=String(sel.value||'');
+    });
+  });
 }
 function fillRapidAktarDefaults(){
   if($('#rapid360SalesStart') && !$('#rapid360SalesStart').value) $('#rapid360SalesStart').value=isoDaysAgo(7);
@@ -1857,12 +1902,22 @@ async function pullRapid360Live(autoImport, st){
 }
 $('#rapid360SalesXmlBtn')?.addEventListener('click',()=>{
   $('#rapid360SalesXmlModal')?.classList.remove('hidden');
+  $('#rapid360SalesXmlImportBtn')&&($('#rapid360SalesXmlImportBtn').disabled=true);
   rapid360PullToken='';
+  rapid360PreviewData=null;
+  $('#rapid360NewProductsBox')?.classList.add('hidden');
+  $('#rapid360NewProductsTable')&&($('#rapid360NewProductsTable').innerHTML='');
   fillRapidAktarDefaults();
   hideRapidOktaBox();
   loadRapidOktaStatus();
 });
 $('#rapid360SalesXmlClose')?.addEventListener('click',()=>{hideRapidOktaBox();$('#rapid360SalesXmlModal')?.classList.add('hidden')});
+$('#rapid360ApplyCategoryBtn')?.addEventListener('click',()=>{
+  const def=String($('#rapid360NewProductCategory')?.value||'').trim();
+  if(!def){stToast('Önce varsayılan kategori seçin');return}
+  $$('#rapid360NewProductsTable select[data-rapid-cat]').forEach(sel=>{sel.value=def;sel.dispatchEvent(new Event('change'))});
+  stToast('Kategori yeni ürünlere uygulandı');
+});
 $('#rapid360SalesPullBtn')?.addEventListener('click',async()=>{
   const st=$('#rapid360SalesXmlStatus');
   fillRapidAktarDefaults();
@@ -1873,11 +1928,21 @@ $('#rapid360SalesPullBtn')?.addEventListener('click',async()=>{
   try{
     const d=await pullRapid360Live(true, st);
     rapid360PullToken=d.pullToken||'';
-    $('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.salesId||''}</td><td>${r.customerName||''}</td><td>${money(r.total)}</td><td>${r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok')}</td></tr>`).join('');
-    $('#rapid360SalesXmlImportBtn').disabled=true;
-    const msg=`${d.imported||0} satış alındı · ${d.skippedDuplicate||0} zaten vardı${d.customersUpdated?` · ${d.customersUpdated} müşteri adı güncellendi`:''}`;
-    st.textContent=msg;
-    stToast(msg);
+    rapid360PreviewData=d;
+    renderRapid360NewProducts(d);
+    $('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.salesId||''}</td><td>${r.customerName||''}</td><td>${money(r.total)}</td><td>${r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok')}${r.unmatchedItems?` · ${r.unmatchedItems} yeni`:''}</td></tr>`).join('');
+    if(d.needsProductCategories && !d.autoImported){
+      const n=Number(d.missingProductCount||(d.missingProducts||[]).length||0);
+      const msg=`${d.importable||0} satış hazır · ${n} ürün katalogda yok. Kategori seçip Satışlara aktar deyin.`;
+      st.textContent=msg;
+      stToast(msg);
+      $('#rapid360SalesXmlImportBtn')&&($('#rapid360SalesXmlImportBtn').disabled=!d.importable);
+    }else{
+      $('#rapid360SalesXmlImportBtn')&&($('#rapid360SalesXmlImportBtn').disabled=true);
+      const msg=`${d.imported||0} satış alındı · ${d.skippedDuplicate||0} zaten vardı${d.productsCreated?` · ${d.productsCreated} ürün eklendi`:''}${d.customersUpdated?` · ${d.customersUpdated} müşteri adı güncellendi`:''}`;
+      st.textContent=msg;
+      stToast(msg);
+    }
   }catch(e){st.textContent=e.message}
   finally{$('#rapid360SalesPullBtn')&&($('#rapid360SalesPullBtn').disabled=false)}
 });
@@ -1890,14 +1955,20 @@ $('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
   st.textContent='XML okunuyor…';
   try{
     const d=await api('/web-api/admin/rapid360-sales-preview',{method:'POST',body:fd});
-    $('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.salesId||''}</td><td>${r.customerName||''}</td><td>${money(r.total)}</td><td>${r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok')}</td></tr>`).join('');
+    rapid360PreviewData=d;
+    renderRapid360NewProducts(d);
+    $('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>`<tr><td>${r.salesId||''}</td><td>${r.customerName||''}</td><td>${money(r.total)}</td><td>${r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok')}${r.unmatchedItems?` · ${r.unmatchedItems} yeni`:''}</td></tr>`).join('');
     $('#rapid360SalesXmlImportBtn').disabled=!d.importable;
-    st.textContent=`${d.importable||0} satış aktarılabilir${d.cancelled?` · ${d.cancelled} iptal atlandı`:''}`;
+    st.textContent=`${d.importable||0} satış aktarılabilir${d.cancelled?` · ${d.cancelled} iptal atlandı`:''}${d.missingProductCount?` · ${d.missingProductCount} yeni ürün — kategori seçin`:''}`;
   }catch(e){st.textContent=e.message}
 });
 $('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
   const st=$('#rapid360SalesXmlStatus');
-  if(!confirm('Rapid360 satışları Atak listesine eklensin mi?'))return;
+  if(!confirm('Rapid360 satışları Atak listesine eklensin mi? Katalogda olmayan ürünler seçilen kategoriyle eklenir.'))return;
+  if((rapid360PreviewData?.missingProducts||[]).length && rapid360MissingCategoryCount()>0 && !String($('#rapid360NewProductCategory')?.value||'').trim()){
+    st.textContent=`${rapid360MissingCategoryCount()} yeni ürünün kategorisi eksik — satırdan seçin`;
+    return;
+  }
   st.textContent='Aktarılıyor…';
   try{
     let r;
@@ -1907,9 +1978,13 @@ $('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
       const file=$('#rapid360SalesXmlFile')?.files?.[0];
       if(!file){st.textContent='Önce Rapid Aktar veya XML seçin';return}
       const fd=new FormData();fd.append('file',file);fd.append('dealerId',$('#rapid360SalesXmlDealer')?.value||'atak-beko');
+      fd.append('categoryId',$('#rapid360NewProductCategory')?.value||'');
+      fd.append('categoryMap',JSON.stringify(rapid360CollectCategoryMap()));
       r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
     }
-    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}`;
+    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı${r.productsCreated?` · ${r.productsCreated} ürün eklendi`:''}${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}`;
+    $('#rapid360NewProductsBox')?.classList.add('hidden');
+    $('#rapid360SalesXmlImportBtn')&&($('#rapid360SalesXmlImportBtn').disabled=true);
     stToast(st.textContent);
   }catch(e){st.textContent=e.message}
 });

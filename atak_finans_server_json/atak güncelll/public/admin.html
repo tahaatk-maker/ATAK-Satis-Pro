@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v191" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v191" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v191" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v191" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v192" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v192" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v192" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v192" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -2806,7 +2806,7 @@ Bulunamayan → Diğer.
       <div>
         <small class="eyebrow">RAPID360 · RAPID AKTAR</small>
         <h2>Rapid Aktar</h2>
-        <p class="note">Tarih seçip <b>Rapid Aktar</b> deyin. Açılan pencerede <b>Rapid360 detaylı satış</b> açılır (cmp 2521). Okta Verify telefona gider. Mağaza <b>340334</b> arka planda uygulanır; yalnız satış ürünleri çekilir. Kasa ve stok değişmez.</p>
+        <p class="note">Tarih seçip <b>Rapid Aktar</b> deyin. Açılan pencerede <b>Rapid360 detaylı satış</b> açılır (cmp 2521). Okta Verify telefona gider. Mağaza <b>340334</b> arka planda uygulanır. Katalogda olmayan satış ürünleri kategori seçilerek Tüm Ürünler’e eklenir. Kasa ve stok değişmez.</p>
       </div>
       <button class="secondary-btn" id="rapid360SalesXmlClose" type="button">Kapat</button>
     </div>
@@ -2823,22 +2823,40 @@ Bulunamayan → Diğer.
     <label>Satış bayisi<select id="rapid360SalesXmlDealer"><option value="atak-beko">Atak Beko</option><option value="atak-istikbal">Atak İstikbal</option></select></label>
     <div class="dynamics-import-actions" style="margin-top:12px">
       <button class="primary" id="rapid360SalesPullBtn" type="button">Rapid Aktar</button>
+      <button class="secondary-btn" id="rapid360SalesXmlImportBtn" type="button" disabled>Satışlara aktar</button>
     </div>
     <details style="margin-top:12px">
       <summary style="cursor:pointer;font-weight:700;color:#334155">Dosyadan yedek (isteğe bağlı)</summary>
       <label style="margin-top:8px">XML dosyası<input id="rapid360SalesXmlFile" type="file" accept=".xml,.xlsx,.xls,text/xml,application/xml"/></label>
       <div class="dynamics-import-actions" style="margin-top:8px">
         <button class="secondary-btn" id="rapid360SalesXmlPreviewBtn" type="button">XML önizle</button>
-        <button class="primary" id="rapid360SalesXmlImportBtn" type="button" disabled>Satışlara aktar</button>
       </div>
     </details>
     <div id="rapid360SalesXmlStatus" class="form-status"></div>
     <div id="rapid360SalesXmlSummary" class="dynamics-summary" style="margin-top:12px"></div>
+    <div id="rapid360NewProductsBox" class="hidden" style="margin-top:12px;padding:12px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+      <b>Tüm Ürünler’de yok — kategori seçilip eklenecek</b>
+      <p class="note" style="margin:6px 0 10px">Satıştaki bu ürünler katalogda yok. Kategorisini seçin; aktarınca Tüm Ürünler’e eklenir. Stok ve kasa değişmez.</p>
+      <div class="two-col">
+        <label>Varsayılan kategori
+          <select id="rapid360NewProductCategory"><option value="">Satır satır seç…</option></select>
+        </label>
+        <div style="align-self:end">
+          <button type="button" class="secondary-btn" id="rapid360ApplyCategoryBtn">Seçileni tüm yenilere uygula</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:8px;max-height:220px;overflow:auto">
+        <table>
+          <thead><tr><th>Ürün</th><th>Kod</th><th>Kategori</th></tr></thead>
+          <tbody id="rapid360NewProductsTable"></tbody>
+        </table>
+      </div>
+    </div>
     <div class="table-wrap" style="margin-top:12px;max-height:320px;overflow:auto">
       <table><thead><tr><th>Sipariş</th><th>Tarih</th><th>Müşteri</th><th>Kalem</th><th>Tutar</th><th>Durum</th></tr></thead><tbody id="rapid360SalesXmlTable"></tbody></table>
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v191"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v191"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v192"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v192"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

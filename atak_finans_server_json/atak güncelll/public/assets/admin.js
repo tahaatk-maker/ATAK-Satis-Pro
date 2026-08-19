@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v191 */
+/* ATAK_ADMIN_BUILD=fix-v192 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6257,9 +6257,12 @@ function rapid360SalesXmlForm(){
   const fd=new FormData();
   fd.append('file',file);
   fd.append('dealerId',q('#rapid360SalesXmlDealer')?.value||'atak-beko');
+  fd.append('categoryId',q('#rapid360NewProductCategory')?.value||'');
+  fd.append('categoryMap',JSON.stringify(rapid360CollectCategoryMap()));
   return fd;
 }
 let rapid360PullToken='';
+let rapid360PreviewData=null;
 function rapid360PullBody(extra={}){
   return{
     startDate:q('#rapid360SalesStart')?.value||isoDaysAgo(7),
@@ -6268,6 +6271,8 @@ function rapid360PullBody(extra={}){
     company:q('#rapid360SalesCompanyFilter')?.value||'2521',
     dealerId:q('#rapid360SalesXmlDealer')?.value||'atak-beko',
     pullToken:rapid360PullToken||undefined,
+    categoryId:q('#rapid360NewProductCategory')?.value||undefined,
+    categoryMap:rapid360CollectCategoryMap(),
     ...extra
   };
 }
@@ -6385,20 +6390,80 @@ function openRapid360SalesXmlModal(){
   q('#rapid360SalesXmlModal')?.classList.remove('hidden');
   q('#rapid360SalesXmlImportBtn')&&(q('#rapid360SalesXmlImportBtn').disabled=true);
   rapid360PullToken='';
+  rapid360PreviewData=null;
+  q('#rapid360NewProductsBox')?.classList.add('hidden');
+  q('#rapid360NewProductsTable')&&(q('#rapid360NewProductsTable').innerHTML='');
   fillRapidAktarDefaults();
   hideRapidOktaBox();
   loadRapidOktaStatus();
 }
 function closeRapid360SalesXmlModal(){hideRapidOktaBox();q('#rapid360SalesXmlModal')?.classList.add('hidden')}
+function rapid360CategoryOptionsHtml(selected){
+  const cats=rapid360PreviewData?.categories||[];
+  const sel=String(selected||'');
+  return `<option value="">Kategori seçin</option>`+cats.map(c=>`<option value="${rapidOktaEsc(c.id)}"${c.id===sel?' selected':''}>${rapidOktaEsc(c.name)}</option>`).join('');
+}
+function rapid360CollectCategoryMap(){
+  const map={};
+  qa('#rapid360NewProductsTable select[data-rapid-cat]').forEach(sel=>{
+    const key=sel.dataset.rapidCat;
+    const val=String(sel.value||'').trim();
+    if(key&&val) map[key]=val;
+  });
+  return map;
+}
+function rapid360MissingCategoryCount(){
+  return [...qa('#rapid360NewProductsTable select[data-rapid-cat]')].filter(sel=>!String(sel.value||'').trim()).length;
+}
+function renderRapid360NewProducts(d){
+  const box=q('#rapid360NewProductsBox');
+  const list=d.missingProducts||[];
+  const catSel=q('#rapid360NewProductCategory');
+  if(catSel){
+    const cur=String(catSel.value||'');
+    catSel.innerHTML='<option value="">Satır satır seç…</option>'+(d.categories||[]).map(c=>`<option value="${rapidOktaEsc(c.id)}">${rapidOktaEsc(c.name)}</option>`).join('');
+    if(cur && [...catSel.options].some(o=>o.value===cur)) catSel.value=cur;
+  }
+  if(!box) return;
+  if(!list.length){box.classList.add('hidden');q('#rapid360NewProductsTable')&&(q('#rapid360NewProductsTable').innerHTML='');return}
+  box.classList.remove('hidden');
+  const def=String(catSel?.value||'');
+  q('#rapid360NewProductsTable').innerHTML=list.map(p=>{
+    const selected=String(p.categoryId||p.suggestedCategoryId||def||'');
+    p.categoryId=selected;
+    return `<tr>
+      <td><b>${rapidOktaEsc(p.name||p.key)}</b></td>
+      <td>${rapidOktaEsc(p.itemCode||'-')}</td>
+      <td><select data-rapid-cat="${rapidOktaEsc(p.key)}">${rapid360CategoryOptionsHtml(selected)}</select></td>
+    </tr>`;
+  }).join('');
+  qa('#rapid360NewProductsTable select[data-rapid-cat]').forEach(sel=>{
+    sel.addEventListener('change',()=>{
+      const row=(rapid360PreviewData?.missingProducts||[]).find(p=>p.key===sel.dataset.rapidCat);
+      if(row) row.categoryId=String(sel.value||'');
+    });
+  });
+}
 function renderRapid360SalesXmlPreview(d){
   const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(Number(n||0));
-  q('#rapid360SalesXmlSummary').innerHTML=`<article><b>${d.count||0}</b><span>Sipariş</span></article><article><b>${d.importable||0}</b><span>Aktarılacak</span></article><article><b>${d.duplicate||0}</b><span>Zaten var</span></article><article><b>${d.cancelled||0}</b><span>İptal atlandı</span></article><article><b>${d.customersNew||0}</b><span>Yeni müşteri</span></article>`;
+  rapid360PreviewData=d;
+  const missing=Number(d.missingProductCount||(d.missingProducts||[]).length||0);
+  q('#rapid360SalesXmlSummary').innerHTML=`<article><b>${d.count||0}</b><span>Sipariş</span></article><article><b>${d.importable||0}</b><span>Aktarılacak</span></article><article><b>${d.duplicate||0}</b><span>Zaten var</span></article><article><b>${d.cancelled||0}</b><span>İptal atlandı</span></article><article><b>${d.customersNew||0}</b><span>Yeni müşteri</span></article><article class="warn"><b>${missing}</b><span>Yeni ürün</span></article>`;
   q('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>{
-    const st=r.duplicate?'Kayıtlı':(!r.itemCount?'Kalem yok':(r.customerStatus==='new'?'Yeni müşteri':'Hazır'));
+    const extra=r.unmatchedItems?` · ${r.unmatchedItems} yeni ürün`:'';
+    const st=r.duplicate?'Kayıtlı':(!r.itemCount?'Kalem yok':(r.customerStatus==='new'?'Yeni müşteri':'Hazır'))+extra;
     return `<tr><td><b>${r.salesId||''}</b></td><td>${r.date||'-'}</td><td>${r.customerName||r.custAccount||'-'}<div style="font-size:11px;color:#667890">${r.custAccount||''}</div></td><td>${r.itemCount||0}</td><td>${money(r.total)}</td><td>${st}</td></tr>`;
   }).join('')||'<tr><td colspan="6">Satış yok</td></tr>';
-  q('#rapid360SalesXmlImportBtn').disabled=!d.importable;
+  renderRapid360NewProducts(d);
+  const imported=Number(d.imported||0)>0 && d.autoImported!==false;
+  q('#rapid360SalesXmlImportBtn').disabled=imported || !d.importable;
 }
+q('#rapid360ApplyCategoryBtn')?.addEventListener('click',()=>{
+  const def=String(q('#rapid360NewProductCategory')?.value||'').trim();
+  if(!def){toast('Önce varsayılan kategori seçin');return}
+  qa('#rapid360NewProductsTable select[data-rapid-cat]').forEach(sel=>{sel.value=def;sel.dispatchEvent(new Event('change'))});
+  toast('Kategori yeni ürünlere uygulandı');
+});
 q('#rapid360SalesXmlBtn')?.addEventListener('click',openRapid360SalesXmlModal);
 q('#rapid360SalesXmlBtn2')?.addEventListener('click',openRapid360SalesXmlModal);
 q('#rapid360SalesXmlClose')?.addEventListener('click',closeRapid360SalesXmlModal);
@@ -6413,10 +6478,19 @@ q('#rapid360SalesPullBtn')?.addEventListener('click',async()=>{
     const d=await pullRapid360Live(true, st);
     rapid360PullToken=d.pullToken||'';
     renderRapid360SalesXmlPreview(d);
-    const msg=`${d.imported||0} satış alındı · ${d.skippedDuplicate||0} zaten vardı · ${d.customersCreated||0} yeni müşteri${d.customersUpdated?` · ${d.customersUpdated} müşteri adı güncellendi`:''}`;
-    st.textContent=msg;st.className='form-status success';
-    toast(msg);
-    await loadSalesTracking();
+    if(d.needsProductCategories && !d.autoImported){
+      const n=Number(d.missingProductCount||(d.missingProducts||[]).length||0);
+      const msg=`${d.importable||0} satış hazır · ${n} ürün Tüm Ürünler’de yok. Kategori seçip Satışlara aktar deyin.`;
+      st.textContent=msg;st.className='form-status';
+      toast(msg);
+      q('#rapid360SalesXmlImportBtn')&&(q('#rapid360SalesXmlImportBtn').disabled=!d.importable);
+      q('#rapid360NewProductsBox')?.scrollIntoView({behavior:'smooth',block:'center'});
+    }else{
+      const msg=`${d.imported||0} satış alındı · ${d.skippedDuplicate||0} zaten vardı · ${d.customersCreated||0} yeni müşteri${d.productsCreated?` · ${d.productsCreated} ürün eklendi`:''}${d.customersUpdated?` · ${d.customersUpdated} müşteri adı güncellendi`:''}`;
+      st.textContent=msg;st.className='form-status success';
+      toast(msg);
+      await loadSalesTracking();
+    }
   }catch(e){st.textContent=e.message;st.className='form-status error'}
   finally{q('#rapid360SalesPullBtn')&&(q('#rapid360SalesPullBtn').disabled=false)}
 });
@@ -6429,12 +6503,17 @@ q('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',async()=>{
   try{
     const d=await api('/web-api/admin/rapid360-sales-preview',{method:'POST',body:fd});
     renderRapid360SalesXmlPreview(d);
-    st.textContent=`${d.importable||0} satış aktarılabilir${d.cancelled?` · ${d.cancelled} iptal atlandı`:''}.`;st.className='form-status success';
+    st.textContent=`${d.importable||0} satış aktarılabilir${d.cancelled?` · ${d.cancelled} iptal atlandı`:''}${d.missingProductCount?` · ${d.missingProductCount} yeni ürün — kategori seçin`:''}.`;st.className='form-status success';
   }catch(e){st.textContent=e.message;st.className='form-status error'}
 });
 q('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
   const st=q('#rapid360SalesXmlStatus');
-  if(!confirm('Seçilen Rapid360 satışları Atak satış listesine eklensin mi?\nKasa ve stok değişmez. Aynı sipariş numaraları atlanır.'))return;
+  if(!confirm('Seçilen Rapid360 satışları Atak satış listesine eklensin mi?\nKatalogda olmayan ürünler seçilen kategoriyle Tüm Ürünler’e eklenir. Kasa ve stok değişmez.'))return;
+  if((rapid360PreviewData?.missingProducts||[]).length && rapid360MissingCategoryCount()>0 && !String(q('#rapid360NewProductCategory')?.value||'').trim()){
+    toast(`${rapid360MissingCategoryCount()} yeni ürünün kategorisi eksik — satırdan seçin`);
+    q('#rapid360SalesXmlImportBtn').disabled=false;
+    return;
+  }
   st.textContent='Aktarılıyor…';st.className='form-status';
   q('#rapid360SalesXmlImportBtn').disabled=true;
   try{
@@ -6446,9 +6525,11 @@ q('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
       if(!fd){st.textContent='Önce Rapid Aktar veya XML seçin';st.className='form-status error';q('#rapid360SalesXmlImportBtn').disabled=false;return}
       r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
     }
-    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı · ${r.customersCreated||0} yeni müşteri${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}`;
+    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı · ${r.customersCreated||0} yeni müşteri${r.productsCreated?` · ${r.productsCreated} ürün eklendi`:''}${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}`;
     st.className='form-status success';
     toast(st.textContent);
+    q('#rapid360NewProductsBox')?.classList.add('hidden');
+    q('#rapid360SalesXmlImportBtn').disabled=true;
     await loadSalesTracking();
   }catch(e){st.textContent=e.message;st.className='form-status error';q('#rapid360SalesXmlImportBtn').disabled=false}
 });
