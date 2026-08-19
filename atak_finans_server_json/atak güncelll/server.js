@@ -235,13 +235,13 @@ function ensureStore(store) {
   store.invoiceIntegration.rapid360 = store.invoiceIntegration.rapid360 && typeof store.invoiceIntegration.rapid360==='object' ? store.invoiceIntegration.rapid360 : {};
   {
     const rz=store.invoiceIntegration.rapid360;
-    if(!String(rz.url||'').trim())rz.url=rapid360.DEFAULTS.url;
-    if(!String(rz.dealerId||'').trim())rz.dealerId=rapid360.DEFAULTS.dealerId;
-    if(!String(rz.eInvoiceCode||'').trim())rz.eInvoiceCode=rapid360.DEFAULTS.eInvoiceCode;
-    if(!String(rz.systemId||'').trim())rz.systemId=rapid360.DEFAULTS.systemId;
-    if(!String(rz.clientId||'').trim())rz.clientId=String(process.env.ARCELIK_MULE_CLIENT_ID||rapid360.DEFAULTS.clientId);
-    if(!String(rz.clientSecret||'').trim())rz.clientSecret=String(process.env.ARCELIK_MULE_CLIENT_SECRET||rapid360.DEFAULTS.clientSecret);
-    if(rz.addReturns==null)rz.addReturns=true;
+    const wasChairman=rapid360.isChairmanMuleConsume(rz);
+    if(wasChairman){
+      store.invoiceIntegration.rapid360=rapid360.sanitizeConsumeConfig(rz);
+      store.__disableChairmanConsume=true;
+    }
+    if(!String(store.invoiceIntegration.rapid360.systemId||'').trim())store.invoiceIntegration.rapid360.systemId='1';
+    if(store.invoiceIntegration.rapid360.addReturns==null)store.invoiceIntegration.rapid360.addReturns=true;
   }
   {
     const seeded=atakGetE.ensureConfig(store.invoiceIntegration.atakDms, store.invoiceIntegration.rapid360);
@@ -257,6 +257,11 @@ function ensureStore(store) {
   store.cancellationRequests = Array.isArray(store.cancellationRequests) ? store.cancellationRequests : [];
   store.invoiceQueue = Array.isArray(store.invoiceQueue) ? store.invoiceQueue : [];
   store.invoiceInbox = Array.isArray(store.invoiceInbox) ? store.invoiceInbox : [];
+  {
+    const dropAll=!!store.__disableChairmanConsume;
+    const purged=rapid360.purgeForeignInbox(store,{dropAllRapid360:dropAll});
+    if(purged.removed>0)store.__purgeChairmanInbox=purged.removed;
+  }
   store.invoiceAppResponses = Array.isArray(store.invoiceAppResponses) ? store.invoiceAppResponses : [];
   store.purchaseInvoices = Array.isArray(store.purchaseInvoices) ? store.purchaseInvoices : [];
   store.suppliers = Array.isArray(store.suppliers) ? store.suppliers : [];
@@ -445,6 +450,25 @@ function readStore(){
       console.log('[atak-dms] geteinvoices anahtarları üretildi');
     }catch(e){console.error('[atak-dms] anahtar kaydı yazılamadı',e.message)}
   }
+  if(s.__disableChairmanConsume){
+    delete s.__disableChairmanConsume;
+    try{
+      const t=`${STORE_PATH}.tmp`;
+      fs.writeFileSync(t,JSON.stringify(s,null,2),'utf8');
+      fs.renameSync(t,STORE_PATH);
+      console.log('[rapid360] başkan Rapid360 tüketimi kapatıldı');
+    }catch(e){console.error('[rapid360] başkan hesabı kaydı yazılamadı',e.message)}
+  }
+  if(s.__purgeChairmanInbox!=null){
+    const n=s.__purgeChairmanInbox;
+    delete s.__purgeChairmanInbox;
+    try{
+      const t=`${STORE_PATH}.tmp`;
+      fs.writeFileSync(t,JSON.stringify(s,null,2),'utf8');
+      fs.renameSync(t,STORE_PATH);
+      console.log(`[rapid360] yabancı gelen fatura silindi: ${n}`);
+    }catch(e){console.error('[rapid360] gelen kutu temizliği yazılamadı',e.message)}
+  }
   return s;
 }
 function writeStore(store){
@@ -452,6 +476,8 @@ function writeStore(store){
   delete clean.__istikbalCategoryFixed;
   delete clean.__mobilyaPurchaseCleared;
   delete clean.__atakDmsSeeded;
+  delete clean.__disableChairmanConsume;
+  delete clean.__purgeChairmanInbox;
   const t=`${STORE_PATH}.tmp`;
   fs.writeFileSync(t,JSON.stringify(clean,null,2),'utf8');
   fs.renameSync(t,STORE_PATH);
@@ -1866,8 +1892,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.177-atak-geteinvoices',
-  build:'fix-v177',
+  version:'6.3.178-atak-geteinvoices',
+  build:'fix-v178',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5827,11 +5853,11 @@ app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_m
       const secretRaw=incoming.clientSecret!=null?incoming.clientSecret:x.rapid360Secret;
       return{
         ...prev,
-        url:String(incoming.url!=null?incoming.url:(x.rapid360Url!=null?x.rapid360Url:prev.url||rapid360.DEFAULTS.url)).trim().split('?')[0],
+        url:String(incoming.url!=null?incoming.url:(x.rapid360Url!=null?x.rapid360Url:prev.url||'')).trim().split('?')[0],
         clientId:String(incoming.clientId!=null?incoming.clientId:(x.rapid360ClientId!=null?x.rapid360ClientId:prev.clientId||'')).trim(),
         clientSecret:String(secretRaw||'')==='********'?String(prev.clientSecret||''):String(secretRaw!=null?secretRaw:prev.clientSecret||''),
-        dealerId:String(incoming.dealerId!=null?incoming.dealerId:(x.rapid360DealerId!=null?x.rapid360DealerId:prev.dealerId||rapid360.DEFAULTS.dealerId)).trim(),
-        eInvoiceCode:String(incoming.eInvoiceCode!=null?incoming.eInvoiceCode:(x.rapid360Code!=null?x.rapid360Code:prev.eInvoiceCode||rapid360.DEFAULTS.eInvoiceCode)).trim(),
+        dealerId:String(incoming.dealerId!=null?incoming.dealerId:(x.rapid360DealerId!=null?x.rapid360DealerId:prev.dealerId||'')).trim(),
+        eInvoiceCode:String(incoming.eInvoiceCode!=null?incoming.eInvoiceCode:(x.rapid360Code!=null?x.rapid360Code:prev.eInvoiceCode||'')).trim(),
         systemId:String(incoming.systemId!=null?incoming.systemId:(x.rapid360SystemId!=null?x.rapid360SystemId:prev.systemId||'1')).trim()||'1',
         addReturns:(incoming.addReturns!=null?incoming.addReturns:x.rapid360AddReturns)!=null
           ? (incoming.addReturns===true||incoming.addReturns==='true'||x.rapid360AddReturns===true||x.rapid360AddReturns==='true'||x.rapid360AddReturns==='on')
@@ -5853,6 +5879,10 @@ app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_m
       },{rotate});
     })()
   };
+  if(rapid360.isChairmanMuleConsume(s.invoiceIntegration.rapid360)){
+    return res.status(400).json({error:'Başkanın Arçelik Rapid360 hesabı (DealerID 21134761) Atak gelen kutusuna kaydedilmez.'});
+  }
+  s.invoiceIntegration.rapid360=rapid360.sanitizeConsumeConfig(s.invoiceIntegration.rapid360);
   audit(s,'QNB Solist entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider,efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries});writeStore(s);res.json({ok:true,settings:{efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries,efaturaNext:s.invoiceIntegration.efaturaNext,earsivNext:s.invoiceIntegration.earsivNext}});
 });
 app.post('/web-api/admin/invoice-integration/atak-dms-rotate',requireAdminOrStaffAny('settings_manage','invoices_manage'),(req,res)=>{
@@ -5872,10 +5902,10 @@ app.post('/web-api/admin/invoice-integration/test',requireAdminOrStaffAny(...INV
     {name:'Firma VKN',ok:vkn.length>=10,detail:vkn||'Yazın'},
     {name:'Firma ünvanı',ok:!!String(c.companyTitle||'').trim(),detail:c.companyTitle||'Yazın'},
     {name:'e-Fatura seri',ok:!!String(c.efaturaSeries||c.earsivSeries||'').trim(),detail:`${c.efaturaSeries||'ATK'} / ${c.earsivSeries||'ATA'}`},
-    {name:'Arçelik Rapid360',ok:!!(rz.url&&rz.clientId&&rz.dealerId),detail:rz.dealerId?`DealerID ${rz.dealerId}`:'Tanımsız'},
+    {name:'Arçelik Rapid360',ok:!rz.blocked,detail:rz.blocked?'Başkan hesabı kapalı':(rz.ready?`DealerID ${rz.dealerId}`:'Örnek link gelen kutuya çekilmez')},
     {name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} · DealerID ${dms.dealerId}`:'Eksik'}
   ];
-  res.json({ok:checks.every(x=>x.ok),mode:'atak',checks,atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Atak fatura merkezi. Gelen Rapid360, giden yerel kuyruk ve geteinvoices.'});
+  res.json({ok:checks.every(x=>x.ok),mode:'atak',checks,atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Atak fatura merkezi. Başkanın Rapid360 linki gelen kutuya çekilmez.'});
 });
 app.get('/web-api/admin/invoice-queue',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
 /** Faturalar özet: kuyruk klasörleri + Rapid360 gelen + kesilmeyen satışlar */
@@ -5888,7 +5918,7 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
     const salesById=new Map((s.financeTransactions||[]).filter(t=>t.kind==='sale').map(t=>[String(t.id),t]));
     queue=queue.filter(r=>txBelongsToActor(salesById.get(String(r.saleId||''))||r,actor));
   }
-  const inbox=(s.invoiceInbox||[]).slice().sort((a,b)=>String(b.invoiceDate||b.createdAt||'').localeCompare(String(a.invoiceDate||a.createdAt||'')));
+  const inbox=(s.invoiceInbox||[]).filter(row=>!rapid360.isForeignInboxRow(row)).slice().sort((a,b)=>String(b.invoiceDate||b.createdAt||'').localeCompare(String(a.invoiceDate||a.createdAt||'')));
   const responses=(s.invoiceAppResponses||[]).slice();
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
   const salesPending=(s.financeTransactions||[])
@@ -5933,7 +5963,7 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
     portal:isStaffPortalReq(req)?'staff':'admin',
     canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),
     canIssue:req.session?.admin===true||staffCanInvoice(req),
-    note:'Gelen kutusu Rapid360 ile dolar. Giden kutu Atak kuyruğudur. geteinvoices URL’sini Kurulum’dan e-fatura firmasına verin.'
+    note:'Gelen kutuya başkanın Rapid360 linki çekilmez. Giden kutu Atak kuyruğudur. geteinvoices URL’sini Kurulum’dan e-fatura firmasına verin.'
   });
 });
 app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),async(req,res)=>{
@@ -5943,7 +5973,11 @@ app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...
   const end=x.endDate?new Date(String(x.endDate)):new Date();
   const start=x.startDate?new Date(String(x.startDate)):new Date(end.getTime()-(days-1)*86400000);
   const rz=cfg.rapid360||{};
-  const ready=rapid360.publicConfig(rz).ready;
+  const pub=rapid360.publicConfig(rz);
+  if(pub.blocked||rapid360.isChairmanMuleConsume(rz)){
+    return res.status(400).json({ok:false,error:'Başkanın Arçelik Rapid360 faturaları Atak gelen kutusuna çekilmez. Bu ekranda yalnızca ATAKHOME faturaları durur.'});
+  }
+  const ready=pub.ready;
   if(ready){
     try{
       const out=await rapid360.fetchGetEInvoices(rz,{startDate:start,endDate:end});
@@ -5970,7 +6004,7 @@ app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...
   if(!qnbReady){
     return res.json({
       ok:true,mode:'local_only',synced:0,
-      message:'Rapid360 bilgisi eksik ve QNB portal sorgusu henüz açık değil. Kurulum’dan Rapid360 alanlarını kaydedin.',
+      message:'Gelen kutu başkanın Rapid360 linkinden doldurulmaz. Firmaya verilen geteinvoices, Atak’ın kendi satış faturaları içindir.',
       checks
     });
   }

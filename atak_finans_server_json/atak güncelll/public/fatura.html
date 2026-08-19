@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Faturalar · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v177"/>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v178"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
@@ -92,12 +92,12 @@
         <div>
           <small>ATAK PAZARLAMA · FATURALAR</small>
           <h2 id="invViewTitle">Gönderilecek Faturalar</h2>
-          <p id="invViewHint">Satıştan kesilen faturalar burada kuyruğa düşer. Gelen kutusu Rapid360’dan dolar.</p>
+          <p id="invViewHint">Satıştan kesilen faturalar burada kuyruğa düşer. Gelen kutuya başkanın Rapid360 linki çekilmez.</p>
         </div>
         <div class="inv-head-actions">
           <a class="inv-btn ghost" href="/web-admin" id="backLink">← Panele dön</a>
           <button class="inv-btn ghost" id="invRefreshBtn" type="button">Sayfayı Yenile</button>
-          <button class="inv-btn primary" id="invPortalQueryBtn" type="button">Rapid360'dan çek</button>
+          <button class="inv-btn primary hidden" id="invPortalQueryBtn" type="button">Kendi Rapid360 hesabından çek</button>
         </div>
       </div>
       <div class="inv-toolbar" id="invToolbar">
@@ -123,7 +123,7 @@
           <form class="form-stack" id="invoiceIntegrationForm" style="margin:0;padding:0;border:0;background:transparent;box-shadow:none">
             <div class="panel-head" style="padding:0;margin:0 0 10px"><div>
               <h2 style="margin:0;font-size:18px;color:#0b2a4a">Atak fatura ayarları</h2>
-              <p class="note">Atak’a özel fatura ekranı: satış kuyruğu, Arçelik Rapid360 çekimi ve e-fatura firmasına verilen geteinvoices linki.</p>
+              <p class="note">Atak’a özel fatura ekranı: satış kuyruğu ve e-fatura firmasına verilen geteinvoices linki. Başkanın Rapid360 linki buraya çekilmez.</p>
             </div></div>
             <input type="hidden" id="invoiceProvider" value="qnb-solist"/>
             <input type="hidden" id="invoiceEnvironment" value="live"/>
@@ -152,15 +152,15 @@
             <div class="form-status" id="invoiceIntegrationStatus"></div>
             <div class="self-test-result" id="invoiceConnectionTestResult"></div>
             <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
-            <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Arçelik Rapid360 (gelen fatura)</h2>
-            <p class="note">Bayiye kesilen e-faturalar geteinvoices’tan çekilir. <b>Rapid360’dan çek</b> bu adresi çağırır.</p>
-            <label>Servis URL<input id="rapid360Url" placeholder="https://arc-p-ms-op.arcelik.com/exp/dms/dms/geteinvoices"/></label>
+            <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Arçelik Rapid360 (isteğe bağlı)</h2>
+            <p class="note">Firmaya attığımız örnek link <b>gelen kutuya çekilmez</b>. O link Atak’ın kendi geteinvoices çıktısı içindir. Buraya yalnızca Atak’ın kendi Arçelik bayi hesabı yazılır — başkanın DealerID’si (21134761) kabul edilmez.</p>
+            <label>Servis URL<input id="rapid360Url" placeholder="Atak’ın kendi Rapid360 adresi (örnek link değil)"/></label>
             <div class="two-col"><label>Client ID<input id="rapid360ClientId" autocomplete="off"/></label><label>Client secret<input id="rapid360Secret" type="password" autocomplete="new-password"/></label></div>
-            <div class="two-col"><label>Dealer ID<input id="rapid360DealerId" placeholder="21134761"/></label><label>EInvoiceCode<input id="rapid360Code" placeholder="2E1N1D3E4"/></label></div>
+            <div class="two-col"><label>Dealer ID<input id="rapid360DealerId" placeholder="Atak bayi kodu — 21134761 değil"/></label><label>EInvoiceCode<input id="rapid360Code" placeholder="servis kodu"/></label></div>
             <div class="two-col"><label>SystemId<input id="rapid360SystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="rapid360AddReturns" type="checkbox" checked/> İadeleri de getir (addReturns)</label></div>
             <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
             <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Atak geteinvoices</h2>
-            <p class="note">Bu linkte yalnız <b>ATAKHOME</b> satış faturaları çıkar (ATK/ATA). Arçelik Rapid360 gelen kutusu karışmaz.</p>
+            <p class="note">Bu linkte yalnız <b>ATAKHOME</b> satış faturaları çıkar (ATK/ATA). Başkanın Rapid360 gelen faturaları (BEA/GEA) karışmaz.</p>
             <label>Hazır URL (firmaya bunu verin)<textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?client_id=…&client_secret=…&StartDate=2023-03-27T00:00:00&EndDate=2023-03-31T00:00:00&DealerID=340344&EInvoiceCode=2E1N1D3E4&SystemId=1&addReturns=true"></textarea></label>
             <div class="button-row"><button class="secondary-btn" type="button" id="atakDmsCopyBtn">URL’yi kopyala</button><button class="secondary-btn" type="button" id="atakDmsRotateBtn">Anahtarları yenile</button></div>
             <div class="two-col"><label>Client ID<input id="atakDmsClientId" autocomplete="off"/></label><label>Client secret<input id="atakDmsSecret" type="password" autocomplete="new-password"/></label></div>
@@ -184,6 +184,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v177"></script>
+  <script src="/assets/fatura.js?v=fix-v178"></script>
 </body>
 </html>

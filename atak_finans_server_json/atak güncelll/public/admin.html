@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v177" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v177" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v177" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v177" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v178" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v178" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v178" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v178" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1657,11 +1657,11 @@ Bulunamayan → Diğer.
         <div>
           <small>ATAK PAZARLAMA · QNB ESOLUTIONS / SOLIST</small>
           <h2 id="invViewTitle">Gönderilecek Faturalar</h2>
-          <p id="invViewHint">Satıştan kesilen faturalar burada kuyruğa düşer. QNB WSDL bağlanınca portala gider.</p>
+          <p id="invViewHint">Satıştan kesilen faturalar burada kuyruğa düşer. Gelen kutuya başkanın Rapid360 linki çekilmez.</p>
         </div>
         <div class="inv-head-actions">
           <button class="inv-btn ghost" id="invRefreshBtn" type="button">Sayfayı Yenile</button>
-          <button class="inv-btn primary" id="invPortalQueryBtn" type="button">Rapid360'dan çek</button>
+          <button class="inv-btn primary hidden" id="invPortalQueryBtn" type="button">Kendi Rapid360 hesabından çek</button>
         </div>
       </div>
       <div class="inv-toolbar" id="invToolbar">
@@ -1710,15 +1710,15 @@ Bulunamayan → Diğer.
             <div class="form-status" id="invoiceIntegrationStatus"></div>
             <div class="self-test-result" id="invoiceConnectionTestResult"></div>
             <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
-            <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Rapid360 / Arçelik e-Fatura</h2>
-            <p class="note">Bayiye kesilen e-faturalar geteinvoices servisinden çekilir. Portaldan Sorgula bu adresi çağırır.</p>
-            <label>Servis URL<input id="rapid360Url" placeholder="https://arc-p-ms-op.arcelik.com/exp/dms/dms/geteinvoices"/></label>
+            <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Arçelik Rapid360 (isteğe bağlı)</h2>
+            <p class="note">Firmaya attığımız örnek link <b>gelen kutuya çekilmez</b>. O link Atak’ın kendi geteinvoices çıktısı içindir. Buraya yalnızca Atak’ın kendi Arçelik bayi hesabı yazılır — başkanın DealerID’si (21134761) kabul edilmez.</p>
+            <label>Servis URL<input id="rapid360Url" placeholder="Atak’ın kendi Rapid360 adresi (örnek link değil)"/></label>
             <div class="two-col"><label>Client ID<input id="rapid360ClientId" autocomplete="off"/></label><label>Client secret<input id="rapid360Secret" type="password" autocomplete="new-password"/></label></div>
-            <div class="two-col"><label>Dealer ID<input id="rapid360DealerId" placeholder="21134761"/></label><label>EInvoiceCode<input id="rapid360Code" placeholder="2E1N1D3E4"/></label></div>
+            <div class="two-col"><label>Dealer ID<input id="rapid360DealerId" placeholder="Atak bayi kodu — 21134761 değil"/></label><label>EInvoiceCode<input id="rapid360Code" placeholder="servis kodu"/></label></div>
             <div class="two-col"><label>SystemId<input id="rapid360SystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="rapid360AddReturns" type="checkbox" checked/> İadeleri de getir (addReturns)</label></div>
             <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
             <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Atak geteinvoices</h2>
-            <p class="note">Bu linkte yalnız <b>ATAKHOME</b> satış faturaları çıkar. Arçelik Rapid360 gelen kutusu karışmaz.</p>
+            <p class="note">Bu linkte yalnız <b>ATAKHOME</b> satış faturaları çıkar. Başkanın Rapid360 gelen faturaları (BEA/GEA) karışmaz.</p>
             <label>Hazır URL (firmaya bunu verin)<textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?client_id=…&client_secret=…&StartDate=2023-03-27T00:00:00&EndDate=2023-03-31T00:00:00&DealerID=340344&EInvoiceCode=2E1N1D3E4&SystemId=1&addReturns=true"></textarea></label>
             <div class="button-row"><button class="secondary-btn" type="button" id="atakDmsCopyBtn">URL’yi kopyala</button><button class="secondary-btn" type="button" id="atakDmsRotateBtn">Anahtarları yenile</button></div>
             <div class="two-col"><label>Client ID<input id="atakDmsClientId" autocomplete="off"/></label><label>Client secret<input id="atakDmsSecret" type="password" autocomplete="new-password"/></label></div>
@@ -2778,6 +2778,6 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v177"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v177"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v178"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v178"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

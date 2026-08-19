@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v177 */
+/* ATAK_ADMIN_BUILD=fix-v178 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -5467,7 +5467,7 @@ const INV_VIEW_META={
   ef_out_sent:{title:'e-Fatura · Gönderilen',hint:'Kuyruğa alınan / taslak / kesilmiş e-Faturalar.'},
   ef_out_error:{title:'e-Fatura · Hatalı',hint:'Gönderim veya doğrulama hatası. Tekrar deneyebilirsiniz.'},
   ef_out_archive:{title:'e-Fatura · Giden Arşiv',hint:'İptal / arşivlenmiş giden e-Faturalar.'},
-  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Arçelik Rapid360 geteinvoices. Rapid360\'dan çek son 14 günü alır.'},
+  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Yalnız ATAKHOME gelen e-faturaları. Başkanın Rapid360 (BEA/GEA) buraya çekilmez.'},
   ef_in_responses:{title:'e-Fatura · Uygulama Yanıtları',hint:'Ticari fatura kabul/red yanıtları.'},
   ef_in_archive:{title:'e-Fatura · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Faturalar.'},
   ea_out_pending:{title:'e-Arşiv · Gönderilecek',hint:'Giden e-Arşiv kuyruğu.'},
@@ -5691,6 +5691,8 @@ async function loadInvoiceCenter(){
     invoiceCenterState.data=d;
     invSetCounts(d.counts||{});
     invUpdateEnvBadge(d.settings||{});
+    const rz=d.settings?.rapid360||{};
+    q('#invPortalQueryBtn')?.classList.toggle('hidden',!rz.ready||!!rz.blocked);
     invPaintCurrentView();
   }catch(e){
     if(q('#invFootStatus'))q('#invFootStatus').textContent=e.message;

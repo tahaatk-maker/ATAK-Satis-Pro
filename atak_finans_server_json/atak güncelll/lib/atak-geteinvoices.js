@@ -71,7 +71,7 @@ function isForeignInvoice(row){
   if(src.includes('RAPID') || src.includes('INBOX')) return true;
   if(row.rapidRaw) return true;
   const no = String(row.invoiceNumber || row.FaturaNo || (row.rapidRaw && row.rapidRaw.FaturaNo) || '').toUpperCase();
-  if(/^(BEA|BKO|BEX|ARC)/.test(no)) return true;
+  if(/^(BEA|GEA|BKO|BEX|ARC)/.test(no)) return true;
   return false;
 }
 

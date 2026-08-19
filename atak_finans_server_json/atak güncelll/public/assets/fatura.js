@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v177 */
+/* ATAK_FATURA_BUILD=fix-v178 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={module:'efatura',view:'ef_out_pending',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -8,14 +8,14 @@ const INV_VIEW_META={
   ef_out_sent:{title:'e-Fatura · Gönderilen',hint:'Kuyruğa alınan / kesilmiş e-Faturalar.'},
   ef_out_error:{title:'e-Fatura · Hatalı',hint:'Doğrulama hatası. Tekrar deneyebilirsiniz.'},
   ef_out_archive:{title:'e-Fatura · Giden Arşiv',hint:'İptal / arşivlenmiş giden e-Faturalar.'},
-  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Arçelik Rapid360 geteinvoices. Rapid360’dan çek son 14 günü alır.'},
+  ef_in_incoming:{title:'e-Fatura · Gelen',hint:'Yalnız ATAKHOME gelen e-faturaları. Başkanın Rapid360 (BEA/GEA) buraya çekilmez.'},
   ef_in_responses:{title:'e-Fatura · Uygulama Yanıtları',hint:'Ticari fatura kabul/red yanıtları.'},
   ef_in_archive:{title:'e-Fatura · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Faturalar.'},
   ea_out_pending:{title:'e-Arşiv · Gönderilecek',hint:'Giden e-Arşiv kuyruğu.'},
   ea_out_sent:{title:'e-Arşiv · Gönderilen',hint:'Kuyruğa alınmış e-Arşiv faturaları.'},
   ea_out_error:{title:'e-Arşiv · Hatalı',hint:'Hatalı e-Arşiv kayıtları.'},
   ea_out_archive:{title:'e-Arşiv · Giden Arşiv',hint:'Arşivlenmiş giden e-Arşiv.'},
-  ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv kayıtları.'},
+  ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv kayıtları. Başkanın Rapid360 linki buraya çekilmez.'},
   ea_in_archive:{title:'e-Arşiv · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Arşiv.'},
   pending_sales:{title:'Kesilmeyen Faturalar',hint:'Geç kesilen satışlar. Kuyruğa alın veya manuel işaretleyin. Satıra tıklayınca belge açılır.'},
   setup_ready:{title:'Kurulum / Hazırlık',hint:'Firma, Rapid360 ve Atak geteinvoices kontrolü.'},
@@ -43,6 +43,8 @@ function applyAccessUi(){
   q('#invSetupModBtn')?.classList.toggle('hidden',!state.canSetup);
   q('#invIssueSelectedBtn')?.classList.toggle('hidden',!state.canIssue);
   q('#invRetrySelectedBtn')?.classList.toggle('hidden',!state.canIssue);
+  const rz=state.data?.settings?.rapid360||{};
+  q('#invPortalQueryBtn')?.classList.toggle('hidden',!rz.ready||!!rz.blocked);
   if(q('#backLink'))q('#backLink').href=state.portal==='staff'?'/personel':'/web-admin';
 }
 

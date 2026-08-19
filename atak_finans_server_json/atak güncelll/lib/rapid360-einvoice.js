@@ -12,6 +12,87 @@ const DEFAULTS = {
   addReturns: true
 };
 
+/** Başkanın Arçelik bayi hesabı — Atak gelen kutusuna çekilmez. */
+const CHAIRMAN_DEALER_ID = '21134761';
+const FOREIGN_INVOICE_PREFIX = /^(BEA|GEA|BKO|BEX|ARC)/i;
+
+function emptyConsumeConfig(){
+  return {
+    url: '',
+    clientId: '',
+    clientSecret: '',
+    dealerId: '',
+    eInvoiceCode: '',
+    systemId: '1',
+    addReturns: true
+  };
+}
+
+function resolveConsumeConfig(raw = {}, env = process.env){
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const e = env || {};
+  const secret = String(r.clientSecret || e.ARCELIK_MULE_CLIENT_SECRET || '').trim();
+  return {
+    url: String(r.url || e.ARCELIK_MULE_URL || '').trim().split('?')[0],
+    clientId: String(r.clientId || e.ARCELIK_MULE_CLIENT_ID || '').trim(),
+    clientSecret: secret,
+    dealerId: String(r.dealerId || e.ARCELIK_DEALER_ID || '').trim(),
+    eInvoiceCode: String(r.eInvoiceCode || e.ARCELIK_EINVOICE_CODE || '').trim(),
+    systemId: String(r.systemId || e.ARCELIK_SYSTEM_ID || '').trim() || '1',
+    addReturns: r.addReturns !== false && String(r.addReturns) !== 'false'
+  };
+}
+
+function isChairmanMuleConsume(cfg, env){
+  const r = cfg && typeof cfg === 'object' ? cfg : {};
+  if(String(r.dealerId || '').trim() === CHAIRMAN_DEALER_ID) return true;
+  if(env && typeof env === 'object' && String(env.ARCELIK_DEALER_ID || '').trim() === CHAIRMAN_DEALER_ID) return true;
+  return false;
+}
+
+function sanitizeConsumeConfig(raw = {}, env){
+  const r = raw && typeof raw === 'object' ? { ...raw } : {};
+  if(isChairmanMuleConsume(r, env)){
+    return {
+      ...emptyConsumeConfig(),
+      lastSyncAt: r.lastSyncAt || '',
+      lastCount: 0,
+      lastError: 'Başkanın Arçelik Rapid360 hesabı (DealerID 21134761) Atak gelen kutusuna çekilmez.'
+    };
+  }
+  return r;
+}
+
+function invoiceNumberOf(row){
+  if(!row || typeof row !== 'object') return '';
+  const raw = row.rapidRaw && typeof row.rapidRaw === 'object' ? row.rapidRaw : {};
+  return String(row.invoiceNumber || row.FaturaNo || row.faturaNo || raw.FaturaNo || raw.InvoiceNumber || '').trim();
+}
+
+function isForeignInboxRow(row){
+  if(!row || typeof row !== 'object') return false;
+  const no = invoiceNumberOf(row);
+  if(FOREIGN_INVOICE_PREFIX.test(no)) return true;
+  const raw = row.rapidRaw && typeof row.rapidRaw === 'object' ? row.rapidRaw : {};
+  const dealer = String(
+    row.BayiKodu || row.bayiKodu || row.dealerId || row.DealerID
+    || raw.BayiKodu || raw.DealerID || raw.DealerId || ''
+  ).trim();
+  if(dealer === CHAIRMAN_DEALER_ID) return true;
+  return false;
+}
+
+function purgeForeignInbox(store, { dropAllRapid360 } = {}){
+  if(!store || typeof store !== 'object') return { before: 0, after: 0, removed: 0 };
+  const list = Array.isArray(store.invoiceInbox) ? store.invoiceInbox : [];
+  const before = list.length;
+  store.invoiceInbox = list.filter(row => {
+    if(dropAllRapid360 && String(row && row.source || '').toLowerCase() === 'rapid360') return false;
+    return !isForeignInboxRow(row);
+  });
+  return { before, after: store.invoiceInbox.length, removed: before - store.invoiceInbox.length };
+}
+
 function pad2(n){ return String(n).padStart(2, '0'); }
 
 /** Örnek: 2023-03-27T00:00:00 */
@@ -197,26 +278,38 @@ function parseInvoices(payload){
   return extractList(payload).map((row, i) => normalizeInvoice(row, i)).filter(x => x.invoiceNumber || x.uuid);
 }
 
-function publicConfig(cfg){
-  const c = resolveConfig(cfg);
+function publicConfig(cfg, env){
+  const c = resolveConsumeConfig(cfg, env);
+  const blocked = isChairmanMuleConsume(cfg, env) || c.dealerId === CHAIRMAN_DEALER_ID;
+  const shown = blocked ? resolveConsumeConfig(emptyConsumeConfig(), {}) : c;
   const r = cfg && typeof cfg === 'object' ? cfg : {};
   return {
-    url: c.url,
-    dealerId: c.dealerId,
-    eInvoiceCode: c.eInvoiceCode,
-    systemId: c.systemId,
-    addReturns: c.addReturns,
-    clientId: c.clientId,
-    clientSecret: c.clientSecret ? '********' : '',
-    ready: Boolean(c.url && c.clientId && c.clientSecret && c.dealerId && c.eInvoiceCode),
+    url: shown.url,
+    dealerId: shown.dealerId,
+    eInvoiceCode: shown.eInvoiceCode,
+    systemId: shown.systemId || '1',
+    addReturns: shown.addReturns,
+    clientId: shown.clientId,
+    clientSecret: shown.clientSecret ? '********' : '',
+    blocked,
+    ready: !blocked && Boolean(shown.url && shown.clientId && shown.clientSecret && shown.dealerId && shown.eInvoiceCode),
     lastSyncAt: r.lastSyncAt || '',
     lastCount: Number(r.lastCount || 0) || 0,
-    lastError: String(r.lastError || '')
+    lastError: blocked
+      ? 'Başkanın Arçelik Rapid360 hesabı Atak gelen kutusuna çekilmez.'
+      : String(r.lastError || '')
   };
 }
 
 async function fetchGetEInvoices(cfg, range = {}, { fetchImpl, timeoutMs = 45000 } = {}){
-  const url = buildUrl(cfg, range);
+  const consume = resolveConsumeConfig(cfg);
+  if(isChairmanMuleConsume(cfg, process.env) || consume.dealerId === CHAIRMAN_DEALER_ID){
+    throw new Error('Başkanın Arçelik Rapid360 hesabı (DealerID 21134761) Atak gelen kutusuna çekilmez.');
+  }
+  if(!consume.url || !consume.clientId || !consume.clientSecret || !consume.dealerId || !consume.eInvoiceCode){
+    throw new Error('Atak’ın kendi Rapid360 hesabı tanımlı değil. Firmaya verilen örnek link gelen kutuya çekilmez.');
+  }
+  const url = buildUrl(consume, range);
   const fetchFn = fetchImpl || fetch;
   const ac = typeof AbortController === 'function' ? new AbortController() : null;
   const t = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
@@ -264,6 +357,7 @@ function mergeInbox(store, invoices){
   let updated = 0;
   const now = new Date().toISOString();
   for(const inv of invoices || []){
+    if(isForeignInboxRow(inv)) continue;
     const k = String(inv.uuid || inv.invoiceNumber || inv.id || '').toLowerCase();
     if(!k) continue;
     const prev = byKey.get(k);
@@ -296,6 +390,14 @@ function mergeInbox(store, invoices){
 
 module.exports = {
   DEFAULTS,
+  CHAIRMAN_DEALER_ID,
+  FOREIGN_INVOICE_PREFIX,
+  emptyConsumeConfig,
+  resolveConsumeConfig,
+  isChairmanMuleConsume,
+  sanitizeConsumeConfig,
+  isForeignInboxRow,
+  purgeForeignInbox,
   formatDateTime,
   toIsoDate,
   asNumber,

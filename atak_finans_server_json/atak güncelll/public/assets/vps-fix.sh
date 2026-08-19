@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.177-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.178-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.177-atak-geteinvoices
-EXPECT_BUILD=fix-v177
+EXPECT_HEALTH=6.3.178-atak-geteinvoices
+EXPECT_BUILD=fix-v178
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -72,6 +72,7 @@ check "admin.html var" test -f "$SRC/public/admin.html"
 check "health $EXPECT_HEALTH" grep -q "$EXPECT_HEALTH" "$SRC/server.js"
 check "admin build $EXPECT_BUILD" grep -q "ATAK_ADMIN_BUILD=$EXPECT_BUILD" "$SRC/public/assets/admin.js"
 check "personel build $EXPECT_BUILD" grep -q "ATAK_PERSONEL_BUILD=$EXPECT_BUILD" "$SRC/public/assets/personel.js"
+check "fatura build $EXPECT_BUILD" grep -q "ATAK_FATURA_BUILD=$EXPECT_BUILD" "$SRC/public/assets/fatura.js"
 check "admin odeme plani" grep -q 'id="salesPayPlanToggleBtn"' "$SRC/public/admin.html"
 check "personel odeme plani" grep -q 'id="salesPayPlanToggleBtn"' "$SRC/public/personel.html"
 check "e-fatura kesilmeyen sekmesi" grep -q 'data-inv-module="pending"' "$SRC/public/admin.html"
@@ -83,6 +84,8 @@ check "personel fatura otomatik yetki" grep -q "grantInvoiceScreenOnList" "$SRC/
 check "e-fatura sayfasi" grep -q 'Faturalar' "$SRC/public/fatura.html"
 check "e-fatura tam merkez" grep -q 'data-inv-module="efatura"' "$SRC/public/fatura.html"
 check "e-fatura giden kutu" grep -q 'data-inv-view="ef_out_pending"' "$SRC/public/fatura.html"
+check "baskan inbox kapali" grep -q "isChairmanMuleConsume" "$SRC/lib/rapid360-einvoice.js"
+check "baskan dealer kilidi" grep -q "CHAIRMAN_DEALER_ID" "$SRC/lib/rapid360-einvoice.js"
 check "vkn lookup api" grep -q "vkn-lookup" "$SRC/server.js"
 check "vkn lookup admin ui" grep -q 'data-vkn-lookup="customerPage"' "$SRC/public/admin.html"
 check "vkn lookup personel ui" grep -q 'id="qcVknLookupBtn"' "$SRC/public/personel.html"

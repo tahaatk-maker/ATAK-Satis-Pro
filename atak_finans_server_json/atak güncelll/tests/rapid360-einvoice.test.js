@@ -45,9 +45,41 @@ function assert(cond, msg){
   const m2 = rapid.mergeInbox(store, listA);
   assert(m2.added === 0 && m2.updated === 1, 'tekrar yok');
 
+  const skipped = rapid.mergeInbox({ invoiceInbox: [] }, [
+    { id: 'bea', uuid: 'bea', invoiceNumber: 'BEA2026000002110', source: 'rapid360' },
+    { id: 'gea', uuid: 'gea', invoiceNumber: 'GEA2026000001257', source: 'rapid360' },
+    { id: 'ata', uuid: 'ata', invoiceNumber: 'ATA2026000000001', source: 'rapid360' }
+  ]);
+  assert(skipped.added === 1, 'BEA/GEA merge edilmez');
+
   const pub = rapid.publicConfig({});
-  assert(pub.clientSecret === '********', 'maske');
-  assert(pub.dealerId === '21134761', 'bayi');
+  assert(pub.ready === false, 'boş tüketim hazır değil');
+  assert(pub.dealerId === '', 'boş bayi');
+  assert(pub.clientSecret === '', 'boş secret');
+  assert(rapid.publicConfig({
+    url: rapid.DEFAULTS.url,
+    clientId: rapid.DEFAULTS.clientId,
+    clientSecret: rapid.DEFAULTS.clientSecret,
+    dealerId: '21134761',
+    eInvoiceCode: rapid.DEFAULTS.eInvoiceCode
+  }).blocked === true, 'başkan hesabı kilitli');
+  assert(rapid.isChairmanMuleConsume({ dealerId: '21134761' }) === true, 'chairman dealer');
+  assert(rapid.isChairmanMuleConsume({ dealerId: '340344' }) === false, 'atak dealer');
+  assert(rapid.isForeignInboxRow({ invoiceNumber: 'BEA2026000002110' }) === true, 'BEA yabancı');
+  assert(rapid.isForeignInboxRow({ invoiceNumber: 'GEA2026000001257' }) === true, 'GEA yabancı');
+  assert(rapid.isForeignInboxRow({ invoiceNumber: 'ATA2026000000001' }) === false, 'ATA kalır');
+
+  const purgedStore = { invoiceInbox: [
+    { invoiceNumber: 'BEA1', source: 'rapid360' },
+    { invoiceNumber: 'GEA1', source: 'rapid360' },
+    { invoiceNumber: 'ATA1', source: 'gib' }
+  ] };
+  const purged = rapid.purgeForeignInbox(purgedStore);
+  assert(purged.removed === 2 && purgedStore.invoiceInbox.length === 1, 'purge BEA/GEA');
+
+  const dropStore = { invoiceInbox: [{ invoiceNumber: 'XYZ1', source: 'rapid360' }] };
+  rapid.purgeForeignInbox(dropStore, { dropAllRapid360: true });
+  assert(dropStore.invoiceInbox.length === 0, 'drop all rapid360');
 
   let seenUrl = '';
   const fake = async (u) => {
@@ -58,9 +90,37 @@ function assert(cond, msg){
       text: async () => JSON.stringify({ Data: [{ InvoiceNumber: 'LIVE1', InvoiceDate: '2026-08-01', Amount: 99 }] })
     };
   };
-  const fetched = await rapid.fetchGetEInvoices({}, { startDate: '2026-08-01', endDate: '2026-08-02' }, { fetchImpl: fake });
+  let fetchBlocked = false;
+  try{
+    await rapid.fetchGetEInvoices({
+      url: rapid.DEFAULTS.url,
+      clientId: rapid.DEFAULTS.clientId,
+      clientSecret: rapid.DEFAULTS.clientSecret,
+      dealerId: '21134761',
+      eInvoiceCode: rapid.DEFAULTS.eInvoiceCode
+    }, {}, { fetchImpl: fake });
+  }catch(e){
+    fetchBlocked = /çekilmez/.test(e.message);
+  }
+  assert(fetchBlocked, 'fetch chairman blocked');
+
+  let emptyBlocked = false;
+  try{
+    await rapid.fetchGetEInvoices({}, { startDate: '2026-08-01', endDate: '2026-08-02' }, { fetchImpl: fake });
+  }catch(e){
+    emptyBlocked = /örnek link/.test(e.message) || /tanımlı değil/.test(e.message);
+  }
+  assert(emptyBlocked, 'boş tüketim çekilmez');
+
+  const fetched = await rapid.fetchGetEInvoices({
+    url: 'https://example.test/geteinvoices',
+    clientId: 'own-id',
+    clientSecret: 'own-secret',
+    dealerId: '340344',
+    eInvoiceCode: '2E1N1D3E4'
+  }, { startDate: '2026-08-01', endDate: '2026-08-02' }, { fetchImpl: fake });
   assert(fetched.count === 1 && fetched.invoices[0].invoiceNumber === 'LIVE1', 'fetch');
-  assert(seenUrl.includes('DealerID=21134761'), 'fetch url');
+  assert(seenUrl.includes('DealerID=340344'), 'fetch url atak');
 
   console.log('rapid360-einvoice.test.js ok');
 })().catch(err => {
