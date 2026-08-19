@@ -23,7 +23,7 @@ assert(atak.authenticate({}, { ...muleQuery, DealerID: '999' }).ok === false, 'D
 assert(atak.authenticate({}, { ...muleQuery, client_id: '' }).ok === false, 'client_id zorunlu');
 assert(atak.authenticate({}, { ...muleQuery, client_secret: 'wrong' }).ok === false, 'secret');
 assert(atak.authenticate({}, { ...muleQuery, client_secret: 'wrong' }).message === 'Unauthorized', 'hata sızmaz');
-assert(atak.ipAllowedForDms({}, '1.2.3.4', {}).ok === false, 'boş IP listesi kapalı');
+assert(atak.ipAllowedForDms({}, '1.2.3.4', {}).ok === true, 'boş IP Rapid360 gibi açık');
 assert(atak.ipAllowedForDms({ allowedIps: '10.1.1.8' }, '10.1.1.8', {}).ok === true, 'izinli IP');
 assert(atak.ipAllowedForDms({ allowedIps: '10.1.1.8' }, '9.9.9.9', {}).ok === false, 'yabancı IP');
 assert(atak.ipAllowedForDms({ allowedIps: '10.1.1.0/24' }, '10.1.1.50', {}).ok === true, 'CIDR izin');
@@ -32,7 +32,7 @@ assert(atak.ipAllowedForDms({}, '8.8.8.8', { ATAK_DMS_ALLOWED_IPS: '8.8.8.8' }).
 assert(atak.ipAllowedForDms({ allowedIps: '*' }, '9.9.9.9', {}).ok === true, 'yıldız açık');
 assert(atak.publicConfig({}, { env: {} }).ipLocked === false, 'IP yoksa kilit yok');
 assert(atak.publicConfig({ allowedIps: '1.1.1.1' }, { env: {} }).ipLocked === true, 'IP varsa kilit');
-assert(atak.publicConfig({ allowedIps: '1.1.1.1' }, { env: {} }).ready === true, 'IP + kimlik ready');
+assert(atak.publicConfig({}, { env: {} }).ready === true, 'mule ready');
 
 const seeded = atak.ensureConfig({});
 assert(seeded.cfg.clientId === muleQuery.client_id, 'default client_id');
@@ -152,8 +152,16 @@ assert(parsed.length === 1 && parsed[0].invoiceNumber === 'BEA2026000002096', 'p
 assert(parsed[0].invoiceDate === '2026-08-17', 'parse DD/MM/YYYY');
 assert(parsed[0].total === 84999, 'parse TutarToplami');
 
-const pub = atak.publicConfig(creds, { reveal: true, baseUrl: 'https://panel.atakhome.com.tr' });
+const pub = atak.publicConfig(creds, { reveal: false, baseUrl: 'https://panel.atakhome.com.tr' });
 assert(pub.copyUrl.includes('EInvoiceCode=2E1N1D3E4'), 'copy servis kodu');
 assert(pub.copyUrl.includes('client_id=' + muleQuery.client_id), 'copy client');
+assert(pub.copyUrl.includes('client_secret=' + muleQuery.client_secret), 'copy secret');
+assert(pub.copyUrl.includes('DealerID=21134761'), 'copy DealerID');
+assert(pub.copyUrl.includes('SystemId=1'), 'copy SystemId');
+assert(pub.copyUrl.includes('addReturns=true'), 'copy addReturns');
+assert(pub.copyUrl.includes('StartDate='), 'copy StartDate');
+assert(pub.copyUrl.includes('EndDate='), 'copy EndDate');
+assert(!pub.copyUrl.includes('%3A'), 'tarih encode yok');
+assert(pub.copyUrl.startsWith('https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?'), 'copy path');
 
 console.log('atak-geteinvoices.test.js ok');

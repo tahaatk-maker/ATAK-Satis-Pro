@@ -123,7 +123,7 @@ function dmsAllowlist(cfg, env = process.env){
 
 function ipAllowedForDms(cfg, ip, env = process.env){
   const list = dmsAllowlist(cfg, env);
-  if(!list.length) return { ok: false, locked: true, reason: 'allowlist-required' };
+  if(!list.length) return { ok: true, locked: false };
   const needle = String(ip || '').replace(/^::ffff:/, '').trim();
   if(!needle) return { ok: false, locked: true, reason: 'no-ip' };
   return { ok: list.some(a => ipMatchesEntry(needle, a)), locked: true };
@@ -482,19 +482,27 @@ function failBody(message, status){
   };
 }
 
+function muleQueryString(cfg, { startDate, endDate, mask } = {}){
+  const c = ensureConfig(cfg).cfg;
+  const start = rapid360.formatDateTime(startDate || new Date(Date.now() - 13 * 86400000), false);
+  const end = rapid360.formatDateTime(endDate || new Date(), false);
+  const secret = mask ? '********' : String(c.clientSecret || '');
+  return [
+    'client_id=' + String(c.clientId || ''),
+    'client_secret=' + secret,
+    'StartDate=' + start,
+    'EndDate=' + end,
+    'DealerID=' + String(c.dealerId || ''),
+    'EInvoiceCode=' + String(c.eInvoiceCode || ''),
+    'SystemId=' + String(c.systemId || '1'),
+    'addReturns=true'
+  ].join('&');
+}
+
 function buildCopyUrl(cfg, { baseUrl, startDate, endDate, mask } = {}){
   const c = ensureConfig(cfg).cfg;
   const origin = String(baseUrl || 'https://panel.atakhome.com.tr').replace(/\/$/, '');
-  const q = new URLSearchParams();
-  q.set('client_id', c.clientId);
-  q.set('client_secret', mask ? '********' : c.clientSecret);
-  q.set('StartDate', rapid360.formatDateTime(startDate || new Date(Date.now() - 13 * 86400000), false));
-  q.set('EndDate', rapid360.formatDateTime(endDate || new Date(), false));
-  q.set('DealerID', c.dealerId);
-  q.set('EInvoiceCode', c.eInvoiceCode);
-  q.set('SystemId', c.systemId);
-  q.set('addReturns', 'true');
-  return `${origin}${PATH}?${q.toString()}`;
+  return `${origin}${PATH}?${muleQueryString(c, { startDate, endDate, mask })}`;
 }
 
 function publicConfig(cfg, { reveal, baseUrl, env } = {}){
@@ -513,13 +521,13 @@ function publicConfig(cfg, { reveal, baseUrl, env } = {}){
     ipLocked,
     systemId: c.systemId,
     clientId: c.clientId,
-    clientSecret: c.clientSecret ? '********' : '',
+    clientSecret: reveal ? c.clientSecret : (c.clientSecret ? '********' : ''),
     path: PATH,
     aliasPath: PATH_ALIAS,
     copyUrlMasked: buildCopyUrl(c, { baseUrl, mask: true }),
-    copyUrl: reveal ? buildCopyUrl(c, { baseUrl, mask: false }) : '',
+    copyUrl: buildCopyUrl(c, { baseUrl, mask: false }),
     rotatedAt: r.rotatedAt || c.rotatedAt || '',
-    ready: Boolean(c.clientId && c.clientSecret && c.dealerId && c.eInvoiceCode && ipLocked)
+    ready: Boolean(c.clientId && c.clientSecret && c.dealerId && c.eInvoiceCode)
   };
 }
 
@@ -577,6 +585,7 @@ module.exports = {
   collectRows,
   buildResponse,
   failBody,
+  muleQueryString,
   buildCopyUrl,
   publicConfig,
   mergeIncoming

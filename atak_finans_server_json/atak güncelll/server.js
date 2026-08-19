@@ -1866,8 +1866,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.173-atak-geteinvoices',
-  build:'fix-v173',
+  version:'6.3.174-atak-geteinvoices',
+  build:'fix-v174',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5867,7 +5867,7 @@ app.post('/web-api/admin/invoice-integration/test',requireAdminOrStaffAny(...INV
   const s=readStore(),c=s.invoiceIntegration||{};
   const checks=qnbSolist.readinessChecks(c);
   const dms=atakGetE.publicConfig(c.atakDms,{reveal:false,baseUrl:publicBaseUrl(req)});
-  checks.push({name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} hazır (DealerID ${dms.dealerId}, IP kilitli)`:(dms.ipLocked?'Anahtar üretilemedi':'İzinli firma IP yazın — boşsa link 403')});
+  checks.push({name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} hazır (DealerID ${dms.dealerId})`:'Anahtar üretilemedi'});
   const ep=qnbSolist.defaultEndpoints(c.environment||'test');
   res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,endpoints:ep,atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Dış servise belge göndermez. QNB Solist WSDL/kullanıcı gelince SOAP gönderim açılır. Atak geteinvoices e-fatura firmasının çağıracağı yerel uçtur.'});
 });
@@ -5922,7 +5922,7 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
   };
   res.json({
     ok:true,
-    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext),rapid360:rapid360.publicConfig(cfg.rapid360),atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal:false,baseUrl:publicBaseUrl(req)})},
+    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext),rapid360:rapid360.publicConfig(cfg.rapid360),atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),baseUrl:publicBaseUrl(req)})},
     counts,queue,inbox,responses,salesPending,
     portal:isStaffPortalReq(req)?'staff':'admin',
     canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),

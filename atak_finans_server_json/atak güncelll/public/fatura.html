@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>e-Fatura Merkezi · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v173"/>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v174"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
@@ -158,13 +158,13 @@
             <div class="two-col"><label>SystemId<input id="rapid360SystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="rapid360AddReturns" type="checkbox" checked/> İadeleri de getir (addReturns)</label></div>
             <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
             <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Atak geteinvoices</h2>
-            <p class="note">HTTPS var ama Rapid360 şifreyi adrese yazar; linki bilen çeker. Bu yüzden <b>izinli IP zorunlu</b>: boşsa link 403 döner. Firma sunucu IP’lerini yazın. Şifre/DealerID/kod yoksa 401. Yanlış deneme 10’dan sonra 15 dk kilit.</p>
-            <label>Hazır URL<textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="Kaydettikten sonra burada oluşur"></textarea></label>
+            <p class="note">Firmanın istediği güvenlik budur: Rapid360 ile aynı tam GET. Linkte <b>client_id, client_secret, StartDate, EndDate, DealerID, EInvoiceCode, SystemId, addReturns</b> olmalı. Aşağıdaki hazır URL’yi kopyalayıp firmaya verin; tarihleri sorgu anında kendileri değiştirir.</p>
+            <label>Hazır URL (firmaya bunu verin)<textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?client_id=…&client_secret=…&StartDate=…&EndDate=…&DealerID=21134761&EInvoiceCode=2E1N1D3E4&SystemId=1&addReturns=true"></textarea></label>
             <div class="button-row"><button class="secondary-btn" type="button" id="atakDmsCopyBtn">URL’yi kopyala</button><button class="secondary-btn" type="button" id="atakDmsRotateBtn">Anahtarları yenile</button></div>
             <div class="two-col"><label>Client ID<input id="atakDmsClientId" autocomplete="off"/></label><label>Client secret<input id="atakDmsSecret" type="password" autocomplete="new-password"/></label></div>
             <div class="two-col"><label>Dealer ID<input id="atakDmsDealerId" placeholder="21134761"/></label><label>E-Fatura servis kodu (EInvoiceCode)<input id="atakDmsCode" placeholder="2E1N1D3E4"/></label></div>
             <div class="two-col"><label>SystemId<input id="atakDmsSystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="atakDmsEnabled" type="checkbox" checked/> Servisi açık tut</label></div>
-            <label>İzinli firma IP’leri (zorunlu)<textarea id="atakDmsAllowedIps" rows="2" placeholder="ör. 185.12.34.56, 2.3.4.5 — boşsa link kapalı"></textarea></label>
+            <label>İzinli firma IP’leri (isteğe bağlı ek kilit)<textarea id="atakDmsAllowedIps" rows="2" placeholder="boş = Rapid360 gibi sadece şifre; doldurursanız yalnız bu IP’ler"></textarea></label>
             <label class="check"><input id="atakDmsIncludeInbox" type="checkbox" checked/> Gelen kutuyu (Rapid360 çekimleri) de dahil et</label>
           </form>
           <hr style="border:0;border-top:1px solid #e2e8f0;margin:8px 0 4px"/>
@@ -182,6 +182,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v173"></script>
+  <script src="/assets/fatura.js?v=fix-v174"></script>
 </body>
 </html>

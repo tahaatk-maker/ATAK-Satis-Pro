@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v173 */
+/* ATAK_ADMIN_BUILD=fix-v174 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4703,7 +4703,7 @@ async function loadInvoiceIntegration(){
   if(q('#atakDmsEnabled'))q('#atakDmsEnabled').checked=dms.enabled!==false;
   if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=dms.includeInbox!==false;
   if(q('#atakDmsAllowedIps'))q('#atakDmsAllowedIps').value=dms.allowedIps||'';
-  if(q('#atakDmsCopyUrl'))q('#atakDmsCopyUrl').value=dms.copyUrl||dms.copyUrlMasked||'';
+  if(q('#atakDmsCopyUrl'))q('#atakDmsCopyUrl').value=dms.copyUrl||'';
   refreshInvoiceSeriesPreview();
  }catch(e){toast(e.message)}
 }
@@ -4757,10 +4757,9 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
 q('#invoiceConnectionTestBtn')?.addEventListener('click',async()=>{const box=q('#invoiceConnectionTestResult');box.innerHTML='<p>Kontrol ediliyor…</p>';try{const r=await api('/web-api/admin/invoice-integration/test');box.innerHTML=(r.checks||[]).map(c=>`<div class="self-test-row ${c.ok?'ok':'bad'}"><b>${c.ok?'✓':'✕'} ${c.name}</b><small>${c.detail}</small></div>`).join('')+`<div class="self-test-row"><small>${r.note||''}</small></div>`}catch(e){box.innerHTML=`<div class="self-test-row bad"><b>Test çalışmadı</b><small>${e.message}</small></div>`}});
 q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
   const url=String(q('#atakDmsCopyUrl')?.value||'').trim();
-  if(!url)return toast('Önce ayarları kaydedin');
-  if(!String(q('#atakDmsAllowedIps')?.value||'').trim())return toast('Önce izinli firma IP yazın; yoksa link 403 döner');
-  try{await navigator.clipboard.writeText(url);toast('geteinvoices URL kopyalandı')}
-  catch(_){q('#atakDmsCopyUrl')?.select();try{document.execCommand('copy');toast('geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}}
+  if(!url || url.indexOf('client_id=')<0 || url.indexOf('client_secret=')<0)return toast('Hazır URL tam değil, sayfayı yenileyin');
+  try{await navigator.clipboard.writeText(url);toast('Tam geteinvoices URL kopyalandı')}
+  catch(_){q('#atakDmsCopyUrl')?.select();try{document.execCommand('copy');toast('Tam geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}}
 });
 q('#atakDmsRotateBtn')?.addEventListener('click',async()=>{
   if(!confirm('Yeni client_id / client_secret üretilecek. E-fatura firmasına yeni URL vermeniz gerekir.'))return;

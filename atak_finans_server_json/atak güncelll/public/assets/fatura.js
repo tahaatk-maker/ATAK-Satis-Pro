@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v173 */
+/* ATAK_FATURA_BUILD=fix-v174 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={module:'efatura',view:'ef_out_pending',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -355,7 +355,7 @@ function fillAtakDms(s){
   if(q('#atakDmsEnabled'))q('#atakDmsEnabled').checked=d.enabled!==false;
   if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=d.includeInbox!==false;
   setVal('atakDmsAllowedIps',d.allowedIps||'');
-  setVal('atakDmsCopyUrl',d.copyUrl||d.copyUrlMasked||'');
+  setVal('atakDmsCopyUrl',d.copyUrl||'');
 }
 function atakDmsPayload(extra){
   return Object.assign({
@@ -514,14 +514,13 @@ q('#invoiceConnectionTestBtn')?.addEventListener('click',async()=>{
 });
 q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
   const url=String(q('#atakDmsCopyUrl')?.value||'').trim();
-  if(!url)return toast('Önce ayarları kaydedin');
-  if(!String(q('#atakDmsAllowedIps')?.value||'').trim())return toast('Önce izinli firma IP yazın; yoksa link 403 döner');
+  if(!url || url.indexOf('client_id=')<0 || url.indexOf('client_secret=')<0)return toast('Hazır URL tam değil, sayfayı yenileyin');
   try{
     await navigator.clipboard.writeText(url);
-    toast('geteinvoices URL kopyalandı');
+    toast('Tam geteinvoices URL kopyalandı');
   }catch(_){
     q('#atakDmsCopyUrl')?.select();
-    try{document.execCommand('copy');toast('geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}
+    try{document.execCommand('copy');toast('Tam geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}
   }
 });
 q('#atakDmsRotateBtn')?.addEventListener('click',async()=>{
