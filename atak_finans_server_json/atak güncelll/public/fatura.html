@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Faturalar · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v185"/>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v186"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
@@ -158,7 +158,7 @@
             <div class="two-col"><label>Client ID<input id="rapid360ClientId" autocomplete="off"/></label><label>Client secret<input id="rapid360Secret" type="password" autocomplete="new-password"/></label></div>
             <div class="two-col"><label>Dealer ID<input id="rapid360DealerId" placeholder="Atak bayi kodu — 21134761 değil"/></label><label>EInvoiceCode<input id="rapid360Code" placeholder="servis kodu"/></label></div>
             <div class="two-col"><label>SystemId<input id="rapid360SystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="rapid360AddReturns" type="checkbox" checked/> İadeleri de getir (addReturns)</label></div>
-            <p class="note" style="margin:8px 0 0">Rapid Aktar bu hesaptan satış çeker. Satış URL boşsa geteinvoices adresinden aday yollar denenir.</p>
+            <p class="note" style="margin:8px 0 0">Rapid Aktar Client secret kullanmaz. Rapid360 Okta Verify ile açılır; yalnız satış ürünleri okunur.</p>
             <label>Satış çekme URL (isteğe bağlı)<input id="rapid360SalesUrl" placeholder="boş = getdetailedsales / getsales adayları"/></label>
             <div class="two-col"><label>Satış mağaza kodu<input id="rapid360SalesStore" placeholder="340334"/></label><label>Şirket / cmp<input id="rapid360SalesCompany" placeholder="2521"/></label></div>
             <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
@@ -187,6 +187,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v185"></script>
+  <script src="/assets/fatura.js?v=fix-v186"></script>
 </body>
 </html>

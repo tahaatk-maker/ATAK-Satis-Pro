@@ -22,6 +22,7 @@ const rapid360 = require('./lib/rapid360-einvoice');
 const atakGetE = require('./lib/atak-geteinvoices');
 const rapidSalesXml = require('./lib/rapid360-sales-xml');
 const rapidSalesFetch = require('./lib/rapid360-sales-fetch');
+const d365Auth = require('./lib/rapid360-d365-auth');
 const personName = require('./lib/person-name');
 const customerCode = require('./lib/customer-code');
 
@@ -1899,8 +1900,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.185-atak-geteinvoices',
-  build:'fix-v185',
+  version:'6.3.186-atak-geteinvoices',
+  build:'fix-v186',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5032,6 +5033,18 @@ function takeRapidPull(token){
   }
   return row;
 }
+function saveRapidOktaTokens(s, tokens){
+  if(!tokens || !(tokens.access_token || tokens.accessToken)) return false;
+  s.invoiceIntegration=s.invoiceIntegration||{};
+  s.invoiceIntegration.rapid360=d365Auth.persistTokens(s.invoiceIntegration.rapid360||{}, tokens);
+  return true;
+}
+async function startRapidOktaChallenge(req, s){
+  return d365Auth.startDeviceLogin({
+    sessionId:req.sessionID||'',
+    rapid:(s.invoiceIntegration||{}).rapid360||{}
+  });
+}
 function parseRapid360SalesUpload(file){
   if(!file||!file.buffer)throw new Error('XML dosyası seçilmedi');
   const name=String(file.originalname||'').toLowerCase();
@@ -5321,6 +5334,22 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
       magaza,
       company
     });
+    if(out.tokens) saveRapidOktaTokens(s,out.tokens);
+    if(!out.ok && out.needsOkta){
+      const started=await startRapidOktaChallenge(req,s);
+      if(out.tokens) writeStore(s);
+      return res.status(409).json({
+        needsOkta:true,
+        error:started.message||out.error||'Okta Verify gerekli.',
+        pollId:started.pollId,
+        userCode:started.userCode,
+        verificationUri:started.verificationUri,
+        verificationUriComplete:started.verificationUriComplete,
+        expiresIn:started.expiresIn,
+        interval:started.interval,
+        tried:out.tried||[]
+      });
+    }
     if(!out.ok) return res.status(400).json({error:out.error||'Rapid360 çekilemedi',tried:out.tried||[]});
     if(!out.parsed || !out.parsed.sales.length){
       return res.status(400).json({error:emptyRapidSalesError(out.parsed||{},false),tried:out.tried||[]});
@@ -5335,7 +5364,8 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
     });
     const autoImport=body.autoImport===true||body.autoImport==='true'||body.autoImport==='1';
     if(!autoImport){
-      return res.json({...preview,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,tried:out.tried||[],store:magaza,company});
+      if(out.tokens) writeStore(s);
+      return res.json({...preview,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,tried:out.tried||[],store:magaza,company,via:out.via||''});
     }
     const dealer=pickRapidDealer(s,body.dealerId);
     if(!dealer)return res.status(400).json({error:'Satış bayisi bulunamadı (Atak Beko).'});
@@ -5343,10 +5373,46 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
     const stats=applyRapidSalesImport(s,out.parsed,{dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-pull'});
     audit(s,'Rapid360 canlı satış aktarıldı',`${stats.imported} satış`,stats);
     writeStore(s);
-    res.json({...preview,...stats,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,autoImported:true,tried:out.tried||[],store:magaza,company});
+    res.json({...preview,...stats,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,autoImported:true,tried:out.tried||[],store:magaza,company,via:out.via||''});
   }catch(e){
     res.status(400).json({error:e.message||'Rapid360 çekilemedi',tried:e.tried||[]});
   }
+});
+app.post('/web-api/admin/rapid360-okta-start',rapidSalesPerm,async(req,res)=>{
+  try{
+    const s=readStore();
+    const started=await startRapidOktaChallenge(req,s);
+    res.json({needsOkta:true,...started,okta:d365Auth.publicAuth((s.invoiceIntegration||{}).rapid360)});
+  }catch(e){
+    res.status(400).json({error:e.message||'Okta Verify başlatılamadı'});
+  }
+});
+app.post('/web-api/admin/rapid360-okta-poll',rapidSalesPerm,async(req,res)=>{
+  try{
+    const result=await d365Auth.pollDeviceLogin({
+      sessionId:req.sessionID||'',
+      pollId:(req.body||{}).pollId
+    });
+    if(result.pending) return res.json({pending:true,ok:false});
+    if(!result.ok) return res.status(400).json({error:result.error||'Okta doğrulanamadı'});
+    const s=readStore();
+    saveRapidOktaTokens(s,result.tokens);
+    writeStore(s);
+    res.json({ok:true,connected:true,account:result.tokens.account||'',okta:d365Auth.publicAuth(s.invoiceIntegration.rapid360)});
+  }catch(e){
+    res.status(400).json({error:e.message||'Okta doğrulanamadı'});
+  }
+});
+app.get('/web-api/admin/rapid360-okta-status',rapidSalesPerm,(req,res)=>{
+  const s=readStore();
+  res.json({ok:true,okta:d365Auth.publicAuth((s.invoiceIntegration||{}).rapid360)});
+});
+app.post('/web-api/admin/rapid360-okta-disconnect',rapidSalesPerm,(req,res)=>{
+  const s=readStore();
+  s.invoiceIntegration=s.invoiceIntegration||{};
+  s.invoiceIntegration.rapid360=d365Auth.clearTokens(s.invoiceIntegration.rapid360||{});
+  writeStore(s);
+  res.json({ok:true,okta:d365Auth.publicAuth(s.invoiceIntegration.rapid360)});
 });
 app.post('/web-api/admin/rapid360-sales-pull-import',rapidSalesPerm,async(req,res)=>{
   try{
@@ -5361,6 +5427,12 @@ app.post('/web-api/admin/rapid360-sales-pull-import',rapidSalesPerm,async(req,re
         magaza:body.store,
         company:body.company
       });
+      if(out.tokens){
+        const cur=readStore();
+        saveRapidOktaTokens(cur,out.tokens);
+        writeStore(cur);
+      }
+      if(!out.ok && out.needsOkta) return res.status(409).json({needsOkta:true,error:out.error||'Okta Verify gerekli.',tried:out.tried||[]});
       if(!out.ok) return res.status(400).json({error:out.error||'Rapid360 çekilemedi',tried:out.tried||[]});
       parsed=out.parsed;
     }
@@ -6204,7 +6276,10 @@ app.get('/web-api/admin/invoice-integration',requireAdminOrStaffAny(...INVOICE_C
     settings:{
       ...cfg,
       password:cfg.password?'********':'',
-      rapid360:rapid360.publicConfig(cfg.rapid360),
+      rapid360:{
+        ...rapid360.publicConfig(cfg.rapid360),
+        okta:d365Auth.publicAuth(cfg.rapid360)
+      },
       atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal,baseUrl:publicBaseUrl(req)}),
       efaturaSeries:efSeries,
       earsivSeries:eaSeries,
@@ -6260,6 +6335,21 @@ app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_m
         salesUrl:String(incoming.salesUrl!=null?incoming.salesUrl:(x.rapid360SalesUrl!=null?x.rapid360SalesUrl:prev.salesUrl||'')).trim().split('?')[0],
         salesStore:String(incoming.salesStore!=null?incoming.salesStore:(x.rapid360SalesStore!=null?x.rapid360SalesStore:prev.salesStore||'340334')).trim()||'340334',
         salesCompany:String(incoming.salesCompany!=null?incoming.salesCompany:(x.rapid360SalesCompany!=null?x.rapid360SalesCompany:prev.salesCompany||'2521')).trim()||'2521',
+        dynamicsUrl:String(incoming.dynamicsUrl!=null?incoming.dynamicsUrl:(x.rapid360DynamicsUrl!=null?x.rapid360DynamicsUrl:prev.dynamicsUrl||'')).trim(),
+        aadTenant:String(incoming.aadTenant!=null?incoming.aadTenant:(x.rapid360AadTenant!=null?x.rapid360AadTenant:prev.aadTenant||'')).trim(),
+        oauthClientId:String(incoming.oauthClientId!=null?incoming.oauthClientId:(x.rapid360OauthClientId!=null?x.rapid360OauthClientId:prev.oauthClientId||'')).trim(),
+        odataEntity:String(incoming.odataEntity!=null?incoming.odataEntity:(x.rapid360OdataEntity!=null?x.rapid360OdataEntity:prev.odataEntity||'')).trim(),
+        d365Auth:(()=>{
+          const prevAuth=prev.d365Auth&&typeof prev.d365Auth==='object'?prev.d365Auth:{};
+          const dyn=String(incoming.dynamicsUrl!=null?incoming.dynamicsUrl:(x.rapid360DynamicsUrl!=null?x.rapid360DynamicsUrl:prevAuth.dynamicsUrl||prev.dynamicsUrl||'')).trim();
+          return{
+            ...prevAuth,
+            dynamicsUrl:dyn||prevAuth.dynamicsUrl||'',
+            tenant:String(incoming.aadTenant!=null?incoming.aadTenant:(x.rapid360AadTenant!=null?x.rapid360AadTenant:prevAuth.tenant||'')).trim()||prevAuth.tenant||'',
+            oauthClientId:String(incoming.oauthClientId!=null?incoming.oauthClientId:(x.rapid360OauthClientId!=null?x.rapid360OauthClientId:prevAuth.oauthClientId||'')).trim()||prevAuth.oauthClientId||'',
+            odataEntity:String(incoming.odataEntity!=null?incoming.odataEntity:(x.rapid360OdataEntity!=null?x.rapid360OdataEntity:prevAuth.odataEntity||'')).trim()||prevAuth.odataEntity||''
+          };
+        })(),
         addReturns:(incoming.addReturns!=null?incoming.addReturns:x.rapid360AddReturns)!=null
           ? (incoming.addReturns===true||incoming.addReturns==='true'||x.rapid360AddReturns===true||x.rapid360AddReturns==='true'||x.rapid360AddReturns==='on')
           : prev.addReturns!==false

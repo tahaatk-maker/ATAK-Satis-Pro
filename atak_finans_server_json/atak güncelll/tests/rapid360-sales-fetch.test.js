@@ -101,10 +101,20 @@ async function run() {
       endDate: '2026-03-18',
     });
     assert.equal(out.ok, false);
-    assert.ok(/XML/i.test(out.error));
+    assert.ok(/XML|Okta/i.test(out.error));
   } finally {
     global.fetch = orig2;
   }
+
+  const empty = await fetchRapid360Sales({
+    store: { invoiceIntegration: { rapid360: {} } },
+    startDate: '2026-08-18',
+    endDate: '2026-08-18',
+  });
+  assert.equal(empty.ok, false);
+  assert.equal(empty.needsOkta, true);
+  assert.ok(/Okta/i.test(empty.error));
+  assert.ok(!/Servis URL, Client ID ve Client secret kaydedin/i.test(empty.error));
 
   console.log('rapid360-sales-fetch tests OK');
 }

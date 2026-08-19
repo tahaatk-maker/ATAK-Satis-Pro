@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v185" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v185" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v185" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v185" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v186" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v186" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v186" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v186" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1728,7 +1728,7 @@ Bulunamayan → Diğer.
             <div class="two-col"><label>Client ID<input id="rapid360ClientId" autocomplete="off"/></label><label>Client secret<input id="rapid360Secret" type="password" autocomplete="new-password"/></label></div>
             <div class="two-col"><label>Dealer ID<input id="rapid360DealerId" placeholder="Atak bayi kodu — 21134761 değil"/></label><label>EInvoiceCode<input id="rapid360Code" placeholder="servis kodu"/></label></div>
             <div class="two-col"><label>SystemId<input id="rapid360SystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="rapid360AddReturns" type="checkbox" checked/> İadeleri de getir (addReturns)</label></div>
-            <p class="note" style="margin:8px 0 0">Rapid Aktar, bu hesabın satış servisinden (geteinvoices değil) tarih aralığıyla çeker. Adres boşsa geteinvoices URL’sinden aday yollar denenir.</p>
+            <p class="note" style="margin:8px 0 0">Rapid Aktar Client secret kullanmaz. Rapid360 (liverapid360) Okta Verify ile açılır; yalnız satış ürünleri okunur. Aşağıdaki satış URL isteğe bağlıdır.</p>
             <label>Satış çekme URL (isteğe bağlı)<input id="rapid360SalesUrl" placeholder="boş = getdetailedsales / getsales adayları"/></label>
             <div class="two-col"><label>Satış mağaza kodu<input id="rapid360SalesStore" placeholder="340334"/></label><label>Şirket / cmp<input id="rapid360SalesCompany" placeholder="2521"/></label></div>
             <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
@@ -2806,10 +2806,12 @@ Bulunamayan → Diğer.
       <div>
         <small class="eyebrow">RAPID360 · RAPID AKTAR</small>
         <h2>Rapid Aktar</h2>
-        <p class="note">Tarih seçip <b>Rapid Aktar</b> deyin — Rapid360’dan satış XML’ini kendisi çeker ve Satış Takibi’ne basar. Dosya yüklemeniz gerekmez. Mağaza otomatik <b>340334</b>. Kasa ve stok değişmez.</p>
+        <p class="note">Tarih seçip <b>Rapid Aktar</b> deyin. Rapid360 size <b>Okta Verify</b> gönderir; onaylayınca yalnız satış ürünleri okunur ve Satış Takibi’ne basılır. Faturalar’daki Client secret gerekmez. Mağaza <b>340334</b>. Kasa ve stok değişmez.</p>
       </div>
       <button class="secondary-btn" id="rapid360SalesXmlClose" type="button">Kapat</button>
     </div>
+    <div id="rapid360OktaStatus" class="note">Rapid Aktar Okta Verify gönderir; Client secret gerekmez.</div>
+    <div id="rapid360OktaBox" class="hidden" style="margin:10px 0;padding:12px;border:1px solid #c7d2fe;border-radius:10px;background:#eef2ff"></div>
     <div class="two-col">
       <label>Başlangıç<input id="rapid360SalesStart" type="date"/></label>
       <label>Bitiş<input id="rapid360SalesEnd" type="date"/></label>
@@ -2837,6 +2839,6 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v185"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v185"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v186"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v186"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

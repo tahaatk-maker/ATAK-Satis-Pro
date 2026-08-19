@@ -2,6 +2,8 @@
 
 const rapid360 = require('./rapid360-einvoice');
 const salesXml = require('./rapid360-sales-xml');
+const d365Auth = require('./rapid360-d365-auth');
+const d365Sales = require('./rapid360-d365-sales');
 
 const DEFAULT_STORE = '340334';
 const DEFAULT_COMPANY = '2521';
@@ -208,23 +210,75 @@ async function fetchDetailedSales(rawCfg, range = {}, { fetchImpl, timeoutMs = 9
   throw err;
 }
 
+async function fetchViaOkta(raw, range, opts = {}){
+  const ensured = await d365Auth.ensureAccessToken(raw, { fetchImpl: opts.fetchImpl, env: opts.env });
+  if(!ensured.ok){
+    return { ok: false, needsOkta: true, error: 'Rapid360 için Okta Verify gerekli.', tokens: null, cfg: ensured.cfg };
+  }
+  const cfg = ensured.cfg;
+  const out = await d365Sales.fetchWithToken({
+    token: ensured.token,
+    dynamicsUrl: cfg.dynamicsUrl,
+    odataEntity: cfg.odataEntity,
+    company: range.company,
+    store: range.store,
+    startDate: range.startDate,
+    endDate: range.endDate,
+    fetchImpl: opts.fetchImpl
+  });
+  if(out.needsOkta){
+    return { ok: false, needsOkta: true, error: out.error || 'Okta Verify gerekli.', tried: out.tried || [], tokens: ensured.refreshed ? ensured.tokens : null };
+  }
+  return Object.assign({ tokens: ensured.refreshed ? ensured.tokens : null }, out);
+}
+
 async function fetchRapid360Sales(opts = {}){
   const raw = consumeFromStore(opts.store) || opts.consume || opts.cfg || {};
+  const range = {
+    startDate: opts.startDate,
+    endDate: opts.endDate,
+    store: opts.salesStore != null ? opts.salesStore : (opts.magaza != null ? opts.magaza : opts.storeId),
+    company: opts.company
+  };
   try{
-    const out = await fetchDetailedSales(raw, {
-      startDate: opts.startDate,
-      endDate: opts.endDate,
-      store: opts.salesStore != null ? opts.salesStore : (opts.magaza != null ? opts.magaza : opts.storeId),
-      company: opts.company
-    }, { fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs });
-    return {
-      ok: true,
-      parsed: out.parsed,
-      sourceUrl: out.sourceUrl || '',
-      store: out.store,
-      company: out.company,
-      tried: out.tried || []
-    };
+    const okta = await fetchViaOkta(raw, range, opts);
+    if(okta.ok){
+      return {
+        ok: true,
+        parsed: okta.parsed,
+        sourceUrl: okta.sourceUrl || '',
+        store: okta.store,
+        company: okta.company,
+        tried: okta.tried || [],
+        via: 'okta',
+        tokens: okta.tokens || null
+      };
+    }
+    const consume = Object.assign({}, rapid360.resolveConsumeConfig(raw), {
+      salesUrl: String(raw && raw.salesUrl || '').trim()
+    });
+    const muleReady = consumeReady(consume) || Boolean(consume.salesUrl);
+    if(okta.needsOkta && muleReady){
+      try{
+        const out = await fetchDetailedSales(raw, range, { fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs });
+        return {
+          ok: true,
+          parsed: out.parsed,
+          sourceUrl: out.sourceUrl || '',
+          store: out.store,
+          company: out.company,
+          tried: out.tried || [],
+          via: 'mule'
+        };
+      }catch(e){
+        if(/21134761/.test(String(e && e.message))) throw e;
+        return { ok: false, needsOkta: true, error: okta.error || e.message || 'Okta Verify gerekli.', tried: e.tried || okta.tried || [], tokens: okta.tokens || null };
+      }
+    }
+    if(okta.needsOkta){
+      return { ok: false, needsOkta: true, error: okta.error || 'Okta Verify gerekli.', tried: okta.tried || [], tokens: okta.tokens || null };
+    }
+    return { ok: false, error: okta.error || 'çekilemedi', tried: okta.tried || [], tokens: okta.tokens || null };
   }catch(e){
     if(/21134761/.test(String(e && e.message))) throw e;
     return { ok: false, error: e.message || 'çekilemedi', tried: e.tried || [] };
@@ -240,5 +294,6 @@ module.exports = {
   buildSalesQuery,
   parseSalesPayload,
   fetchDetailedSales,
+  fetchViaOkta,
   fetchRapid360Sales
 };
