@@ -59,7 +59,8 @@ function ensureConfig(raw = {}, fallback = {}){
       eInvoiceCode: String(r.eInvoiceCode || mule.eInvoiceCode).trim() || mule.eInvoiceCode,
       systemId: String(r.systemId || mule.systemId).trim() || '1',
       bayi: String(r.bayi || DEFAULTS.bayi).trim() || DEFAULTS.bayi,
-      subeKodu: String(r.subeKodu || DEFAULTS.subeKodu).trim() || DEFAULTS.subeKodu,
+      subeKodu: String(r.subeKodu || mule.subeKodu || DEFAULTS.subeKodu).trim() || DEFAULTS.subeKodu,
+      allowedIps: parseIpList(r.allowedIps),
       clientId: String(r.clientId || mule.clientId).trim(),
       clientSecret: String(r.clientSecret || mule.clientSecret).trim(),
       rotatedAt: r.rotatedAt || (missing ? new Date().toISOString() : '')
@@ -87,6 +88,47 @@ function safeEq(a, b){
   return crypto.timingSafeEqual(x, y);
 }
 
+function parseIpList(raw){
+  if(Array.isArray(raw)) return raw.map(x => String(x || '').trim()).filter(Boolean);
+  return String(raw || '').split(/[,;\n\r]+/).map(x => x.trim()).filter(Boolean);
+}
+
+function ipv4ToInt(ip){
+  const p = String(ip || '').split('.').map(n => Number(n));
+  if(p.length !== 4 || p.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+  return ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3];
+}
+
+function ipMatchesEntry(needle, allowed){
+  const a = String(allowed || '').trim();
+  const n = String(needle || '').trim();
+  if(!a || !n) return false;
+  if(a === '*') return true;
+  if(a === n) return true;
+  const cidr = a.match(/^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/);
+  if(!cidr) return false;
+  const bits = Number(cidr[2]);
+  if(!Number.isInteger(bits) || bits < 0 || bits > 32) return false;
+  const base = ipv4ToInt(cidr[1]);
+  const ip = ipv4ToInt(n);
+  if(base == null || ip == null) return false;
+  const mask = bits === 0 ? 0 : ((0xFFFFFFFF << (32 - bits)) >>> 0);
+  return (base & mask) === (ip & mask);
+}
+
+function dmsAllowlist(cfg, env = process.env){
+  const c = ensureConfig(cfg).cfg;
+  return [...parseIpList(c.allowedIps), ...parseIpList(env && env.ATAK_DMS_ALLOWED_IPS)];
+}
+
+function ipAllowedForDms(cfg, ip, env = process.env){
+  const list = dmsAllowlist(cfg, env);
+  if(!list.length) return { ok: false, locked: true, reason: 'allowlist-required' };
+  const needle = String(ip || '').replace(/^::ffff:/, '').trim();
+  if(!needle) return { ok: false, locked: true, reason: 'no-ip' };
+  return { ok: list.some(a => ipMatchesEntry(needle, a)), locked: true };
+}
+
 function authenticate(cfg, query){
   const c = ensureConfig(cfg).cfg;
   const clientId = qpick(query, ['client_id', 'clientId', 'ClientId']);
@@ -94,23 +136,20 @@ function authenticate(cfg, query){
   const dealerId = qpick(query, ['DealerID', 'dealerId', 'DealerId']);
   const eInvoiceCode = qpick(query, ['EInvoiceCode', 'eInvoiceCode']);
   const systemId = qpick(query, ['SystemId', 'systemId']);
-  if(!clientId || !clientSecret || !eInvoiceCode){
+  if(!clientId || !clientSecret || !eInvoiceCode || !dealerId){
     return { ok: false, status: 401, message: 'Unauthorized' };
   }
   if(!safeEq(clientId, c.clientId) || !safeEq(clientSecret, c.clientSecret)){
     return { ok: false, status: 401, message: 'Unauthorized' };
   }
-  if(!safeEq(eInvoiceCode, c.eInvoiceCode)){
-    return { ok: false, status: 401, message: 'Invalid EInvoiceCode' };
-  }
-  if(dealerId && !safeEq(dealerId, c.dealerId)){
-    return { ok: false, status: 401, message: 'Invalid DealerID' };
+  if(!safeEq(eInvoiceCode, c.eInvoiceCode) || !safeEq(dealerId, c.dealerId)){
+    return { ok: false, status: 401, message: 'Unauthorized' };
   }
   if(systemId && !safeEq(systemId, c.systemId)){
-    return { ok: false, status: 401, message: 'Invalid SystemId' };
+    return { ok: false, status: 401, message: 'Unauthorized' };
   }
   if(!c.enabled){
-    return { ok: false, status: 403, message: 'Service disabled' };
+    return { ok: false, status: 403, message: 'Unauthorized' };
   }
   return { ok: true, cfg: c };
 }
@@ -458,9 +497,11 @@ function buildCopyUrl(cfg, { baseUrl, startDate, endDate, mask } = {}){
   return `${origin}${PATH}?${q.toString()}`;
 }
 
-function publicConfig(cfg, { reveal, baseUrl } = {}){
+function publicConfig(cfg, { reveal, baseUrl, env } = {}){
   const c = ensureConfig(cfg).cfg;
   const r = cfg && typeof cfg === 'object' ? cfg : {};
+  const list = dmsAllowlist(c, env || process.env);
+  const ipLocked = list.length > 0 && !list.includes('*');
   return {
     enabled: c.enabled,
     includeInbox: c.includeInbox,
@@ -468,6 +509,8 @@ function publicConfig(cfg, { reveal, baseUrl } = {}){
     eInvoiceCode: c.eInvoiceCode,
     bayi: c.bayi,
     subeKodu: c.subeKodu,
+    allowedIps: Array.isArray(c.allowedIps) ? c.allowedIps.join(', ') : '',
+    ipLocked,
     systemId: c.systemId,
     clientId: c.clientId,
     clientSecret: c.clientSecret ? '********' : '',
@@ -476,7 +519,7 @@ function publicConfig(cfg, { reveal, baseUrl } = {}){
     copyUrlMasked: buildCopyUrl(c, { baseUrl, mask: true }),
     copyUrl: reveal ? buildCopyUrl(c, { baseUrl, mask: false }) : '',
     rotatedAt: r.rotatedAt || c.rotatedAt || '',
-    ready: Boolean(c.clientId && c.clientSecret && c.dealerId && c.eInvoiceCode)
+    ready: Boolean(c.clientId && c.clientSecret && c.dealerId && c.eInvoiceCode && ipLocked)
   };
 }
 
@@ -502,6 +545,7 @@ function mergeIncoming(prev, incoming, { rotate } = {}){
     systemId: String(x.systemId != null ? x.systemId : base.systemId).trim() || '1',
     bayi: String(x.bayi != null ? x.bayi : base.bayi).trim() || DEFAULTS.bayi,
     subeKodu: String(x.subeKodu != null ? x.subeKodu : base.subeKodu).trim() || DEFAULTS.subeKodu,
+    allowedIps: x.allowedIps != null ? parseIpList(x.allowedIps) : (base.allowedIps || []),
     clientId,
     clientSecret,
     rotatedAt
@@ -517,6 +561,10 @@ module.exports = {
   generateClientSecret,
   ensureConfig,
   authenticate,
+  parseIpList,
+  ipMatchesEntry,
+  dmsAllowlist,
+  ipAllowedForDms,
   parseRange,
   ymd,
   inDateRange,

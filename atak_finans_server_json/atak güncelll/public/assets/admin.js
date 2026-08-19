@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v172 */
+/* ATAK_ADMIN_BUILD=fix-v173 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4702,6 +4702,7 @@ async function loadInvoiceIntegration(){
   if(q('#atakDmsSystemId'))q('#atakDmsSystemId').value=dms.systemId||'1';
   if(q('#atakDmsEnabled'))q('#atakDmsEnabled').checked=dms.enabled!==false;
   if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=dms.includeInbox!==false;
+  if(q('#atakDmsAllowedIps'))q('#atakDmsAllowedIps').value=dms.allowedIps||'';
   if(q('#atakDmsCopyUrl'))q('#atakDmsCopyUrl').value=dms.copyUrl||dms.copyUrlMasked||'';
   refreshInvoiceSeriesPreview();
  }catch(e){toast(e.message)}
@@ -4744,7 +4745,8 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       atakDmsCode:q('#atakDmsCode')?.value||'',
       atakDmsSystemId:q('#atakDmsSystemId')?.value||'1',
       atakDmsClientId:q('#atakDmsClientId')?.value||'',
-      atakDmsSecret:q('#atakDmsSecret')?.value||''
+      atakDmsSecret:q('#atakDmsSecret')?.value||'',
+      atakDmsAllowedIps:q('#atakDmsAllowedIps')?.value||''
     })});
     st.textContent='QNB ayarları kaydedildi · e-Fatura ATK / e-Arşiv ATA.';
     st.className='form-status success';
@@ -4756,6 +4758,7 @@ q('#invoiceConnectionTestBtn')?.addEventListener('click',async()=>{const box=q('
 q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
   const url=String(q('#atakDmsCopyUrl')?.value||'').trim();
   if(!url)return toast('Önce ayarları kaydedin');
+  if(!String(q('#atakDmsAllowedIps')?.value||'').trim())return toast('Önce izinli firma IP yazın; yoksa link 403 döner');
   try{await navigator.clipboard.writeText(url);toast('geteinvoices URL kopyalandı')}
   catch(_){q('#atakDmsCopyUrl')?.select();try{document.execCommand('copy');toast('geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}}
 });

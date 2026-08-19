@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v172 */
+/* ATAK_FATURA_BUILD=fix-v173 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={module:'efatura',view:'ef_out_pending',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -354,6 +354,7 @@ function fillAtakDms(s){
   setVal('atakDmsSystemId',d.systemId||'1');
   if(q('#atakDmsEnabled'))q('#atakDmsEnabled').checked=d.enabled!==false;
   if(q('#atakDmsIncludeInbox'))q('#atakDmsIncludeInbox').checked=d.includeInbox!==false;
+  setVal('atakDmsAllowedIps',d.allowedIps||'');
   setVal('atakDmsCopyUrl',d.copyUrl||d.copyUrlMasked||'');
 }
 function atakDmsPayload(extra){
@@ -364,7 +365,8 @@ function atakDmsPayload(extra){
     atakDmsCode:q('#atakDmsCode')?.value||'',
     atakDmsSystemId:q('#atakDmsSystemId')?.value||'1',
     atakDmsClientId:q('#atakDmsClientId')?.value||'',
-    atakDmsSecret:q('#atakDmsSecret')?.value||''
+    atakDmsSecret:q('#atakDmsSecret')?.value||'',
+    atakDmsAllowedIps:q('#atakDmsAllowedIps')?.value||''
   },extra||{});
 }
 async function loadInvoiceIntegration(){
@@ -513,6 +515,7 @@ q('#invoiceConnectionTestBtn')?.addEventListener('click',async()=>{
 q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
   const url=String(q('#atakDmsCopyUrl')?.value||'').trim();
   if(!url)return toast('Önce ayarları kaydedin');
+  if(!String(q('#atakDmsAllowedIps')?.value||'').trim())return toast('Önce izinli firma IP yazın; yoksa link 403 döner');
   try{
     await navigator.clipboard.writeText(url);
     toast('geteinvoices URL kopyalandı');

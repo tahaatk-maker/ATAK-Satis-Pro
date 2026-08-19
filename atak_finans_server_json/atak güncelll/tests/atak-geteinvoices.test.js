@@ -18,8 +18,21 @@ const creds = { clientId: muleQuery.client_id, clientSecret: muleQuery.client_se
 assert(atak.PATH === '/exp/dms/dms/geteinvoices', 'path');
 assert(atak.authenticate({}, muleQuery).ok === true, 'mule auth');
 assert(atak.authenticate({}, { ...muleQuery, EInvoiceCode: '' }).ok === false, 'servis kodu zorunlu');
+assert(atak.authenticate({}, { ...muleQuery, DealerID: '' }).ok === false, 'DealerID zorunlu');
+assert(atak.authenticate({}, { ...muleQuery, DealerID: '999' }).ok === false, 'DealerID yanlış');
 assert(atak.authenticate({}, { ...muleQuery, client_id: '' }).ok === false, 'client_id zorunlu');
 assert(atak.authenticate({}, { ...muleQuery, client_secret: 'wrong' }).ok === false, 'secret');
+assert(atak.authenticate({}, { ...muleQuery, client_secret: 'wrong' }).message === 'Unauthorized', 'hata sızmaz');
+assert(atak.ipAllowedForDms({}, '1.2.3.4', {}).ok === false, 'boş IP listesi kapalı');
+assert(atak.ipAllowedForDms({ allowedIps: '10.1.1.8' }, '10.1.1.8', {}).ok === true, 'izinli IP');
+assert(atak.ipAllowedForDms({ allowedIps: '10.1.1.8' }, '9.9.9.9', {}).ok === false, 'yabancı IP');
+assert(atak.ipAllowedForDms({ allowedIps: '10.1.1.0/24' }, '10.1.1.50', {}).ok === true, 'CIDR izin');
+assert(atak.ipAllowedForDms({ allowedIps: '10.1.1.0/24' }, '10.1.2.50', {}).ok === false, 'CIDR red');
+assert(atak.ipAllowedForDms({}, '8.8.8.8', { ATAK_DMS_ALLOWED_IPS: '8.8.8.8' }).ok === true, 'env IP');
+assert(atak.ipAllowedForDms({ allowedIps: '*' }, '9.9.9.9', {}).ok === true, 'yıldız açık');
+assert(atak.publicConfig({}, { env: {} }).ipLocked === false, 'IP yoksa kilit yok');
+assert(atak.publicConfig({ allowedIps: '1.1.1.1' }, { env: {} }).ipLocked === true, 'IP varsa kilit');
+assert(atak.publicConfig({ allowedIps: '1.1.1.1' }, { env: {} }).ready === true, 'IP + kimlik ready');
 
 const seeded = atak.ensureConfig({});
 assert(seeded.cfg.clientId === muleQuery.client_id, 'default client_id');

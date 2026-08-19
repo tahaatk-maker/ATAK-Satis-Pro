@@ -117,7 +117,24 @@ function loginRateLimited(key=''){
   loginFailMap.set(k,row);
   return row.n>10;
 }
+function loginBlocked(key=''){
+  const k=String(key||'unknown');
+  const row=loginFailMap.get(k);
+  if(!row)return false;
+  if(Date.now()-row.t>15*60*1000){ loginFailMap.delete(k); return false; }
+  return row.n>10;
+}
 function clearLoginFails(key=''){ loginFailMap.delete(String(key||'unknown')); }
+const dmsOkMap=new Map();
+function dmsTooMany(ip=''){
+  const k=String(ip||'unknown');
+  const now=Date.now();
+  let row=dmsOkMap.get(k);
+  if(!row||now-row.t>60*1000)row={n:0,t:now};
+  row.n+=1;
+  dmsOkMap.set(k,row);
+  return row.n>120;
+}
 
 /** KDV: beyaz eşya %20; X30 TR / yazar kasa %10; İstikbal mobilya %10 */
 function resolveVatRate(p={}){
@@ -1849,8 +1866,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.172-atak-geteinvoices',
-  build:'fix-v172',
+  version:'6.3.173-atak-geteinvoices',
+  build:'fix-v173',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -1860,17 +1877,35 @@ app.get('/health',(req,res)=>res.json({
   time:new Date().toISOString()
 }));
 function handleAtakGetEInvoices(req,res){
+  const ip=clientIp(req);
+  const failKey=`dms:${ip}`;
+  if(loginBlocked(failKey)){
+    const fail=atakGetE.failBody('Unauthorized',429);
+    return res.status(429).json(fail.body);
+  }
+  if(dmsTooMany(ip)){
+    const fail=atakGetE.failBody('Unauthorized',429);
+    return res.status(429).json(fail.body);
+  }
   try{
     const s=readStore();
     const cfg=atakGetE.ensureConfig((s.invoiceIntegration||{}).atakDms,(s.invoiceIntegration||{}).rapid360).cfg;
+    const ipGate=atakGetE.ipAllowedForDms(cfg,ip);
+    if(!ipGate.ok){
+      loginRateLimited(failKey);
+      const fail=atakGetE.failBody('Unauthorized',403);
+      return res.status(403).json(fail.body);
+    }
     const auth=atakGetE.authenticate(cfg,req.query||{});
     if(!auth.ok){
-      const fail=atakGetE.failBody(auth.message,auth.status);
+      loginRateLimited(failKey);
+      const fail=atakGetE.failBody('Unauthorized',auth.status);
       return res.status(fail.status).json(fail.body);
     }
+    clearLoginFails(failKey);
     return res.json(atakGetE.buildResponse(s,auth.cfg,req.query||{}));
   }catch(e){
-    const fail=atakGetE.failBody(e.message||'Error',500);
+    const fail=atakGetE.failBody('Unauthorized',500);
     return res.status(fail.status).json(fail.body);
   }
 }
@@ -5813,7 +5848,8 @@ app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_m
         eInvoiceCode:incoming.eInvoiceCode!=null?incoming.eInvoiceCode:x.atakDmsCode,
         systemId:incoming.systemId!=null?incoming.systemId:x.atakDmsSystemId,
         clientId:incoming.clientId!=null?incoming.clientId:x.atakDmsClientId,
-        clientSecret:incoming.clientSecret!=null?incoming.clientSecret:x.atakDmsSecret
+        clientSecret:incoming.clientSecret!=null?incoming.clientSecret:x.atakDmsSecret,
+        allowedIps:incoming.allowedIps!=null?incoming.allowedIps:x.atakDmsAllowedIps
       },{rotate});
     })()
   };
@@ -5831,7 +5867,7 @@ app.post('/web-api/admin/invoice-integration/test',requireAdminOrStaffAny(...INV
   const s=readStore(),c=s.invoiceIntegration||{};
   const checks=qnbSolist.readinessChecks(c);
   const dms=atakGetE.publicConfig(c.atakDms,{reveal:false,baseUrl:publicBaseUrl(req)});
-  checks.push({name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} hazır (DealerID ${dms.dealerId})`:'Anahtar üretilemedi'});
+  checks.push({name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} hazır (DealerID ${dms.dealerId}, IP kilitli)`:(dms.ipLocked?'Anahtar üretilemedi':'İzinli firma IP yazın — boşsa link 403')});
   const ep=qnbSolist.defaultEndpoints(c.environment||'test');
   res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,endpoints:ep,atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Dış servise belge göndermez. QNB Solist WSDL/kullanıcı gelince SOAP gönderim açılır. Atak geteinvoices e-fatura firmasının çağıracağı yerel uçtur.'});
 });
