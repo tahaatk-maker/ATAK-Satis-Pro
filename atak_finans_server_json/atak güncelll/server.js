@@ -17,6 +17,7 @@ const invoicePrint = require('./lib/invoice-print');
 const branchLock = require('./lib/branch-lock');
 const customerComms = require('./lib/customer-comms');
 const salaryProrate = require('./lib/salary-prorate');
+const autoBackupLib = require('./lib/auto-backup');
 
 const app = express();
 const ROOT = __dirname;
@@ -42,10 +43,18 @@ loadEnvFile();
 const PORT = Number(process.env.PORT || 3100);
 const STORE_FILE = 'store.json';
 const STORE_PATH = path.join(ROOT, 'data', STORE_FILE);
+const BACKUP_DIR = path.join(ROOT, 'data', 'backups');
+const autoBackup = autoBackupLib.create({
+  storePath: STORE_PATH,
+  backupDir: BACKUP_DIR
+});
 const STORE_SEARCH_DIRS = Array.from(new Set([
   path.join(ROOT, 'data'),
+  BACKUP_DIR,
   '/root/atak-v10/data',
+  '/root/atak-v10/data/backups',
   '/root/atakhome-platform/data',
+  '/root/atakhome-platform/data/backups',
 ]));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -335,7 +344,7 @@ function listStoreCandidates(){
     let names=[];
     try{ names=fs.readdirSync(dir); }catch{ continue; }
     for(const name of names){
-      if(name===STORE_FILE || name.startsWith(STORE_FILE+'.bak-')) out.push(path.join(dir,name));
+      if(name===STORE_FILE || name.startsWith(STORE_FILE+'.bak-') || /^store-\d{8}-\d{6}-/.test(name)) out.push(path.join(dir,name));
     }
   }
   return out;
@@ -1812,10 +1821,11 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.165-kasa-eksi',
-  build:'fix-v165',
+  version:'6.3.166-yedek',
+  build:'fix-v166',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
+  backup:autoBackup.status(),
   mfa:mfaEnabled(),
   mfaTrustHours:Math.round(mfaTrustMs()/3600000),
   company:ATAK_COMPANY.legalName,
@@ -2741,11 +2751,32 @@ app.delete('/web-api/admin/announcement/:id',requireAdmin,(req,res)=>{
   const s=readStore();s.announcements=s.announcements.filter(x=>x.id!==req.params.id);s.announcementReads=s.announcementReads.filter(x=>x.announcementId!==req.params.id);writeStore(s);res.json({ok:true});
 });
 app.get('/web-api/admin/backup',requireAdmin,(req,res)=>{
+  if(storeFileSize(STORE_PATH)<200)return res.status(404).json({error:'store.json yok'});
   const raw=fs.readFileSync(STORE_PATH);
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
   res.setHeader('Content-Type','application/json');
-  res.setHeader('Content-Disposition',`attachment; filename="atakhome-foundation-backup-${stamp}.json"`);
+  res.setHeader('Content-Disposition',`attachment; filename="atakhome-yedek-canli-${stamp}.json"`);
   res.send(raw);
+});
+app.get('/web-api/admin/backups',requireAdmin,(req,res)=>{
+  res.json({ok:true,...autoBackup.status(),items:autoBackup.list()});
+});
+app.post('/web-api/admin/backups',requireAdmin,(req,res)=>{
+  const row=autoBackup.take({reason:'manual',force:true});
+  if(!row.ok)return res.status(400).json({error:row.error||'Yedek alınamadı'});
+  try{
+    const s=readStore();
+    audit(s,'Elle yedek alındı',row.file,{size:row.size});
+    writeStore(s);
+  }catch(_){}
+  res.json({ok:true,...row,items:autoBackup.list(),status:autoBackup.status()});
+});
+app.get('/web-api/admin/backups/:file',requireAdmin,(req,res)=>{
+  const full=autoBackup.filePath(req.params.file);
+  if(!full)return res.status(404).json({error:'Yedek bulunamadı'});
+  res.setHeader('Content-Type','application/json');
+  res.setHeader('Content-Disposition',`attachment; filename="${path.basename(full)}"`);
+  res.sendFile(full);
 });
 
 
@@ -7659,4 +7690,5 @@ ensureStore(readStore()); writeStore(readStore());
 app.listen(PORT,'127.0.0.1',()=>{
   console.log(`Atak Home ERP V2 http://127.0.0.1:${PORT}`);
   console.log(`[SECURITY] ownerOnly=${ownerOnlyEnabled()} owners=${ownerUsernames().join(',')} ipLock=${allowedIps().length?allowedIps().join(','):'off'} mfa=${mfaEnabled()} trustH=${Math.round(mfaTrustMs()/3600000)}`);
+  try{autoBackup.start()}catch(e){console.error('[backup] start',e.message||e)}
 });

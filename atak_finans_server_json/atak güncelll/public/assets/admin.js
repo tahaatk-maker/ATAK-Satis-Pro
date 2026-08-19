@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v165 */
+/* ATAK_ADMIN_BUILD=fix-v166 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1223,7 +1223,40 @@ qa('#appView form').forEach(form=>form.addEventListener('submit',e=>{
 },true));
 
 let foundationData=null;
-async function loadFoundation(){foundationData=await api('/web-api/admin/foundation');renderFoundation()}
+async function loadFoundation(){
+  foundationData=await api('/web-api/admin/foundation');
+  renderFoundation();
+  loadBackups().catch(()=>{});
+}
+function backupReasonLabel(r){
+  return ({daily:'Gece 03:00',hourly:'Otomatik (6 saat)',startup:'Sunucu açılışı',manual:'Sizin aldığınız',auto:'Otomatik'}[r]||r||'—');
+}
+async function loadBackups(){
+  if(!q('#backupRows'))return;
+  const d=await api('/web-api/admin/backups');
+  const last=d.lastAt?new Date(d.lastAt).toLocaleString('tr-TR'):'henüz yok';
+  if(q('#backupStatus'))q('#backupStatus').textContent=`Son yedek: ${last} · ${d.count||0} kopya · ${d.keepDays||14} gün saklanır`;
+  const rows=d.items||[];
+  q('#backupRows').innerHTML=rows.length
+    ?rows.map(x=>`<tr>
+        <td>${x.at?new Date(x.at).toLocaleString('tr-TR'):x.stamp||'—'}<br><small>${x.file||''}</small></td>
+        <td>${backupReasonLabel(x.reason)}</td>
+        <td>${x.sizeLabel||''}</td>
+        <td><a class="secondary-btn" href="/web-api/admin/backups/${encodeURIComponent(x.file)}">İndir</a></td>
+      </tr>`).join('')
+    :'<tr><td colspan="4">Henüz sunucu yedeği yok. Bir kez <b>Şimdi yedek al</b> deyin; bundan sonra otomatik devam eder.</td></tr>';
+}
+q('#backupNowBtn')?.addEventListener('click',async()=>{
+  const btn=q('#backupNowBtn');
+  if(btn)btn.disabled=true;
+  try{
+    const r=await api('/web-api/admin/backups',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    toast('Yedek alındı: '+(r.file||''));
+    await loadBackups();
+    if(r.file)window.location.href='/web-api/admin/backups/'+encodeURIComponent(r.file);
+  }catch(e){toast(e.message||'Yedek alınamadı')}
+  if(btn)btn.disabled=false;
+});
 function renderFoundation(){
   if(!foundationData||!q('#foundationSummary'))return;
   const f=foundationData,s=f.summary;

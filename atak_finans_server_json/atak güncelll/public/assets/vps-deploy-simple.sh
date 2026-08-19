@@ -7,8 +7,8 @@ die(){ log "FAIL: $*"; exit 1; }
 
 log "=== ATAK DEPLOY ==="
 BRANCH="cursor/fatura-ayri-sekme-474e"
-EXPECT_V="6.3.165-kasa-eksi"
-EXPECT_B="fix-v165"
+EXPECT_V="6.3.166-yedek"
+EXPECT_B="fix-v166"
 APP="${APP_DIR:-/root/atak-v10}"
 [ -d /root/atakhome-platform ] && [ ! -f "$APP/server.js" ] && APP=/root/atakhome-platform
 
@@ -120,7 +120,7 @@ recover_store(){
   fi
   local best="" bestsz=0 f sz
   shopt -s nullglob
-  for f in /root/atak-v10/data/store.json /root/atakhome-platform/data/store.json /root/atak-v10/data/store.json.bak-* /root/atakhome-platform/data/store.json.bak-* "$1/data/store.json.bak-"*; do
+  for f in /root/atak-v10/data/store.json /root/atakhome-platform/data/store.json /root/atak-v10/data/store.json.bak-* /root/atakhome-platform/data/store.json.bak-* /root/atak-v10/data/backups/store-*.json /root/atakhome-platform/data/backups/store-*.json "$1/data/backups/store-"*.json "$1/data/store.json.bak-"*; do
     [ -f "$f" ] || continue
     sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
     [ "${sz:-0}" -ge 200 ] || continue

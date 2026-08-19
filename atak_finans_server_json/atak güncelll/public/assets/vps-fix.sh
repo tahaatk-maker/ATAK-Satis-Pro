@@ -1,8 +1,8 @@
 # ATAK VPS kesin deploy (fix-v89) — health 6.3.90-mobilya-alis-v2 olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.165-kasa-eksi
-EXPECT_BUILD=fix-v165
+EXPECT_HEALTH=6.3.166-yedek
+EXPECT_BUILD=fix-v166
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -94,6 +94,7 @@ check "kokpit api" grep -q 'dashboard-cockpit' "$SRC/server.js"
 check "kiosk personel kartlari" grep -q 'modules kiosk' "$SRC/public/personel.html"
 check "personel girisi .env son deger" grep -q "forceKeys" "$SRC/server.js"
 check "store.json yedek kurtarma" grep -q "recoverStoreFile" "$SRC/server.js"
+check "otomatik yedek" grep -q "auto-backup" "$SRC/server.js"
 check "microsip ara sip-call.js" test -f "$SRC/public/assets/sip-call.js"
 check "admin microsip" grep -q "sip-call.js" "$SRC/public/admin.html"
 check "personel microsip" grep -q "sip-call.js" "$SRC/public/personel.html"
@@ -178,6 +179,9 @@ recover_store_file(){
     /root/atakhome-platform/data/store.json \
     /root/atak-v10/data/store.json.bak-* \
     /root/atakhome-platform/data/store.json.bak-* \
+    /root/atak-v10/data/backups/store-*.json \
+    /root/atakhome-platform/data/backups/store-*.json \
+    "$dest_dir/data/backups/store-"*.json \
     "$dest_dir/data/store.json.bak-"*
   do
     [ -f "$f" ] || continue

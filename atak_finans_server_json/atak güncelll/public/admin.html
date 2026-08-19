@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v165" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v165" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v165" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v165" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v166" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v166" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v166" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v166" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1328,7 +1328,22 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 </section>
 <section class="tab" id="foundation">
-<div class="foundation-head panel"><div><small class="eyebrow">V3.0 FOUNDATION</small><h2>Mağaza Operasyon Merkezi</h2><p class="note">Mağaza, depo, personel, ciro, duyuru ve yönetici yedeği tek ekranda.</p></div><a class="backup-btn" href="/web-api/admin/backup">💾 Günlük Yedeği İndir</a></div>
+<div class="foundation-head panel"><div><small class="eyebrow">V3.0 FOUNDATION</small><h2>Mağaza Operasyon Merkezi</h2><p class="note">Mağaza, depo, personel, ciro, duyuru ve yedek tek ekranda. Sunucu kendisi yedekler; siz de indirebilirsiniz.</p></div>
+  <div class="backup-head-actions">
+    <a class="backup-btn" href="/web-api/admin/backup">💾 Canlı yedeği indir</a>
+    <button class="secondary-btn" id="backupNowBtn" type="button">Şimdi yedek al</button>
+  </div>
+</div>
+<div class="panel" id="backupPanel">
+  <div class="panel-head"><h2>Yedekler</h2><span id="backupStatus">Otomatik: her 6 saatte bir + her gece 03:00 · 14 gün saklanır</span></div>
+  <p class="note">Otomatik kopyalar sunucuda durur. Aşağıdan eski bir tarihi indirin veya <b>Şimdi yedek al</b> ile yeni kopya oluşturun.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tarih</th><th>Tür</th><th>Boyut</th><th></th></tr></thead>
+      <tbody id="backupRows"></tbody>
+    </table>
+  </div>
+</div>
 <div class="foundation-summary" id="foundationSummary"></div>
 
 <nav class="fnd-tabs" id="foundationTabs" aria-label="Foundation bölümleri">
@@ -2761,6 +2776,6 @@ Bulunamayan → Diğer.
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v165"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v165"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v166"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v166"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
