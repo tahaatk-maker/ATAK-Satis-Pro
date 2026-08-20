@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v207" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v207" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v207" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v207" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v208" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v208" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v208" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v208" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1732,6 +1732,8 @@ Bulunamayan → Diğer.
             <div class="two-col"><label>SystemId<input id="rapid360SystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="rapid360AddReturns" type="checkbox" checked/> İadeleri de getir (addReturns)</label></div>
             <p class="note" style="margin:8px 0 0">Rapid Aktar Rapid360’ı açar ve satışları okur. Kod yazılmaz. Microsoft hata sayfası açılmaz.</p>
             <label>Satış çekme URL (isteğe bağlı)<input id="rapid360SalesUrl" placeholder="boş = getdetailedsales / getsales adayları"/></label>
+            <div class="two-col"><label>Okta kullanıcı (robot girişi)<input id="rapid360OktaUser" placeholder="3403343@arcelik.com" autocomplete="off"/></label><label>Okta şifre<input id="rapid360OktaPass" type="password" autocomplete="new-password"/></label></div>
+            <p class="note" style="margin:4px 0 0">Robot bu hesapla Rapid360’a girer. Siz yalnız telefonda Okta bildirimini onaylarsınız; sonraki çekimler otomatik olur.</p>
             <div class="two-col"><label>Satış mağaza kodu<input id="rapid360SalesStore" placeholder="340334"/></label><label>Şirket / cmp<input id="rapid360SalesCompany" placeholder="2521"/></label></div>
             <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
             <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Atak geteinvoices</h2>
@@ -2874,6 +2876,6 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v207"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v207"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v208"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v208"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

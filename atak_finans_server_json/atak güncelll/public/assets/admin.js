@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v207 */
+/* ATAK_ADMIN_BUILD=fix-v208 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4815,6 +4815,8 @@ async function loadInvoiceIntegration(){
   if(q('#rapid360SystemId'))q('#rapid360SystemId').value=rz.systemId||'1';
   if(q('#rapid360AddReturns'))q('#rapid360AddReturns').checked=rz.addReturns!==false;
   if(q('#rapid360SalesUrl'))q('#rapid360SalesUrl').value=rz.salesUrl||'';
+  if(q('#rapid360OktaUser'))q('#rapid360OktaUser').value=rz.oktaUser||'';
+  if(q('#rapid360OktaPass'))q('#rapid360OktaPass').value=rz.oktaPassword||'';
   if(q('#rapid360SalesStore'))q('#rapid360SalesStore').value=rz.salesStore||'340334';
   if(q('#rapid360SalesCompany'))q('#rapid360SalesCompany').value=rz.salesCompany||'2521';
   const dms=s.atakDms||{};
@@ -4863,6 +4865,8 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       rapid360SystemId:q('#rapid360SystemId')?.value||'1',
       rapid360AddReturns:!!q('#rapid360AddReturns')?.checked,
       rapid360SalesUrl:q('#rapid360SalesUrl')?.value||'',
+      rapid360OktaUser:q('#rapid360OktaUser')?.value||'',
+      rapid360OktaPass:q('#rapid360OktaPass')?.value||'',
       rapid360SalesStore:q('#rapid360SalesStore')?.value||'',
       rapid360SalesCompany:q('#rapid360SalesCompany')?.value||'2521',
       atakDmsEnabled:!!q('#atakDmsEnabled')?.checked,
@@ -6486,7 +6490,7 @@ async function autoPullRapid360Sales(){
   const st=q('#rapid360SalesXmlStatus');
   fillRapidAktarDefaults();
   rapid360PullToken='';
-  if(st){st.textContent='Satışlar arka planda okunuyor (XML ile aynı veri)…';st.className='form-status'}
+  if(st){st.textContent='Satışlar arka planda okunuyor…';st.className='form-status'}
   q('#rapid360SalesXmlImportBtn')&&(q('#rapid360SalesXmlImportBtn').disabled=true);
   q('#rapid360SalesPullBtn')&&(q('#rapid360SalesPullBtn').disabled=true);
   try{
@@ -6496,6 +6500,27 @@ async function autoPullRapid360Sales(){
     }catch(e){
       if(!(e.status===409 && e.payload && e.payload.needsOkta) && e.status!==400) throw e;
     }
+    let robot=null;
+    try{
+      robot=await api('/web-api/admin/rapid360-robot-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
+    }catch(e){
+      robot=null;
+      if(st&&e.message){st.textContent=e.message;st.className='form-status'}
+    }
+    let lastErr='';
+    if(robot&&robot.jobId){
+      if(st){st.textContent=robot.message||'Robot Rapid360’a bağlanıyor…';st.className='form-status'}
+      const rDeadline=Date.now()+240000;
+      while(Date.now()<rDeadline){
+        await sleep(3000);
+        try{
+          const jr=await api('/web-api/admin/rapid360-robot-poll/'+encodeURIComponent(robot.jobId));
+          if(jr.pending){if(st){st.textContent=jr.message||'Robot çalışıyor…';st.className='form-status'}continue}
+          return applyRapidPullResult(jr, st);
+        }catch(e){lastErr=e.message||'Robot hatası';break}
+      }
+      if(st&&lastErr){st.textContent=lastErr;st.className='form-status'}
+    }
     let bridge=null;
     try{
       bridge=await api('/web-api/admin/rapid360-bridge-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
@@ -6503,7 +6528,6 @@ async function autoPullRapid360Sales(){
     showRapidBridgeBox(bridge||{});
     openRapidOktaPopup((bridge&&bridge.loginUrl)||rapid360ReportUrl());
     const deadline=Date.now()+180000;
-    let lastErr='';
     while(Date.now()<deadline){
       try{
         const d=await pullRapid360Live();

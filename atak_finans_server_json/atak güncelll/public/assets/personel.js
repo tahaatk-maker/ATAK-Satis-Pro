@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v207 */
+/* ATAK_PERSONEL_BUILD=fix-v208 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -2026,7 +2026,7 @@ async function autoPullRapid360Sales(){
   const st=$('#rapid360SalesXmlStatus');
   fillRapidAktarDefaults();
   rapid360PullToken='';
-  if(st) st.textContent='Satışlar arka planda okunuyor (XML ile aynı veri)…';
+  if(st) st.textContent='Satışlar arka planda okunuyor…';
   $('#rapid360SalesXmlImportBtn')&&($('#rapid360SalesXmlImportBtn').disabled=true);
   $('#rapid360SalesPullBtn')&&($('#rapid360SalesPullBtn').disabled=true);
   try{
@@ -2036,6 +2036,24 @@ async function autoPullRapid360Sales(){
     }catch(e){
       if(!(e.status===409 && e.payload && e.payload.needsOkta) && e.status!==400) throw e;
     }
+    let robot=null;
+    try{
+      robot=await api('/web-api/admin/rapid360-robot-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
+    }catch(e){robot=null;if(st&&e.message)st.textContent=e.message}
+    let lastErr='';
+    if(robot&&robot.jobId){
+      if(st) st.textContent=robot.message||'Robot Rapid360’a bağlanıyor…';
+      const rDeadline=Date.now()+240000;
+      while(Date.now()<rDeadline){
+        await sleep(3000);
+        try{
+          const jr=await api('/web-api/admin/rapid360-robot-poll/'+encodeURIComponent(robot.jobId));
+          if(jr.pending){if(st)st.textContent=jr.message||'Robot çalışıyor…';continue}
+          return applyRapidPullResult(jr, st);
+        }catch(e){lastErr=e.message||'Robot hatası';break}
+      }
+      if(st&&lastErr)st.textContent=lastErr;
+    }
     let bridge=null;
     try{
       bridge=await api('/web-api/admin/rapid360-bridge-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
@@ -2043,7 +2061,6 @@ async function autoPullRapid360Sales(){
     showRapidBridgeBox(bridge||{});
     openRapidOktaPopup((bridge&&bridge.loginUrl)||rapid360ReportUrl());
     const deadline=Date.now()+180000;
-    let lastErr='';
     while(Date.now()<deadline){
       try{
         const d=await pullRapid360Live();

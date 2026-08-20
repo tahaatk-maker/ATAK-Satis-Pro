@@ -1,0 +1,47 @@
+const assert = require('assert');
+const robot = require('../lib/rapid360-robot');
+
+assert.equal(typeof robot.available(), 'boolean');
+
+assert.equal(robot.classifyUrl('https://login.microsoftonline.com/common/oauth2/authorize?x=1'), 'microsoft');
+assert.equal(robot.classifyUrl('https://arcelik.okta-emea.com/signin/verify/okta/push'), 'okta');
+assert.equal(robot.classifyUrl('https://liverapid360.operations.dynamics.com/?cmp=2521&mi=DmrDetailedSalesReport'), 'dynamics');
+assert.equal(robot.classifyUrl('https://panel.atakhome.com.tr/web-admin'), 'other');
+
+async function run(){
+  robot.resetForTests();
+  const job = robot.startPull({
+    startDate: '2026-08-18',
+    endDate: '2026-08-20',
+    store: '340334',
+    company: '2521',
+    runner: async (j) => {
+      j.status = 'Telefonda Okta bildirimini onaylayın…';
+      await new Promise((r) => setTimeout(r, 30));
+      return { json: { value: [{ SalesOrderNumber: 'S1' }] } };
+    }
+  });
+  assert.ok(job.id);
+  assert.equal(robot.getJob(job.id).done, false);
+  assert.throws(() => robot.startPull({ runner: async () => ({}) }), /zaten çalışıyor/);
+  await new Promise((r) => setTimeout(r, 80));
+  const done = robot.getJob(job.id);
+  assert.equal(done.done, true);
+  assert.equal(done.ok, true);
+  assert.equal(done.result.json.value[0].SalesOrderNumber, 'S1');
+
+  robot.resetForTests();
+  const bad = robot.startPull({
+    runner: async () => { throw new Error('Okta şifresi kayıtlı değil.'); }
+  });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(robot.getJob(bad.id).ok, false);
+  assert.ok(/Okta şifresi/.test(robot.getJob(bad.id).error));
+
+  console.log('rapid360-robot tests OK');
+}
+
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

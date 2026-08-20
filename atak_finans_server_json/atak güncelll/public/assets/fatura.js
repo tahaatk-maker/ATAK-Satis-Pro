@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v207 */
+/* ATAK_FATURA_BUILD=fix-v208 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={module:'efatura',view:'ef_out_pending',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -406,6 +406,8 @@ async function loadInvoiceIntegration(){
     setVal('rapid360SystemId',rz.systemId||'1');
     if(q('#rapid360AddReturns'))q('#rapid360AddReturns').checked=rz.addReturns!==false;
     setVal('rapid360SalesUrl',rz.salesUrl||'');
+    setVal('rapid360OktaUser',rz.oktaUser||'');
+    setVal('rapid360OktaPass',rz.oktaPassword||'');
     setVal('rapid360SalesStore',rz.salesStore||'340334');
     setVal('rapid360SalesCompany',rz.salesCompany||'2521');
     fillAtakDms(s);
@@ -501,6 +503,8 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       rapid360SystemId:q('#rapid360SystemId')?.value||'1',
       rapid360AddReturns:!!q('#rapid360AddReturns')?.checked,
       rapid360SalesUrl:q('#rapid360SalesUrl')?.value||'',
+      rapid360OktaUser:q('#rapid360OktaUser')?.value||'',
+      rapid360OktaPass:q('#rapid360OktaPass')?.value||'',
       rapid360SalesStore:q('#rapid360SalesStore')?.value||'',
       rapid360SalesCompany:q('#rapid360SalesCompany')?.value||'2521',
       ...atakDmsPayload()

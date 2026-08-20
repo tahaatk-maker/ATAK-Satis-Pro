@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.207-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.208-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.207-atak-geteinvoices
-EXPECT_BUILD=fix-v207
+EXPECT_HEALTH=6.3.208-atak-geteinvoices
+EXPECT_BUILD=fix-v208
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -180,6 +180,11 @@ check "rapid360 mule once" grep -q "XML ile aynı Satislar" "$SRC/lib/rapid360-s
 check "admin rapid bridge" grep -q "showRapidBridgeBox" "$SRC/public/assets/admin.js"
 check "rapid conn status api" grep -q "rapid360-conn-status" "$SRC/server.js"
 check "admin conn isigi" grep -q "rapid360-conn-status" "$SRC/public/assets/admin.js"
+check "rapid robot lib" test -f "$SRC/lib/rapid360-robot.js"
+check "rapid robot api" grep -q "rapid360-robot-start" "$SRC/server.js"
+check "admin robot poll" grep -q "rapid360-robot-poll" "$SRC/public/assets/admin.js"
+check "personel robot poll" grep -q "rapid360-robot-poll" "$SRC/public/assets/personel.js"
+check "okta sifre alani" grep -q "rapid360OktaPass" "$SRC/public/admin.html"
 check "rapid taslak needsCompletion" grep -q "needsCompletion" "$SRC/server.js"
 check "rapid taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/admin.js"
 check "personel taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/personel.js"
@@ -379,6 +384,22 @@ cd "$APP"
 if [ ! -d "$APP/node_modules" ] && [ -f "$APP/package.json" ]; then
   npm install --omit=dev || npm install || true
 fi
+
+step "rapid robot (tarayici) kuruluyor"
+ROBOT_OK=0
+if node -e "require('playwright')" >/dev/null 2>&1; then
+  ROBOT_OK=1
+else
+  echo "   playwright indiriliyor (tek seferlik, ~1-2 dk)..."
+  npm install playwright --no-save --omit=dev >/dev/null 2>&1 && ROBOT_OK=1 || echo "   playwright kurulamadi — robot devre disi (XML yedek calisir)"
+fi
+if [ "$ROBOT_OK" = "1" ]; then
+  npx playwright install --with-deps chromium >/dev/null 2>&1 \
+    || npx playwright install chromium >/dev/null 2>&1 \
+    || { echo "   chromium indirilemedi — robot devre disi"; ROBOT_OK=0; }
+fi
+[ "$ROBOT_OK" = "1" ] && echo "   ok: rapid robot hazir" || echo "   robot yok: Satislari oku yine calisir (Rapid360 penceresi + XML)"
+
 ATAK_OWNER_ONLY=0 pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env
 pm2 save || true
 

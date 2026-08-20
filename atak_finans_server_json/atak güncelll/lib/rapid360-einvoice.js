@@ -294,6 +294,8 @@ function publicConfig(cfg, env){
     salesUrl: blocked ? '' : String(r.salesUrl || '').trim().split('?')[0],
     salesStore: blocked ? '' : String(r.salesStore || '').trim(),
     salesCompany: blocked ? '' : String(r.salesCompany || '').trim(),
+    oktaUser: blocked ? '' : String(r.oktaUser || '').trim(),
+    oktaPassword: r.oktaPassword ? '********' : '',
     blocked,
     ready: !blocked && Boolean(shown.url && shown.clientId && shown.clientSecret && shown.dealerId && shown.eInvoiceCode),
     lastSyncAt: r.lastSyncAt || '',
