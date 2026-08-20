@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.203-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.204-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.203-atak-geteinvoices
-EXPECT_BUILD=fix-v203
+EXPECT_HEALTH=6.3.204-atak-geteinvoices
+EXPECT_BUILD=fix-v204
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -147,10 +147,14 @@ check "aadsts50011 uyarisi" grep -q "AADSTS50011" "$SRC/public/admin.html"
 if grep -q "rapid360-okta-callback" "$SRC/public/assets/admin.js" && grep -q 'webOnly:true' "$SRC/public/assets/admin.js"; then
   echo "   ok: Rapid Aktar popup Microsoft authorize açmaz"
 fi
-if ! grep -q "login.microsoftonline.com" "$SRC/public/assets/admin.js"; then
+if ! grep -F "login.microsoftonline.com" "$SRC/public/assets/admin.js" >/dev/null; then
   echo "   HATALI: Rapid popup Microsoft URL kilidi yok"; exit 1
 fi
 echo "   ok: Rapid popup Microsoft URL kilidi var"
+if ! grep -F "login.microsoftonline.com" "$SRC/public/assets/personel.js" >/dev/null; then
+  echo "   HATALI: Personel Rapid popup Microsoft URL kilidi yok"; exit 1
+fi
+echo "   ok: Personel Rapid popup Microsoft URL kilidi var"
 if grep -q "rapid360silent" "$SRC/public/assets/admin.js" "$SRC/public/assets/personel.js"; then
   echo "   HATALI: Rapid Aktar hâlâ silent Kod penceresi açıyor"; exit 1
 fi

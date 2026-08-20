@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v203 */
+/* ATAK_PERSONEL_BUILD=fix-v204 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1926,9 +1926,16 @@ function showRapidOktaBox(d){
   box.innerHTML=`<div style="font-weight:700;margin-bottom:6px">Okta bekleniyor</div>
     <p class="muted" style="margin:6px 0 0">${rapidOktaEsc(d.message||'Telefonda Okta bildirimine basın. Onaydan sonra satışlar otomatik çekilir. Kod yazılmaz.')}</p>`;
 }
+function rapidBlockedMicrosoftHref(href){
+  const s=String(href||'');
+  const blocked='login.microsoftonline.com';
+  if(!s) return true;
+  if(s.toLowerCase().includes(blocked)) return true;
+  return /nativeclient|wrongplace|deviceauth|devicelogin|rapid360-okta-callback|oauth2\/v2\.0\/authorize/i.test(s);
+}
 function openRapidOktaPopup(url, popup, name){
   let href=String(url||'');
-  if(!href || /nativeclient|wrongplace|deviceauth|devicelogin|rapid360-okta-callback|oauth2\/v2\.0\/authorize|login\.microsoftonline\.com/i.test(href)) href=rapid360ReportUrl();
+  if(rapidBlockedMicrosoftHref(href)) href=rapid360ReportUrl();
   try{
     if(popup && !popup.closed && !name) popup.location.href=href;
     else popup=window.open(href,name||'rapid360okta','popup=yes,width=1080,height=780');

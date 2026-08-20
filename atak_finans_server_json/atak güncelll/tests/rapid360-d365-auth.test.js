@@ -130,6 +130,14 @@ async function run(){
   assert.ok(!JSON.stringify(webOnly).includes('51f81489'));
   assert.ok(!webOnly.loginUrl.includes('rapid360-okta-callback'));
 
+  const fs = require('fs');
+  const path = require('path');
+  for (const file of ['admin.js', 'personel.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '../public/assets', file), 'utf8');
+    assert.ok(src.includes('function rapidBlockedMicrosoftHref'), `${file} Microsoft popup kilidi fonksiyonu yok`);
+    assert.ok(src.includes("blocked='login.microsoftonline.com'"), `${file} Hostinger grep -F kilidi yok`);
+  }
+
   console.log('rapid360-d365-auth tests OK');
 }
 
