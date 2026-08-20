@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.211-atak-geteinvoices',
-    build:'fix-v211',
+    version:'6.3.212-atak-geteinvoices',
+    build:'fix-v212',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5672,6 +5672,26 @@ app.post('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('setting
   audit(s,'Rapid Aktar Okta girişi güncellendi',rapid.oktaUser||'-',{passwordSet:Boolean(String(rapid.oktaPassword||'').trim())});
   writeStore(s);
   res.json({ok:true,oktaUser:rapid.oktaUser||'',oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+});
+app.get('/web-api/admin/rapid360-robot-diag',rapidSalesPerm,async(req,res)=>{
+  let pwVersion='';
+  try{pwVersion=require('playwright/package.json').version}catch(_){
+    try{pwVersion=require('playwright-core/package.json').version+' (core)'}catch(__){}
+  }
+  let launch={ok:false,error:'kontrol edilemedi'};
+  try{launch=await rapidRobot.verifyLaunch()}catch(e){launch={ok:false,error:e.message||''}}
+  const s=readStore();
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  res.json({
+    ok:true,
+    node:process.version,
+    playwright:Boolean(pwVersion),
+    playwrightVersion:pwVersion,
+    launchOk:launch.ok,
+    launchError:launch.error||'',
+    oktaUser:String(rapid.oktaUser||'').trim(),
+    oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())
+  });
 });
 app.get('/web-api/admin/rapid360-conn-status',rapidSalesPerm,async(req,res)=>{
   const s=readStore();

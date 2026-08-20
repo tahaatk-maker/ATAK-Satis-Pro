@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v211 */
+/* ATAK_ADMIN_BUILD=fix-v212 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4599,9 +4599,16 @@ async function loadRapidSettings(){
     conn.innerHTML='<span style="color:#64748b">Bağlantı kontrol ediliyor…</span>';
     try{
       const c=await api('/web-api/admin/rapid360-conn-status');
-      conn.innerHTML=c.canPull
+      let diag=null;
+      try{diag=await api('/web-api/admin/rapid360-robot-diag')}catch(_){}
+      const robotLine=diag
+        ?(diag.launchOk
+          ?'<div style="margin-top:6px;color:#15803d">🤖 Robot hazır — Chromium sunucuda açılıyor</div>'
+          :`<div style="margin-top:6px;color:#b45309">🤖 Robot çalışmıyor: ${rapidOktaEsc(diag.launchError||(diag.playwright?'bilinmiyor':'playwright kurulu değil'))} · node ${rapidOktaEsc(diag.node||'')}${diag.playwrightVersion?` · playwright ${rapidOktaEsc(diag.playwrightVersion)}`:''}<br>Hostinger scriptini çalıştırın; terminaldeki "rapid robot" satırlarını kontrol edin.</div>`)
+        :'';
+      conn.innerHTML=(c.canPull
         ?'<span style="color:#15803d;font-weight:800">🟢 Bağlı — aktarım hazır</span>'
-        :'<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span><small style="margin-left:6px;color:#475569">Kaydedin, sonra Rapid Aktar → Satışları oku</small>';
+        :'<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span><small style="margin-left:6px;color:#475569">Kaydedin, sonra Rapid Aktar → Satışları oku</small>')+robotLine;
     }catch(_){conn.innerHTML='<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span>'}
   }
 }

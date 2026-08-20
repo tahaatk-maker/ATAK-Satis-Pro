@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.211-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.212-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.211-atak-geteinvoices
-EXPECT_BUILD=fix-v211
+EXPECT_HEALTH=6.3.212-atak-geteinvoices
+EXPECT_BUILD=fix-v212
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -190,6 +190,7 @@ check "okta ayar api" grep -q "rapid360-okta-settings" "$SRC/server.js"
 check "robot sorgula basar" grep -q "fillReportAndQuery" "$SRC/lib/rapid360-robot.js"
 check "robot xml aktar" grep -q "xml\\\\s\\*aktar" "$SRC/lib/rapid360-robot.js"
 check "robot chromium testi" grep -q "verifyLaunch" "$SRC/lib/rapid360-robot.js"
+check "robot teshis api" grep -q "rapid360-robot-diag" "$SRC/server.js"
 check "rapid taslak needsCompletion" grep -q "needsCompletion" "$SRC/server.js"
 check "rapid taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/admin.js"
 check "personel taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/personel.js"
@@ -392,14 +393,26 @@ fi
 
 step "rapid robot (tarayici) kuruluyor"
 ROBOT_OK=0
+echo "   node: $(node -v 2>/dev/null || echo yok)  npm: $(npm -v 2>/dev/null || echo yok)  disk: $(df -h "$APP" 2>/dev/null | awk 'NR==2{print $4" bos"}')"
 if node -e "require('playwright')" >/dev/null 2>&1; then
   ROBOT_OK=1
+  echo "   playwright zaten kurulu ($(node -e "console.log(require('playwright/package.json').version)" 2>/dev/null))"
 else
   echo "   playwright indiriliyor (tek seferlik, ~1-2 dk)..."
-  npm install playwright --no-save --omit=dev >/dev/null 2>&1 && ROBOT_OK=1 || echo "   playwright kurulamadi — robot devre disi (XML yedek calisir)"
+  if npm install playwright --no-save --omit=dev >/tmp/atak-pw-install.log 2>&1; then
+    ROBOT_OK=1
+  else
+    echo "   guncel surum olmadi, eski surum deneniyor..."
+    if npm install playwright@1.40.1 --no-save --omit=dev >>/tmp/atak-pw-install.log 2>&1; then
+      ROBOT_OK=1
+    else
+      echo "   HATA: playwright kurulamadi — sebep:"
+      tail -6 /tmp/atak-pw-install.log 2>/dev/null | sed 's/^/     /'
+    fi
+  fi
 fi
 if [ "$ROBOT_OK" = "1" ]; then
-  npx playwright install chromium >/dev/null 2>&1 || true
+  npx playwright install chromium >/tmp/atak-pw-browser.log 2>&1 || { echo "   chromium indirme sorunu:"; tail -4 /tmp/atak-pw-browser.log | sed 's/^/     /'; }
   npx playwright install-deps chromium >/dev/null 2>&1 \
     || apt-get install -y --no-install-recommends \
       libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 \
