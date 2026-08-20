@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v200 */
+/* ATAK_PERSONEL_BUILD=fix-v201 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1846,7 +1846,7 @@ function showRapidOktaBox(d){
 }
 function openRapidOktaPopup(url, popup, name){
   let href=String(url||'');
-  if(!href || /nativeclient|wrongplace|deviceauth|devicelogin/i.test(href)) href=rapid360ReportUrl();
+  if(!href || /nativeclient|wrongplace|deviceauth|devicelogin|rapid360-okta-callback|oauth2\/v2\.0\/authorize|login\.microsoftonline\.com/i.test(href)) href=rapid360ReportUrl();
   try{
     if(popup && !popup.closed && !name) popup.location.href=href;
     else popup=window.open(href,name||'rapid360okta','popup=yes,width=1080,height=780');
@@ -1862,9 +1862,9 @@ async function loadRapidOktaStatus(){
   try{
     const d=await api('/web-api/admin/rapid360-okta-status');
     el.textContent=(d.okta&&d.okta.connected)
-      ?(`Rapid360 bağlı${d.okta.account?`: ${d.okta.account}`:''}. Satışları çek’e basın.`)
-      :'Satışları çek’e basın. Okta onayı sonrası satışlar gelir.';
-  }catch(_){el.textContent='Satışları çek’e basın. Okta onayı sonrası satışlar gelir.'}
+      ?(`Rapid360 bağlı${d.okta.account?`: ${d.okta.account}`:''}. Satışları oku’ya basın.`)
+      :'Satışları oku: Rapid açılır, Okta onaylanır, satışlar okunur.';
+  }catch(_){el.textContent='Satışları oku: Rapid açılır, Okta onaylanır, satışlar okunur.'}
 }
 async function pullRapid360Live(){
   return api('/web-api/admin/rapid360-sales-pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody({autoImport:false}))});
@@ -1900,58 +1900,43 @@ async function applyRapidPullResult(d, st){
   rapid360PullToken=d.pullToken||'';
   renderRapid360SalesRows(d);
   const n=Number(d.count||(d.rows||[]).length||0);
-  const msg=`${n} satış çekildi · ${d.importable||0} aktarılabilir. İstediklerinizi işaretleyin.`;
+  const msg=`${n} satış okundu · ${d.importable||0} aktarılabilir. İstediklerinizi işaretleyin.`;
   if(st) st.textContent=msg;
   stToast(msg);
   return d;
 }
 async function startRapidOktaLogin(popup){
-  const d=await api('/web-api/admin/rapid360-okta-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
+  const d=await api('/web-api/admin/rapid360-okta-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody({webOnly:true}))});
   showRapidOktaBox(d);
-  openRapidOktaPopup(d.loginUrl||rapid360ReportUrl(), popup);
+  openRapidOktaPopup(rapid360ReportUrl(), popup);
   return d;
 }
 async function autoPullRapid360Sales(){
   const st=$('#rapid360SalesXmlStatus');
   fillRapidAktarDefaults();
   rapid360PullToken='';
-  if(st) st.textContent='Satışlar çekiliyor…';
+  if(st) st.textContent='Rapid360 açılıyor, satışlar okunuyor…';
   $('#rapid360SalesXmlImportBtn')&&($('#rapid360SalesXmlImportBtn').disabled=true);
   $('#rapid360SalesPullBtn')&&($('#rapid360SalesPullBtn').disabled=true);
   try{
-    try{
-      const first=await pullRapid360Live();
-      return applyRapidPullResult(first, st);
-    }catch(e){
-      if(!(e.status===409 && e.payload && e.payload.needsOkta)) throw e;
-    }
-    const started=await startRapidOktaLogin();
-    const pollId=started.pollId||'';
-    if(st) st.textContent=started.message||'Telefonda Okta’yı onaylayın. Satışlar otomatik çekilir.';
-    const deadline=Date.now()+180000;
+    openRapidOktaPopup(rapid360ReportUrl());
+    try{await startRapidOktaLogin()}catch(_){}
+    const deadline=Date.now()+90000;
+    let lastErr='';
     while(Date.now()<deadline){
-      if(pollId){
-        const polled=await pollRapidOktaOnce(pollId);
-        if(polled && polled.ok){
-          await loadRapidOktaStatus();
-          const d=await pullRapid360Live();
-          return applyRapidPullResult(d, st);
-        }
-      }
       try{
         const d=await pullRapid360Live();
         return applyRapidPullResult(d, st);
       }catch(e){
-        if(!(e.status===409 && e.payload && e.payload.needsOkta)) throw e;
+        lastErr=e.message||'okunamadı';
+        if(!(e.status===409 && e.payload && e.payload.needsOkta) && e.status!==400) throw e;
+        if(st) st.textContent='Rapid360’ta Okta’yı onaylayın. Satışlar okunuyor…';
       }
       await sleep(3000);
     }
-    if(st) st.textContent='Okta onayı alınamadı. Telefonda bildirimi onaylayıp Satışları çek’e tekrar basın.';
+    if(st) st.textContent=lastErr||'Satış okunamadı. Rapid360 açıkken Satışları oku’ya tekrar basın.';
   }catch(e){
-    if(e.status===409 && e.payload && e.payload.needsOkta){
-      showRapidOktaBox(e.payload);
-      if(st) st.textContent=e.payload.error||'Telefonda Okta’yı onaylayın.';
-    }else if(st) st.textContent=e.message;
+    if(st) st.textContent=e.message;
   }finally{
     $('#rapid360SalesPullBtn')&&($('#rapid360SalesPullBtn').disabled=false);
   }
@@ -2039,7 +2024,7 @@ $('#rapid360OktaConnectBtn')?.addEventListener('click',async()=>{
   try{
     const d=await api('/web-api/admin/rapid360-okta-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody({webOnly:true}))});
     showRapidOktaBox(d);
-    st.textContent=d.message||'Okta bildirimi telefona gitti. Onaydan sonra Satışları çek’e basın.';
+    st.textContent=d.message||'Okta bildirimi telefona gitti. Rapid360’ta onaylayın, Satışları oku satışları getirir.';
   }catch(e){st.textContent=e.message}
 });
 $('#rapid360SalesPullBtn')?.addEventListener('click',()=>autoPullRapid360Sales());

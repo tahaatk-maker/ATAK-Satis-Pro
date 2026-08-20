@@ -1901,8 +1901,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.200-atak-geteinvoices',
-  build:'fix-v200',
+  version:'6.3.201-atak-geteinvoices',
+  build:'fix-v201',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5040,31 +5040,17 @@ function saveRapidOktaTokens(s, tokens){
   s.invoiceIntegration.rapid360=d365Auth.persistTokens(s.invoiceIntegration.rapid360||{}, tokens);
   return true;
 }
-function rapidOktaRedirectUri(req){
-  const xfProto=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim();
-  const proto=xfProto||req.protocol||'https';
-  const xfHost=String(req.headers['x-forwarded-host']||'').split(',')[0].trim();
-  const host=xfHost||String(req.headers.host||'').trim()||'panel.atakhome.com.tr';
-  return `${proto}://${host}/web-api/admin/rapid360-okta-callback`;
-}
 async function startRapidOktaChallenge(req, s){
   const body=req.body||{};
   const rapid=(s.invoiceIntegration||{}).rapid360||{};
   const okta=d365Auth.publicAuth(rapid);
-  const loginHint=body.loginHint||body.username||okta.lastUser||okta.account||d365Auth.DEFAULT_ACCOUNT;
-  const common={
+  return d365Auth.startWebOnlyLogin({
     rapid,
-    loginHint,
+    loginHint:body.loginHint||body.username||okta.lastUser||okta.account||d365Auth.DEFAULT_ACCOUNT,
     company:body.company,
     store:body.store||body.magaza||'340334',
     startDate:body.startDate,
     endDate:body.endDate
-  };
-  if(body.webOnly) return d365Auth.startWebOnlyLogin(common);
-  return d365Auth.startInteractiveLogin({
-    ...common,
-    sessionId:req.sessionID||'',
-    redirectUri:rapidOktaRedirectUri(req)
   });
 }
 function parseRapid360SalesUpload(file){
@@ -5448,7 +5434,7 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
       if(out.tokens) writeStore(s);
       return res.status(409).json({
         needsOkta:true,
-        error:out.error||'Telefonda Okta’yı onaylayın. Satışlar otomatik çekilir.',
+        error:out.error||'Rapid360’ı açın, Okta’yı onaylayın, Satışları oku’ya basın.',
         loginUrl:d365Auth.dynamicsReportUrl({company,store:magaza,startDate:body.startDate,endDate:body.endDate}),
         store:magaza,company,tried:out.tried||[]
       });

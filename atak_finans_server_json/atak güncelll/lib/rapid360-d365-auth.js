@@ -81,11 +81,9 @@ function accountFromToken(token){
   return String(p.upn || p.unique_name || p.preferred_username || p.email || p.name || '').trim();
 }
 
-const DEFAULT_PKCE_CLIENT_ID = '51f81489-12ee-4a9e-aaae-a2591f45987d';
-
 function loginMessage(loginHint){
   const who = String(loginHint || DEFAULT_ACCOUNT).trim();
-  return `Okta bildirimi telefona gitti (${who}). Onaylayın; satışlar otomatik çekilir. Kod yazılmaz. Mağaza 340334 ATAK.`;
+  return `Rapid360 açıldı (${who}). Telefonda Okta’yı onaylayın. Kod yazılmaz. Sonra Satışları oku. Mağaza 340334 ATAK.`;
 }
 
 function isoDateParam(v){
@@ -371,7 +369,7 @@ function startWebOnlyLogin(opts = {}){
     loginUrl,
     expiresIn: 900,
     interval: 3,
-    message: `Rapid360 açıldı (${DEFAULT_ACCOUNT}). Telefonda Okta bildirimine basın. Kod yazılmaz. Onaydan sonra satışlar otomatik çekilir.`
+    message: `Rapid360 açıldı (${DEFAULT_ACCOUNT}). Telefonda Okta bildirimine basın. Kod yazılmaz. Onaydan sonra Satışları oku.`
   };
 }
 
@@ -382,7 +380,7 @@ async function startInteractiveLogin(opts = {}){
   const redirectUri = String(opts.redirectUri || '').trim();
   const rapid = opts.rapid || {};
   const cfg = configFromRapid(rapid, opts.env);
-  const usePkce = Boolean(redirectUri);
+  const usePkce = Boolean(cfg.oauthClientId && redirectUri);
   const company = String(opts.company || rapid.salesCompany || '2521').trim() || '2521';
   const store = String(opts.store || rapid.salesStore || '340334').trim() || '340334';
   const startDate = isoDateParam(opts.startDate);
@@ -418,7 +416,7 @@ async function startInteractiveLogin(opts = {}){
   }
   const resource = isMuleUrl(cfg.dynamicsUrl) ? DEFAULT_DYNAMICS_URL : cfg.dynamicsUrl;
   const tenant = cfg.tenant || DEFAULT_TENANT;
-  const clientId = usePkce ? (cfg.oauthClientId || DEFAULT_PKCE_CLIENT_ID) : clientIdsFrom(cfg)[0];
+  const clientId = usePkce ? cfg.oauthClientId : clientIdsFrom(cfg)[0];
 
   if(usePkce){
     const pollId = crypto.randomBytes(16).toString('hex');
