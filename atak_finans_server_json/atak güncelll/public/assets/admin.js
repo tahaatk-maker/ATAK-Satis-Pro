@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v208 */
+/* ATAK_ADMIN_BUILD=fix-v209 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4573,12 +4573,13 @@ async function runSystemSelfTest(target='#settingsSelfTestResult'){
 }
 let settingsTabView='accounts';
 function setSettingsTab(name){
-  const allowed=['accounts','promissory','dealer','mail','sms','test'];
+  const allowed=['accounts','promissory','dealer','mail','sms','rapid','test'];
   settingsTabView=allowed.includes(name)?name:'accounts';
   qa('#settingsNav [data-settings-tab]').forEach(b=>b.classList.toggle('active',b.dataset.settingsTab===settingsTabView));
   qa('#settings [data-settings-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.settingsPanel!==settingsTabView));
   try{sessionStorage.setItem('atak-settings-tab',settingsTabView)}catch(_){}
   if(settingsTabView==='sms')loadSmsSettings().catch(()=>{});
+  if(settingsTabView==='rapid')loadRapidSettings().catch(()=>{});
 }
 qa('#settingsNav [data-settings-tab]').forEach(b=>b.addEventListener('click',()=>setSettingsTab(b.dataset.settingsTab)));
 try{
@@ -4587,6 +4588,36 @@ try{
 }catch(_){}
 setSettingsTab(settingsTabView);
 
+async function loadRapidSettings(){
+  const conn=q('#rapidSettingsConn');
+  try{
+    const d=await api('/web-api/admin/rapid360-okta-settings');
+    if(q('#rapidSettingsOktaUser'))q('#rapidSettingsOktaUser').value=d.oktaUser||'';
+    if(q('#rapidSettingsOktaPass'))q('#rapidSettingsOktaPass').value=d.oktaPasswordSet?'********':'';
+  }catch(e){toast(e.message)}
+  if(conn){
+    conn.innerHTML='<span style="color:#64748b">Bağlantı kontrol ediliyor…</span>';
+    try{
+      const c=await api('/web-api/admin/rapid360-conn-status');
+      conn.innerHTML=c.canPull
+        ?'<span style="color:#15803d;font-weight:800">🟢 Bağlı — aktarım hazır</span>'
+        :'<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span><small style="margin-left:6px;color:#475569">Kaydedin, sonra Rapid Aktar → Satışları oku</small>';
+    }catch(_){conn.innerHTML='<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span>'}
+  }
+}
+q('#rapidSettingsForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#rapidSettingsStatus');
+  try{
+    await api('/web-api/admin/rapid360-okta-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      oktaUser:q('#rapidSettingsOktaUser')?.value||'',
+      oktaPassword:q('#rapidSettingsOktaPass')?.value||''
+    })});
+    if(st){st.textContent='Kaydedildi. Rapid Aktar → Satışları oku ile deneyin.';st.className='form-status success'}
+    toast('Rapid Aktar Okta girişi kaydedildi');
+    loadRapidSettings().catch(()=>{});
+  }catch(err){if(st){st.textContent=err.message;st.className='form-status error'}}
+});
 async function loadMailSettings(){
   const st=q('#mailSettingsStatus');
   try{
@@ -4815,8 +4846,6 @@ async function loadInvoiceIntegration(){
   if(q('#rapid360SystemId'))q('#rapid360SystemId').value=rz.systemId||'1';
   if(q('#rapid360AddReturns'))q('#rapid360AddReturns').checked=rz.addReturns!==false;
   if(q('#rapid360SalesUrl'))q('#rapid360SalesUrl').value=rz.salesUrl||'';
-  if(q('#rapid360OktaUser'))q('#rapid360OktaUser').value=rz.oktaUser||'';
-  if(q('#rapid360OktaPass'))q('#rapid360OktaPass').value=rz.oktaPassword||'';
   if(q('#rapid360SalesStore'))q('#rapid360SalesStore').value=rz.salesStore||'340334';
   if(q('#rapid360SalesCompany'))q('#rapid360SalesCompany').value=rz.salesCompany||'2521';
   const dms=s.atakDms||{};
@@ -4865,8 +4894,6 @@ q('#invoiceIntegrationForm')?.addEventListener('submit',async e=>{
       rapid360SystemId:q('#rapid360SystemId')?.value||'1',
       rapid360AddReturns:!!q('#rapid360AddReturns')?.checked,
       rapid360SalesUrl:q('#rapid360SalesUrl')?.value||'',
-      rapid360OktaUser:q('#rapid360OktaUser')?.value||'',
-      rapid360OktaPass:q('#rapid360OktaPass')?.value||'',
       rapid360SalesStore:q('#rapid360SalesStore')?.value||'',
       rapid360SalesCompany:q('#rapid360SalesCompany')?.value||'2521',
       atakDmsEnabled:!!q('#atakDmsEnabled')?.checked,

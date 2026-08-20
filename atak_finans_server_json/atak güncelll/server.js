@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.208-atak-geteinvoices',
-    build:'fix-v208',
+    version:'6.3.209-atak-geteinvoices',
+    build:'fix-v209',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5650,6 +5650,25 @@ app.post('/web-api/admin/rapid360-okta-poll',rapidSalesPerm,async(req,res)=>{
 app.get('/web-api/admin/rapid360-okta-status',rapidSalesPerm,(req,res)=>{
   const s=readStore();
   res.json({ok:true,okta:d365Auth.publicAuth((s.invoiceIntegration||{}).rapid360)});
+});
+app.get('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('settings_manage','invoices_manage','orders_manage'),(req,res)=>{
+  const s=readStore();
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  res.json({ok:true,oktaUser:String(rapid.oktaUser||'').trim(),oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+});
+app.post('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('settings_manage','invoices_manage','orders_manage'),(req,res)=>{
+  const s=readStore();
+  s.invoiceIntegration=s.invoiceIntegration||{};
+  const rapid=s.invoiceIntegration.rapid360=s.invoiceIntegration.rapid360||{};
+  const body=req.body||{};
+  if(body.oktaUser!=null)rapid.oktaUser=String(body.oktaUser).trim();
+  if(body.oktaPassword!=null){
+    const v=String(body.oktaPassword);
+    if(v!=='********')rapid.oktaPassword=v;
+  }
+  audit(s,'Rapid Aktar Okta girişi güncellendi',rapid.oktaUser||'-',{passwordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+  writeStore(s);
+  res.json({ok:true,oktaUser:rapid.oktaUser||'',oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
 });
 app.get('/web-api/admin/rapid360-conn-status',rapidSalesPerm,async(req,res)=>{
   const s=readStore();
