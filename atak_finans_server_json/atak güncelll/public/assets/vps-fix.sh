@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.206-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.207-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.206-atak-geteinvoices
-EXPECT_BUILD=fix-v206
+EXPECT_HEALTH=6.3.207-atak-geteinvoices
+EXPECT_BUILD=fix-v207
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -143,7 +143,7 @@ if grep -A12 "rapid360-okta-callback" "$SRC/server.js" | grep -q "completeAuthor
   echo "   HATALI: Rapid callback hâlâ Microsoft token alıyor"; exit 1
 fi
 echo "   ok: Rapid callback Microsoft token almıyor"
-check "aadsts50011 uyarisi" grep -q "AADSTS50011" "$SRC/public/admin.html"
+check "aadsts50011 uyarisi" grep -q "AADSTS50011" "$SRC/server.js"
 if grep -q "rapid360-okta-callback" "$SRC/public/assets/admin.js" && grep -q 'webOnly:true' "$SRC/public/assets/admin.js"; then
   echo "   ok: Rapid Aktar popup Microsoft authorize açmaz"
 fi
@@ -178,6 +178,8 @@ check "admin taslak sil" grep -q "discardRapidDraft" "$SRC/public/assets/admin.j
 check "rapid360 bridge start" grep -q "rapid360-bridge-start" "$SRC/server.js"
 check "rapid360 mule once" grep -q "XML ile aynı Satislar" "$SRC/lib/rapid360-sales-fetch.js"
 check "admin rapid bridge" grep -q "showRapidBridgeBox" "$SRC/public/assets/admin.js"
+check "rapid conn status api" grep -q "rapid360-conn-status" "$SRC/server.js"
+check "admin conn isigi" grep -q "rapid360-conn-status" "$SRC/public/assets/admin.js"
 check "rapid taslak needsCompletion" grep -q "needsCompletion" "$SRC/server.js"
 check "rapid taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/admin.js"
 check "personel taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/personel.js"

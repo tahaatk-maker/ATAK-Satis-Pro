@@ -1917,8 +1917,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.206-atak-geteinvoices',
-    build:'fix-v206',
+    version:'6.3.207-atak-geteinvoices',
+    build:'fix-v207',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5595,6 +5595,21 @@ app.post('/web-api/admin/rapid360-okta-poll',rapidSalesPerm,async(req,res)=>{
 app.get('/web-api/admin/rapid360-okta-status',rapidSalesPerm,(req,res)=>{
   const s=readStore();
   res.json({ok:true,okta:d365Auth.publicAuth((s.invoiceIntegration||{}).rapid360)});
+});
+app.get('/web-api/admin/rapid360-conn-status',rapidSalesPerm,async(req,res)=>{
+  const s=readStore();
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  let connected=false;
+  try{
+    const ensured=await d365Auth.ensureAccessToken(rapid,{});
+    if(ensured.ok){
+      connected=true;
+      if(ensured.refreshed&&ensured.tokens){saveRapidOktaTokens(s,ensured.tokens);writeStore(s);}
+    }
+  }catch(_){}
+  const consume=rapidSalesFetch.resolveSalesConsume(rapid,process.env);
+  const muleReady=Boolean(consume.url&&consume.clientId&&consume.clientSecret)||Boolean(consume.salesUrl);
+  res.json({ok:true,connected,muleReady,canPull:connected||muleReady,account:d365Auth.publicAuth(rapid).account||''});
 });
 app.post('/web-api/admin/rapid360-okta-disconnect',rapidSalesPerm,(req,res)=>{
   const s=readStore();

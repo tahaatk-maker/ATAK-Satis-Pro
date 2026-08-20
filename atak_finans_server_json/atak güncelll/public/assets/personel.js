@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v206 */
+/* ATAK_PERSONEL_BUILD=fix-v207 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1941,9 +1941,7 @@ function showRapidBridgeBox(br){
   const box=$('#rapid360OktaBox');
   if(!box) return;
   box.classList.remove('hidden');
-  box.innerHTML=`<div style="font-weight:700;margin-bottom:6px">Okta sonrası satışlar Atak’a gelir</div>
-    <p class="muted" style="margin:6px 0">${rapidOktaEsc(br.message||'Telefonda Okta’yı onaylayın. Gelmezse Rapid360’da yeşil düğmeye bir kez basın.')}</p>
-    <p style="margin:10px 0 0"><a id="rapid360BridgeLink" class="primary-btn" style="display:inline-block">Rapid360’dan Atak’a gönder</a></p>`;
+  box.innerHTML=`<p class="muted" style="margin:0">Telefonda Okta’yı onaylayın; satışlar Atak’a gelir. Gelmezse: <a id="rapid360BridgeLink" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:700">Rapid360’dan Atak’a gönder</a> düğmesini yer imlerine sürükleyin, Rapid360 sekmesinde tıklayın.</p>`;
   const a=$('#rapid360BridgeLink');
   if(a && br.bookmarklet) a.setAttribute('href',br.bookmarklet);
 }
@@ -1969,12 +1967,13 @@ function continueRapidDeviceLogin(popup){
 async function loadRapidOktaStatus(){
   const el=$('#rapid360OktaStatus');
   if(!el) return;
+  el.innerHTML='<span class="muted">Bağlantı kontrol ediliyor…</span>';
   try{
-    const d=await api('/web-api/admin/rapid360-okta-status');
-    el.textContent=(d.okta&&d.okta.connected)
-      ?(`Rapid360 bağlı${d.okta.account?`: ${d.okta.account}`:''}. Satışları oku’ya basın.`)
-      :'Satışları oku: Rapid açılır, Okta onaylanır, satışlar okunur.';
-  }catch(_){el.textContent='Satışları oku: Rapid açılır, Okta onaylanır, satışlar okunur.'}
+    const d=await api('/web-api/admin/rapid360-conn-status');
+    el.innerHTML=d.canPull
+      ?'<span style="color:#15803d;font-weight:800">🟢 Bağlı — aktarım hazır</span>'
+      :'<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span>';
+  }catch(_){el.innerHTML='<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span>'}
 }
 async function pullRapid360Live(){
   return api('/web-api/admin/rapid360-sales-pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody({autoImport:false}))});
@@ -2009,6 +2008,8 @@ function renderRapid360SalesRows(d){
 async function applyRapidPullResult(d, st){
   rapid360PullToken=d.pullToken||'';
   renderRapid360SalesRows(d);
+  hideRapidOktaBox();
+  loadRapidOktaStatus();
   const n=Number(d.count||(d.rows||[]).length||0);
   const msg=`${n} satış okundu · ${d.importable||0} aktarılabilir. İstediklerinizi işaretleyin.`;
   if(st) st.textContent=msg;
