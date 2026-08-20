@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v210 */
+/* ATAK_ADMIN_BUILD=fix-v211 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6468,10 +6468,14 @@ async function loadRapidOktaStatus(){
   el.innerHTML='<span style="color:#64748b">Bağlantı kontrol ediliyor…</span>';
   try{
     const d=await api('/web-api/admin/rapid360-conn-status');
+    const robot=d.robotReady
+      ?'<small style="margin-left:6px;color:#15803d">robot hazır</small>'
+      :`<small style="margin-left:6px;color:#b45309">robot yok${d.robotError?': '+rapidOktaEsc(d.robotError):''}</small>`;
+    const pass=d.oktaPasswordSet?'':'<small style="margin-left:6px;color:#b45309">Okta şifresi kayıtlı değil — Ayarlar → Rapid Aktar</small>';
     if(d.canPull){
-      el.innerHTML=`<span style="color:#15803d;font-weight:800">🟢 Bağlı — aktarım hazır</span>${d.account?`<small style="margin-left:6px;color:#475569">${rapidOktaEsc(d.account)}</small>`:''}`;
+      el.innerHTML=`<span style="color:#15803d;font-weight:800">🟢 Bağlı — aktarım hazır</span>${d.account?`<small style="margin-left:6px;color:#475569">${rapidOktaEsc(d.account)}</small>`:''}${robot}${pass}`;
     }else{
-      el.innerHTML='<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span><small style="margin-left:6px;color:#475569">Satışları oku Rapid360 + Okta açar</small>';
+      el.innerHTML=`<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span>${robot}${pass}`;
     }
   }catch(_){
     el.innerHTML='<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span>';
@@ -6509,7 +6513,8 @@ function showRapidBridgeBox(br){
   const box=q('#rapid360OktaBox');
   if(!box) return;
   box.classList.remove('hidden');
-  box.innerHTML=`<p style="margin:0;font-size:13px;color:#334155">Telefonda Okta’yı onaylayın; satışlar Atak’a gelir. Gelmezse: <a id="rapid360BridgeLink" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:700">Rapid360’dan Atak’a gönder</a> düğmesini yer imlerine sürükleyin, Rapid360 sekmesinde tıklayın.</p>`;
+  const head=br&&br.reason?`<p style="margin:0 0 6px;font-size:13px;color:#b45309"><b>${rapidOktaEsc(br.reason)}</b></p>`:'';
+  box.innerHTML=`${head}<p style="margin:0;font-size:13px;color:#334155">Telefonda Okta’yı onaylayın; satışlar Atak’a gelir. Gelmezse: <a id="rapid360BridgeLink" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:700">Rapid360’dan Atak’a gönder</a> düğmesini yer imlerine sürükleyin, Rapid360 sekmesinde tıklayın.</p>`;
   const a=q('#rapid360BridgeLink');
   if(a && br.bookmarklet) a.setAttribute('href',br.bookmarklet);
 }
@@ -6528,11 +6533,13 @@ async function autoPullRapid360Sales(){
       if(!(e.status===409 && e.payload && e.payload.needsOkta) && e.status!==400) throw e;
     }
     let robot=null;
+    let robotErr='';
     try{
       robot=await api('/web-api/admin/rapid360-robot-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
     }catch(e){
       robot=null;
-      if(st&&e.message){st.textContent=e.message;st.className='form-status'}
+      robotErr=e.message||'';
+      if(st&&robotErr){st.textContent='Robot çalışmadı: '+robotErr;st.className='form-status'}
     }
     let lastErr='';
     if(robot&&robot.jobId){
@@ -6552,7 +6559,9 @@ async function autoPullRapid360Sales(){
     try{
       bridge=await api('/web-api/admin/rapid360-bridge-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
     }catch(_){}
-    showRapidBridgeBox(bridge||{});
+    const boxInfo=bridge||{};
+    if(robotErr||lastErr)boxInfo.reason=`Robot çalışmadı: ${robotErr||lastErr}`;
+    showRapidBridgeBox(boxInfo);
     openRapidOktaPopup((bridge&&bridge.loginUrl)||rapid360ReportUrl());
     const deadline=Date.now()+180000;
     while(Date.now()<deadline){

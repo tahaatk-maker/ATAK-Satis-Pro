@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.210-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.211-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.210-atak-geteinvoices
-EXPECT_BUILD=fix-v210
+EXPECT_HEALTH=6.3.211-atak-geteinvoices
+EXPECT_BUILD=fix-v211
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -189,6 +189,7 @@ check "ayarlar rapid sekmesi" grep -q 'data-settings-tab="rapid"' "$SRC/public/a
 check "okta ayar api" grep -q "rapid360-okta-settings" "$SRC/server.js"
 check "robot sorgula basar" grep -q "fillReportAndQuery" "$SRC/lib/rapid360-robot.js"
 check "robot xml aktar" grep -q "xml\\\\s\\*aktar" "$SRC/lib/rapid360-robot.js"
+check "robot chromium testi" grep -q "verifyLaunch" "$SRC/lib/rapid360-robot.js"
 check "rapid taslak needsCompletion" grep -q "needsCompletion" "$SRC/server.js"
 check "rapid taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/admin.js"
 check "personel taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/personel.js"
@@ -398,11 +399,21 @@ else
   npm install playwright --no-save --omit=dev >/dev/null 2>&1 && ROBOT_OK=1 || echo "   playwright kurulamadi — robot devre disi (XML yedek calisir)"
 fi
 if [ "$ROBOT_OK" = "1" ]; then
-  npx playwright install --with-deps chromium >/dev/null 2>&1 \
-    || npx playwright install chromium >/dev/null 2>&1 \
-    || { echo "   chromium indirilemedi — robot devre disi"; ROBOT_OK=0; }
+  npx playwright install chromium >/dev/null 2>&1 || true
+  npx playwright install-deps chromium >/dev/null 2>&1 \
+    || apt-get install -y --no-install-recommends \
+      libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 \
+      libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 \
+      libpango-1.0-0 libcairo2 libglib2.0-0 fonts-liberation >/dev/null 2>&1 \
+    || echo "   sistem kutuphaneleri kurulamadi (apt)"
+  if node -e "const {chromium}=require('playwright');(async()=>{const b=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});await b.close()})().then(()=>process.exit(0)).catch(e=>{console.error(String(e.message).split('\n')[0]);process.exit(1)})" 2>/tmp/atak-robot-err.txt; then
+    echo "   ok: rapid robot hazir (chromium acildi)"
+  else
+    echo "   HATA: chromium acilamadi — robot devre disi: $(head -c 200 /tmp/atak-robot-err.txt 2>/dev/null)"
+    ROBOT_OK=0
+  fi
 fi
-[ "$ROBOT_OK" = "1" ] && echo "   ok: rapid robot hazir" || echo "   robot yok: Satislari oku yine calisir (Rapid360 penceresi + XML)"
+[ "$ROBOT_OK" = "1" ] || echo "   robot yok: Satislari oku yine calisir (Rapid360 penceresi + XML)"
 
 ATAK_OWNER_ONLY=0 pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env
 pm2 save || true

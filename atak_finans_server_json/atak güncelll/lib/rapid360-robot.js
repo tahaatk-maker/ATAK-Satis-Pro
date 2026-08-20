@@ -30,6 +30,23 @@ function loadPlaywright(){
   catch{ return require('playwright-core'); }
 }
 
+let launchCheck = null;
+async function verifyLaunch(){
+  if(launchCheck) return launchCheck;
+  launchCheck = (async () => {
+    if(!available()) return { ok: false, error: 'Sunucuda playwright kurulu değil. Hostinger scriptini tekrar çalıştırın.' };
+    try{
+      const pw = loadPlaywright();
+      const b = await pw.chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+      await b.close();
+      return { ok: true, error: '' };
+    }catch(e){
+      return { ok: false, error: ('Chromium açılamadı: ' + String(e && e.message || '').split('\n')[0]).slice(0, 220) };
+    }
+  })();
+  return launchCheck;
+}
+
 function classifyUrl(url){
   const u = String(url || '').toLowerCase();
   if(/login\.microsoftonline\.com|login\.live\.com/.test(u)) return 'microsoft';
@@ -324,6 +341,7 @@ function resetForTests(){
 
 module.exports = {
   available,
+  verifyLaunch,
   classifyUrl,
   trDate,
   startPull,

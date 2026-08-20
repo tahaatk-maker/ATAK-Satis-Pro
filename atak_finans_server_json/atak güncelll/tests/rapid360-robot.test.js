@@ -13,6 +13,10 @@ assert.equal(robot.trDate('2026-08-20T00:00:00'), '20.08.2026');
 assert.equal(robot.trDate(''), '');
 
 async function run(){
+  const v = await robot.verifyLaunch();
+  assert.equal(typeof v.ok, 'boolean');
+  if(!v.ok) assert.ok(v.error.length > 0);
+
   robot.resetForTests();
   const job = robot.startPull({
     startDate: '2026-08-18',

@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.210-atak-geteinvoices',
-    build:'fix-v210',
+    version:'6.3.211-atak-geteinvoices',
+    build:'fix-v211',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5568,13 +5568,16 @@ function rapidPreviewResponse(res,parsed,meta){
   const pullToken=rememberRapidPull(parsed,meta);
   res.json({...preview,ok:true,pending:false,pullToken,fetched:true,via:meta.via||'robot',store:meta.store,company:meta.company});
 }
-app.post('/web-api/admin/rapid360-robot-start',rapidSalesPerm,(req,res)=>{
+app.post('/web-api/admin/rapid360-robot-start',rapidSalesPerm,async(req,res)=>{
   if(!rapidRobot.available())return res.status(501).json({error:'Sunucuda Rapid robotu kurulu değil. Hostinger deploy scriptini çalıştırın.'});
+  const launch=await rapidRobot.verifyLaunch();
+  if(!launch.ok)return res.status(501).json({error:'Robot çalışamıyor: '+launch.error});
   const body=req.body||{};
   const s=readStore();
   const rapid=(s.invoiceIntegration||{}).rapid360||{};
   const user=String(rapid.oktaUser||'').trim()||d365Auth.DEFAULT_ACCOUNT;
   const password=String(rapid.oktaPassword||'').trim();
+  if(!password)return res.status(400).json({error:'Okta şifresi kayıtlı değil. Ayarlar → Rapid Aktar’dan kullanıcı + şifre kaydedin.'});
   try{
     const job=rapidRobot.startPull({
       user,password,oktaLogin:user.split('@')[0],
@@ -5683,7 +5686,15 @@ app.get('/web-api/admin/rapid360-conn-status',rapidSalesPerm,async(req,res)=>{
   }catch(_){}
   const consume=rapidSalesFetch.resolveSalesConsume(rapid,process.env);
   const muleReady=Boolean(consume.url&&consume.clientId&&consume.clientSecret)||Boolean(consume.salesUrl);
-  res.json({ok:true,connected,muleReady,canPull:connected||muleReady,account:d365Auth.publicAuth(rapid).account||''});
+  let robot={ok:false,error:'kurulu değil'};
+  try{robot=await rapidRobot.verifyLaunch();}catch(_){}
+  res.json({
+    ok:true,connected,muleReady,canPull:connected||muleReady,
+    account:d365Auth.publicAuth(rapid).account||'',
+    robotReady:robot.ok,
+    robotError:robot.ok?'':String(robot.error||''),
+    oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())
+  });
 });
 app.post('/web-api/admin/rapid360-okta-disconnect',rapidSalesPerm,(req,res)=>{
   const s=readStore();
