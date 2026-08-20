@@ -856,6 +856,7 @@ function buildSalesCiro(salesRows){
   const brand={beko:0,istikbal:0,other:0,total:0,count:0};
   const byPerson=new Map();
   for(const t of salesRows||[]){
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const amount=saleAmount(t);
     const key=dealerBrandKey(t);
     brand[key]=(brand[key]||0)+amount;
@@ -909,7 +910,7 @@ function isStaffPortalReq(req){
 function buildMonthSalesPrim(salesRows=[],pendingMap=new Map()){
   const round=n=>Math.round(Number(n||0)*100)/100;
   let gross=0,grossCount=0,cancelled=0,cancelledCount=0,returned=0,returnedCount=0,net=0,netCount=0,prim=0,primLost=0;
-  const rows=(salesRows||[]).map(t=>{
+  const rows=(salesRows||[]).filter(t=>!rapidSalesCatalog.isOpenRapidSale(t)).map(t=>{
     const amount=saleAmount(t);
     const commission=Number(t.commissionAmount||0);
     const isCancelled=Boolean(t.cancelled);
@@ -1675,6 +1676,7 @@ function buildAutoTurnovers(s,{days=30}={}){
   const map=new Map();
   for(const t of (s.financeTransactions||[])){
     if(t.kind!=='sale'||t.cancelled)continue;
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const date=txDateKey(t);
     if(!date||date<fromKey||date>today)continue;
     const who=resolveSaleStore(s,t);
@@ -1708,6 +1710,7 @@ function foundationSummary(s,date=todayISO()){
   const soldStores=new Set();
   for(const t of (s.financeTransactions||[])){
     if(t.kind!=='sale'||t.cancelled)continue;
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     if(txDateKey(t)!==date)continue;
     const amount=saleAmount(t);
     total+=amount;count+=1;
@@ -1901,8 +1904,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.201-atak-geteinvoices',
-  build:'fix-v201',
+    version:'6.3.202-atak-geteinvoices',
+    build:'fix-v202',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -4157,7 +4160,8 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
         accountName:s.financeAccounts.find(a=>a.id===x.accountId)?.name||'',
         receiptUrl:`/web-api/admin/receipt/${x.id}`,
         displayAmount,
-        itemSummary:items.map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', ')
+        itemSummary:items.map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', '),
+        needsCompletion:rapidSalesCatalog.isOpenRapidSale(x)
       };
     });
   const pendingEdit=(s.cancellationRequests||[]).find(r=>r.status==='pending'&&r.targetType==='customer_edit'&&String(r.targetId)===String(customer.id))||null;
@@ -4277,7 +4281,7 @@ app.get('/web-api/admin/uninvoiced-sales',requireAdminOrStaffAny('screen_uninvoi
   const actor=currentActor(req);
   const canAll=actorIsManager(req)||!isStaffPortalReq(req);
   let rows=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale' && !t.cancelled && saleNeedsInvoice(t.invoiceStatus));
+    .filter(t=>t.kind==='sale' && !t.cancelled && !rapidSalesCatalog.isOpenRapidSale(t) && saleNeedsInvoice(t.invoiceStatus));
   if(!canAll)rows=rows.filter(t=>txBelongsToActor(t,actor));
   rows=rows.map(t=>({
       id:t.id,
@@ -4455,14 +4459,37 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
       if(available<item.quantity)return res.status(400).json({error:`${item.productCode} için seçilen depoda yalnızca ${Math.max(0,available)} adet satılabilir stok var`});
     }
   }
-  const ref=`SAT-${Date.now()}`;
+  const completeId=String(x.completeSaleId||x.rapidCompleteTxId||'').trim();
+  let existing=null;
+  if(completeId){
+    existing=(s.financeTransactions||[]).find(t=>String(t.id)===completeId&&t.kind==='sale'&&!t.cancelled);
+    if(!existing)return res.status(404).json({error:'Tamamlanacak satış bulunamadı'});
+    if(!rapidSalesCatalog.isOpenRapidSale(existing))return res.status(400).json({error:'Bu satış zaten tamamlanmış. Yeni satış açın.'});
+    if(isStaffPortalReq(req) && !actorCanSeeAllStaffSales(req) && !txBelongsToActor(existing,actor)){
+      return res.status(403).json({error:'Bu satış size ait değil'});
+    }
+  }
   const actorName=actor?.name||currentActor(req)?.name||'Admin';
   const actorId=actor?.id||currentActor(req)?.id||'';
-  const sale=financeTx(s,{
+  const ref=existing?(String(existing.reference||existing.rapidSalesId||'').trim()||`SAT-${Date.now()}`):`SAT-${Date.now()}`;
+  const sale=existing||financeTx(s,{
     date:x.date,kind:'sale',accountId:'',customerId:customer.id,amount:0,customerDelta:total,
     category:'Ürün Satışı',description:String(x.description||'Müşteri satışı'),reference:ref,
     createdBy:actorName,createdById:actorId
   });
+  if(existing){
+    if(!sale.rapidInvoiceNumber)sale.rapidInvoiceNumber=String(sale.invoiceNumber||'').trim();
+    sale.date=String(x.date||sale.date||todayISO()).slice(0,10);
+    sale.customerId=customer.id;
+    sale.amount=0;
+    sale.customerDelta=total;
+    sale.category='Ürün Satışı';
+    sale.description=String(x.description||sale.description||'Müşteri satışı');
+    sale.reference=ref;
+    sale.updatedAt=new Date().toISOString();
+    sale.completedBy=actorName;
+    sale.completedById=actorId;
+  }
   sale.items=cleanItems;
   sale.grossTotal=grossTotal;
   sale.discountPct=discountPct;
@@ -4476,8 +4503,8 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   sale.commissionAmount=commissionAmount;
   sale.salespersonId=salesperson.id;
   sale.salespersonName=salesperson.name;
-  sale.deliveryStatus=String(x.deliveryStatus||'order_received');
-  sale.deliveryNote=String(x.deliveryNote||'');
+  sale.deliveryStatus=String(x.deliveryStatus||existing?.deliveryStatus||'order_received');
+  sale.deliveryNote=String(x.deliveryNote||(existing?existing.deliveryNote:'')||'');
   sale.paymentMethod=paymentMethod;
   sale.payments=normalizedPayments.map(p=>isHavaleMethod(p.method)?{...p,pending:true,collectedAmount:0}:p)
     .concat(promissoryAmount>0?[{method:'Senet',amount:promissoryAmount,accountId:''}]:[]);
@@ -4582,7 +4609,11 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     if(g)sale.guarantor=g;
   }catch(err){return res.status(400).json({error:err.message||'Kefil bilgisi geçersiz'})}
 
-  audit(s,'Müşteriye satış yapıldı',customer.name,{total,grossTotal,discountPct,dealer:dealer.name,salesperson:salesperson.name,commissionAmount,paid,payments:sale.payments,promissoryAmount,ref,items:cleanItems.length,hasGuarantor:Boolean(sale.guarantor)});
+  sale.needsCompletion=false;
+  sale.rapidDraft=false;
+  sale.cashPosted=collections.length>0;
+  sale.completedAt=new Date().toISOString();
+  audit(s,existing?'Rapid satış tamamlandı':'Müşteriye satış yapıldı',customer.name,{total,grossTotal,discountPct,dealer:dealer.name,salesperson:salesperson.name,commissionAmount,paid,payments:sale.payments,promissoryAmount,ref,items:cleanItems.length,hasGuarantor:Boolean(sale.guarantor),completeSaleId:existing?existing.id:''});
   writeStore(s);
   res.json({
     ok:true,sale,collections,collection:collections[0]||null,promissory:promissoryResult,
@@ -5005,7 +5036,9 @@ app.get('/web-api/admin/sales-tracking',requireAdminOrStaffAny('screen_sales_tra
         customerId:t.customerId||'',customerName:c.name||'',customerPhone:c.phone||'',customerNote:c.note||'',
         total:saleAmount(t),items:t.items||[],deliveryStatus:t.deliveryStatus||'order_received',
         deliveryNote:t.deliveryNote||'',invoiceStatus:t.invoiceStatus||'pending',deductStock:Boolean(t.deductStock),
-        warehouseId:t.warehouseId||'',createdAt:t.createdAt||''
+        warehouseId:t.warehouseId||'',createdAt:t.createdAt||'',
+        needsCompletion:rapidSalesCatalog.isOpenRapidSale(t),rapidDraft:Boolean(t.rapidDraft),
+        rapidSalesId:t.rapidSalesId||'',source:t.source||''
       }
     })
     .sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
@@ -5192,6 +5225,7 @@ function applyRapidSalesImport(s, parsed, {dealer, actorName, actorId, source, c
     if(!(parsed.sales||[]).length) throw new Error('Seçilen satışlar bu listede yok');
   }
   let imported=0,skippedDuplicate=0,skippedEmpty=0,customersCreated=0,customersUpdated=0;
+  const importedSales=[];
   const errors=[];
   ensureDynamicsCoreCategories(s);
   const missing=collectRapidMissingProducts(s, parsed, dealer);
@@ -5232,28 +5266,23 @@ function applyRapidSalesImport(s, parsed, {dealer, actorName, actorId, source, c
     const sp=matchRapidSalesperson(s,src.salespersonName);
     row.salespersonId=sp?.id||actorId;
     row.salespersonName=src.salespersonName||sp?.name||actorName||'Rapid360';
-    row.deliveryStatus=src.invoiceDate?'delivered':'order_received';
     row.deliveryNote=live?'Rapid360 canlı aktarım':(src.webOrder?'Rapid360 web siparişi':'Rapid360 XML aktarım');
     row.paymentMethod=payLabel;
-    row.payments=(src.payments||[]).filter(p=>Number(p.amount)>0).map(p=>({method:p.method,amount:cleanMoney(p.amount),accountId:'',imported:true}));
+    row.payments=(src.payments||[]).filter(p=>Number(p.amount)>0).map(p=>({method:p.method,amount:cleanMoney(p.amount),accountId:'',imported:true,rawMethod:p.rawMethod||'',dueDate:p.dueDate||'',installments:p.installments||0}));
     row.warehouseId='';
     row.deductStock=false;
     row.reserveStock=false;
     row.stockMode='none';
-    row.invoiceStatus=src.invoiceDate||src.invoiceNumber?'issued':'not_required';
-    row.invoiceNumber=String(src.invoiceNumber||'').trim();
-    row.invoiceDate=src.invoiceDate||'';
-    row.invoiceIssuedAt=src.invoiceDate?new Date().toISOString():'';
-    row.invoiceQueueId='';
     row.billingParty='individual';
     row.rapidSalesId=ref;
     row.rapidCustAccount=src.custAccount||'';
     row.rapidStore=src.store||'';
     row.source=source||'rapid360-xml';
-    row.cashPosted=false;
+    rapidSalesCatalog.markImportedSaleDraft(row, src);
+    importedSales.push({id:row.id,rapidSalesId:ref,customerId:customer.id,customerName:customer.name||'',total,date});
     imported++;
   }
-  return {imported,skippedDuplicate,skippedEmpty,customersCreated,customersUpdated,productsCreated,errors};
+  return {imported,skippedDuplicate,skippedEmpty,customersCreated,customersUpdated,productsCreated,errors,importedSales};
 }
 function rapidSaleDuplicate(s,salesId){
   const id=String(salesId||'').trim();
@@ -5607,9 +5636,12 @@ app.get('/web-api/admin/salespeople',requireAdminOrStaff('orders_manage'),(req,r
   const s=readStore();
   res.json({ok:true,rows:salesPeople(s,req),currentUser:currentSessionUser(req),canManage:isSystemManager(req)});
 });
-app.get('/web-api/admin/sale/:id',requireAdmin,(req,res)=>{
+app.get('/web-api/admin/sale/:id',requireAdminOrStaff('orders_manage'),(req,res)=>{
   const s=readStore(),sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
   if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
+  if(isStaffPortalReq(req) && !actorCanSeeAllStaffSales(req) && !txBelongsToActor(sale,currentActor(req))){
+    return res.status(403).json({error:'Bu satış size ait değil'});
+  }
   const customer=s.customers.find(c=>c.id===sale.customerId)||null;
   const collections=relatedSaleCollections(s,sale).map(c=>({
     id:c.id,date:c.date,amount:c.amount,accountId:c.accountId,
@@ -5618,6 +5650,8 @@ app.get('/web-api/admin/sale/:id',requireAdmin,(req,res)=>{
   const pending=(s.cancellationRequests||[]).filter(r=>r.status==='pending'&&String(r.targetId)===String(sale.id));
   res.json({
     ok:true,sale,customer,collections,
+    needsCompletion:rapidSalesCatalog.isOpenRapidSale(sale),
+    paymentSplits:rapidSalesCatalog.paymentsToSplits(sale.payments),
     accounts:s.financeAccounts.filter(a=>a.active!==false),
     products:(s.products||[]).filter(p=>p.active!==false).map(p=>({code:p.code,name:p.name,itemCode:p.itemCode||'',searchName:p.searchName||'',cashPrice:Number(p.cashPrice||p.salePrice||p.price||0)})),
     pending,canManage:isSystemManager(req)
@@ -5652,6 +5686,7 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
   const brand={beko:0,istikbal:0,other:0,bekoCount:0,istikbalCount:0,otherCount:0};
   let gross=0,grossCount=0,net=0,netCount=0,cancelled=0,cancelledCount=0,discount=0,commission=0,primLost=0;
   for(const t of all){
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const amount=saleAmount(t);
     const g=Number(t.grossTotal!=null && t.grossTotal!==''?t.grossTotal:amount)||0;
     const comm=Number(t.commissionAmount||0);
@@ -5683,7 +5718,7 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
 
   const pendingByTarget=new Map();
   (s.cancellationRequests||[]).filter(r=>r.status==='pending').forEach(r=>pendingByTarget.set(`${r.targetType}:${r.targetId}`,r));
-  const rows=all.filter(t=>!t.cancelled).map(t=>{
+  const rows=all.filter(t=>!t.cancelled&&!rapidSalesCatalog.isOpenRapidSale(t)).map(t=>{
     const c=customerMap.get(String(t.customerId));
     const pendCancel=pendingByTarget.get(`sale:${t.id}`);
     const pendEdit=pendingByTarget.get(`sale_edit:${t.id}`);
@@ -6026,6 +6061,7 @@ app.get('/web-api/admin/dashboard-cockpit',requireAdmin,(req,res)=>{
 
   for(const t of (s.financeTransactions||[])){
     if(t.kind!=='sale'||t.cancelled)continue;
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const key=txDateKey(t);
     if(!key)continue;
     const amount=saleAmount(t);
@@ -6055,7 +6091,7 @@ app.get('/web-api/admin/dashboard-cockpit',requireAdmin,(req,res)=>{
 
   const fin=financeSnapshot(s);
   const pendingInvoices=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale'&&!t.cancelled&&saleNeedsInvoice(t.invoiceStatus)).length;
+    .filter(t=>t.kind==='sale'&&!t.cancelled&&!rapidSalesCatalog.isOpenRapidSale(t)&&saleNeedsInvoice(t.invoiceStatus)).length;
   const overdueNotes=(s.promissoryNotes||[])
     .filter(n=>n.status==='open'&&String(n.dueDate||'')<today).length;
   const lowStock=(s.productStocks||[])
@@ -6538,7 +6574,7 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
   const responses=(s.invoiceAppResponses||[]).slice();
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
   const salesPending=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale'&&!t.cancelled&&saleNeedsInvoice(t.invoiceStatus))
+    .filter(t=>t.kind==='sale'&&!t.cancelled&&!rapidSalesCatalog.isOpenRapidSale(t)&&saleNeedsInvoice(t.invoiceStatus))
     .filter(t=>staffSeesAllInvoices(req)||txBelongsToActor(t,currentActor(req)))
     .map(t=>({
       id:t.id,reference:t.reference||'',date:t.date||'',customerId:t.customerId||'',
@@ -8395,6 +8431,7 @@ app.get('/web-api/admin/revenue-summary',requireAdmin,(req,res)=>{
   const posCounts={beko:0,istikbal:0,other:0};
   for(const t of (s.financeTransactions||[])){
     if(t.kind!=='sale'||t.cancelled)continue;
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const key=txDateKey(t);
     if(!key||key<startDate||key>endDate)continue;
     const b=dealerBrandKey(t);

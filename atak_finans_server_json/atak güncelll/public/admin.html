@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v201" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v201" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v201" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v201" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v202" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v202" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v202" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v202" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1146,7 +1146,7 @@ body.inv-full #pageTitle{font-size:18px}
 </div></section>
 <section class="tab" id="salesTracking">
 <div class="panel">
-  <div class="panel-head"><div><small class="eyebrow">SATIŞ OPERASYONU</small><h2>Satış Takibi</h2><p>Satışı aldıktan teslim edilene kadar takip edin. Rapid Aktar ile Rapid360 satışları içeri çekilir.</p></div>
+  <div class="panel-head"><div><small class="eyebrow">SATIŞ OPERASYONU</small><h2>Satış Takibi</h2><p>Satışı aldıktan teslim edilene kadar takip edin. Rapid Aktar satışları buraya düşer; Satışa git ile açıp Satışı Yap ile tamamlarsınız.</p></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button id="rapid360SalesXmlBtn2" class="primary" type="button">Rapid Aktar</button>
       <button id="salesTrackingRefresh" class="secondary-btn" type="button">Yenile</button>
@@ -1154,7 +1154,9 @@ body.inv-full #pageTitle{font-size:18px}
   </div>
   <div class="sales-tracking-filters">
     <label>Durum<select id="salesTrackingStatusFilter">
-      <option value="">Tüm açık satışlar</option><option value="order_received">Sipariş Alındı</option><option value="preparing">Hazırlanıyor</option><option value="ready">Teslimata Hazır</option><option value="shipped">Sevkte</option><option value="delivered">Teslim Edildi</option>
+      <option value="">Tüm açık satışlar</option>
+      <option value="needs_completion">Rapid — tamamla</option>
+      <option value="order_received">Sipariş Alındı</option><option value="preparing">Hazırlanıyor</option><option value="ready">Teslimata Hazır</option><option value="shipped">Sevkte</option><option value="delivered">Teslim Edildi</option>
     </select></label>
     <label>Ara<input id="salesTrackingSearch" placeholder="Müşteri, satış no, ürün veya personel"/></label>
   </div>
@@ -2806,7 +2808,7 @@ Bulunamayan → Diğer.
       <div>
         <small class="eyebrow">RAPID360 · RAPID AKTAR</small>
         <h2>Rapid Aktar</h2>
-        <p class="note"><b>Satışları oku</b> Rapid360’ı açar. Telefonda Okta’yı onaylayın, satışlar okunur. Kod yazılmaz. Microsoft hata sayfası açılmaz. Mağaza <b>340334 ATAK</b>.</p>
+        <p class="note"><b>Satışları oku</b> Rapid360’ı açar. Telefonda Okta’yı onaylayın, satışlar okunur. Seçilenleri aktarınca satışa düşer; içeri girip bilgileri değiştirip Satışı Yap ile tamamlarsınız. Kod yazılmaz. Mağaza <b>340334 ATAK</b>.</p>
       </div>
       <button class="secondary-btn" id="rapid360SalesXmlClose" type="button">Kapat</button>
     </div>
@@ -2861,12 +2863,17 @@ Bulunamayan → Diğer.
         </table>
       </div>
     </div>
+    <div id="rapid360ImportedBox" class="hidden" style="margin-top:12px;padding:12px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4">
+      <b>Satışa düştü — Satışı Yap ile tamamlayın</b>
+      <p class="note" style="margin:6px 0 0">Kasa ve stok henüz değişmedi. İçeri girip fiyat / ödeme / müşteri bilgisini anlık düzeltebilirsiniz.</p>
+      <div id="rapid360ImportedList" style="margin-top:8px"></div>
+    </div>
     <div id="rapid360SalesSelectHint" class="note" style="margin-top:8px"></div>
     <div class="table-wrap" style="margin-top:12px;max-height:320px;overflow:auto">
       <table><thead><tr><th><input type="checkbox" id="rapid360SalesSelectAll" title="Tümünü seç"/></th><th>Sipariş</th><th>Tarih</th><th>Müşteri</th><th>Kalem</th><th>Tutar</th><th>Durum</th></tr></thead><tbody id="rapid360SalesXmlTable"></tbody></table>
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v201"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v201"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v202"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v202"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

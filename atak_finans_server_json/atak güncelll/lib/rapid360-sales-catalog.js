@@ -103,6 +103,57 @@ function collectMissingProducts(parsed, products, opts = {}){
   return [...seen.values()];
 }
 
+function paymentSplitKey(method){
+  const s = String(method || '').toLocaleLowerCase('tr-TR');
+  if(/senet|promiss|cek|çek/.test(s)) return 'note';
+  if(/kredi\s*kart|kk\b|card|pos/.test(s)) return 'card';
+  if(/havale|eft|transfer|banka/.test(s)) return 'transfer';
+  if(/vadeli|credit|acik\s*hesap|açık/.test(s)) return 'credit';
+  if(/nakit|cash|nak\b/.test(s)) return 'cash';
+  return 'credit';
+}
+
+function paymentsToSplits(payments){
+  const out = { cash: 0, card: 0, transfer: 0, credit: 0, note: 0 };
+  for(const p of payments || []){
+    const amt = Number(p && p.amount);
+    if(!(amt > 0)) continue;
+    const key = paymentSplitKey(p.method || p.rawMethod);
+    out[key] = Math.round((out[key] + amt) * 100) / 100;
+  }
+  return out;
+}
+
+function isOpenRapidSale(tx){
+  if(!tx || String(tx.kind || '') !== 'sale' || tx.cancelled) return false;
+  if(tx.needsCompletion === true || tx.rapidDraft === true) return true;
+  const src = String(tx.source || '');
+  const rapidId = String(tx.rapidSalesId || '').trim();
+  if(!/^rapid360/i.test(src) && !rapidId) return false;
+  if(tx.cashPosted === true) return false;
+  if(Array.isArray(tx.collectionIds) && tx.collectionIds.length) return false;
+  if(Number(tx.customerDelta || 0) !== 0) return false;
+  return true;
+}
+
+function markImportedSaleDraft(row, src){
+  const sale = src || {};
+  row.needsCompletion = true;
+  row.rapidDraft = true;
+  row.cashPosted = false;
+  row.deliveryStatus = 'order_received';
+  row.invoiceStatus = 'not_required';
+  row.rapidInvoiceNumber = String(sale.invoiceNumber || row.rapidInvoiceNumber || row.invoiceNumber || '').trim();
+  row.rapidInvoiceDate = sale.invoiceDate || row.rapidInvoiceDate || row.invoiceDate || '';
+  row.invoiceNumber = '';
+  row.invoiceDate = '';
+  row.invoiceIssuedAt = '';
+  row.invoiceQueueId = '';
+  row.customerDelta = 0;
+  row.amount = 0;
+  return row;
+}
+
 module.exports = {
   fold,
   lineKey,
@@ -111,5 +162,9 @@ module.exports = {
   lookupCategory,
   collectMissingProducts,
   parseSalesIds,
-  filterSalesByIds
+  filterSalesByIds,
+  paymentSplitKey,
+  paymentsToSplits,
+  isOpenRapidSale,
+  markImportedSaleDraft
 };

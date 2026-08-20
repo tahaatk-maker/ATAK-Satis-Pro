@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v201 */
+/* ATAK_PERSONEL_BUILD=fix-v202 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -45,6 +45,7 @@ let salesCustomers=[];
 let salesCustomerTotal=0;
 let salesAccounts=[];
 let salesCart=[];
+let completingSaleId='';
 let salesStep=1;
 let lastSaleDocsUrl='';
 let cancelDraft=null;
@@ -613,6 +614,7 @@ function setSalesStep(step){
   else salesRecalcPay();
 }
 function salesReset(){
+  completingSaleId='';
   salesCart=[];
   lastSaleDocsUrl='';
   // Müşteri listesini silme — finance-center'dan gelenleri koru
@@ -654,6 +656,83 @@ function salesReset(){
   salesRecalcPay();
   $('#salesStatus').textContent='';
   $('#customerSearchSale')?.focus();
+}
+function salesPickCustomerRecord(c){
+  if(!c?.id)return;
+  const map=new Map((salesCustomers||[]).map(x=>[String(x.id),x]));
+  map.set(String(c.id),c);
+  salesCustomers=[...map.values()];
+  const sel=$('#salesCustomerSelect');
+  if(sel){
+    if(![...sel.options].some(o=>String(o.value)===String(c.id))){
+      const o=document.createElement('option');
+      o.value=c.id;o.textContent=typeof customerOptionLabel==='function'?customerOptionLabel(c):(c.name||c.id);
+      sel.appendChild(o);
+    }
+    sel.value=c.id;
+  }
+  if($('#customerSearchSale'))$('#customerSearchSale').value=c.name||'';
+  salesCustomerChanged();
+}
+function salesFillPaymentSplits(splits){
+  const s=splits||{};
+  const set=(id,v)=>{if($(id))$(id).value=Number(v)>0?String(v):''};
+  set('#payCash',s.cash);set('#payCard',s.card);set('#payTransfer',s.transfer);set('#payCredit',s.credit);set('#payNote',s.note);
+  if(Number(s.note)>0)setSalesPayPlanOpen(true);
+  salesRecalcPay();
+}
+async function renderRapidOpenSalesHint(){
+  const box=$('#rapidOpenSalesHint');
+  if(!box)return;
+  try{
+    const d=await api('/web-api/admin/sales-tracking');
+    const open=(d.rows||[]).filter(r=>r.needsCompletion);
+    if(!open.length){box.classList.add('hidden');box.innerHTML='';return}
+    box.classList.remove('hidden');
+    box.innerHTML=`<b>Tamamlanacak Rapid satış</b><p class="muted" style="margin:6px 0">Satışa düştü. İçeri girip bilgileri düzeltip Satışı Yap ile tamamlayın.</p>`+
+      open.slice(0,12).map(r=>`<button type="button" class="primary-btn" data-sale-complete="${r.id}" style="margin:4px 6px 0 0">${esc(r.reference||r.rapidSalesId||r.customerName||'Satışa git')}</button>`).join('');
+    box.querySelectorAll('[data-sale-complete]').forEach(btn=>btn.onclick=()=>openRapidSaleInSalesCenter(btn.dataset.saleComplete));
+  }catch(_){box.classList.add('hidden')}
+}
+async function openRapidSaleInSalesCenter(saleId){
+  const id=String(saleId||'').trim();
+  if(!id)return;
+  if(salesCart.length && completingSaleId!==id){
+    if(!confirm('Açık satış formu var. Rapid satış yüklensin mi?'))return;
+  }
+  hideRapidOktaBox();
+  $('#rapid360SalesXmlModal')?.classList.add('hidden');
+  hidePanels();
+  $('#salesPanel')?.classList.remove('hidden');
+  $('#salesStickyDock')?.classList.remove('hidden');
+  try{
+    await loadSales();
+    const d=await api('/web-api/admin/sale/'+encodeURIComponent(id));
+    const sale=d.sale||{};
+    completingSaleId=String(sale.id||id);
+    if(d.customer)salesPickCustomerRecord(d.customer);
+    if(sale.dealerId && $('#salesDealer') && [...$('#salesDealer').options].some(o=>String(o.value)===String(sale.dealerId)))$('#salesDealer').value=sale.dealerId;
+    if(sale.date && $('#salesDate'))$('#salesDate').value=String(sale.date).slice(0,10);
+    if($('#salesDiscountPct'))$('#salesDiscountPct').value=String(sale.discountPct||0);
+    if($('#salesDescription'))$('#salesDescription').value=sale.description||(`Rapid ${sale.rapidSalesId||sale.reference||''}`.trim());
+    if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value='not_required';
+    salesCart=(sale.items||[]).map(i=>({
+      code:i.productCode||i.itemCode||'',
+      name:i.productName||i.materialCode||i.productCode||'',
+      qty:Math.max(1,Math.round(Number(i.quantity)||1)),
+      unitPrice:Number(i.unitPrice||0),
+      itemCode:i.itemCode||'',
+      materialCode:i.materialCode||i.productName||''
+    })).filter(r=>r.code);
+    renderCart();
+    salesFillPaymentSplits(d.paymentSplits||{});
+    const senet=(sale.payments||[]).find(p=>/senet/i.test(String(p.method||'')));
+    if(senet && Number(senet.installments)>0 && $('#promissoryInstallments'))$('#promissoryInstallments').value=String(senet.installments);
+    setSalesStep(salesCart.length?2:1);
+    const hint=`Rapid satış yüklendi (${sale.rapidSalesId||sale.reference||''}). Fiyat, ödeme ve müşteri bilgisini kontrol edip Satışı Yap ile tamamlayın.`;
+    $('#salesStatus').textContent=hint;
+    stToast(hint);
+  }catch(e){stToast(e.message||'Satış yüklenemedi')}
 }
 
 $('#salesCard').onclick=async()=>{
@@ -721,6 +800,7 @@ async function loadSales(){
       salesCustomers.length?`Toplam ${salesCustomerTotal} müşteri yüklendi. Yazarak süzün veya listeden seçin.`
       :'Müşteri yok — önce ekleyin.';
     st.textContent='';
+    renderRapidOpenSalesHint();
   }catch(e){st.textContent=e.message}
 }
 async function salesSearchCustomers(){
@@ -1703,6 +1783,7 @@ async function confirmSalesDraft(){
   try{
     const invoiceStatus=d.invoiceStatus==='queue_qnb'?'pending':d.invoiceStatus;
     const body={
+      completeSaleId:completingSaleId||undefined,
       customerId:d.customerId,dealerId:d.dealerId,salespersonId:d.salespersonId,salespersonName:d.salesperson?.name||'',
       discountPct:d.discountPct,warehouseId:d.warehouseId,date:d.date,paymentMethod:d.method,
       payments:d.payments,promissory:d.promissory,guarantor:d.guarantor||null,billingParty:d.billingParty||'individual',
@@ -1726,6 +1807,7 @@ async function confirmSalesDraft(){
     st.textContent=`Satış bitti: ${r.sale?.reference||r.reference||'OK'}${noteText}`;
     $('#salesStatus').textContent=st.textContent;
     salesReset();
+    renderRapidOpenSalesHint();
   }catch(e){st.textContent=e.message||'Satış kaydedilemedi'}
   finally{if(btn){btn.disabled=false;btn.textContent='✓ Kontrol Ettim, Satışı Yap'}}
 }
@@ -1998,6 +2080,8 @@ $('#rapid360SalesXmlBtn')?.addEventListener('click',()=>{
   rapid360PullToken='';
   rapid360PreviewData=null;
   $('#rapid360NewProductsBox')?.classList.add('hidden');
+  $('#rapid360ImportedBox')?.classList.add('hidden');
+  $('#rapid360ImportedList')&&($('#rapid360ImportedList').innerHTML='');
   $('#rapid360NewProductsTable')&&($('#rapid360NewProductsTable').innerHTML='');
   fillRapidAktarDefaults();
   hideRapidOktaBox();
@@ -2058,7 +2142,7 @@ async function previewRapid360Xml(){
 $('#rapid360SalesXmlPreviewBtn')?.addEventListener('click',()=>previewRapid360Xml());
 $('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
   const st=$('#rapid360SalesXmlStatus');
-  if(!confirm('İşaretli Rapid360 satışları Atak listesine eklensin mi? Katalogda olmayan ürünler seçilen kategoriyle eklenir.'))return;
+  if(!confirm('İşaretli Rapid360 satışları Atak satış listesine eklensin mi?\nSatışa düşer; içeri girip bilgileri düzeltip Satışı Yap ile tamamlarsınız. Kasa ve stok o zaman işler.'))return;
   if(!rapid360SelectedSalesIds().length){st.textContent='Aktarılacak satış seçin';return}
   if(rapid360MissingCategoryCount()>0){
     st.textContent=`${rapid360MissingCategoryCount()} yeni ürünün kategorisi eksik — satırdan seçin`;
@@ -2078,10 +2162,20 @@ $('#rapid360SalesXmlImportBtn')?.addEventListener('click',async()=>{
       fd.append('salesIds',JSON.stringify(rapid360SelectedSalesIds()));
       r=await api('/web-api/admin/rapid360-sales-import',{method:'POST',body:fd});
     }
-    st.textContent=`${r.imported||0} satış alındı · ${r.skippedDuplicate||0} zaten vardı${r.productsCreated?` · ${r.productsCreated} ürün eklendi`:''}${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}`;
+    st.textContent=`${r.imported||0} satışa düştü · ${r.skippedDuplicate||0} zaten vardı${r.productsCreated?` · ${r.productsCreated} ürün eklendi`:''}${r.customersUpdated?` · ${r.customersUpdated} müşteri adı güncellendi`:''}. İçeri girip Satışı Yap ile tamamlayın.`;
     $('#rapid360NewProductsBox')?.classList.add('hidden');
     $('#rapid360SalesXmlImportBtn')&&($('#rapid360SalesXmlImportBtn').disabled=true);
+    const imported=(r.importedSales||[]).filter(x=>x&&x.id);
+    const box=$('#rapid360ImportedBox');
+    const list=$('#rapid360ImportedList');
+    if(box&&list&&imported.length){
+      box.classList.remove('hidden');
+      list.innerHTML=imported.map(x=>`<button type="button" class="primary-btn" data-sale-complete="${x.id}" style="margin:4px 6px 0 0">${esc(x.rapidSalesId||x.customerName||'Satışa git')}</button>`).join('');
+      list.querySelectorAll('[data-sale-complete]').forEach(btn=>btn.onclick=()=>openRapidSaleInSalesCenter(btn.dataset.saleComplete));
+    }
     stToast(st.textContent);
+    await renderRapidOpenSalesHint();
+    if(imported.length===1) await openRapidSaleInSalesCenter(imported[0].id);
   }catch(e){st.textContent=e.message}
 });
 $('#salesFooterResetBtn')?.addEventListener('click',salesReset);

@@ -72,4 +72,27 @@ assert.equal(picked.sales[0].salesId, 'S1');
 assert.deepEqual(missing.find((x) => x.itemCode === 'C9120').salesIds, ['S1', 'S2']);
 assert.deepEqual(missing.find((x) => x.itemCode === 'NEW2').salesIds, ['S2']);
 
+assert.deepEqual(catalog.paymentsToSplits([
+  { method: 'Nakit', amount: 1000 },
+  { method: 'Kredi Kartı', amount: 500.5 },
+  { method: 'Senet', amount: 200 }
+]), { cash: 1000, card: 500.5, transfer: 0, credit: 0, note: 200 });
+assert.equal(catalog.paymentSplitKey('Havale / EFT'), 'transfer');
+assert.equal(catalog.paymentSplitKey('Açık hesap'), 'credit');
+
+const draft = catalog.markImportedSaleDraft({
+  kind: 'sale', invoiceNumber: 'FTR-1', invoiceDate: '2026-08-01', invoiceStatus: 'issued', deliveryStatus: 'delivered'
+}, { invoiceNumber: 'FTR-1', invoiceDate: '2026-08-01' });
+assert.equal(draft.needsCompletion, true);
+assert.equal(draft.rapidDraft, true);
+assert.equal(draft.cashPosted, false);
+assert.equal(draft.deliveryStatus, 'order_received');
+assert.equal(draft.invoiceStatus, 'not_required');
+assert.equal(draft.invoiceNumber, '');
+assert.equal(draft.rapidInvoiceNumber, 'FTR-1');
+assert.equal(catalog.isOpenRapidSale(draft), true);
+assert.equal(catalog.isOpenRapidSale({ kind: 'sale', source: 'rapid360-xml', cashPosted: false, customerDelta: 0 }), true);
+assert.equal(catalog.isOpenRapidSale({ kind: 'sale', source: 'rapid360-xml', cashPosted: true, customerDelta: 1200 }), false);
+assert.equal(catalog.isOpenRapidSale({ kind: 'sale', cancelled: true, needsCompletion: true }), false);
+
 console.log('rapid360-sales-catalog tests OK');

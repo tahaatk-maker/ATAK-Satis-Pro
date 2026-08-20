@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.201-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.202-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.201-atak-geteinvoices
-EXPECT_BUILD=fix-v201
+EXPECT_HEALTH=6.3.202-atak-geteinvoices
+EXPECT_BUILD=fix-v202
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -157,6 +157,13 @@ echo "   ok: Rapid Aktar ikinci Kod penceresi yok"
 check "rapid360 satis aktar ui" grep -q "Rapid Aktar" "$SRC/public/admin.html"
 check "rapid360 satis katalog" test -f "$SRC/lib/rapid360-sales-catalog.js"
 check "rapid360 missing products" grep -q "collectMissingProducts" "$SRC/lib/rapid360-sales-catalog.js"
+check "rapid taslak isOpenRapidSale" grep -q "isOpenRapidSale" "$SRC/lib/rapid360-sales-catalog.js"
+check "rapid taslak needsCompletion" grep -q "needsCompletion" "$SRC/server.js"
+check "rapid taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/admin.js"
+check "personel taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/personel.js"
+check "satis takip rapid tamamla" grep -q "Rapid — tamamla" "$SRC/public/admin.html"
+check "admin satis git" grep -q "openRapidSaleInSalesCenter" "$SRC/public/assets/admin.js"
+check "personel satis git" grep -q "openRapidSaleInSalesCenter" "$SRC/public/assets/personel.js"
 check "rapid360 yeni urun kategori" grep -q "createRapidMissingProducts" "$SRC/server.js"
 check "admin yeni urun kutu" grep -q 'id="rapid360NewProductsBox"' "$SRC/public/admin.html"
 check "personel yeni urun kutu" grep -q 'id="rapid360NewProductsBox"' "$SRC/public/personel.html"
