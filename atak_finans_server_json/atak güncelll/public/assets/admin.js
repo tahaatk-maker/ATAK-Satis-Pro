@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v205 */
+/* ATAK_ADMIN_BUILD=fix-v206 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6473,17 +6473,38 @@ async function applyRapidPullResult(d, st){
   if(d.needsProductCategories) q('#rapid360NewProductsBox')?.scrollIntoView({behavior:'smooth',block:'center'});
   return d;
 }
+function showRapidBridgeBox(br){
+  const box=q('#rapid360OktaBox');
+  if(!box) return;
+  box.classList.remove('hidden');
+  box.innerHTML=`<div style="font-weight:700;color:#1e3a8a;margin-bottom:6px">Okta sonrası satışlar Atak’a gelir</div>
+    <p style="margin:6px 0;font-size:13px;color:#334155">${rapidOktaEsc(br.message||'Telefonda Okta’yı onaylayın. Atak arka planda okur. Gelmezse Rapid360 penceresinde yeşil düğmeye bir kez basın — XML ile aynı satışlar ekrana düşer.')}</p>
+    <p style="margin:10px 0 0"><a id="rapid360BridgeLink" class="primary" style="display:inline-block;padding:8px 12px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none">Rapid360’dan Atak’a gönder</a></p>
+    <p class="note" style="margin:8px 0 0">Düğmeyi yer imine sürükleyip Rapid360 sekmesinde tıklayın. Microsoft sayfasında çalışmaz. XML yedek aynı listedir.</p>`;
+  const a=q('#rapid360BridgeLink');
+  if(a && br.bookmarklet) a.setAttribute('href',br.bookmarklet);
+}
 async function autoPullRapid360Sales(){
   const st=q('#rapid360SalesXmlStatus');
   fillRapidAktarDefaults();
   rapid360PullToken='';
-  if(st){st.textContent='Rapid360 açılıyor, satışlar okunuyor…';st.className='form-status'}
+  if(st){st.textContent='Satışlar arka planda okunuyor (XML ile aynı veri)…';st.className='form-status'}
   q('#rapid360SalesXmlImportBtn')&&(q('#rapid360SalesXmlImportBtn').disabled=true);
   q('#rapid360SalesPullBtn')&&(q('#rapid360SalesPullBtn').disabled=true);
   try{
-    openRapidOktaPopup(rapid360ReportUrl());
-    try{await startRapidOktaLogin()}catch(_){}
-    const deadline=Date.now()+90000;
+    try{
+      const d=await pullRapid360Live();
+      return applyRapidPullResult(d, st);
+    }catch(e){
+      if(!(e.status===409 && e.payload && e.payload.needsOkta) && e.status!==400) throw e;
+    }
+    let bridge=null;
+    try{
+      bridge=await api('/web-api/admin/rapid360-bridge-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
+    }catch(_){}
+    showRapidBridgeBox(bridge||{});
+    openRapidOktaPopup((bridge&&bridge.loginUrl)||rapid360ReportUrl());
+    const deadline=Date.now()+180000;
     let lastErr='';
     while(Date.now()<deadline){
       try{
@@ -6492,11 +6513,18 @@ async function autoPullRapid360Sales(){
       }catch(e){
         lastErr=e.message||'okunamadı';
         if(!(e.status===409 && e.payload && e.payload.needsOkta) && e.status!==400) throw e;
-        if(st){st.textContent='Rapid360’ta Okta’yı onaylayın. Satışlar okunuyor…';st.className='form-status'}
       }
-      await sleep(3000);
+      if(bridge&&bridge.bridgeId){
+        try{
+          const b=await api('/web-api/admin/rapid360-bridge-poll/'+encodeURIComponent(bridge.bridgeId));
+          if(b && b.ok && ((b.rows||[]).length||b.count)) return applyRapidPullResult(b, st);
+          if(b && b.error) lastErr=b.error;
+        }catch(_){}
+      }
+      if(st){st.textContent='Rapid360’ta Okta’yı onaylayın. Satışlar Atak’a geliyor…';st.className='form-status'}
+      await sleep(2500);
     }
-    if(st){st.textContent=lastErr||'Satış okunamadı. Rapid360 açıkken Satışları oku’ya tekrar basın. Olmazsa XML yedeğini kullanın.';st.className='form-status error'}
+    if(st){st.textContent=lastErr||'Satış okunamadı. Rapid360 açıkken yeşil “Atak’a gönder”e basın veya XML yükleyin.';st.className='form-status error'}
   }catch(e){
     if(st){st.textContent=e.message;st.className='form-status error'}
   }finally{

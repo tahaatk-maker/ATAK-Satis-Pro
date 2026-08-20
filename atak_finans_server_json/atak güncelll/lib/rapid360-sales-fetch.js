@@ -336,7 +336,6 @@ async function fetchRapid360Sales(opts = {}){
     let muleErr = '';
     let muleTried = [];
     let muleParsed = null;
-    const muleReady = Boolean(consume.salesUrl) || (consumeReady(consume) && !oktaReady);
 
     async function tryMule(){
       if(!(consumeReady(consume) || Boolean(consume.salesUrl))) return null;
@@ -362,6 +361,10 @@ async function fetchRapid360Sales(opts = {}){
       return null;
     }
 
+    // XML ile aynı Satislar verisi: önce Arçelik satış servisi (arka plan, Rapid360 penceresi gerekmez).
+    const mule = await tryMule();
+    if(mule) return mule;
+
     if(oktaReady){
       const okta = await fetchViaOkta(raw, range, opts);
       if(okta.ok){
@@ -371,18 +374,17 @@ async function fetchRapid360Sales(opts = {}){
           sourceUrl: okta.sourceUrl || '',
           store: okta.store || range.store,
           company: okta.company || range.company,
-          tried: okta.tried || [],
+          tried: (muleTried || []).concat(okta.tried || []),
           via: 'okta',
           tokens: okta.tokens || null
         };
       }
-      const mule = await tryMule();
-      if(mule) return mule;
       if(okta.needsOkta && !muleErr){
-        return { ok: false, needsOkta: true, error: 'Rapid360’ı açın, Okta’yı onaylayın, Satışları oku. Mağaza 340334 ATAK.', tried: okta.tried || [], tokens: okta.tokens || null };
+        return { ok: false, needsOkta: true, error: 'Rapid360’ı açın, Okta’yı onaylayın. Satışlar Atak’a gelsin. Mağaza 340334 ATAK.', tried: (muleTried || []).concat(okta.tried || []), tokens: okta.tokens || null };
       }
       return {
         ok: false,
+        needsOkta: Boolean(okta.needsOkta),
         error: okta.error || muleErr || 'Satışlar okunamadı',
         tried: (okta.tried || []).concat(muleTried),
         parsed: muleParsed,
@@ -392,10 +394,6 @@ async function fetchRapid360Sales(opts = {}){
       };
     }
 
-    if(muleReady){
-      const mule = await tryMule();
-      if(mule) return mule;
-    }
     const okta = await fetchViaOkta(raw, range, opts);
     if(okta.ok){
       return {

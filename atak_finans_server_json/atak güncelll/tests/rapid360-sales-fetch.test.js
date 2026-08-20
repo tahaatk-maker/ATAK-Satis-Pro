@@ -181,7 +181,7 @@ async function run() {
   let muleHits = 0;
   global.fetch = async (url) => {
     const u = String(url);
-    if (/getdetailedsales|getsales|geteinvoices/i.test(u)) {
+    if (!u.includes('/data/') && !/login\.microsoftonline/i.test(u)) {
       muleHits += 1;
       return { ok: false, status: 404, text: async () => '' };
     }
@@ -221,9 +221,41 @@ async function run() {
     assert.equal(out.ok, true, out.error);
     assert.equal(out.via, 'okta');
     assert.equal(out.parsed.sales[0].salesId, 'S1');
-    assert.equal(muleHits, 0);
+    assert.ok(muleHits >= 1);
   } finally {
     global.fetch = origOkta;
+  }
+
+  const origMuleFirst = global.fetch;
+  let odataHits = 0;
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('/data/') || /login\.microsoftonline/.test(u)) {
+      odataHits += 1;
+      return { ok: false, status: 401, text: async () => '' };
+    }
+    if (u.includes('getdetailedsales')) {
+      return { ok: true, status: 200, text: async () => xmlBody() };
+    }
+    return { ok: false, status: 404, text: async () => '' };
+  };
+  try {
+    const out = await fetchRapid360Sales({
+      store: makeStore({
+        d365Auth: {
+          accessToken: 'tok',
+          expiresAt: new Date(Date.now() + 3600000).toISOString(),
+          dynamicsUrl: 'https://liverapid360.operations.dynamics.com'
+        }
+      }),
+      startDate: '2026-08-18',
+      endDate: '2026-08-18',
+    });
+    assert.equal(out.ok, true, out.error);
+    assert.equal(out.via, 'mule');
+    assert.equal(odataHits, 0);
+  } finally {
+    global.fetch = origMuleFirst;
   }
 
   console.log('rapid360-sales-fetch tests OK');

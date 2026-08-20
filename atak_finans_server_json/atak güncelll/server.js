@@ -23,6 +23,7 @@ const atakGetE = require('./lib/atak-geteinvoices');
 const rapidSalesXml = require('./lib/rapid360-sales-xml');
 const rapidSalesFetch = require('./lib/rapid360-sales-fetch');
 const rapidSalesCatalog = require('./lib/rapid360-sales-catalog');
+const rapidSalesBridge = require('./lib/rapid360-sales-bridge');
 const d365Auth = require('./lib/rapid360-d365-auth');
 const personName = require('./lib/person-name');
 const customerCode = require('./lib/customer-code');
@@ -1846,7 +1847,19 @@ function financeTx(s,data){
   s.financeTransactions.unshift(row); return row;
 }
 
-app.set('trust proxy',1); app.use(helmet({contentSecurityPolicy:false})); app.use(compression()); app.use(express.json({limit:'2mb'})); app.use(express.urlencoded({extended:true}));
+app.set('trust proxy',1); app.use(helmet({contentSecurityPolicy:false})); app.use(compression()); app.use(express.json({limit:'8mb'})); app.use(express.urlencoded({extended:true}));
+app.use((req,res,next)=>{
+  if(!/^\/web-api\/rapid360-bridge\//.test(req.path)) return next();
+  const allow=rapidSalesBridge.corsOrigin(req.headers.origin);
+  if(allow){
+    res.setHeader('Access-Control-Allow-Origin',allow);
+    res.setHeader('Vary','Origin');
+    res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers','Content-Type');
+  }
+  if(req.method==='OPTIONS') return res.status(204).end();
+  next();
+});
 app.use(session({
   name:'atakhome.sid',
   secret:process.env.SESSION_SECRET||'CHANGE-ME-SET-IN-ENV',
@@ -1904,8 +1917,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.205-atak-geteinvoices',
-    build:'fix-v205',
+    version:'6.3.206-atak-geteinvoices',
+    build:'fix-v206',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5507,6 +5520,45 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
   }catch(e){
     res.status(400).json({error:e.message||'Rapid360 çekilemedi',tried:e.tried||[]});
   }
+});
+app.post('/web-api/admin/rapid360-bridge-start',rapidSalesPerm,(req,res)=>{
+  const body=req.body||{};
+  const row=rapidSalesBridge.createBridge({
+    startDate:body.startDate,endDate:body.endDate,
+    store:rapidSalesFetch.DEFAULT_STORE,
+    company:String(body.company||'').trim()||rapidSalesFetch.DEFAULT_COMPANY,
+    dealerId:body.dealerId
+  });
+  const base=publicBaseUrl(req);
+  res.json({
+    ok:true,
+    bridgeId:row.id,
+    pushUrl:`${base}/web-api/rapid360-bridge/${row.id}`,
+    bookmarklet:rapidSalesBridge.bookmarklet({
+      bridgeId:row.id,baseUrl:base,startDate:row.meta.startDate,endDate:row.meta.endDate
+    }),
+    loginUrl:d365Auth.dynamicsReportUrl({company:row.meta.company,store:row.meta.store,startDate:row.meta.startDate,endDate:row.meta.endDate}),
+    message:'Telefonda Okta’yı onaylayın. Satışlar Atak’a gelsin. Gelmezse Rapid360 penceresinde yeşil düğmeye bir kez basın.'
+  });
+});
+app.get('/web-api/admin/rapid360-bridge-poll/:id',rapidSalesPerm,(req,res)=>{
+  const row=rapidSalesBridge.getBridge(req.params.id);
+  if(!row) return res.status(404).json({error:'Oturum yok. Satışları oku’ya tekrar basın.'});
+  if(row.error && !row.parsed) return res.json({pending:false,ok:false,error:row.error});
+  if(!row.parsed || !(row.parsed.sales||[]).length) return res.json({pending:true,ok:false});
+  const s=readStore();
+  const dealer=pickRapidDealer(s,row.meta.dealerId);
+  const preview=buildRapidSalesPreview(s,row.parsed,dealer);
+  const pullToken=rememberRapidPull(row.parsed,{
+    dealerId:row.meta.dealerId,startDate:row.meta.startDate,endDate:row.meta.endDate,
+    store:row.meta.store,company:row.meta.company
+  });
+  res.json({...preview,ok:true,pending:false,pullToken,fetched:true,via:'bridge',store:row.meta.store,company:row.meta.company});
+});
+app.post('/web-api/rapid360-bridge/:id',(req,res)=>{
+  const out=rapidSalesBridge.acceptPush(req.params.id,req.body||{});
+  if(!out.ok) return res.status(400).json({error:out.error||'Satış alınamadı'});
+  res.json({ok:true,count:out.count});
 });
 app.post('/web-api/admin/rapid360-okta-start',rapidSalesPerm,async(req,res)=>{
   try{

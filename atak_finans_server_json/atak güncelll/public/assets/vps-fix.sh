@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.205-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.206-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.205-atak-geteinvoices
-EXPECT_BUILD=fix-v205
+EXPECT_HEALTH=6.3.206-atak-geteinvoices
+EXPECT_BUILD=fix-v206
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -175,6 +175,9 @@ check "rapid iptal tekrar yazmaz" grep -q "isRapidSaleAlreadyImported" "$SRC/lib
 check "rapid iptal hayalet kapat" grep -q "suppressReimportedCancelledRapidDrafts" "$SRC/lib/rapid360-sales-catalog.js"
 check "rapid taslak sil api" grep -q "discard-rapid-draft" "$SRC/server.js"
 check "admin taslak sil" grep -q "discardRapidDraft" "$SRC/public/assets/admin.js"
+check "rapid360 bridge start" grep -q "rapid360-bridge-start" "$SRC/server.js"
+check "rapid360 mule once" grep -q "XML ile aynı Satislar" "$SRC/lib/rapid360-sales-fetch.js"
+check "admin rapid bridge" grep -q "showRapidBridgeBox" "$SRC/public/assets/admin.js"
 check "rapid taslak needsCompletion" grep -q "needsCompletion" "$SRC/server.js"
 check "rapid taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/admin.js"
 check "personel taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/personel.js"
