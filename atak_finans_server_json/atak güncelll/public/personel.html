@@ -8,9 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v198">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v198">
-<link rel="stylesheet" href="/assets/sip-call.css?v=fix-v198">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v199">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v199">
+<link rel="stylesheet" href="/assets/sip-call.css?v=fix-v199">
 </head>
 <body>
 
@@ -714,35 +714,61 @@
       <div>
         <small class="eyebrow">RAPID360</small>
         <h2>Rapid Aktar</h2>
-        <p class="muted">Önce Okta bağla, sonra Satışları oku. Mağaza 340334 ATAK. Listeden aktarmak istediklerinizi seçin. Kod yazılmaz.</p>
+        <p class="muted">Komut sırası: Rapid360 açılır → Okta onaylanır → Rapid’te XML indirilir → burada seçilir → Seçilenleri aktar. Kod yazılmaz. Mağaza 340334 ATAK.</p>
       </div>
       <button class="ghost-btn" id="rapid360SalesXmlClose" type="button">Kapat</button>
     </div>
-    <div id="rapid360OktaStatus" class="muted">Önce Okta bağla, sonra Satışları oku. Mağaza 340334 ATAK.</div>
+    <div id="rapid360OktaStatus" class="muted">1. Rapid360’ı açın. 2. Telefonda Okta’yı onaylayın. 3. Rapid’te XML indirin. 4. Dosyayı buraya seçin.</div>
     <div id="rapid360OktaBox" class="hidden" style="margin:10px 0;padding:12px;border:1px solid #c7d2fe;border-radius:10px;background:#eef2ff"></div>
-    <div class="toolbar" style="gap:8px;flex-wrap:wrap">
-      <label class="field">Başlangıç<input id="rapid360SalesStart" type="date"></label>
-      <label class="field">Bitiş<input id="rapid360SalesEnd" type="date"></label>
-    </div>
-    <div class="toolbar" style="gap:8px;flex-wrap:wrap">
-      <label class="field">Mağaza
-        <select id="rapid360SalesStoreFilter">
-          <option value="340334" selected>340334 ATAK</option>
-        </select>
-      </label>
-      <label class="field">Şirket<input id="rapid360SalesCompanyFilter" value="2521" readonly></label>
-    </div>
-    <label class="field">Satış bayisi<select id="rapid360SalesXmlDealer"><option value="atak-beko">Atak Beko</option><option value="atak-istikbal">Atak İstikbal</option></select></label>
-    <div class="toolbar" style="margin-top:10px;gap:8px">
-      <button class="primary-btn" id="rapid360OktaConnectBtn" type="button">Okta bağla</button>
-      <button class="ghost-btn" id="rapid360SalesPullBtn" type="button">Satışları oku</button>
-      <button class="ghost-btn" id="rapid360SalesXmlImportBtn" type="button" disabled>Seçilenleri aktar</button>
-    </div>
+    <ol style="margin:12px 0 0;padding-left:22px;line-height:1.45">
+      <li style="margin-bottom:12px">
+        <b>Rapid360’ı aç (Okta)</b>
+        <p class="muted" style="margin:4px 0 8px">Pencere açılır. Telefonda bildirime basın. Kod yazılmaz.</p>
+        <div class="toolbar" style="gap:8px">
+          <button class="primary-btn" id="rapid360OktaConnectBtn" type="button">Rapid360’ı aç (Okta)</button>
+        </div>
+      </li>
+      <li style="margin-bottom:12px">
+        <b>Rapid’te XML yap</b>
+        <p class="muted" style="margin:4px 0 8px">Mağaza 340334 ATAK, tarihleri seçin, XML / İndir’e basın.</p>
+        <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+          <label class="field">Başlangıç<input id="rapid360SalesStart" type="date"></label>
+          <label class="field">Bitiş<input id="rapid360SalesEnd" type="date"></label>
+        </div>
+        <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+          <label class="field">Mağaza
+            <select id="rapid360SalesStoreFilter">
+              <option value="340334" selected>340334 ATAK</option>
+            </select>
+          </label>
+          <label class="field">Şirket<input id="rapid360SalesCompanyFilter" value="2521" readonly></label>
+        </div>
+      </li>
+      <li style="margin-bottom:12px">
+        <b>XML’i Atak’a ver</b>
+        <div id="rapid360SalesXmlDrop" style="margin-top:8px;padding:14px;border:2px dashed #94a3b8;border-radius:10px;background:#f8fafc">
+          <label class="field">İndirdiğiniz XML dosyası<input id="rapid360SalesXmlFile" type="file" accept=".xml,.xlsx,.xls,text/xml,application/xml"></label>
+          <p class="muted" style="margin:8px 0 0">Dosyayı buraya bırakın veya seçin. Satışlar otomatik listelenir.</p>
+        </div>
+        <label class="field" style="margin-top:8px">veya XML yapıştırın<textarea id="rapid360SalesXmlPaste" rows="3" placeholder="&lt;Satislar&gt; … XML buraya"></textarea></label>
+        <div class="toolbar" style="margin-top:8px;gap:8px">
+          <button class="ghost-btn" id="rapid360SalesXmlPreviewBtn" type="button">XML oku</button>
+        </div>
+      </li>
+      <li>
+        <b>Seçilenleri aktar</b>
+        <p class="muted" style="margin:4px 0 8px">Listeden istediklerinizi işaretleyin.</p>
+        <label class="field">Satış bayisi<select id="rapid360SalesXmlDealer"><option value="atak-beko">Atak Beko</option><option value="atak-istikbal">Atak İstikbal</option></select></label>
+        <div class="toolbar" style="margin-top:8px;gap:8px">
+          <button class="ghost-btn" id="rapid360SalesXmlImportBtn" type="button" disabled>Seçilenleri aktar</button>
+        </div>
+      </li>
+    </ol>
     <details style="margin-top:10px">
-      <summary style="cursor:pointer;font-weight:700">Dosyadan yedek (isteğe bağlı)</summary>
-      <label class="field">XML dosyası<input id="rapid360SalesXmlFile" type="file" accept=".xml,.xlsx,.xls,text/xml,application/xml"></label>
-      <div class="toolbar" style="margin-top:8px;gap:8px">
-        <button class="ghost-btn" id="rapid360SalesXmlPreviewBtn" type="button">XML önizle</button>
+      <summary style="cursor:pointer;font-weight:700">Canlı çekim denemesi (çoğu zaman çalışmaz)</summary>
+      <p class="muted" style="margin:8px 0">Asıl yol yukarıdaki XML dosyasıdır.</p>
+      <div class="toolbar" style="gap:8px">
+        <button class="ghost-btn" id="rapid360SalesPullBtn" type="button">Satışları oku</button>
       </div>
     </details>
     <div id="rapid360SalesXmlStatus" class="status"></div>
@@ -761,7 +787,7 @@
     </div>
   </div>
 </div>
-<script src="/assets/sip-call.js?v=fix-v198"></script>
-<script src="/assets/personel.js?v=fix-v198"></script>
+<script src="/assets/sip-call.js?v=fix-v199"></script>
+<script src="/assets/personel.js?v=fix-v199"></script>
 </body>
 </html>

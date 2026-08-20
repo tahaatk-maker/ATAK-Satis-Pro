@@ -369,7 +369,7 @@ function startWebOnlyLogin(opts = {}){
     loginUrl,
     expiresIn: 900,
     interval: 3,
-    message: `Rapid360 açıldı (${DEFAULT_ACCOUNT}). Telefonda Okta bildirimine basın. Kod yazılmaz. Mağaza 340334 ATAK Atak’ta uygulanır. Onaydan sonra Satışları oku.`
+    message: `Rapid360 açıldı (${DEFAULT_ACCOUNT}). Telefonda Okta bildirimine basın. Kod yazılmaz. Rapid’te Mağaza 340334 ATAK seçip XML indirin. Dosyayı Atak’ta seçin, sonra Seçilenleri aktar.`
   };
 }
 

@@ -1901,8 +1901,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-  version:'6.3.198-atak-geteinvoices',
-  build:'fix-v198',
+  version:'6.3.199-atak-geteinvoices',
+  build:'fix-v199',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5434,7 +5434,7 @@ app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
       if(out.tokens) writeStore(s);
       return res.status(409).json({
         needsOkta:true,
-        error:out.error||'Önce Okta bağla, sonra Satışları oku.',
+        error:out.error||'Önce Rapid360’ı açın (Okta). Satış için Rapid’te XML indirip Atak’a seçin.',
         loginUrl:d365Auth.dynamicsReportUrl({company,store:magaza,startDate:body.startDate,endDate:body.endDate}),
         store:magaza,company,tried:out.tried||[]
       });

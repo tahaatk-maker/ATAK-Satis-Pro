@@ -232,6 +232,7 @@ async function run(){
   assert.ok(!JSON.stringify(webOnly).includes('deviceauth'));
   assert.ok(/Kod yazılmaz/i.test(webOnly.message));
   assert.ok(/340334 ATAK/i.test(webOnly.message));
+  assert.ok(/XML/i.test(webOnly.message));
 
   console.log('rapid360-d365-auth tests OK');
 }

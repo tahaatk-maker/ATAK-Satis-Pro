@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.198-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.199-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.198-atak-geteinvoices
-EXPECT_BUILD=fix-v198
+EXPECT_HEALTH=6.3.199-atak-geteinvoices
+EXPECT_BUILD=fix-v199
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -119,6 +119,10 @@ echo "   ok: Rapid360 URL Magaza query yok"
 check "rapid360 f12 magaza" grep -q "rapid360MagazaConsoleScript" "$SRC/public/assets/admin.js"
 check "rapid360 web only login" grep -q "startWebOnlyLogin" "$SRC/lib/rapid360-d365-auth.js"
 check "rapid360 okta bagla" grep -q "rapid360OktaConnectBtn" "$SRC/public/admin.html"
+check "rapid360 xml drop" grep -q 'id="rapid360SalesXmlDrop"' "$SRC/public/admin.html"
+check "personel xml drop" grep -q 'id="rapid360SalesXmlDrop"' "$SRC/public/personel.html"
+check "rapid360 xml oku" grep -q "XML oku" "$SRC/public/admin.html"
+check "rapid360 xml paste" grep -q 'id="rapid360SalesXmlPaste"' "$SRC/public/admin.html"
 check "rapid360 secilenleri aktar" grep -q "Seçilenleri aktar" "$SRC/public/admin.html"
 check "rapid360 salesIds" grep -q "parseSalesIds" "$SRC/lib/rapid360-sales-catalog.js"
 check "rapid360 magaza 340334" grep -q 'value="340334"' "$SRC/public/admin.html"
