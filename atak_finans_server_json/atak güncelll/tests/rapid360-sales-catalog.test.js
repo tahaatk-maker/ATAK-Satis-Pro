@@ -95,4 +95,18 @@ assert.equal(catalog.isOpenRapidSale({ kind: 'sale', source: 'rapid360-xml', cas
 assert.equal(catalog.isOpenRapidSale({ kind: 'sale', source: 'rapid360-xml', cashPosted: true, customerDelta: 1200 }), false);
 assert.equal(catalog.isOpenRapidSale({ kind: 'sale', cancelled: true, needsCompletion: true }), false);
 
+const txs = [
+  { kind: 'sale', id: 'old', reference: '2521-065731', rapidSalesId: '2521-065731', cancelled: true },
+  { kind: 'sale', id: 'ghost', reference: '2521-065731', rapidSalesId: '2521-065731', needsCompletion: true, rapidDraft: true, cashPosted: false, customerDelta: 0 }
+];
+assert.equal(catalog.isRapidSaleAlreadyImported(txs, '2521-065731'), true);
+assert.equal(catalog.isRapidSaleCancelledInAtak([txs[0]], '2521-065731'), true);
+assert.equal(catalog.isRapidSaleCancelledInAtak(txs, '2521-065731'), false);
+assert.equal(catalog.suppressReimportedCancelledRapidDrafts(txs), 1);
+assert.equal(txs[1].cancelled, true);
+assert.equal(txs[1].needsCompletion, false);
+assert.equal(catalog.isOpenRapidSale(txs[1]), false);
+assert.equal(catalog.isRapidSaleCancelledInAtak(txs, '2521-065731'), true);
+assert.equal(catalog.isRapidSaleAlreadyImported(txs, '2521-065682'), false);
+
 console.log('rapid360-sales-catalog tests OK');

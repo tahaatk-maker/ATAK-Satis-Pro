@@ -1904,8 +1904,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.204-atak-geteinvoices',
-    build:'fix-v204',
+    version:'6.3.205-atak-geteinvoices',
+    build:'fix-v205',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5023,6 +5023,8 @@ app.post('/web-api/admin/customer/:id/note',requireAdmin,(req,res)=>{
 
 app.get('/web-api/admin/sales-tracking',requireAdminOrStaffAny('screen_sales_tracking','orders_manage','screen_sales_center'),(req,res)=>{
   const s=readStore();
+  const closedGhosts=rapidSalesCatalog.suppressReimportedCancelledRapidDrafts(s.financeTransactions||[]);
+  if(closedGhosts) writeStore(s);
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
   const actor=currentActor(req);
   const canAll=actorCanSeeAllStaffSales(req)||!isStaffPortalReq(req);
@@ -5174,6 +5176,7 @@ function buildRapidSalesPreview(s, parsed, dealer){
   const rows=(parsed.sales||[]).map(sale=>{
     const customer=matchRapidCustomer(s,sale.custAccount,sale.custName,sale.tckn);
     const duplicate=rapidSaleDuplicate(s,sale.salesId);
+    const cancelledInAtak=rapidSalesCatalog.isRapidSaleCancelledInAtak(s.financeTransactions||[],sale.salesId);
     const items=mapRapidSaleItems(s,sale);
     return{
       salesId:sale.salesId,
@@ -5191,6 +5194,7 @@ function buildRapidSalesPreview(s, parsed, dealer){
       total:sale.total||0,
       paymentMethod:(sale.payments||[]).map(p=>p.method).filter(Boolean).join(' + ')||'',
       duplicate,
+      cancelledInAtak,
       skip:!items.length||duplicate
     };
   });
@@ -5214,6 +5218,7 @@ function pickRapidDealer(s, dealerId){
     ||(s.dealerSettings||[]).find(d=>d.active!==false);
 }
 function applyRapidSalesImport(s, parsed, {dealer, actorName, actorId, source, categoryMap, categoryId, salesIds}={}){
+  rapidSalesCatalog.suppressReimportedCancelledRapidDrafts(s.financeTransactions||[]);
   const live=source==='rapid360-pull';
   const label=live?'Rapid360 Aktar':'Rapid360 XML';
   const wanted=rapidSalesCatalog.parseSalesIds(salesIds);
@@ -5285,11 +5290,7 @@ function applyRapidSalesImport(s, parsed, {dealer, actorName, actorId, source, c
   return {imported,skippedDuplicate,skippedEmpty,customersCreated,customersUpdated,productsCreated,errors,importedSales};
 }
 function rapidSaleDuplicate(s,salesId){
-  const id=String(salesId||'').trim();
-  if(!id)return false;
-  return (s.financeTransactions||[]).some(t=>t.kind==='sale'&&!t.cancelled&&(
-    String(t.rapidSalesId||'')===id||String(t.reference||'')===id||String(t.reference||'')===`R360-${id}`
-  ));
+  return rapidSalesCatalog.isRapidSaleAlreadyImported(s.financeTransactions||[],salesId);
 }
 function matchRapidSalesperson(s,name){
   const n=String(name||'').trim().toLocaleLowerCase('tr-TR');
@@ -5615,6 +5616,21 @@ app.post('/web-api/admin/sale/:id/delivery-status',requireAdminOrStaffAny('scree
   }
   audit(s,'Satış teslimat durumu güncellendi',sale.reference||sale.id,{status,note:sale.deliveryNote,prev});writeStore(s);
   res.json({ok:true,sale});
+});
+app.post('/web-api/admin/sale/:id/discard-rapid-draft',requireAdminOrStaffAny('screen_sales_tracking','orders_manage','screen_sales_center'),(req,res)=>{
+  const s=readStore(),sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
+  if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
+  if(sale.cancelled)return res.status(400).json({error:'Satış zaten iptal edilmiş'});
+  if(!rapidSalesCatalog.isOpenRapidSale(sale))return res.status(400).json({error:'Yalnız tamamlanmamış Rapid taslağı silinebilir'});
+  const actor=currentActor(req);
+  if(isStaffPortalReq(req) && !actorCanSeeAllStaffSales(req) && !txBelongsToActor(sale,actor)){
+    return res.status(403).json({error:'Bu satış için yetkiniz yok'});
+  }
+  const reason=String(req.body?.reason||'Rapid taslak silindi').trim()||'Rapid taslak silindi';
+  const result=cancelSaleInStore(s,sale,actor?.name||'Admin',reason);
+  audit(s,'Rapid taslak silindi',sale.reference||sale.rapidSalesId||sale.id,{reason});
+  writeStore(s);
+  res.json({ok:true,result,reference:sale.reference||sale.rapidSalesId||sale.id});
 });
 
 app.get('/web-api/admin/salespeople',requireAdminOrStaff('orders_manage'),(req,res)=>{
@@ -6244,6 +6260,16 @@ app.post('/web-api/admin/cancellation-request',requireAdminOrStaffAny('finance_m
     return res.status(403).json({error:'Yalnız kendi satışlarınız için iptal/iade talebi açabilirsiniz'});
   if((s.cancellationRequests||[]).some(r=>r.status==='pending'&&['sale','sale_return','sale_edit','collection'].includes(r.targetType)&&String(r.targetId)===targetId))
     return res.status(409).json({error:'Bu işlem için bekleyen onay talebi var'});
+
+  if(targetType==='sale' && rapidSalesCatalog.isOpenRapidSale(target)){
+    const result=cancelSaleInStore(s,target,u?.name||'Personel',reason);
+    audit(s,'Rapid taslak silindi',target.reference||target.rapidSalesId||target.id,{reason,personel:u?.name||'Personel',direct:true});
+    writeStore(s);
+    return res.json({
+      ok:true,direct:true,pendingApproval:false,result,
+      message:'Rapid taslak silindi. Aynı satış bir daha Satış Takibi’ne düşmez.'
+    });
+  }
 
   if(targetType==='sale_edit'){
     let preview;

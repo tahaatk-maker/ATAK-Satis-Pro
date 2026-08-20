@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v204 */
+/* ATAK_PERSONEL_BUILD=fix-v205 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -408,7 +408,7 @@ async function submitCancelRequest(){
         reason
       })
     });
-    st.textContent=d.message||'Talep yöneticiye iletildi.';
+    st.textContent=d.direct?(d.message||'Rapid taslak silindi.'):(d.message||'Talep yöneticiye iletildi.');
     closeCancelModal();
     await loadMonthSales();
     if(financeData?.canApprove||canScreen('screen_manager_approvals'))await loadManagerApprovals();
@@ -681,6 +681,16 @@ function salesFillPaymentSplits(splits){
   if(Number(s.note)>0)setSalesPayPlanOpen(true);
   salesRecalcPay();
 }
+async function discardRapidDraft(saleId, ref){
+  const id=String(saleId||'').trim();
+  if(!id)return;
+  if(!confirm(`${ref||'Bu Rapid taslağı'} silinsin mi? Aynı satış bir daha düşmez.`))return;
+  try{
+    await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/discard-rapid-draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Rapid taslak silindi'})});
+    stToast('Rapid taslak silindi');
+    await renderRapidOpenSalesHint();
+  }catch(e){stToast(e.message||'Silinemedi')}
+}
 async function renderRapidOpenSalesHint(){
   const box=$('#rapidOpenSalesHint');
   if(!box)return;
@@ -690,8 +700,9 @@ async function renderRapidOpenSalesHint(){
     if(!open.length){box.classList.add('hidden');box.innerHTML='';return}
     box.classList.remove('hidden');
     box.innerHTML=`<b>Tamamlanacak Rapid satış</b><p class="muted" style="margin:6px 0">Satışa düştü. İçeri girip bilgileri düzeltip Satışı Yap ile tamamlayın.</p>`+
-      open.slice(0,12).map(r=>`<button type="button" class="primary-btn" data-sale-complete="${r.id}" style="margin:4px 6px 0 0">${esc(r.reference||r.rapidSalesId||r.customerName||'Satışa git')}</button>`).join('');
+      open.slice(0,12).map(r=>`<button type="button" class="primary-btn" data-sale-complete="${r.id}" style="margin:4px 6px 0 0">${esc(r.reference||r.rapidSalesId||r.customerName||'Satışa git')}</button><button type="button" data-sale-discard="${r.id}" data-ref="${esc(r.reference||r.rapidSalesId||'')}" style="margin:4px 6px 0 0">Sil</button>`).join('');
     box.querySelectorAll('[data-sale-complete]').forEach(btn=>btn.onclick=()=>openRapidSaleInSalesCenter(btn.dataset.saleComplete));
+    box.querySelectorAll('[data-sale-discard]').forEach(btn=>btn.onclick=()=>discardRapidDraft(btn.dataset.saleDiscard,btn.dataset.ref||''));
   }catch(_){box.classList.add('hidden')}
 }
 async function openRapidSaleInSalesCenter(saleId){
@@ -1979,7 +1990,7 @@ function renderRapid360SalesRows(d){
       <td>${rapidOktaEsc(r.salesId||'')}</td>
       <td>${rapidOktaEsc(r.customerName||'')}</td>
       <td>${money(r.total)}</td>
-      <td>${r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok')}${r.unmatchedItems?` · ${r.unmatchedItems} yeni`:''}</td>
+      <td>${r.cancelledInAtak?'İptal edildi':(r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok'))}${r.unmatchedItems?` · ${r.unmatchedItems} yeni`:''}</td>
     </tr>`;
   }).join('');
   $$('#rapid360SalesXmlTable input[data-rapid-sale]').forEach(cb=>cb.addEventListener('change',rapid360SyncSaleSelect));
@@ -2138,7 +2149,7 @@ async function previewRapid360Xml(){
         <td>${rapidOktaEsc(r.salesId||'')}</td>
         <td>${rapidOktaEsc(r.customerName||'')}</td>
         <td>${money(r.total)}</td>
-        <td>${r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok')}${r.unmatchedItems?` · ${r.unmatchedItems} yeni`:''}</td>
+        <td>${r.cancelledInAtak?'İptal edildi':(r.duplicate?'Kayıtlı':(r.itemCount?'Hazır':'Kalem yok'))}${r.unmatchedItems?` · ${r.unmatchedItems} yeni`:''}</td>
       </tr>`;
     }).join('');
     $$('#rapid360SalesXmlTable input[data-rapid-sale]').forEach(cb=>cb.addEventListener('change',rapid360SyncSaleSelect));

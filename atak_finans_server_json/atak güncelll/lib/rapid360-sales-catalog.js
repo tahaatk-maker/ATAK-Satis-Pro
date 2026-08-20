@@ -136,6 +136,61 @@ function isOpenRapidSale(tx){
   return true;
 }
 
+function rapidSaleIdsOf(tx){
+  const out = [];
+  const rapid = String(tx && tx.rapidSalesId || '').trim();
+  const ref = String(tx && tx.reference || '').trim();
+  if(rapid) out.push(rapid, `R360-${rapid}`);
+  if(ref) out.push(ref);
+  if(ref.startsWith('R360-')) out.push(ref.slice(5));
+  return out;
+}
+
+function matchingRapidSales(txs, salesId){
+  const id = String(salesId || '').trim();
+  if(!id) return [];
+  const keys = new Set([id, `R360-${id}`]);
+  if(id.startsWith('R360-')) keys.add(id.slice(5));
+  return (txs || []).filter((t) => {
+    if(String(t.kind || '') !== 'sale') return false;
+    return rapidSaleIdsOf(t).some((k) => keys.has(k));
+  });
+}
+
+function isRapidSaleAlreadyImported(txs, salesId){
+  return matchingRapidSales(txs, salesId).length > 0;
+}
+
+function isRapidSaleCancelledInAtak(txs, salesId){
+  const hits = matchingRapidSales(txs, salesId);
+  return hits.length > 0 && hits.every((t) => t.cancelled);
+}
+
+function suppressReimportedCancelledRapidDrafts(txs, at){
+  const list = Array.isArray(txs) ? txs : [];
+  const cancelledKeys = new Set();
+  for(const t of list){
+    if(String(t.kind || '') !== 'sale' || !t.cancelled) continue;
+    for(const k of rapidSaleIdsOf(t)) cancelledKeys.add(k);
+  }
+  if(!cancelledKeys.size) return 0;
+  const when = at || new Date().toISOString();
+  let n = 0;
+  for(const t of list){
+    if(String(t.kind || '') !== 'sale' || t.cancelled) continue;
+    if(!isOpenRapidSale(t)) continue;
+    if(!rapidSaleIdsOf(t).some((k) => cancelledKeys.has(k))) continue;
+    t.cancelled = true;
+    t.cancelledAt = when;
+    t.cancelledBy = t.cancelledBy || 'Sistem';
+    t.cancelReason = t.cancelReason || 'Daha önce iptal edilen Rapid satış yeniden aktarılmasın diye kapatıldı';
+    t.needsCompletion = false;
+    t.rapidDraft = false;
+    n += 1;
+  }
+  return n;
+}
+
 function markImportedSaleDraft(row, src){
   const sale = src || {};
   row.needsCompletion = true;
@@ -166,5 +221,10 @@ module.exports = {
   paymentSplitKey,
   paymentsToSplits,
   isOpenRapidSale,
-  markImportedSaleDraft
+  markImportedSaleDraft,
+  rapidSaleIdsOf,
+  matchingRapidSales,
+  isRapidSaleAlreadyImported,
+  isRapidSaleCancelledInAtak,
+  suppressReimportedCancelledRapidDrafts
 };

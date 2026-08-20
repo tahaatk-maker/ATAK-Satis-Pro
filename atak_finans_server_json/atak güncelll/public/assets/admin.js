@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v204 */
+/* ATAK_ADMIN_BUILD=fix-v205 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2207,7 +2207,8 @@ function customerSaleActionButtons(t,{compact=false}={}){
   const ref=salesEsc(t.reference||'');
   if(t.needsCompletion||t.rapidDraft){
     const btn=`<button type="button" class="primary" data-sale-complete="${id}">Satışa git / Tamamla</button>`;
-    return compact?`<div class="customer-sale-actions compact">${btn}</div>`:`<div class="customer-sale-actions">${btn}</div>`;
+    const drop=`<button type="button" data-sale-discard="${id}" data-ref="${ref}">Taslağı sil</button>`;
+    return compact?`<div class="customer-sale-actions compact">${btn}${drop}</div>`:`<div class="customer-sale-actions">${btn}${drop}</div>`;
   }
   if(compact){
     return `<div class="customer-sale-actions compact">
@@ -2233,6 +2234,9 @@ function bindCustomerSaleActions(root){
   });
   root.querySelectorAll('[data-sale-complete]').forEach(btn=>{
     btn.addEventListener('click',()=>openRapidSaleInSalesCenter(btn.dataset.saleComplete));
+  });
+  root.querySelectorAll('[data-sale-discard]').forEach(btn=>{
+    btn.addEventListener('click',()=>discardRapidDraft(btn.dataset.saleDiscard,btn.dataset.ref||''));
   });
   root.querySelectorAll('[data-sale-edit]').forEach(btn=>{
     btn.addEventListener('click',()=>openSaleEditModal(btn.dataset.saleEdit));
@@ -6041,9 +6045,9 @@ async function requestCancellation(targetType,targetId,ref='',opts={}){
       :`${ref||'İşlem'} için iptal sebebi yazın. Talep Yönetici Onayları’na gider; onaylanınca cari, kasa/banka, stok ve prim düzeltilir.`,
     onSubmit:async(reason)=>{
       try{
-        await api('/web-api/admin/cancellation-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetType,targetId,reason,requestKind})});
-        toast(isReturn?'İade talebi yönetici onayına gönderildi':'İptal talebi yönetici onayına gönderildi');
-        await loadMySalesReport();await loadStaffSalesReport();await loadApprovals();
+        const d=await api('/web-api/admin/cancellation-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetType,targetId,reason,requestKind})});
+        toast(d.message||(d.direct?'Rapid taslak silindi':(isReturn?'İade talebi yönetici onayına gönderildi':'İptal talebi yönetici onayına gönderildi')));
+        await loadMySalesReport();await loadStaffSalesReport();await loadApprovals();await loadSalesTracking().catch(()=>{});
         if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId).catch(()=>{});
       }catch(e){toast(e.message)}
     }
@@ -6287,6 +6291,17 @@ qa('#staffSalesPeriodToggle .period-btn').forEach(b=>b.onclick=()=>{setPeriodUi(
 
 let salesTrackingRows=[];
 const deliveryStatusNames={order_received:'Sipariş Alındı',preparing:'Hazırlanıyor',ready:'Teslimata Hazır',shipped:'Sevkte',delivered:'Teslim Edildi'};
+async function discardRapidDraft(saleId, ref){
+  const id=String(saleId||'').trim();
+  if(!id)return;
+  if(!confirm(`${ref||'Bu Rapid taslağı'} silinsin mi?\n\nKasa ve stok işlemedi. Aynı Rapid satış bir daha Satış Takibi’ne düşmez.`))return;
+  try{
+    await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/discard-rapid-draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Rapid taslak silindi'})});
+    toast('Rapid taslak silindi');
+    await loadSalesTracking().catch(()=>{});
+    if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId).catch(()=>{});
+  }catch(e){toast(e.message||'Silinemedi')}
+}
 function renderSalesTracking(){
   const term=(q('#salesTrackingSearch')?.value||'').trim().toLocaleLowerCase('tr-TR'),status=q('#salesTrackingStatusFilter')?.value||'';
   const rows=salesTrackingRows.filter(r=>{
@@ -6302,6 +6317,7 @@ function renderSalesTracking(){
   q('#salesTrackingSummary').innerHTML=`<article><small>Gösterilen</small><b>${rows.length}</b></article><article><small>Açık Satış</small><b>${open}</b></article><article><small>Tamamlanacak Rapid</small><b>${pending}</b></article><article><small>Teslim Edildi</small><b>${delivered}</b></article><article><small>Toplam Tutar</small><b>${salesMoney(total)}</b></article>`;
   q('#salesTrackingTable').innerHTML=rows.map(r=>{
     const complete=r.needsCompletion?`<button type="button" class="primary" data-sale-complete="${r.id}">Satışa git</button>`:'';
+    const discard=r.needsCompletion?`<button type="button" data-sale-discard="${r.id}" data-ref="${salesEsc(r.reference||r.rapidSalesId||'')}">Taslağı sil</button>`:'';
     return `<tr${r.needsCompletion?' style="background:#fff7ed"':''}>
     <td><b>${r.reference||'-'}</b><small>${r.date||''}${r.needsCompletion?' · Rapid — tamamla':''}</small></td>
     <td><b>${r.customerName||'-'}</b><small>${r.customerPhone||''}</small> ${sipBtn(r.customerPhone,{className:'sip-call-sm',customerId:r.customerId})}</td>
@@ -6309,10 +6325,11 @@ function renderSalesTracking(){
     <td><b>${salesMoney(r.total)}</b></td>
     <td><select data-track-status="${r.id}">${Object.entries(deliveryStatusNames).map(([k,v])=>`<option value="${k}" ${k===r.deliveryStatus?'selected':''}>${v}</option>`).join('')}</select></td>
     <td><textarea data-track-note="${r.customerId}" rows="2">${r.customerNote||''}</textarea></td>
-    <td style="display:flex;gap:6px;flex-wrap:wrap">${complete}<button type="button" data-track-save="${r.id}" data-customer="${r.customerId}">Kaydet</button></td>
+    <td style="display:flex;gap:6px;flex-wrap:wrap">${complete}${discard}<button type="button" data-track-save="${r.id}" data-customer="${r.customerId}">Kaydet</button></td>
   </tr>`;
   }).join('');
   qa('[data-sale-complete]').forEach(btn=>btn.onclick=()=>openRapidSaleInSalesCenter(btn.dataset.saleComplete));
+  qa('[data-sale-discard]').forEach(btn=>btn.onclick=()=>discardRapidDraft(btn.dataset.saleDiscard,btn.dataset.ref||''));
   qa('[data-track-save]').forEach(btn=>btn.onclick=async()=>{
     const saleId=btn.dataset.trackSave,customerId=btn.dataset.customer,status=q(`[data-track-status="${saleId}"]`)?.value||'order_received',note=q(`[data-track-note="${customerId}"]`)?.value||'';
     try{
@@ -6621,7 +6638,7 @@ function renderRapid360SalesXmlPreview(d){
   q('#rapid360SalesXmlSummary').innerHTML=`<article><b>${d.count||0}</b><span>Sipariş</span></article><article><b>${d.importable||0}</b><span>Aktarılabilir</span></article><article><b>${d.duplicate||0}</b><span>Zaten var</span></article><article><b>${d.cancelled||0}</b><span>İptal atlandı</span></article><article><b>${d.customersNew||0}</b><span>Yeni müşteri</span></article><article class="warn"><b>${missing}</b><span>Yeni ürün</span></article>`;
   q('#rapid360SalesXmlTable').innerHTML=(d.rows||[]).map(r=>{
     const extra=r.unmatchedItems?` · ${r.unmatchedItems} yeni ürün`:'';
-    const st=r.duplicate?'Kayıtlı':(!r.itemCount?'Kalem yok':(r.customerStatus==='new'?'Yeni müşteri':'Hazır'))+extra;
+    const st=r.cancelledInAtak?'İptal edildi':(r.duplicate?'Kayıtlı':(!r.itemCount?'Kalem yok':(r.customerStatus==='new'?'Yeni müşteri':'Hazır'))+extra);
     const disable=r.skip||r.duplicate||!r.itemCount;
     const check=disable?'':' checked';
     return `<tr>
