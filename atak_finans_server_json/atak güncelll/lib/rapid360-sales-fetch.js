@@ -379,7 +379,7 @@ async function fetchRapid360Sales(opts = {}){
       const mule = await tryMule();
       if(mule) return mule;
       if(okta.needsOkta && !muleErr){
-        return { ok: false, needsOkta: true, error: 'Önce Rapid360’ı açın (Okta). Satış için Rapid’te XML indirip Atak’a seçin. Mağaza 340334 ATAK.', tried: okta.tried || [], tokens: okta.tokens || null };
+        return { ok: false, needsOkta: true, error: 'Telefonda Okta’yı onaylayın. Satışlar otomatik çekilir. Mağaza 340334 ATAK.', tried: okta.tried || [], tokens: okta.tokens || null };
       }
       return {
         ok: false,
@@ -410,7 +410,7 @@ async function fetchRapid360Sales(opts = {}){
       };
     }
     if(okta.needsOkta){
-      return { ok: false, needsOkta: true, error: 'Önce Rapid360’ı açın (Okta). Satış için Rapid’te XML indirip Atak’a seçin. Mağaza 340334 ATAK.', tried: (muleTried || []).concat(okta.tried || []), tokens: okta.tokens || null };
+      return { ok: false, needsOkta: true, error: 'Telefonda Okta’yı onaylayın. Satışlar otomatik çekilir. Mağaza 340334 ATAK.', tried: (muleTried || []).concat(okta.tried || []), tokens: okta.tokens || null };
     }
     return { ok: false, error: okta.error || muleErr || 'çekilemedi', tried: (muleTried || []).concat(okta.tried || []), parsed: muleParsed, tokens: okta.tokens || null };
   }catch(e){

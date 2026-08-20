@@ -63,30 +63,20 @@ async function run(){
   auth.resetPendingForTests();
   const noAzureApp = await auth.startInteractiveLogin({
     sessionId: 'sess-noaad',
-    redirectUri: 'https://atakhome.com.tr/web-api/admin/rapid360-okta-callback',
-    fetchImpl: async (url) => {
-      if(String(url).includes('v2.0/devicecode')) return jsonRes(400, { error: 'invalid_client' });
-      return jsonRes(200, {
-        user_code: 'HIDE-ME',
-        device_code: 'dev-x',
-        verification_uri_complete: 'https://microsoft.com/devicelogin?otc=HIDE-ME',
-        expires_in: 900,
-        interval: 5
-      });
-    }
+    redirectUri: 'https://panel.atakhome.com.tr/web-api/admin/rapid360-okta-callback',
+    loginHint: 'W340334.1@rapid360.arcelikpazarlama.com.tr'
   });
-  assert.ok(!noAzureApp.loginUrl.includes('okta-callback'));
-  assert.ok(noAzureApp.loginUrl.includes('liverapid360.operations.dynamics.com'));
-  assert.ok(noAzureApp.loginUrl.includes('mi=DmrDetailedSalesReport'));
-  assert.ok(noAzureApp.loginUrl.includes('cmp=2521'));
-  assert.ok(!noAzureApp.loginUrl.includes('Magaza='));
+  assert.ok(noAzureApp.loginUrl.includes('oauth2/v2.0/authorize'));
+  assert.ok(noAzureApp.loginUrl.includes('rapid360-okta-callback'));
+  assert.ok(noAzureApp.loginUrl.includes('code_challenge'));
+  assert.ok(noAzureApp.loginUrl.includes('login_hint='));
   assert.ok(!noAzureApp.loginUrl.includes('nativeclient'));
   assert.ok(!noAzureApp.loginUrl.includes('deviceauth'));
-  assert.ok(noAzureApp.deviceLoginUrl.includes('otc=HIDE-ME'));
-  assert.ok(!noAzureApp.deviceLoginUrl.includes('login_hint'));
-  assert.ok(!noAzureApp.deviceLoginUrl.includes('deviceauth'));
-  assert.ok(noAzureApp.deviceLoginUrl.includes('microsoft.com/devicelogin'));
-  assert.equal(noAzureApp.userCode, undefined);
+  assert.ok(!noAzureApp.loginUrl.includes('devicelogin'));
+  assert.equal(noAzureApp.deviceLoginUrl, undefined);
+  assert.ok(!JSON.stringify(noAzureApp).includes('user_code'));
+  assert.ok(/Kod yazılmaz/i.test(noAzureApp.message));
+  assert.ok(/otomatik/i.test(noAzureApp.message));
 
   auth.resetPendingForTests();
   const started = await auth.startDeviceLogin({
@@ -231,8 +221,8 @@ async function run(){
   assert.ok(!JSON.stringify(webOnly).includes('devicelogin'));
   assert.ok(!JSON.stringify(webOnly).includes('deviceauth'));
   assert.ok(/Kod yazılmaz/i.test(webOnly.message));
-  assert.ok(/340334 ATAK/i.test(webOnly.message));
-  assert.ok(/XML/i.test(webOnly.message));
+  assert.ok(/340334 ATAK/i.test(webOnly.message) || /otomatik/i.test(webOnly.message));
+  assert.ok(/otomatik/i.test(webOnly.message));
 
   console.log('rapid360-d365-auth tests OK');
 }

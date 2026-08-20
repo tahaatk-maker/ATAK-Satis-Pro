@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.199-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.200-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.199-atak-geteinvoices
-EXPECT_BUILD=fix-v199
+EXPECT_HEALTH=6.3.200-atak-geteinvoices
+EXPECT_BUILD=fix-v200
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -128,6 +128,9 @@ check "rapid360 salesIds" grep -q "parseSalesIds" "$SRC/lib/rapid360-sales-catal
 check "rapid360 magaza 340334" grep -q 'value="340334"' "$SRC/public/admin.html"
 check "rapid360 atak magaza" grep -q "340334 ATAK" "$SRC/public/admin.html"
 check "rapid360 pull auto yok" grep -q "autoImport:false" "$SRC/public/assets/admin.js"
+check "rapid360 auto pull" grep -q "autoPullRapid360Sales" "$SRC/public/assets/admin.js"
+check "personel auto pull" grep -q "autoPullRapid360Sales" "$SRC/public/assets/personel.js"
+check "rapid360 satis cek" grep -q "Satışları çek" "$SRC/public/admin.html"
 if grep -q "rapid360silent" "$SRC/public/assets/admin.js" "$SRC/public/assets/personel.js"; then
   echo "   HATALI: Rapid Aktar hâlâ silent Kod penceresi açıyor"; exit 1
 fi

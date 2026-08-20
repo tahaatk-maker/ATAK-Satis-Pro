@@ -81,9 +81,11 @@ function accountFromToken(token){
   return String(p.upn || p.unique_name || p.preferred_username || p.email || p.name || '').trim();
 }
 
+const DEFAULT_PKCE_CLIENT_ID = '51f81489-12ee-4a9e-aaae-a2591f45987d';
+
 function loginMessage(loginHint){
   const who = String(loginHint || DEFAULT_ACCOUNT).trim();
-  return `Rapid360 açılır (${who}). Telefona Okta bildirimi gelir; onaylayın. Kod yazılmaz. Mağaza 340334 ATAK Atak’ta uygulanır.`;
+  return `Okta bildirimi telefona gitti (${who}). Onaylayın; satışlar otomatik çekilir. Kod yazılmaz. Mağaza 340334 ATAK.`;
 }
 
 function isoDateParam(v){
@@ -369,7 +371,7 @@ function startWebOnlyLogin(opts = {}){
     loginUrl,
     expiresIn: 900,
     interval: 3,
-    message: `Rapid360 açıldı (${DEFAULT_ACCOUNT}). Telefonda Okta bildirimine basın. Kod yazılmaz. Rapid’te Mağaza 340334 ATAK seçip XML indirin. Dosyayı Atak’ta seçin, sonra Seçilenleri aktar.`
+    message: `Rapid360 açıldı (${DEFAULT_ACCOUNT}). Telefonda Okta bildirimine basın. Kod yazılmaz. Onaydan sonra satışlar otomatik çekilir.`
   };
 }
 
@@ -380,7 +382,7 @@ async function startInteractiveLogin(opts = {}){
   const redirectUri = String(opts.redirectUri || '').trim();
   const rapid = opts.rapid || {};
   const cfg = configFromRapid(rapid, opts.env);
-  const usePkce = Boolean(cfg.oauthClientId && redirectUri);
+  const usePkce = Boolean(redirectUri);
   const company = String(opts.company || rapid.salesCompany || '2521').trim() || '2521';
   const store = String(opts.store || rapid.salesStore || '340334').trim() || '340334';
   const startDate = isoDateParam(opts.startDate);
@@ -416,7 +418,7 @@ async function startInteractiveLogin(opts = {}){
   }
   const resource = isMuleUrl(cfg.dynamicsUrl) ? DEFAULT_DYNAMICS_URL : cfg.dynamicsUrl;
   const tenant = cfg.tenant || DEFAULT_TENANT;
-  const clientId = usePkce ? cfg.oauthClientId : clientIdsFrom(cfg)[0];
+  const clientId = usePkce ? (cfg.oauthClientId || DEFAULT_PKCE_CLIENT_ID) : clientIdsFrom(cfg)[0];
 
   if(usePkce){
     const pollId = crypto.randomBytes(16).toString('hex');
@@ -429,7 +431,7 @@ async function startInteractiveLogin(opts = {}){
       loginHint,
       challenge: pkceChallenge(verifier),
       state: pollId,
-      prompt: 'login'
+      prompt: opts.prompt || 'login'
     });
     const row = {
       pollId,
@@ -627,6 +629,35 @@ async function refreshAccessToken(cfg, fetchImpl){
   };
 }
 
+async function clientCredentialsToken(rapid, { fetchImpl, env } = {}){
+  const r = rapid && typeof rapid === 'object' ? rapid : {};
+  const clientId = String(r.oauthClientId || r.clientId || '').trim();
+  const clientSecret = String(r.clientSecret || '').trim();
+  if(!clientId || !clientSecret) return null;
+  const cfg = configFromRapid(r, env);
+  const resource = isMuleUrl(cfg.dynamicsUrl) ? DEFAULT_DYNAMICS_URL : cfg.dynamicsUrl;
+  const tenant = cfg.tenant || DEFAULT_TENANT;
+  const res = await postForm(`${LOGIN_HOST}/${tenant}/oauth2/v2.0/token`, {
+    grant_type: 'client_credentials',
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: `${resource}/.default`
+  }, fetchImpl);
+  if(res.ok && res.json && res.json.access_token){
+    return {
+      access_token: res.json.access_token,
+      refresh_token: '',
+      expires_in: res.json.expires_in,
+      account: accountFromToken(res.json.access_token) || 'app',
+      protocol: 'v2',
+      clientId,
+      tenant,
+      resource
+    };
+  }
+  return null;
+}
+
 async function ensureAccessToken(rapid, { fetchImpl, env } = {}){
   const cfg = configFromRapid(rapid, env);
   if(tokenFresh(cfg)){
@@ -637,6 +668,10 @@ async function ensureAccessToken(rapid, { fetchImpl, env } = {}){
     if(tokens && tokens.access_token){
       return { ok: true, token: tokens.access_token, cfg: configFromRapid(persistTokens(rapid, tokens), env), refreshed: true, tokens };
     }
+  }
+  const app = await clientCredentialsToken(rapid, { fetchImpl, env });
+  if(app && app.access_token){
+    return { ok: true, token: app.access_token, cfg: configFromRapid(persistTokens(rapid, app), env), refreshed: true, tokens: app };
   }
   return { ok: false, needsOkta: true, cfg };
 }
@@ -732,6 +767,7 @@ module.exports = {
   startDeviceLogin,
   startInteractiveLogin,
   startWebOnlyLogin,
+  clientCredentialsToken,
   pollDeviceLogin,
   completeAuthorizationCode,
   popupResultHtml,
