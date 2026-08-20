@@ -180,6 +180,68 @@ async function probeOdata(page){
   return null;
 }
 
+function trDate(iso){
+  const s = String(iso || '').slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
+
+async function fillReportAndQuery(page, opts, job){
+  const start = trDate(opts.startDate);
+  const end = trDate(opts.endDate);
+  setStatus(job, 'Tarih ve mağaza dolduruluyor…');
+  await page.evaluate(({ start, end, magaza }) => {
+    const setVal = (input, v) => {
+      if(!input || !v) return;
+      input.focus(); input.click();
+      const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      if(d && d.set) d.set.call(input, v); else input.value = v;
+      ['input', 'change'].forEach(t => input.dispatchEvent(new Event(t, { bubbles: true })));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      if(input.blur) input.blur();
+    };
+    const inputs = [...document.querySelectorAll('input:not([type=hidden])')];
+    const byLabel = (re) => inputs.find(i => re.test(
+      (i.getAttribute('aria-label') || '') + ' ' + (i.id || '') + ' ' + (i.name || '') + ' ' +
+      String((i.closest('[data-dyn-controlname]') || {}).getAttribute ? (i.closest('[data-dyn-controlname]').getAttribute('data-dyn-controlname') || '') : '')
+    ));
+    setVal(byLabel(/başlangıç|baslangic|fromdate|startdate/i), start);
+    setVal(byLabel(/bitiş|bitis|todate|enddate/i), end);
+    setVal(byLabel(/ma[gğ]aza|store|inventlocation/i), magaza);
+  }, { start, end, magaza: opts.store }).catch(() => {});
+  await page.waitForTimeout(2000);
+  const clicked = await page.evaluate(() => {
+    const els = [...document.querySelectorAll('button, [role="button"], span, a, input')];
+    const hit = els.find(el => /^sorgula$/i.test(String(el.innerText || el.value || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim()));
+    if(hit){ hit.click(); return true; }
+    return false;
+  }).catch(() => false);
+  if(clicked) setStatus(job, 'Rapid360 satışları sorgulanıyor…');
+  const until = Date.now() + 45000;
+  while(Date.now() < until){
+    await page.waitForTimeout(3000);
+    const empty = await page.evaluate(() => /Burada gösterecek hiçbir şey bulamadık/i.test(document.body ? document.body.innerText : '')).catch(() => true);
+    if(!empty) return true;
+  }
+  return false;
+}
+
+async function clickXmlExport(page){
+  return page.evaluate(() => {
+    const els = [...document.querySelectorAll('button, [role="button"], span, a, input')];
+    const label = (el) => String(el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('title') || '').replace(/\s+/g, ' ').trim();
+    const hit = els.find(el => /^xml\s*aktar$/i.test(label(el)))
+      || els.find(el => /^(XML|Xml)$/.test(label(el)))
+      || els.find(el => /xml/i.test(label(el)) && /aktar|indir|export|download/i.test(label(el)))
+      || els.find(el => {
+        const n = String(el.getAttribute('data-dyn-controlname') || el.id || '');
+        return /xml/i.test(n) && /(aktar|export|download|indir)/i.test(n + label(el));
+      });
+    if(hit){ hit.click(); return true; }
+    return false;
+  }).catch(() => false);
+}
+
 async function downloadReportFile(page, opts, job){
   try{
     if(!/DmrDetailedSalesReport/i.test(String(page.url()))){
@@ -187,34 +249,22 @@ async function downloadReportFile(page, opts, job){
     }
     setStatus(job, 'Rapor ekranı yükleniyor…');
     await page.waitForTimeout(15000);
-    const dlPromise = page.waitForEvent('download', { timeout: 90000 });
-    setStatus(job, 'Rapor XML/Excel indiriliyor…');
-    await page.evaluate((magaza) => {
-      const w = String(magaza || '340334');
-      const names = ['InventLocationId', 'inventLocationId', 'parmInventLocationId', 'Magaza', 'RetailStoreId', 'Store'];
-      const all = [...document.querySelectorAll('[data-dyn-controlname]')];
-      const host = all.find(el => names.includes(el.getAttribute('data-dyn-controlname')))
-        || all.find(el => /inventlocation|magaza|store|warehouse/i.test(el.getAttribute('data-dyn-controlname') || ''));
-      const input = (host && host.querySelector('input:not([type=hidden])'))
-        || [...document.querySelectorAll('input')].find(i => /ma[gğ]aza|inventlocation|depo/i.test((i.getAttribute('aria-label') || '') + (i.id || '')));
-      if(input){
-        input.focus(); input.click();
-        const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-        if(d && d.set) d.set.call(input, w); else input.value = w;
-        ['input', 'change'].forEach(t => input.dispatchEvent(new Event(t, { bubbles: true })));
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      }
-      const hit = [...document.querySelectorAll('button,a,span,div,li,input')].find(el => {
-        const t = String(el.innerText || el.value || el.getAttribute('title') || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim();
-        const n = String(el.getAttribute('data-dyn-controlname') || el.id || '');
-        return /^(XML|Xml)$/.test(t) || /XML\s*(indir|oluştur|olustur)?$/i.test(t) || (/xml/i.test(n) && /(export|download|indir)/i.test(n + t));
-      });
-      if(hit) hit.click();
-    }, opts.store).catch(() => {});
+    const hasRows = await fillReportAndQuery(page, opts, job);
+    if(!hasRows){
+      setStatus(job, 'Sorgu boş döndü, XML Aktar deneniyor…');
+    }
+    const dlPromise = page.waitForEvent('download', { timeout: 120000 });
+    setStatus(job, 'XML Aktar’a basılıyor…');
+    const clicked = await clickXmlExport(page);
+    if(!clicked){
+      await page.waitForTimeout(3000);
+      await clickXmlExport(page);
+    }
     const dl = await dlPromise;
+    setStatus(job, 'XML indiriliyor…');
     const filePath = await dl.path();
     const buffer = fs.readFileSync(filePath);
-    return { file: { originalname: dl.suggestedFilename() || 'rapid360.xlsx', buffer } };
+    return { file: { originalname: dl.suggestedFilename() || 'rapid360.xml', buffer } };
   }catch(_){
     return null;
   }
@@ -257,10 +307,10 @@ async function runPull(job, opts = {}){
     }
     setStatus(job, 'Satışlar okunuyor…');
     await page.waitForTimeout(4000);
-    const json = await probeOdata(page);
-    if(json) return { json };
     const dl = await downloadReportFile(page, opts, job);
     if(dl) return dl;
+    const json = await probeOdata(page);
+    if(json) return { json };
     throw new Error('Rapid360 satış vermedi. Tarihi genişletin veya XML yükleyin.');
   }finally{
     if(ctx) await ctx.close().catch(() => {});
@@ -275,6 +325,7 @@ function resetForTests(){
 module.exports = {
   available,
   classifyUrl,
+  trDate,
   startPull,
   getJob,
   runPull,

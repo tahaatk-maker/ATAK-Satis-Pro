@@ -8,6 +8,10 @@ assert.equal(robot.classifyUrl('https://arcelik.okta-emea.com/signin/verify/okta
 assert.equal(robot.classifyUrl('https://liverapid360.operations.dynamics.com/?cmp=2521&mi=DmrDetailedSalesReport'), 'dynamics');
 assert.equal(robot.classifyUrl('https://panel.atakhome.com.tr/web-admin'), 'other');
 
+assert.equal(robot.trDate('2026-08-18'), '18.08.2026');
+assert.equal(robot.trDate('2026-08-20T00:00:00'), '20.08.2026');
+assert.equal(robot.trDate(''), '');
+
 async function run(){
   robot.resetForTests();
   const job = robot.startPull({
