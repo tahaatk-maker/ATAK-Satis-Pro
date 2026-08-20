@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.202-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.203-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.202-atak-geteinvoices
-EXPECT_BUILD=fix-v202
+EXPECT_HEALTH=6.3.203-atak-geteinvoices
+EXPECT_BUILD=fix-v203
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -135,6 +135,15 @@ if grep -A30 "async function startRapidOktaChallenge" "$SRC/server.js" | grep -q
   echo "   HATALI: Rapid Aktar Microsoft AADSTS50011 callback açıyor"; exit 1
 fi
 echo "   ok: Rapid Aktar Microsoft callback yok"
+if grep -A8 "async function startInteractiveLogin" "$SRC/lib/rapid360-d365-auth.js" | grep -q "buildAuthorizeUrl"; then
+  echo "   HATALI: Rapid Aktar hâlâ PKCE authorize açıyor"; exit 1
+fi
+echo "   ok: Rapid Aktar PKCE authorize yok"
+if grep -A12 "rapid360-okta-callback" "$SRC/server.js" | grep -q "completeAuthorizationCode"; then
+  echo "   HATALI: Rapid callback hâlâ Microsoft token alıyor"; exit 1
+fi
+echo "   ok: Rapid callback Microsoft token almıyor"
+check "aadsts50011 uyarisi" grep -q "AADSTS50011" "$SRC/public/admin.html"
 if grep -q "rapid360-okta-callback" "$SRC/public/assets/admin.js" && grep -q 'webOnly:true' "$SRC/public/assets/admin.js"; then
   echo "   ok: Rapid Aktar popup Microsoft authorize açmaz"
 fi

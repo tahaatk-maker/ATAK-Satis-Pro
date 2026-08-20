@@ -28,52 +28,22 @@ async function run(){
   const interactive = await auth.startInteractiveLogin({
     sessionId: 'sess-pkce',
     loginHint: 'taha@atakhome.com.tr',
-    redirectUri: 'https://panel.atakhome.com.tr/web-api/admin/rapid360-okta-callback',
-    rapid: { oauthClientId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }
+    redirectUri: 'https://atakhome.com.tr/web-api/admin/rapid360-okta-callback',
+    rapid: { oauthClientId: '51f81489-12ee-4a9e-aaae-a2591f45987d' }
   });
-  assert.ok(interactive.loginUrl.includes('login.microsoftonline.com'));
-  assert.ok(interactive.loginUrl.includes('login_hint=taha'));
-  assert.ok(interactive.loginUrl.includes('code_challenge'));
-  assert.equal(interactive.userCode, undefined);
-  assert.ok(!JSON.stringify(interactive).includes('user_code'));
-  assert.ok(/Okta/.test(interactive.message));
+  assert.ok(interactive.loginUrl.includes('liverapid360.operations.dynamics.com'));
+  assert.ok(interactive.loginUrl.includes('mi=DmrDetailedSalesReport'));
+  assert.ok(!interactive.loginUrl.includes('login.microsoftonline.com'));
+  assert.ok(!interactive.loginUrl.includes('rapid360-okta-callback'));
+  assert.ok(!interactive.loginUrl.includes('code_challenge'));
+  assert.ok(!JSON.stringify(interactive).includes('51f81489'));
+  assert.equal(interactive.deviceLoginUrl, undefined);
   assert.ok(/Kod yazılmaz/i.test(interactive.message));
-
-  const pendingPkce = await auth.pollDeviceLogin({
-    sessionId: 'sess-pkce',
-    pollId: interactive.pollId
-  });
-  assert.equal(pendingPkce.pending, true);
-
-  const authed = await auth.completeAuthorizationCode({
-    sessionId: 'sess-pkce',
-    state: interactive.pollId,
-    code: 'auth-code-1',
-    fetchImpl: async () => jsonRes(200, {
-      access_token: `${header}.${payload}.x`,
-      refresh_token: 'r1',
-      expires_in: 3600
-    })
-  });
-  assert.equal(authed.ok, true);
-  const polled = await auth.pollDeviceLogin({ sessionId: 'sess-pkce', pollId: interactive.pollId });
-  assert.equal(polled.ok, true);
-  assert.equal(polled.tokens.account, 'taha@atakhome.com.tr');
 
   auth.resetPendingForTests();
   const noAzureApp = await auth.startInteractiveLogin({
     sessionId: 'sess-noaad',
-    redirectUri: 'https://atakhome.com.tr/web-api/admin/rapid360-okta-callback',
-    fetchImpl: async (url) => {
-      if(String(url).includes('v2.0/devicecode')) return jsonRes(400, { error: 'invalid_client' });
-      return jsonRes(200, {
-        user_code: 'HIDE-ME',
-        device_code: 'dev-x',
-        verification_uri_complete: 'https://microsoft.com/devicelogin?otc=HIDE-ME',
-        expires_in: 900,
-        interval: 5
-      });
-    }
+    redirectUri: 'https://atakhome.com.tr/web-api/admin/rapid360-okta-callback'
   });
   assert.ok(!noAzureApp.loginUrl.includes('okta-callback'));
   assert.ok(noAzureApp.loginUrl.includes('liverapid360.operations.dynamics.com'));
@@ -82,47 +52,25 @@ async function run(){
   assert.ok(!noAzureApp.loginUrl.includes('Magaza='));
   assert.ok(!noAzureApp.loginUrl.includes('nativeclient'));
   assert.ok(!noAzureApp.loginUrl.includes('deviceauth'));
-  assert.ok(noAzureApp.deviceLoginUrl.includes('otc=HIDE-ME'));
-  assert.ok(!noAzureApp.deviceLoginUrl.includes('login_hint'));
-  assert.ok(!noAzureApp.deviceLoginUrl.includes('deviceauth'));
-  assert.ok(noAzureApp.deviceLoginUrl.includes('microsoft.com/devicelogin'));
-  assert.equal(noAzureApp.userCode, undefined);
+  assert.equal(noAzureApp.deviceLoginUrl, undefined);
 
   auth.resetPendingForTests();
   const started = await auth.startDeviceLogin({
     sessionId: 'sess-1',
-    loginHint: 'taha@atakhome.com.tr',
-    fetchImpl: async (url) => {
-      if(String(url).includes('v2.0/devicecode')){
-        return jsonRes(400, { error: 'invalid_client' });
-      }
-      return jsonRes(200, {
-        user_code: 'ABCD-EFGH',
-        device_code: 'dev-1',
-        verification_uri: 'https://microsoft.com/devicelogin',
-        verification_uri_complete: 'https://microsoft.com/devicelogin?otc=ABCD-EFGH',
-        expires_in: 900,
-        interval: 5
-      });
-    }
+    loginHint: 'taha@atakhome.com.tr'
   });
   assert.equal(started.userCode, undefined);
   assert.ok(started.loginUrl);
-  assert.ok(started.pollId);
   assert.ok(/Okta/.test(started.message));
   assert.ok(/Kod yazılmaz/i.test(started.message));
-  assert.ok(!JSON.stringify(started).includes('dev-1'));
   assert.ok(!started.loginUrl.includes('rapid360-okta-callback'));
   assert.ok(started.loginUrl.includes('DmrDetailedSalesReport'));
   assert.ok(started.loginUrl.includes('cmp=2521'));
   assert.ok(!started.loginUrl.includes('Magaza='));
   assert.ok(!started.loginUrl.includes('nativeclient'));
   assert.ok(!started.loginUrl.includes('deviceauth'));
-  assert.ok(started.deviceLoginUrl.includes('otc=ABCD-EFGH'));
-  assert.ok(!started.deviceLoginUrl.includes('login_hint'));
-  assert.ok(!started.deviceLoginUrl.includes('deviceauth'));
-  assert.ok(started.deviceLoginUrl.includes('microsoft.com/devicelogin'));
-  assert.ok(!('userCode' in started));
+  assert.ok(!started.loginUrl.includes('login.microsoftonline.com'));
+  assert.equal(started.deviceLoginUrl, undefined);
   const report = auth.dynamicsReportUrl({ company: '2521', store: '340334', startDate: '2026-08-18', endDate: '2026-08-19' });
   assert.ok(report.includes('cmp=2521'));
   assert.ok(report.includes('mi=DmrDetailedSalesReport'));
@@ -131,6 +79,8 @@ async function run(){
   assert.ok(!report.includes('parmMagaza'));
   assert.ok(!report.includes('nativeclient'));
   assert.equal(auth.isBlockedMicrosoftUrl('https://login.microsoftonline.com/common/oauth2/nativeclient?code=x'), true);
+  assert.equal(auth.isBlockedMicrosoftUrl('https://login.microsoftonline.com/login.srf'), true);
+  assert.equal(auth.isBlockedMicrosoftUrl('https://atakhome.com.tr/web-api/admin/rapid360-okta-callback'), true);
 
   assert.equal(auth.isBrokenDeviceLoginUrl('https://login.microsoftonline.com/common/oauth2/deviceauth?login_hint=W340334.1%40x'), true);
   assert.equal(auth.isBrokenDeviceLoginUrl('https://microsoft.com/devicelogin?otc=ABCD-EFGH'), false);
@@ -150,71 +100,16 @@ async function run(){
     user_code: 'KEEP-ME'
   }).includes('login_hint'));
 
-  const pending = await auth.pollDeviceLogin({
-    sessionId: 'sess-1',
-    pollId: started.pollId,
-    fetchImpl: async () => jsonRes(400, { error: 'authorization_pending' })
+  const saved = auth.persistTokens({}, {
+    access_token: `${header}.${payload}.x`,
+    refresh_token: 'r1',
+    expires_in: 3600,
+    account: 'taha@atakhome.com.tr'
   });
-  assert.equal(pending.pending, true);
-
-  const denied = await auth.pollDeviceLogin({
-    sessionId: 'other',
-    pollId: started.pollId,
-    fetchImpl: async () => jsonRes(200, { access_token: 'nope' })
-  });
-  assert.equal(denied.ok, false);
-
-  const done = await auth.pollDeviceLogin({
-    sessionId: 'sess-1',
-    pollId: started.pollId,
-    fetchImpl: async () => jsonRes(200, {
-      access_token: `${header}.${payload}.x`,
-      refresh_token: 'r1',
-      expires_in: 3600
-    })
-  });
-  assert.equal(done.ok, true);
-  assert.equal(done.tokens.account, 'taha@atakhome.com.tr');
-  const saved = auth.persistTokens({}, done.tokens);
   assert.equal(saved.d365Auth.account, 'taha@atakhome.com.tr');
   assert.equal(saved.d365Auth.refreshToken, 'r1');
 
   auth.resetPendingForTests();
-  const onlyUri = await auth.startDeviceLogin({
-    sessionId: 'sess-otc',
-    loginHint: 'W340334.1@rapid360.arcelikpazarlama.com.tr',
-    company: '2521',
-    store: '340334',
-    fetchImpl: async (url) => {
-      if(String(url).includes('v2.0/devicecode')) return jsonRes(400, { error: 'invalid_client' });
-      return jsonRes(200, {
-        user_code: 'ZZZZ-YYYY',
-        device_code: 'dev-2',
-        verification_uri: 'https://login.microsoftonline.com/common/oauth2/deviceauth',
-        expires_in: 900,
-        interval: 5
-      });
-    }
-  });
-  assert.ok(onlyUri.loginUrl.includes('DmrDetailedSalesReport'));
-  assert.ok(!onlyUri.loginUrl.includes('Magaza='));
-  assert.ok(!onlyUri.loginUrl.includes('nativeclient'));
-  assert.ok(!onlyUri.loginUrl.includes('deviceauth'));
-  assert.ok(onlyUri.deviceLoginUrl.includes('otc=ZZZZ-YYYY'));
-  assert.ok(!onlyUri.deviceLoginUrl.includes('login_hint'));
-  assert.ok(!onlyUri.deviceLoginUrl.includes('deviceauth'));
-
-  const reused = await auth.startDeviceLogin({
-    sessionId: 'sess-otc',
-    loginHint: 'W340334.1@rapid360.arcelikpazarlama.com.tr',
-    fetchImpl: async () => { throw new Error('should reuse pending otc url'); }
-  });
-  assert.equal(reused.pollId, onlyUri.pollId);
-  assert.ok(reused.loginUrl.includes('DmrDetailedSalesReport'));
-  assert.ok(reused.deviceLoginUrl.includes('otc=ZZZZ-YYYY'));
-  assert.ok(!reused.deviceLoginUrl.includes('login_hint'));
-  assert.ok(!reused.deviceLoginUrl.includes('deviceauth'));
-
   const webOnly = auth.startWebOnlyLogin({
     company: '2521',
     store: '340334',

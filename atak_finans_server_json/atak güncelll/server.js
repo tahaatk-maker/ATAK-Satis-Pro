@@ -1904,8 +1904,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.202-atak-geteinvoices',
-    build:'fix-v202',
+    version:'6.3.203-atak-geteinvoices',
+    build:'fix-v203',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5516,27 +5516,12 @@ app.post('/web-api/admin/rapid360-okta-start',rapidSalesPerm,async(req,res)=>{
     res.status(400).json({error:e.message||'Okta Verify başlatılamadı'});
   }
 });
-app.get('/web-api/admin/rapid360-okta-callback',async(req,res)=>{
-  const send=(ok,error)=>res.status(ok?200:400).type('html').send(d365Auth.popupResultHtml(ok,error));
-  if(!req.session||!(req.session.admin===true||req.session.systemOwner===true||req.session.staffUser||req.session.user)){
-    return send(false,'Atak oturumu yok. Panele girip Rapid Aktar’a tekrar basın.');
-  }
-  try{
-    const result=await d365Auth.completeAuthorizationCode({
-      sessionId:req.sessionID||'',
-      code:req.query.code,
-      state:req.query.state,
-      error:req.query.error
-    });
-    if(result.ok){
-      const s=readStore();
-      saveRapidOktaTokens(s,result.tokens);
-      writeStore(s);
-    }
-    return send(!!result.ok,result.error);
-  }catch(e){
-    return send(false,e.message||'Giriş tamamlanamadı');
-  }
+app.get('/web-api/admin/rapid360-okta-callback',(req,res)=>{
+  const url=d365Auth.dynamicsReportUrl({company:'2521'});
+  res.status(200).type('html').send(`<!doctype html><html lang="tr"><meta charset="utf-8"><title>Rapid360</title>
+  <p>Microsoft AADSTS50011 Atak’ta kullanılmaz. Rapid360 açılıyor…</p>
+  <p><a href="${url}">Rapid360’ı aç</a></p>
+  <script>location.replace(${JSON.stringify(url)})</script></html>`);
 });
 app.post('/web-api/admin/rapid360-okta-poll',rapidSalesPerm,async(req,res)=>{
   try{

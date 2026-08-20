@@ -102,7 +102,7 @@ function dynamicsReportUrl({ dynamicsUrl, company } = {}){
 }
 
 function isBlockedMicrosoftUrl(url){
-  return /nativeclient|wrongplace|deviceauth|devicelogin/i.test(String(url || ''));
+  return /nativeclient|wrongplace|deviceauth|devicelogin|login\.microsoftonline\.com|rapid360-okta-callback|51f81489/i.test(String(url || ''));
 }
 
 function withLoginHint(url, loginHint){
@@ -374,150 +374,11 @@ function startWebOnlyLogin(opts = {}){
 }
 
 async function startInteractiveLogin(opts = {}){
-  const sessionId = String(opts.sessionId || '');
-  if(!sessionId) throw new Error('Oturum yok');
-  const loginHint = String(opts.loginHint || opts.username || DEFAULT_ACCOUNT).trim() || DEFAULT_ACCOUNT;
-  const redirectUri = String(opts.redirectUri || '').trim();
-  const rapid = opts.rapid || {};
-  const cfg = configFromRapid(rapid, opts.env);
-  const usePkce = Boolean(cfg.oauthClientId && redirectUri);
-  const company = String(opts.company || rapid.salesCompany || '2521').trim() || '2521';
-  const store = String(opts.store || rapid.salesStore || '340334').trim() || '340334';
-  const startDate = isoDateParam(opts.startDate);
-  const endDate = isoDateParam(opts.endDate);
-  const existing = findPendingForSession(sessionId);
-  if(existing){
-    const isCallbackPkce = /rapid360-okta-callback/.test(String(existing.redirectUri || existing.authorizeUrl || ''));
-    const stalePkce = isCallbackPkce && !usePkce;
-    const staleNative = isBlockedMicrosoftUrl(existing.loginUrl) || isBlockedMicrosoftUrl(existing.authorizeUrl) || isBlockedMicrosoftUrl(existing.redirectUri);
-    const isDynamics = /operations\.dynamics\.com/i.test(String(existing.loginUrl || existing.reportUrl || ''));
-    if(!stalePkce && !staleNative && (isDynamics || isCallbackPkce)){
-      if(loginHint) existing.loginHint = loginHint;
-      existing.company = company;
-      existing.store = store;
-      existing.startDate = startDate || existing.startDate;
-      existing.endDate = endDate || existing.endDate;
-      existing.message = loginMessage(loginHint || existing.loginHint);
-      if(isDynamics){
-        existing.loginUrl = dynamicsReportUrl({
-          dynamicsUrl: existing.resource || cfg.dynamicsUrl,
-          company,
-          store,
-          startDate: existing.startDate,
-          endDate: existing.endDate
-        });
-        existing.reportUrl = existing.loginUrl;
-      }else if(existing.authorizeUrl){
-        existing.loginUrl = withLoginHint(existing.authorizeUrl, loginHint || existing.loginHint);
-      }
-      return publicLoginStart(existing);
-    }
-    pendingById.delete(existing.pollId);
-  }
-  const resource = isMuleUrl(cfg.dynamicsUrl) ? DEFAULT_DYNAMICS_URL : cfg.dynamicsUrl;
-  const tenant = cfg.tenant || DEFAULT_TENANT;
-  const clientId = usePkce ? cfg.oauthClientId : clientIdsFrom(cfg)[0];
-
-  if(usePkce){
-    const pollId = crypto.randomBytes(16).toString('hex');
-    const verifier = pkceVerifier();
-    const authorizeUrl = buildAuthorizeUrl({
-      tenant,
-      clientId,
-      resource,
-      redirectUri,
-      loginHint,
-      challenge: pkceChallenge(verifier),
-      state: pollId,
-      prompt: opts.prompt || 'login'
-    });
-    const row = {
-      pollId,
-      sessionId,
-      deviceCode: '',
-      clientId,
-      tenant,
-      resource,
-      protocol: 'v2',
-      verificationUri: '',
-      verificationUriComplete: '',
-      authorizeUrl,
-      redirectUri,
-      codeVerifier: verifier,
-      loginHint,
-      loginUrl: authorizeUrl,
-      interval: 3,
-      expiresAt: Date.now() + 15 * 60 * 1000,
-      message: loginMessage(loginHint)
-    };
-    pendingById.set(pollId, row);
-    return publicLoginStart(row);
-  }
-
-  let lastErr = 'Okta girişi başlatılamadı';
-  for(const id of clientIdsFrom(cfg)){
-    const got = await requestDeviceCode({
-      tenant,
-      clientId: id,
-      resource,
-      fetchImpl: opts.fetchImpl
-    });
-    if(got && got.json && got.json.user_code){
-      const json = got.json;
-      const pollId = crypto.randomBytes(16).toString('hex');
-      const expiresIn = Number(json.expires_in || 900);
-      const interval = Math.max(3, Number(json.interval || 5));
-      const verificationUri = String(json.verification_uri || json.verification_url || 'https://microsoft.com/devicelogin');
-      const verificationUriComplete = String(json.verification_uri_complete || '');
-      const userCode = String(json.user_code || '');
-      const deviceUrl = deviceLoginUrl({
-        verification_uri_complete: verificationUriComplete,
-        verification_uri: verificationUri,
-        user_code: userCode
-      });
-      const reportUrl = dynamicsReportUrl({
-        dynamicsUrl: resource,
-        company,
-        store,
-        startDate,
-        endDate
-      });
-      const row = {
-        pollId,
-        sessionId,
-        deviceCode: String(json.device_code || json.code || ''),
-        userCode,
-        clientId: id,
-        tenant,
-        resource,
-        protocol: got.protocol,
-        verificationUri,
-        verificationUriComplete,
-        authorizeUrl: '',
-        redirectUri: '',
-        codeVerifier: '',
-        loginHint,
-        company,
-        store,
-        startDate,
-        endDate,
-        reportUrl,
-        loginUrl: reportUrl,
-        deviceLoginUrl: deviceUrl,
-        interval,
-        expiresAt: Date.now() + expiresIn * 1000,
-        message: loginMessage(loginHint)
-      };
-      pendingById.set(pollId, row);
-      return publicLoginStart(row);
-    }
-    lastErr = (got && got.error) || lastErr;
-  }
-  throw new Error(`Okta Verify başlatılamadı (${lastErr}). Rapid Aktar’a tekrar basın.`);
+  return startWebOnlyLogin(opts);
 }
 
 async function startDeviceLogin(opts = {}){
-  return startInteractiveLogin(opts);
+  return startWebOnlyLogin(opts);
 }
 
 function aadErrorMessage(json){
