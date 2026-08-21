@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.215-atak-geteinvoices',
-    build:'fix-v215',
+    version:'6.3.216-atak-geteinvoices',
+    build:'fix-v216',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5710,10 +5710,8 @@ app.get('/web-api/admin/rapid360-robot-shot',rapidSalesPerm,(req,res)=>{
   res.type('png').send(job.shot);
 });
 app.get('/web-api/admin/rapid360-robot-diag',rapidSalesPerm,async(req,res)=>{
-  let pwVersion='';
-  try{pwVersion=require('playwright/package.json').version}catch(_){
-    try{pwVersion=require('playwright-core/package.json').version+' (core)'}catch(__){}
-  }
+  const pwMeta=rapidRobot.resolvePlaywrightMeta();
+  const pwVersion=pwMeta?(pwMeta.version+(pwMeta.name==='playwright-core'?' (core)':'')):'';
   let launch={ok:false,error:'kontrol edilemedi'};
   try{launch=await rapidRobot.verifyLaunch()}catch(e){launch={ok:false,error:e.message||''}}
   const s=readStore();
@@ -5721,8 +5719,10 @@ app.get('/web-api/admin/rapid360-robot-diag',rapidSalesPerm,async(req,res)=>{
   res.json({
     ok:true,
     node:process.version,
-    playwright:Boolean(pwVersion),
+    cwd:process.cwd(),
+    playwright:Boolean(pwMeta),
     playwrightVersion:pwVersion,
+    playwrightPath:pwMeta?pwMeta.entry:'',
     launchOk:launch.ok,
     launchError:launch.error||'',
     oktaUser:String(rapid.oktaUser||'').trim(),

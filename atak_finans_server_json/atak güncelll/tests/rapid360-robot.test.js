@@ -2,6 +2,11 @@ const assert = require('assert');
 const robot = require('../lib/rapid360-robot');
 
 assert.equal(typeof robot.available(), 'boolean');
+assert.ok(Array.isArray(robot.PW_SEARCH_PATHS));
+assert.ok(robot.PW_SEARCH_PATHS.includes('/root/atak-v10'));
+assert.ok(robot.PW_SEARCH_PATHS.includes('/root/atakhome-platform'));
+assert.equal(typeof robot.resolvePlaywrightPath(), 'string');
+assert.ok(robot.resolvePlaywrightMeta() === null || typeof robot.resolvePlaywrightMeta().entry === 'string');
 
 assert.equal(robot.classifyUrl('https://login.microsoftonline.com/common/oauth2/authorize?x=1'), 'microsoft');
 assert.equal(robot.classifyUrl('https://arcelik.okta-emea.com/signin/verify/okta/push'), 'okta');

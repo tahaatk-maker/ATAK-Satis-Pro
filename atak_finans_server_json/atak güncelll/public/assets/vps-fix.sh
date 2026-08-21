@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.215-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.216-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.215-atak-geteinvoices
-EXPECT_BUILD=fix-v215
+EXPECT_HEALTH=6.3.216-atak-geteinvoices
+EXPECT_BUILD=fix-v216
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -195,6 +195,9 @@ check "robot selenium tikla" grep -q "typeIntoD365" "$SRC/lib/rapid360-robot.js"
 check "robot ekran goruntusu" grep -q "rapid360-robot-shot" "$SRC/server.js"
 check "robot test api" grep -q "rapid360-robot-test" "$SRC/server.js"
 check "ayarlar robot test" grep -q "rapidRobotTestBtn" "$SRC/public/admin.html"
+check "robot coklu klasor" grep -q "PW_SEARCH_PATHS" "$SRC/lib/rapid360-robot.js"
+check "robot playwright meta" grep -q "resolvePlaywrightMeta" "$SRC/lib/rapid360-robot.js"
+check "robot teshis yol" grep -q "playwrightPath" "$SRC/server.js"
 check "rapid taslak needsCompletion" grep -q "needsCompletion" "$SRC/server.js"
 check "rapid taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/admin.js"
 check "personel taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/personel.js"
@@ -398,23 +401,24 @@ fi
 step "rapid robot (tarayici) kuruluyor"
 ROBOT_OK=0
 echo "   node: $(node -v 2>/dev/null || echo yok)  npm: $(npm -v 2>/dev/null || echo yok)  disk: $(df -h "$APP" 2>/dev/null | awk 'NR==2{print $4" bos"}')"
-if node -e "require('playwright')" >/dev/null 2>&1; then
-  ROBOT_OK=1
-  echo "   playwright zaten kurulu ($(node -e "console.log(require('playwright/package.json').version)" 2>/dev/null))"
-else
-  echo "   playwright indiriliyor (tek seferlik, ~1-2 dk)..."
-  if npm install playwright --no-save --omit=dev >/tmp/atak-pw-install.log 2>&1; then
+# Iki uygulama klasoru olabilir — playwright'i HEPSINE kur (calisan panel hangisiyse bulsun)
+for RD in "${DIRS[@]}"; do
+  [ -d "$RD" ] || continue
+  if (cd "$RD" && node -e "require('playwright')" >/dev/null 2>&1); then
+    echo "   $RD: playwright kurulu ($(cd "$RD" && node -e "console.log(require('playwright/package.json').version)" 2>/dev/null))"
     ROBOT_OK=1
   else
-    echo "   guncel surum olmadi, eski surum deneniyor..."
-    if npm install playwright@1.40.1 --no-save --omit=dev >>/tmp/atak-pw-install.log 2>&1; then
+    echo "   $RD: playwright indiriliyor..."
+    if (cd "$RD" && npm install playwright --no-save --omit=dev >/tmp/atak-pw-install.log 2>&1); then
+      echo "   $RD: playwright kuruldu"
       ROBOT_OK=1
     else
-      echo "   HATA: playwright kurulamadi — sebep:"
-      tail -6 /tmp/atak-pw-install.log 2>/dev/null | sed 's/^/     /'
+      echo "   $RD: HATA — playwright kurulamadi:"
+      tail -4 /tmp/atak-pw-install.log 2>/dev/null | sed 's/^/     /'
     fi
   fi
-fi
+done
+cd "$APP"
 if [ "$ROBOT_OK" = "1" ]; then
   npx playwright install chromium >/tmp/atak-pw-browser.log 2>&1 || { echo "   chromium indirme sorunu:"; tail -4 /tmp/atak-pw-browser.log | sed 's/^/     /'; }
   npx playwright install-deps chromium >/dev/null 2>&1 \
@@ -423,16 +427,29 @@ if [ "$ROBOT_OK" = "1" ]; then
       libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 \
       libpango-1.0-0 libcairo2 libglib2.0-0 fonts-liberation >/dev/null 2>&1 \
     || echo "   sistem kutuphaneleri kurulamadi (apt)"
-  if node -e "const {chromium}=require('playwright');(async()=>{const b=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});await b.close()})().then(()=>process.exit(0)).catch(e=>{console.error(String(e.message).split('\n')[0]);process.exit(1)})" 2>/tmp/atak-robot-err.txt; then
-    echo "   ok: rapid robot hazir (chromium acildi)"
-  else
+  LAUNCH_OK=0
+  for RD in "${DIRS[@]}"; do
+    [ -d "$RD" ] || continue
+    if (cd "$RD" && node -e "const {chromium}=require('playwright');(async()=>{const b=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});await b.close()})().then(()=>process.exit(0)).catch(e=>{console.error(String(e.message).split('\n')[0]);process.exit(1)})" 2>/tmp/atak-robot-err.txt); then
+      echo "   ok: rapid robot hazir ($RD chromium acildi)"
+      LAUNCH_OK=1
+      break
+    fi
+  done
+  if [ "$LAUNCH_OK" != "1" ]; then
     echo "   HATA: chromium acilamadi — robot devre disi: $(head -c 200 /tmp/atak-robot-err.txt 2>/dev/null)"
     ROBOT_OK=0
   fi
 fi
 [ "$ROBOT_OK" = "1" ] || echo "   robot yok: Satislari oku yine calisir (Rapid360 penceresi + XML)"
 
-ATAK_OWNER_ONLY=0 pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env
+NODE_PATH_JOIN=""
+for RD in "${DIRS[@]}" /root/atak-v10 /root/atakhome-platform "$APP"; do
+  [ -d "$RD/node_modules" ] || continue
+  case ":$NODE_PATH_JOIN:" in *":$RD/node_modules:"*) ;; *) NODE_PATH_JOIN="${NODE_PATH_JOIN:+$NODE_PATH_JOIN:}$RD/node_modules" ;; esac
+done
+echo "   NODE_PATH=$NODE_PATH_JOIN"
+NODE_PATH="$NODE_PATH_JOIN" ATAK_OWNER_ONLY=0 pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env
 pm2 save || true
 
 step "saglik kontrolu"

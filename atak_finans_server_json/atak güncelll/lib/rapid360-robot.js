@@ -10,6 +10,7 @@
 
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
 const { ODATA_ENTITIES } = require('./rapid360-sales-bridge');
 
 const JOB_TTL_MS = 15 * 60 * 1000;
@@ -17,22 +18,55 @@ const LOGIN_TIMEOUT_MS = 180000;
 const jobs = new Map();
 let runningJobId = '';
 
-function available(){
-  try{ require.resolve('playwright'); return true; }
-  catch{
-    try{ require.resolve('playwright-core'); return true; }
-    catch{ return false; }
+// Sunucuda birden fazla uygulama klasörü olabilir (atak-v10, atakhome-platform).
+// playwright hangisine kurulduysa oradan bul.
+const PW_SEARCH_PATHS = [
+  path.join(__dirname, '..'),
+  '/root/atak-v10',
+  '/root/atakhome-platform',
+  process.cwd()
+];
+
+function resolvePlaywrightMeta(){
+  const bases = ['', ...PW_SEARCH_PATHS];
+  for(const name of ['playwright', 'playwright-core']){
+    for(const base of bases){
+      try{
+        const opts = base ? { paths: [base] } : undefined;
+        const entry = require.resolve(name, opts);
+        let version = '';
+        try{
+          version = String(require(require.resolve(name + '/package.json', opts)).version || '');
+        }catch(_){ }
+        return { name, entry, version, searchedFrom: base || 'default' };
+      }catch(_){ }
+    }
   }
+  return null;
+}
+
+function resolvePlaywrightPath(){
+  const meta = resolvePlaywrightMeta();
+  return meta ? meta.entry : '';
+}
+
+function available(){
+  return Boolean(resolvePlaywrightPath());
 }
 
 function loadPlaywright(){
-  try{ return require('playwright'); }
-  catch{ return require('playwright-core'); }
+  const p = resolvePlaywrightPath();
+  if(!p) throw new Error('playwright bulunamadı');
+  return require(p);
 }
 
 let launchCheck = null;
 async function verifyLaunch(){
-  if(launchCheck) return launchCheck;
+  if(launchCheck){
+    const prev = await launchCheck;
+    if(prev.ok) return prev;
+    launchCheck = null;
+  }
   launchCheck = (async () => {
     if(!available()) return { ok: false, error: 'Sunucuda playwright kurulu değil. Hostinger scriptini tekrar çalıştırın.' };
     try{
@@ -450,5 +484,8 @@ module.exports = {
   getLastJob,
   runPull,
   resetForTests,
-  LOGIN_TIMEOUT_MS
+  LOGIN_TIMEOUT_MS,
+  PW_SEARCH_PATHS,
+  resolvePlaywrightPath,
+  resolvePlaywrightMeta
 };
