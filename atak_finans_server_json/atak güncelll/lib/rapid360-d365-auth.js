@@ -13,6 +13,19 @@ const DEFAULT_DYNAMICS_URL = 'https://liverapid360.operations.dynamics.com';
 const LOGIN_HOST = 'https://login.microsoftonline.com';
 const DEFAULT_TENANT = 'organizations';
 const DEFAULT_ACCOUNT = 'W340334.1@rapid360.arcelikpazarlama.com.tr';
+
+/** W3403341 → W340334.1 (nokta unutulunca Okta “Oturum açılamıyor” der). */
+function normalizeRapidAccount(raw){
+  let s = String(raw || '').trim();
+  if(!s) return '';
+  s = s.replace(/^W340334(\d)(?=@|$)/i, 'W340334.$1');
+  if(!s.includes('@') && /^W\d/i.test(s)) s += '@rapid360.arcelikpazarlama.com.tr';
+  return s;
+}
+function oktaLoginName(account){
+  const full = normalizeRapidAccount(account) || DEFAULT_ACCOUNT;
+  return full.split('@')[0];
+}
 /** Azure PowerShell (d365fo.integrations) + Microsoft örnek public client. */
 const DEFAULT_CLIENT_IDS = [
   '1950a258-227b-4e31-a9cf-717495945fc2',
@@ -610,6 +623,8 @@ module.exports = {
   DEFAULT_DYNAMICS_URL,
   DEFAULT_TENANT,
   DEFAULT_ACCOUNT,
+  normalizeRapidAccount,
+  oktaLoginName,
   DEFAULT_CLIENT_IDS,
   NATIVE_REDIRECT,
   isoDateParam,

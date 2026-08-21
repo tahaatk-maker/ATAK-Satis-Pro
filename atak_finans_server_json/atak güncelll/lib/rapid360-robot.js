@@ -187,44 +187,84 @@ async function handleMicrosoft(page, opts, job){
   }catch(_){ }
 }
 
-async function handleOkta(page, opts, job){
-  const userSel = 'input[name="identifier"], #okta-signin-username, input[name="username"]';
-  const passSel = 'input[name="credentials.passcode"], #okta-signin-password, input[type="password"]';
-  try{
-    const pass = await page.$(passSel);
-    if(pass){
-      if(!opts.password){
-        throw new Error('Okta şifresi kayıtlı değil. Faturalar → Kurulum → Rapid360 Okta şifre alanını doldurun.');
+async function pageInnerText(page){
+  return page.evaluate(() => document.body ? document.body.innerText.slice(0, 4000) : '').catch(() => '');
+}
+
+async function clickFirst(page, names){
+  for(const re of names){
+    try{
+      const loc = page.getByText(re).first();
+      if(await loc.count()){
+        await loc.click({ timeout: 4000 });
+        return true;
       }
+    }catch(_){ }
+  }
+  return false;
+}
+
+async function typeOktaField(locator, value){
+  await locator.click({ timeout: 5000 });
+  await locator.fill('');
+  await locator.press('Control+A').catch(() => {});
+  await locator.type(String(value), { delay: 55 });
+}
+
+async function handleOkta(page, opts, job){
+  const login = String(opts.oktaLogin || (opts.user || '').split('@')[0] || '').trim();
+  try{
+    const body = await pageInnerText(page);
+    if(/oturum açılamıyor|unable to sign in|invalid credentials|authentication failed|şifre yanlış/i.test(body)){
+      throw new Error('Okta “Oturum açılamıyor” dedi. Kullanıcı W340334.1 olmalı (nokta var — W3403341 değil). Şifreyi tekrar denemeyin, hesap kilitlenir. Ayarlar → Rapid Aktar’dan hesabı düzeltin; giriş telefonda Okta bildirimi ile olur.');
+    }
+    if(/şifreniz ile doğrulayın|verify with your password/i.test(body)){
+      setStatus(job, 'Şifre ekranı — Okta bildirimine geçiliyor…');
+      const switched = await clickFirst(page, [/başka bir yöntemle doğrula/i, /verify with another method/i, /diğer yöntem/i]);
+      if(switched){
+        await page.waitForTimeout(1200);
+        return;
+      }
+    }
+    const pushClicked = await clickFirst(page, [
+      /anlık bildirim gönder/i, /send push/i, /okta verify/i, /telefona bildirim/i, /bildirim gönder/i
+    ]);
+    if(pushClicked || /anlık bildirim|okta verify|push notification/i.test(body)){
+      setStatus(job, 'Telefonda Okta bildirimini onaylayın…');
+      return;
+    }
+    const userSel = 'input[name="identifier"], #okta-signin-username, input[name="username"]';
+    const passSel = 'input[name="credentials.passcode"], #okta-signin-password, input[type="password"]';
+    const pass = page.locator(passSel).first();
+    if(await pass.count() && await pass.isVisible().catch(() => false)){
+      if(!opts.password){
+        throw new Error('Okta şifresi kayıtlı değil. Ayarlar → Rapid Aktar’dan kullanıcı + şifre kaydedin.');
+      }
+      if(job._oktaPassTried){
+        setStatus(job, 'Okta şifre denendi. Telefonda bildirimi bekleyin veya Ayarlar’daki hesabı kontrol edin…');
+        return;
+      }
+      job._oktaPassTried = true;
       setStatus(job, 'Okta şifresi giriliyor…');
-      await pass.fill(String(opts.password)).catch(() => {});
-      await page.click('#okta-signin-submit, input[type="submit"], button[type="submit"], [data-se="save"]').catch(() => {});
+      await typeOktaField(pass, opts.password);
+      await clickFirst(page, [/doğrula/i, /^verify$/i, /oturum aç/i]);
+      await page.locator('#okta-signin-submit, button[type="submit"], [data-se="save"]').first().click({ timeout: 3000 }).catch(() => {});
       await page.waitForTimeout(1500);
       return;
     }
-    const user = await page.$(userSel);
-    if(user){
+    const user = page.locator(userSel).first();
+    if(await user.count() && await user.isVisible().catch(() => false)){
       const cur = await user.inputValue().catch(() => '');
-      if(!cur){
+      if(login && cur !== login){
         setStatus(job, 'Okta kullanıcısı giriliyor…');
-        await user.fill(String(opts.oktaLogin || opts.user || '')).catch(() => {});
+        await typeOktaField(user, login);
       }
-      await page.click('#okta-signin-submit, input[type="submit"], button[type="submit"], [data-se="save"]').catch(() => {});
+      await clickFirst(page, [/ileri/i, /^next$/i, /devam/i]);
+      await page.locator('#okta-signin-submit, button[type="submit"], [data-se="save"]').first().click({ timeout: 3000 }).catch(() => {});
       await page.waitForTimeout(1200);
-      return;
-    }
-    const push = await page.$('[data-se="okta_verify-push"] a, [data-se="okta_verify-push"] button, button:has-text("bildirim"), a:has-text("bildirim"), input[value*="bildirim" i]');
-    if(push){
-      setStatus(job, 'Telefonda Okta bildirimini onaylayın…');
-      await push.click().catch(() => {});
-      return;
-    }
-    const body = await page.evaluate(() => document.body ? document.body.innerText.slice(0, 3000) : '').catch(() => '');
-    if(/anlık bildirim|push|Okta Verify/i.test(body)){
-      setStatus(job, 'Telefonda Okta bildirimini onaylayın…');
     }
   }catch(e){
-    if(/Okta şifresi kayıtlı değil/.test(String(e && e.message))) throw e;
+    if(/Okta|oturum açılamıyor/i.test(String(e && e.message))) throw e;
   }
 }
 
@@ -451,8 +491,17 @@ async function runProbe(job, opts = {}){
     await page.goto(opts.reportUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
     const until = Date.now() + 25000;
     while(Date.now() < until){
+      const kind = classifyUrl(page.url());
+      try{
+        if(kind === 'microsoft') await handleMicrosoft(page, opts, job);
+        else if(kind === 'okta') await handleOkta(page, opts, job);
+      }catch(e){
+        setStatus(job, e && e.message ? e.message : 'Okta hatası');
+      }
       await takeShot(job, page);
-      setStatus(job, `Robot şu an: ${classifyUrl(page.url())} ekranında`);
+      if(!/Oturum açılamıyor|bildirimini onaylayın|Ayarlar/i.test(String(job.status || ''))){
+        setStatus(job, `Robot şu an: ${classifyUrl(page.url())} ekranında`);
+      }
       await page.waitForTimeout(3000);
     }
     await takeShot(job, page);

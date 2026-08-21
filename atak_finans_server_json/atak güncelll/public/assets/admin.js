@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v216 */
+/* ATAK_ADMIN_BUILD=fix-v217 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -6550,9 +6550,10 @@ function showRapidBridgeBox(br){
   if(!box) return;
   box.classList.remove('hidden');
   const head=br&&br.reason?`<p style="margin:0 0 6px;font-size:13px;color:#b45309"><b>${rapidOktaEsc(br.reason)}</b> — <a href="/web-api/admin/rapid360-robot-shot" target="_blank">robotun gördüğü ekranı aç</a></p>`:'';
-  box.innerHTML=`${head}<p style="margin:0;font-size:13px;color:#334155">Telefonda Okta’yı onaylayın; satışlar Atak’a gelir. Gelmezse: <a id="rapid360BridgeLink" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:700">Rapid360’dan Atak’a gönder</a> düğmesini yer imlerine sürükleyin, Rapid360 sekmesinde tıklayın.</p>`;
+  box.innerHTML=`${head}<p style="margin:0 0 8px;font-size:13px;color:#334155">Robot Hostinger’da çalışır. Kendi Chrome’unuzda açılan Rapid360 <b>robot değildir</b>. Kullanıcı <b>W340334.1</b> (nokta var). “Oturum açılamıyor” görürseniz Doğrula’ya tekrar basmayın.</p><p style="margin:0;font-size:13px;color:#334155">Yedek: <a id="rapid360BridgeLink" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:700">Rapid360’dan Atak’a gönder</a> yer imine, veya <button type="button" id="rapidOpenBrowserBtn" class="secondary-btn" style="margin-left:6px">Tarayıcıda Rapid360 aç</button></p>`;
   const a=q('#rapid360BridgeLink');
   if(a && br.bookmarklet) a.setAttribute('href',br.bookmarklet);
+  q('#rapidOpenBrowserBtn')?.addEventListener('click',()=>openRapidOktaPopup((br&&br.loginUrl)||rapid360ReportUrl()));
 }
 async function autoPullRapid360Sales(){
   const st=q('#rapid360SalesXmlStatus');
@@ -6602,7 +6603,6 @@ async function autoPullRapid360Sales(){
     const boxInfo=bridge||{};
     if(robotErr||lastErr)boxInfo.reason=`Robot çalışmadı: ${robotErr||lastErr}`;
     showRapidBridgeBox(boxInfo);
-    openRapidOktaPopup((bridge&&bridge.loginUrl)||rapid360ReportUrl());
     const deadline=Date.now()+180000;
     while(Date.now()<deadline){
       try{

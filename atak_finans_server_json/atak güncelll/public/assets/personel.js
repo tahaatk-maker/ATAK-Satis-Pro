@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v216 */
+/* ATAK_PERSONEL_BUILD=fix-v217 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1942,9 +1942,10 @@ function showRapidBridgeBox(br){
   if(!box) return;
   box.classList.remove('hidden');
   const head=br&&br.reason?`<p class="muted" style="margin:0 0 6px;color:#b45309"><b>${rapidOktaEsc(br.reason)}</b> — <a href="/web-api/admin/rapid360-robot-shot" target="_blank">robotun gördüğü ekranı aç</a></p>`:'';
-  box.innerHTML=`${head}<p class="muted" style="margin:0">Telefonda Okta’yı onaylayın; satışlar Atak’a gelir. Gelmezse: <a id="rapid360BridgeLink" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:700">Rapid360’dan Atak’a gönder</a> düğmesini yer imlerine sürükleyin, Rapid360 sekmesinde tıklayın.</p>`;
+  box.innerHTML=`${head}<p class="muted" style="margin:0 0 8px">Robot sunucuda çalışır. Kendi tarayıcınızda açılan Rapid360 robot değildir. Kullanıcı <b>W340334.1</b> (nokta var).</p><p class="muted" style="margin:0">Yedek: <a id="rapid360BridgeLink" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:700">Rapid360’dan Atak’a gönder</a> veya <button type="button" id="rapidOpenBrowserBtn" class="ghost-btn">Tarayıcıda Rapid360 aç</button></p>`;
   const a=$('#rapid360BridgeLink');
   if(a && br.bookmarklet) a.setAttribute('href',br.bookmarklet);
+  $('#rapidOpenBrowserBtn')?.addEventListener('click',()=>openRapidOktaPopup((br&&br.loginUrl)||rapid360ReportUrl()));
 }
 function rapidBlockedMicrosoftHref(href){
   const s=String(href||'');
@@ -2067,7 +2068,6 @@ async function autoPullRapid360Sales(){
     const boxInfo=bridge||{};
     if(robotErr||lastErr)boxInfo.reason=`Robot çalışmadı: ${robotErr||lastErr}`;
     showRapidBridgeBox(boxInfo);
-    openRapidOktaPopup((bridge&&bridge.loginUrl)||rapid360ReportUrl());
     const deadline=Date.now()+180000;
     while(Date.now()<deadline){
       try{

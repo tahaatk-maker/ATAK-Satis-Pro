@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.216-atak-geteinvoices',
-    build:'fix-v216',
+    version:'6.3.217-atak-geteinvoices',
+    build:'fix-v217',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5575,12 +5575,12 @@ app.post('/web-api/admin/rapid360-robot-start',rapidSalesPerm,async(req,res)=>{
   const body=req.body||{};
   const s=readStore();
   const rapid=(s.invoiceIntegration||{}).rapid360||{};
-  const user=String(rapid.oktaUser||'').trim()||d365Auth.DEFAULT_ACCOUNT;
+  const user=d365Auth.normalizeRapidAccount(rapid.oktaUser||'')||d365Auth.DEFAULT_ACCOUNT;
   const password=String(rapid.oktaPassword||'').trim();
   if(!password)return res.status(400).json({error:'Okta şifresi kayıtlı değil. Ayarlar → Rapid Aktar’dan kullanıcı + şifre kaydedin.'});
   try{
     const job=rapidRobot.startPull({
-      user,password,oktaLogin:user.split('@')[0],
+      user,password,oktaLogin:d365Auth.oktaLoginName(user),
       store:rapidSalesFetch.DEFAULT_STORE,
       company:String(body.company||'').trim()||rapidSalesFetch.DEFAULT_COMPANY,
       dealerId:String(body.dealerId||''),
@@ -5660,14 +5660,14 @@ app.get('/web-api/admin/rapid360-okta-status',rapidSalesPerm,(req,res)=>{
 app.get('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('settings_manage','invoices_manage','orders_manage'),(req,res)=>{
   const s=readStore();
   const rapid=(s.invoiceIntegration||{}).rapid360||{};
-  res.json({ok:true,oktaUser:String(rapid.oktaUser||'').trim(),oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+  res.json({ok:true,oktaUser:d365Auth.normalizeRapidAccount(rapid.oktaUser||''),oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
 });
 app.post('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('settings_manage','invoices_manage','orders_manage'),(req,res)=>{
   const s=readStore();
   s.invoiceIntegration=s.invoiceIntegration||{};
   const rapid=s.invoiceIntegration.rapid360=s.invoiceIntegration.rapid360||{};
   const body=req.body||{};
-  if(body.oktaUser!=null)rapid.oktaUser=String(body.oktaUser).trim();
+  if(body.oktaUser!=null)rapid.oktaUser=d365Auth.normalizeRapidAccount(body.oktaUser);
   if(body.oktaPassword!=null){
     const v=String(body.oktaPassword);
     if(v!=='********')rapid.oktaPassword=v;
@@ -5682,10 +5682,10 @@ app.post('/web-api/admin/rapid360-robot-test',rapidSalesPerm,async(req,res)=>{
   if(!launch.ok)return res.status(501).json({error:'Robot çalışamıyor: '+launch.error});
   const s=readStore();
   const rapid=(s.invoiceIntegration||{}).rapid360||{};
-  const user=String(rapid.oktaUser||'').trim()||d365Auth.DEFAULT_ACCOUNT;
+  const user=d365Auth.normalizeRapidAccount(rapid.oktaUser||'')||d365Auth.DEFAULT_ACCOUNT;
   try{
     const job=rapidRobot.startProbe({
-      user,password:String(rapid.oktaPassword||'').trim(),oktaLogin:user.split('@')[0],
+      user,password:String(rapid.oktaPassword||'').trim(),oktaLogin:d365Auth.oktaLoginName(user),
       store:rapidSalesFetch.DEFAULT_STORE,company:rapidSalesFetch.DEFAULT_COMPANY,
       reportUrl:d365Auth.dynamicsReportUrl({company:rapidSalesFetch.DEFAULT_COMPANY,store:rapidSalesFetch.DEFAULT_STORE}),
       profileDir:path.join(ROOT,'data','rapid360-profile')

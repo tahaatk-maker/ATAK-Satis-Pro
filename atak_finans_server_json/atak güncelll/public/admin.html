@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v216" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v216" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v216" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v216" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v217" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v217" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v217" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v217" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -2701,10 +2701,10 @@ Bulunamayan → Diğer.
 </form>
 
 <form class="panel form-stack settings-panel hidden" id="rapidSettingsForm" data-settings-panel="rapid">
-<div class="panel-head"><div><h2>Rapid Aktar — Okta Girişi</h2><p class="note">Robot bu hesapla Rapid360’a girer, satışları arka planda çeker. Siz yalnız telefonda Okta bildirimini onaylarsınız.</p></div></div>
+<div class="panel-head"><div><h2>Rapid Aktar — Okta Girişi</h2><p class="note">Robot bu hesapla Rapid360’a girer. Kullanıcı <b>W340334.1</b> (nokta var — W3403341 değil). Siz yalnız telefonda Okta bildirimini onaylarsınız. Kendi Chrome’unuzda Rapid360 açmayın; o pencere robot değildir.</p></div></div>
 <div id="rapidSettingsConn" class="note">Bağlantı kontrol ediliyor…</div>
 <div class="two-col">
-  <label>Okta kullanıcı<input id="rapidSettingsOktaUser" placeholder="3403343@arcelik.com" autocomplete="off"/></label>
+  <label>Okta kullanıcı<input id="rapidSettingsOktaUser" placeholder="W340334.1@rapid360.arcelikpazarlama.com.tr" autocomplete="off"/></label>
   <label>Okta şifre<input id="rapidSettingsOktaPass" type="password" autocomplete="new-password"/></label>
 </div>
 <div class="button-row"><button class="primary" type="submit">Kaydet</button><button class="secondary-btn" type="button" id="rapidRobotTestBtn">Robot testi (ekran fotoğrafı çeker)</button></div>
@@ -2823,7 +2823,7 @@ Bulunamayan → Diğer.
       <div>
         <small class="eyebrow">RAPID360 · RAPID AKTAR</small>
         <h2>Rapid Aktar</h2>
-        <p class="note">Bağlıysa <b>Satışları oku</b> yeter. Olmazsa <b>XML yükle</b>.</p>
+        <p class="note">Bağlıysa <b>Satışları oku</b> yeter. Robot sunucuda çalışır — kendi tarayıcınızda Rapid360 açmayın. Olmazsa <b>XML yükle</b>.</p>
       </div>
       <button class="secondary-btn" id="rapid360SalesXmlClose" type="button">Kapat</button>
     </div>
@@ -2889,6 +2889,6 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v216"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v216"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v217"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v217"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
