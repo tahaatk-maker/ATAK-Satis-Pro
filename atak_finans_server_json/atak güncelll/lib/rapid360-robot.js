@@ -203,36 +203,78 @@ function trDate(iso){
   return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
 }
 
+async function typeIntoD365(page, selector, value, { pressEnter = true } = {}){
+  const loc = page.locator(selector).first();
+  if(!(await loc.count().catch(() => 0))) return false;
+  try{
+    await loc.click({ timeout: 5000 });
+    await loc.fill('');
+    await loc.type(String(value), { delay: 70 });
+    await page.waitForTimeout(1200);
+    if(pressEnter) await loc.press('Enter').catch(() => {});
+    await page.waitForTimeout(600);
+    return true;
+  }catch(_){
+    return false;
+  }
+}
+
 async function fillReportAndQuery(page, opts, job){
   const start = trDate(opts.startDate);
   const end = trDate(opts.endDate);
   setStatus(job, 'Tarih ve mağaza dolduruluyor…');
-  await page.evaluate(({ start, end, magaza }) => {
-    const setVal = (input, v) => {
-      if(!input || !v) return;
-      input.focus(); input.click();
-      const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-      if(d && d.set) d.set.call(input, v); else input.value = v;
-      ['input', 'change'].forEach(t => input.dispatchEvent(new Event(t, { bubbles: true })));
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      if(input.blur) input.blur();
-    };
-    const inputs = [...document.querySelectorAll('input:not([type=hidden])')];
-    const byLabel = (re) => inputs.find(i => re.test(
-      (i.getAttribute('aria-label') || '') + ' ' + (i.id || '') + ' ' + (i.name || '') + ' ' +
-      String((i.closest('[data-dyn-controlname]') || {}).getAttribute ? (i.closest('[data-dyn-controlname]').getAttribute('data-dyn-controlname') || '') : '')
-    ));
-    setVal(byLabel(/başlangıç|baslangic|fromdate|startdate/i), start);
-    setVal(byLabel(/bitiş|bitis|todate|enddate/i), end);
-    setVal(byLabel(/ma[gğ]aza|store|inventlocation/i), magaza);
-  }, { start, end, magaza: opts.store }).catch(() => {});
-  await page.waitForTimeout(2000);
-  const clicked = await page.evaluate(() => {
-    const els = [...document.querySelectorAll('button, [role="button"], span, a, input')];
-    const hit = els.find(el => /^sorgula$/i.test(String(el.innerText || el.value || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim()));
-    if(hit){ hit.click(); return true; }
-    return false;
-  }).catch(() => false);
+  // Selenium mantığı: elemanın adresine git, tıkla, değeri yaz, listeden seç.
+  const startSel = 'input[aria-label*="Başlangıç" i], input[aria-label*="Baslangic" i], input[id*="FromDate" i], input[name*="FromDate" i]';
+  const endSel = 'input[aria-label*="Bitiş" i], input[aria-label*="Bitis" i], input[id*="ToDate" i], input[name*="ToDate" i]';
+  const magSel = 'input[aria-label*="Mağaza" i], input[aria-label*="Magaza" i], input[id*="Magaza" i], input[id*="InventLocation" i], input[name*="Store" i]';
+  const okStart = start ? await typeIntoD365(page, startSel, start) : false;
+  const okEnd = end ? await typeIntoD365(page, endSel, end) : false;
+  let okMag = await typeIntoD365(page, magSel, opts.store);
+  if(okMag){
+    // Lookup listesi açık kaldıysa ilk eşleşen satırı tıkla
+    await page.evaluate((magaza) => {
+      const rows = [...document.querySelectorAll('[data-dyn-role="LookupGrid"] [role="row"], .lookup-popup [role="row"], [id*="LookupGrid"] [role="row"]')];
+      const hit = rows.find(r => (r.innerText || '').includes(String(magaza)));
+      if(hit) hit.click();
+    }, opts.store).catch(() => {});
+    await page.waitForTimeout(800);
+  }
+  if(!okStart || !okEnd || !okMag){
+    await page.evaluate(({ start, end, magaza }) => {
+      const setVal = (input, v) => {
+        if(!input || !v) return;
+        input.focus(); input.click();
+        const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        if(d && d.set) d.set.call(input, v); else input.value = v;
+        ['input', 'change'].forEach(t => input.dispatchEvent(new Event(t, { bubbles: true })));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        if(input.blur) input.blur();
+      };
+      const inputs = [...document.querySelectorAll('input:not([type=hidden])')];
+      const byLabel = (re) => inputs.find(i => re.test(
+        (i.getAttribute('aria-label') || '') + ' ' + (i.id || '') + ' ' + (i.name || '') + ' ' +
+        String((i.closest('[data-dyn-controlname]') || {}).getAttribute ? (i.closest('[data-dyn-controlname]').getAttribute('data-dyn-controlname') || '') : '')
+      ));
+      setVal(byLabel(/başlangıç|baslangic|fromdate|startdate/i), start);
+      setVal(byLabel(/bitiş|bitis|todate|enddate/i), end);
+      setVal(byLabel(/ma[gğ]aza|store|inventlocation/i), magaza);
+    }, { start, end, magaza: opts.store }).catch(() => {});
+  }
+  await page.waitForTimeout(1500);
+  setStatus(job, 'Sorgula’ya basılıyor…');
+  let clicked = false;
+  try{
+    const btn = page.getByRole('button', { name: /sorgula/i }).first();
+    if(await btn.count()){ await btn.click({ timeout: 5000 }); clicked = true; }
+  }catch(_){ }
+  if(!clicked){
+    clicked = await page.evaluate(() => {
+      const els = [...document.querySelectorAll('button, [role="button"], span, a, input')];
+      const hit = els.find(el => /^sorgula$/i.test(String(el.innerText || el.value || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim()));
+      if(hit){ hit.click(); return true; }
+      return false;
+    }).catch(() => false);
+  }
   if(clicked) setStatus(job, 'Rapid360 satışları sorgulanıyor…');
   const until = Date.now() + 45000;
   while(Date.now() < until){
@@ -244,6 +286,10 @@ async function fillReportAndQuery(page, opts, job){
 }
 
 async function clickXmlExport(page){
+  try{
+    const btn = page.getByRole('button', { name: /xml/i }).first();
+    if(await btn.count()){ await btn.click({ timeout: 5000 }); return true; }
+  }catch(_){ }
   return page.evaluate(() => {
     const els = [...document.querySelectorAll('button, [role="button"], span, a, input')];
     const label = (el) => String(el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('title') || '').replace(/\s+/g, ' ').trim();
