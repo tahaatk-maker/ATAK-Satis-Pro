@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.213-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.214-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.213-atak-geteinvoices
-EXPECT_BUILD=fix-v213
+EXPECT_HEALTH=6.3.214-atak-geteinvoices
+EXPECT_BUILD=fix-v214
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -192,6 +192,7 @@ check "robot xml aktar" grep -q "xml\\\\s\\*aktar" "$SRC/lib/rapid360-robot.js"
 check "robot chromium testi" grep -q "verifyLaunch" "$SRC/lib/rapid360-robot.js"
 check "robot teshis api" grep -q "rapid360-robot-diag" "$SRC/server.js"
 check "robot selenium tikla" grep -q "typeIntoD365" "$SRC/lib/rapid360-robot.js"
+check "robot ekran goruntusu" grep -q "rapid360-robot-shot" "$SRC/server.js"
 check "rapid taslak needsCompletion" grep -q "needsCompletion" "$SRC/server.js"
 check "rapid taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/admin.js"
 check "personel taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/personel.js"

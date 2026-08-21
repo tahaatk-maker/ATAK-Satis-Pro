@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v213 */
+/* ATAK_ADMIN_BUILD=fix-v214 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4601,14 +4601,19 @@ async function loadRapidSettings(){
       const c=await api('/web-api/admin/rapid360-conn-status');
       let diag=null;
       try{diag=await api('/web-api/admin/rapid360-robot-diag')}catch(_){}
+      let last=null;
+      try{const r=await api('/web-api/admin/rapid360-robot-last');last=r&&r.job}catch(_){}
       const robotLine=diag
         ?(diag.launchOk
           ?'<div style="margin-top:6px;color:#15803d">🤖 Robot hazır — Chromium sunucuda açılıyor</div>'
           :`<div style="margin-top:6px;color:#b45309">🤖 Robot çalışmıyor: ${rapidOktaEsc(diag.launchError||(diag.playwright?'bilinmiyor':'playwright kurulu değil'))} · node ${rapidOktaEsc(diag.node||'')}${diag.playwrightVersion?` · playwright ${rapidOktaEsc(diag.playwrightVersion)}`:''}<br>Hostinger scriptini çalıştırın; terminaldeki "rapid robot" satırlarını kontrol edin.</div>`)
         :'';
+      const lastLine=last
+        ?`<div style="margin-top:6px;color:#475569">Son çalışma: ${rapidOktaEsc(last.error||last.status||'-')}${last.hasShot?' · <a href="/web-api/admin/rapid360-robot-shot" target="_blank"><b>Robotun gördüğü ekranı aç</b></a>':''}</div>`
+        :'';
       conn.innerHTML=(c.canPull
         ?'<span style="color:#15803d;font-weight:800">🟢 Bağlı — aktarım hazır</span>'
-        :'<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span><small style="margin-left:6px;color:#475569">Kaydedin, sonra Rapid Aktar → Satışları oku</small>')+robotLine;
+        :'<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span><small style="margin-left:6px;color:#475569">Kaydedin, sonra Rapid Aktar → Satışları oku</small>')+robotLine+lastLine;
     }catch(_){conn.innerHTML='<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span>'}
   }
 }
@@ -6520,7 +6525,7 @@ function showRapidBridgeBox(br){
   const box=q('#rapid360OktaBox');
   if(!box) return;
   box.classList.remove('hidden');
-  const head=br&&br.reason?`<p style="margin:0 0 6px;font-size:13px;color:#b45309"><b>${rapidOktaEsc(br.reason)}</b></p>`:'';
+  const head=br&&br.reason?`<p style="margin:0 0 6px;font-size:13px;color:#b45309"><b>${rapidOktaEsc(br.reason)}</b> — <a href="/web-api/admin/rapid360-robot-shot" target="_blank">robotun gördüğü ekranı aç</a></p>`:'';
   box.innerHTML=`${head}<p style="margin:0;font-size:13px;color:#334155">Telefonda Okta’yı onaylayın; satışlar Atak’a gelir. Gelmezse: <a id="rapid360BridgeLink" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:700">Rapid360’dan Atak’a gönder</a> düğmesini yer imlerine sürükleyin, Rapid360 sekmesinde tıklayın.</p>`;
   const a=q('#rapid360BridgeLink');
   if(a && br.bookmarklet) a.setAttribute('href',br.bookmarklet);
@@ -6547,6 +6552,10 @@ async function autoPullRapid360Sales(){
       robot=null;
       robotErr=e.message||'';
       if(st&&robotErr){st.textContent='Robot çalışmadı: '+robotErr;st.className='form-status'}
+    }
+    if(robotErr&&/Okta şifresi/i.test(robotErr)){
+      if(st){st.textContent=robotErr;st.className='form-status error'}
+      return;
     }
     let lastErr='';
     if(robot&&robot.jobId){

@@ -62,6 +62,20 @@ function sweepJobs(){
   }
 }
 
+let lastJob = null;
+function getLastJob(){
+  return lastJob;
+}
+
+async function takeShot(job, page){
+  if(!job || !page) return;
+  try{
+    job.shot = await page.screenshot({ type: 'png', timeout: 8000 });
+    job.shotAt = new Date().toISOString();
+    job.lastUrl = String(page.url() || '');
+  }catch(_){ }
+}
+
 function getJob(id){
   sweepJobs();
   return jobs.get(String(id || '')) || null;
@@ -95,6 +109,7 @@ function startPull(opts = {}){
   };
   jobs.set(id, job);
   runningJobId = id;
+  lastJob = job;
   const runner = typeof opts.runner === 'function' ? opts.runner : runPull;
   (async () => {
     try{
@@ -349,8 +364,9 @@ async function runPull(job, opts = {}){
   }catch(e){
     throw new Error('Sunucuda Chromium açılamadı. Deploy scriptini tekrar çalıştırın. (' + String(e && e.message || '').slice(0, 120) + ')');
   }
+  let page = null;
   try{
-    const page = ctx.pages()[0] || await ctx.newPage();
+    page = ctx.pages()[0] || await ctx.newPage();
     setStatus(job, 'Rapid360 açılıyor…');
     await page.goto(opts.reportUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
     const deadline = Date.now() + (opts.loginTimeoutMs || LOGIN_TIMEOUT_MS);
@@ -366,15 +382,20 @@ async function runPull(job, opts = {}){
       await page.waitForTimeout(2000);
     }
     if(!loggedIn){
+      await takeShot(job, page);
       throw new Error('Rapid360 girişi tamamlanamadı. Telefonda Okta bildirimini onaylayıp Satışları oku’ya tekrar basın.');
     }
     setStatus(job, 'Satışlar okunuyor…');
     await page.waitForTimeout(4000);
     const dl = await downloadReportFile(page, opts, job);
-    if(dl) return dl;
+    if(dl){ await takeShot(job, page); return dl; }
     const json = await probeOdata(page);
-    if(json) return { json };
+    if(json){ await takeShot(job, page); return { json }; }
+    await takeShot(job, page);
     throw new Error('Rapid360 satış vermedi. Tarihi genişletin veya XML yükleyin.');
+  }catch(e){
+    if(page && !job.shot) await takeShot(job, page);
+    throw e;
   }finally{
     if(ctx) await ctx.close().catch(() => {});
   }
@@ -383,6 +404,7 @@ async function runPull(job, opts = {}){
 function resetForTests(){
   jobs.clear();
   runningJobId = '';
+  lastJob = null;
 }
 
 module.exports = {
@@ -392,6 +414,7 @@ module.exports = {
   trDate,
   startPull,
   getJob,
+  getLastJob,
   runPull,
   resetForTests,
   LOGIN_TIMEOUT_MS

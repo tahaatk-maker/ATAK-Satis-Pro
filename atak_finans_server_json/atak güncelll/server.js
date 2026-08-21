@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.213-atak-geteinvoices',
-    build:'fix-v213',
+    version:'6.3.214-atak-geteinvoices',
+    build:'fix-v214',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5672,6 +5672,20 @@ app.post('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('setting
   audit(s,'Rapid Aktar Okta girişi güncellendi',rapid.oktaUser||'-',{passwordSet:Boolean(String(rapid.oktaPassword||'').trim())});
   writeStore(s);
   res.json({ok:true,oktaUser:rapid.oktaUser||'',oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+});
+app.get('/web-api/admin/rapid360-robot-last',rapidSalesPerm,(req,res)=>{
+  const job=rapidRobot.getLastJob();
+  if(!job)return res.json({ok:true,job:null});
+  res.json({ok:true,job:{
+    id:job.id,status:job.status,error:job.error||'',done:job.done,okRun:job.ok,
+    at:new Date(job.at).toISOString(),shotAt:job.shotAt||'',lastUrl:job.lastUrl||'',
+    hasShot:Boolean(job.shot)
+  }});
+});
+app.get('/web-api/admin/rapid360-robot-shot',rapidSalesPerm,(req,res)=>{
+  const job=rapidRobot.getLastJob();
+  if(!job||!job.shot)return res.status(404).json({error:'Robot ekran görüntüsü yok. Önce Satışları oku çalıştırın.'});
+  res.type('png').send(job.shot);
 });
 app.get('/web-api/admin/rapid360-robot-diag',rapidSalesPerm,async(req,res)=>{
   let pwVersion='';

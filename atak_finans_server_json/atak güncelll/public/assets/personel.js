@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v213 */
+/* ATAK_PERSONEL_BUILD=fix-v214 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -1941,7 +1941,7 @@ function showRapidBridgeBox(br){
   const box=$('#rapid360OktaBox');
   if(!box) return;
   box.classList.remove('hidden');
-  const head=br&&br.reason?`<p class="muted" style="margin:0 0 6px;color:#b45309"><b>${rapidOktaEsc(br.reason)}</b></p>`:'';
+  const head=br&&br.reason?`<p class="muted" style="margin:0 0 6px;color:#b45309"><b>${rapidOktaEsc(br.reason)}</b> — <a href="/web-api/admin/rapid360-robot-shot" target="_blank">robotun gördüğü ekranı aç</a></p>`:'';
   box.innerHTML=`${head}<p class="muted" style="margin:0">Telefonda Okta’yı onaylayın; satışlar Atak’a gelir. Gelmezse: <a id="rapid360BridgeLink" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#15803d;color:#fff;text-decoration:none;font-weight:700">Rapid360’dan Atak’a gönder</a> düğmesini yer imlerine sürükleyin, Rapid360 sekmesinde tıklayın.</p>`;
   const a=$('#rapid360BridgeLink');
   if(a && br.bookmarklet) a.setAttribute('href',br.bookmarklet);
@@ -2042,6 +2042,10 @@ async function autoPullRapid360Sales(){
     try{
       robot=await api('/web-api/admin/rapid360-robot-start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rapid360PullBody())});
     }catch(e){robot=null;robotErr=e.message||'';if(st&&robotErr)st.textContent='Robot çalışmadı: '+robotErr}
+    if(robotErr&&/Okta şifresi/i.test(robotErr)){
+      if(st)st.textContent=robotErr;
+      return;
+    }
     let lastErr='';
     if(robot&&robot.jobId){
       if(st) st.textContent=robot.message||'Robot Rapid360’a bağlanıyor…';
