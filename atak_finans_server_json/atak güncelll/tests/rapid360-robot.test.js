@@ -21,6 +21,14 @@ assert.equal(robot.isMagazaControlName('parmMagaza'), true);
 assert.equal(robot.isMagazaControlName('FromDate'), false);
 assert.equal(robot.magazaFilled('340334 ATAK', '340334'), true);
 assert.equal(robot.magazaFilled('', '340334'), false);
+assert.equal(robot.isNextButtonLabel('İleri'), true);
+assert.equal(robot.isNextButtonLabel('Next'), true);
+assert.equal(robot.isNextButtonLabel('Continue'), true);
+assert.equal(robot.isNextButtonLabel('Devam etmek'), true);
+assert.equal(robot.isNextButtonLabel('Sorgula'), false);
+assert.equal(robot.isLoginButtonLabel('Doğrula'), true);
+assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(robot.turkeyTodayIso()));
+assert.equal(typeof robot.jobPublicView({ stage:'PASSWORD_PAGE', lastUrl:'https://okta', meta:{ store:'340334', date:'2026-08-22' }, error:'' }).stage, 'string');
 
 async function run(){
   const v = await robot.verifyLaunch();

@@ -115,8 +115,78 @@ function getJob(id){
   return jobs.get(String(id || '')) || null;
 }
 
+function turkeyTodayIso(){
+  try{
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Istanbul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  }catch(_){
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+}
+
+function foldButtonText(text){
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/İ/g, 'I')
+    .replace(/ı/g, 'i')
+    .toLowerCase();
+}
+
+function isNextButtonLabel(text){
+  return /^(ileri|next|continue|devam(\s+et(mek)?)?)$/.test(foldButtonText(text));
+}
+
+function isLoginButtonLabel(text){
+  return /^(dogrula|doğrula|verify|oturum ac|oturum aç|sign in|log in|login|giris(\s+yap)?|giriş(\s+yap)?)$/.test(foldButtonText(text));
+}
+
 function setStatus(job, msg){
   if(job) job.status = String(msg || '');
+}
+
+function robotLog(job, stage, message){
+  if(job){
+    job.stage = stage;
+    if(message) job.status = message;
+    else job.status = stage;
+  }
+  console.log('[RAPID-ROBOT] ' + stage + (message ? ' ' + message : ''));
+}
+
+function robotFail(job, stage, message){
+  const msg = String(message || 'Robot hatası');
+  if(job){
+    job.stage = stage;
+    job.error = msg;
+    job.status = msg;
+  }
+  console.error('[RAPID-ROBOT-ERROR] stage=' + stage + ' message=' + msg);
+  const err = new Error(msg);
+  err.stage = stage;
+  throw err;
+}
+
+function jobPublicView(job){
+  if(!job) return null;
+  const today = turkeyTodayIso();
+  return {
+    stage: job.stage || '',
+    url: job.lastUrl || '',
+    store: (job.meta && job.meta.store) || '340334',
+    date: (job.meta && (job.meta.date || job.meta.startDate)) || today,
+    error: job.error || null,
+    status: job.status || '',
+    done: Boolean(job.done),
+    ok: Boolean(job.ok),
+    hasShot: Boolean(job.shot)
+  };
 }
 
 function startPull(opts = {}){
@@ -124,18 +194,21 @@ function startPull(opts = {}){
   if(runningJobId && jobs.get(runningJobId) && !jobs.get(runningJobId).done){
     throw new Error('Robot zaten çalışıyor. Birkaç saniye bekleyin.');
   }
+  const today = turkeyTodayIso();
   const id = crypto.randomBytes(12).toString('hex');
   const job = {
     id,
     at: Date.now(),
     status: 'Başlatılıyor…',
+    stage: 'START',
     done: false,
     ok: false,
     error: '',
     result: null,
     meta: {
-      startDate: String(opts.startDate || '').slice(0, 10),
-      endDate: String(opts.endDate || '').slice(0, 10),
+      startDate: today,
+      endDate: today,
+      date: today,
       store: String(opts.store || '340334'),
       company: String(opts.company || '2521'),
       dealerId: String(opts.dealerId || '')
@@ -149,9 +222,16 @@ function startPull(opts = {}){
     try{
       job.result = await runner(job, opts);
       job.ok = true;
-      setStatus(job, 'Satışlar alındı');
+      if(job.stage !== 'SALES_IMPORTED' && job.result && !job.result.probe){
+        robotLog(job, 'SALES_IMPORTED', 'Satışlar alındı');
+      }else{
+        setStatus(job, job.status || 'Satışlar alındı');
+      }
     }catch(e){
       job.error = e && e.message ? e.message : 'Robot hatası';
+      if(e && e.stage) job.stage = e.stage;
+      if(!job.stage) job.stage = 'ERROR';
+      console.error('[RAPID-ROBOT-ERROR] stage=' + job.stage + ' message=' + job.error);
       setStatus(job, job.error);
     }finally{
       job.done = true;
@@ -211,60 +291,188 @@ async function typeOktaField(locator, value){
   await locator.type(String(value), { delay: 55 });
 }
 
+async function clickWithFallback(page, locator){
+  try{
+    await locator.click({ timeout: 4000 });
+    return 'click';
+  }catch(_){ }
+  try{
+    await locator.click({ force: true, timeout: 4000 });
+    return 'force';
+  }catch(_){ }
+  try{
+    await locator.evaluate((el) => el.click());
+    return 'evaluate';
+  }catch(_){ }
+  return '';
+}
+
+async function usernameLocator(page){
+  return page.locator('input[name="identifier"], #okta-signin-username, input[name="username"]:not([type=hidden])').first();
+}
+
+async function passwordLocator(page){
+  return page.locator('input[name="credentials.passcode"], #okta-signin-password, input[type="password"]:not([type=hidden])').first();
+}
+
+async function isVisibleLocator(loc){
+  try{
+    return (await loc.count()) > 0 && await loc.isVisible();
+  }catch(_){
+    return false;
+  }
+}
+
+async function passwordVisible(page){
+  return isVisibleLocator(await passwordLocator(page));
+}
+
+async function usernameVisible(page){
+  return isVisibleLocator(await usernameLocator(page));
+}
+
+async function markVisibleButtonByLabel(page, kind){
+  return page.evaluate((which) => {
+    const vis = (el) => {
+      const r = el.getBoundingClientRect();
+      const st = window.getComputedStyle(el);
+      return r.width > 8 && r.height > 8 && st.visibility !== 'hidden' && st.display !== 'none' && !el.disabled;
+    };
+    const labelOf = (el) => String(el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('value') || '').replace(/\s+/g, ' ').trim();
+    const nextRe = /^(ileri|next|continue|devam(\s+et(mek)?)?)$/i;
+    const loginRe = /^(doğrula|dogrula|verify|oturum aç|oturum ac|sign in|log in|login|giriş(\s+yap)?|giris(\s+yap)?)$/i;
+    const fold = (s) => String(s || '').replace(/\s+/g, ' ').trim().replace(/İ/g, 'I').replace(/ı/g, 'i').toLowerCase();
+    const re = which === 'login' ? loginRe : nextRe;
+    const attr = which === 'login' ? 'data-atak-login' : 'data-atak-next';
+    [...document.querySelectorAll('[data-atak-next],[data-atak-login]')].forEach((el) => {
+      el.removeAttribute('data-atak-next');
+      el.removeAttribute('data-atak-login');
+    });
+    const els = [...document.querySelectorAll('button, input[type=submit], input[type=button], a[role=button], [role=button]')];
+    const hit = els.find((el) => vis(el) && re.test(fold(labelOf(el))));
+    if(!hit) return '';
+    hit.setAttribute(attr, '1');
+    return labelOf(hit);
+  }, kind).catch(() => '');
+}
+
+async function waitForPasswordPage(page, timeoutMs = 15000){
+  const started = Date.now();
+  while(Date.now() - started < timeoutMs){
+    if(await passwordVisible(page)) return true;
+    await page.waitForTimeout(350);
+  }
+  return passwordVisible(page);
+}
+
+async function clickNextAndWaitForPassword(page, job){
+  const user = await usernameLocator(page);
+  await user.press('Tab').catch(() => {});
+  await page.waitForTimeout(400);
+
+  const nextNames = ['İleri', 'Ileri', 'ileri', 'Next', 'Continue', 'Devam', 'Devam et', 'Devam etmek'];
+  for(const name of nextNames){
+    const roleNext = page.getByRole('button', { name, exact: true }).first();
+    if(await roleNext.count()){
+      const how = await clickWithFallback(page, roleNext);
+      if(how) console.log('[RAPID-ROBOT] NEXT click via role(' + name + ')+' + how);
+      if(await waitForPasswordPage(page, 4000)) return true;
+    }
+  }
+
+  const label = await markVisibleButtonByLabel(page, 'next');
+  if(label){
+    const marked = page.locator('[data-atak-next="1"]').first();
+    const how = await clickWithFallback(page, marked);
+    if(how) console.log('[RAPID-ROBOT] NEXT click via visible:' + label + '+' + how);
+  }
+  if(await waitForPasswordPage(page, 4000)) return true;
+
+  await user.press('Enter').catch(() => {});
+  console.log('[RAPID-ROBOT] NEXT fallback Enter on username');
+  if(await waitForPasswordPage(page, 8000)) return true;
+
+  await takeShot(job, page);
+  return false;
+}
+
+async function clickLoginSubmit(page){
+  const loginNames = ['Doğrula', 'Dogrula', 'Verify', 'Oturum aç', 'Sign in', 'Log in', 'Login', 'Giriş', 'Giriş yap'];
+  for(const name of loginNames){
+    const role = page.getByRole('button', { name, exact: true }).first();
+    if(await role.count()){
+      const how = await clickWithFallback(page, role);
+      if(how) return how;
+    }
+  }
+  const label = await markVisibleButtonByLabel(page, 'login');
+  if(label){
+    const how = await clickWithFallback(page, page.locator('[data-atak-login="1"]').first());
+    if(how) return how;
+  }
+  const submit = page.locator('#okta-signin-submit, button[type="submit"], input[type="submit"], [data-type="save"], [data-se="save"]').first();
+  if(await submit.count()){
+    const how = await clickWithFallback(page, submit);
+    if(how) return how;
+  }
+  const pass = await passwordLocator(page);
+  await pass.press('Enter').catch(() => {});
+  return 'enter';
+}
+
 async function handleOkta(page, opts, job){
   const login = String(opts.oktaLogin || (opts.user || '').split('@')[0] || '').trim();
-  try{
-    const body = await pageInnerText(page);
-    if(/oturum açılamıyor|unable to sign in|invalid credentials|authentication failed|şifre yanlış/i.test(body)){
-      throw new Error('Okta “Oturum açılamıyor” dedi. Kullanıcı W340334.1 olmalı (nokta var — W3403341 değil). Şifreyi tekrar denemeyin, hesap kilitlenir. Ayarlar → Rapid Aktar’dan hesabı düzeltin; giriş telefonda Okta bildirimi ile olur.');
+  const body = await pageInnerText(page);
+  if(/oturum açılamıyor|unable to sign in|invalid credentials|authentication failed|şifre yanlış/i.test(body)){
+    robotFail(job, job.stage || 'LOGIN_CLICKED', 'Okta “Oturum açılamıyor” dedi. Kullanıcı W340334.1 olmalı (nokta var). Ayarlar → Rapid Aktar şifresini kontrol edin.');
+  }
+
+  if(await passwordVisible(page)){
+    robotLog(job, 'PASSWORD_PAGE', 'Şifre ekranı açıldı');
+    if(!opts.password){
+      robotFail(job, 'PASSWORD_PAGE', 'Okta şifresi kayıtlı değil. Ayarlar → Rapid Aktar’dan şifre kaydedin.');
     }
-    if(/şifreniz ile doğrulayın|verify with your password/i.test(body)){
-      setStatus(job, 'Şifre ekranı — Okta bildirimine geçiliyor…');
-      const switched = await clickFirst(page, [/başka bir yöntemle doğrula/i, /verify with another method/i, /diğer yöntem/i]);
-      if(switched){
-        await page.waitForTimeout(1200);
-        return;
-      }
-    }
-    const pushClicked = await clickFirst(page, [
-      /anlık bildirim gönder/i, /send push/i, /okta verify/i, /telefona bildirim/i, /bildirim gönder/i
-    ]);
-    if(pushClicked || /anlık bildirim|okta verify|push notification/i.test(body)){
-      setStatus(job, 'Telefonda Okta bildirimini onaylayın…');
+    if(job._oktaPassTried){
+      setStatus(job, 'Okta şifre gönderildi, sonuç bekleniyor…');
       return;
     }
-    const userSel = 'input[name="identifier"], #okta-signin-username, input[name="username"]';
-    const passSel = 'input[name="credentials.passcode"], #okta-signin-password, input[type="password"]';
-    const pass = page.locator(passSel).first();
-    if(await pass.count() && await pass.isVisible().catch(() => false)){
-      if(!opts.password){
-        throw new Error('Okta şifresi kayıtlı değil. Ayarlar → Rapid Aktar’dan kullanıcı + şifre kaydedin.');
-      }
-      if(job._oktaPassTried){
-        setStatus(job, 'Okta şifre denendi. Telefonda bildirimi bekleyin veya Ayarlar’daki hesabı kontrol edin…');
-        return;
-      }
-      job._oktaPassTried = true;
-      setStatus(job, 'Okta şifresi giriliyor…');
-      await typeOktaField(pass, opts.password);
-      await clickFirst(page, [/doğrula/i, /^verify$/i, /oturum aç/i]);
-      await page.locator('#okta-signin-submit, button[type="submit"], [data-se="save"]').first().click({ timeout: 3000 }).catch(() => {});
-      await page.waitForTimeout(1500);
-      return;
+    const pass = await passwordLocator(page);
+    await typeOktaField(pass, opts.password);
+    robotLog(job, 'PASSWORD_FILLED', 'Kayıtlı Okta şifresi yazıldı');
+    await takeShot(job, page);
+    job._oktaPassTried = true;
+    await clickLoginSubmit(page);
+    robotLog(job, 'LOGIN_CLICKED', 'Oturum aç / Doğrula basıldı');
+    await takeShot(job, page);
+    await page.waitForTimeout(1500);
+    return;
+  }
+
+  if(await usernameVisible(page)){
+    robotLog(job, 'USERNAME_PAGE', 'Okta kullanıcı adı ekranı');
+    const user = await usernameLocator(page);
+    const cur = await user.inputValue().catch(() => '');
+    if(login && cur !== login){
+      await typeOktaField(user, login);
     }
-    const user = page.locator(userSel).first();
-    if(await user.count() && await user.isVisible().catch(() => false)){
-      const cur = await user.inputValue().catch(() => '');
-      if(login && cur !== login){
-        setStatus(job, 'Okta kullanıcısı giriliyor…');
-        await typeOktaField(user, login);
-      }
-      await clickFirst(page, [/ileri/i, /^next$/i, /devam/i]);
-      await page.locator('#okta-signin-submit, button[type="submit"], [data-se="save"]').first().click({ timeout: 3000 }).catch(() => {});
-      await page.waitForTimeout(1200);
+    const after = await user.inputValue().catch(() => '');
+    if(login && after !== login){
+      robotFail(job, 'USERNAME_PAGE', 'Kullanıcı adı yazılamadı (kutuda: ' + after + ')');
     }
-  }catch(e){
-    if(/Okta|oturum açılamıyor/i.test(String(e && e.message))) throw e;
+    robotLog(job, 'USERNAME_FILLED', 'Kullanıcı adı: ' + (after || login));
+    await takeShot(job, page);
+    const ok = await clickNextAndWaitForPassword(page, job);
+    if(!ok){
+      robotFail(job, 'NEXT_CLICKED', 'İleri basıldı ama şifre alanı gelmedi. Ekran fotoğrafına bakın.');
+    }
+    robotLog(job, 'NEXT_CLICKED', 'İleri sonrası şifre alanı göründü');
+    await takeShot(job, page);
+    return;
+  }
+
+  if(/anlık bildirim|okta verify|push notification|telefonda/i.test(body)){
+    robotLog(job, 'LOGIN_CLICKED', 'Telefonda Okta bildirimini onaylayın…');
+    await clickFirst(page, [/anlık bildirim gönder/i, /send push/i]);
   }
 }
 
@@ -426,26 +634,45 @@ async function selectMagaza(page, store, job){
     await page.waitForTimeout(1500);
   }
   const last = await readMagazaField(page);
-  throw new Error(`Mağaza ${w} seçilemedi${last.value ? ' (kutuda: ' + last.value + ')' : ''}. Sorgula basılmadı — boş rapor gelmesin diye. Ayarlar → Robot testi ile ekran fotoğrafına bakın.`);
+  robotFail(job, 'STORE_SELECTED', `Mağaza ${w} seçilemedi${last.value ? ' (kutuda: ' + last.value + ')' : ''}. Sorgula basılmadı.`);
+}
+
+async function waitQuerySettled(page){
+  return page.evaluate(() => {
+    const t = document.body ? document.body.innerText : '';
+    if(/Burada gösterecek hiçbir şey bulamadık|kayıt yok|no data to display|no records/i.test(t)) return 'empty';
+    const rows = [...document.querySelectorAll('[data-dyn-role="GridRow"], table tbody tr, [role="row"]')];
+    const real = rows.filter((r) => String(r.innerText || '').trim().length > 2);
+    if(real.length > 1) return 'rows';
+    return '';
+  }).catch(() => '');
 }
 
 async function fillReportAndQuery(page, opts, job){
-  const start = trDate(opts.startDate);
-  const end = trDate(opts.endDate);
+  const todayIso = turkeyTodayIso();
+  const todayTr = trDate(todayIso);
   const store = String(opts.store || '340334');
+  job.meta = job.meta || {};
+  job.meta.startDate = todayIso;
+  job.meta.endDate = todayIso;
+  job.meta.date = todayIso;
+  robotLog(job, 'RAPID_PAGE', 'Rapid360 rapor ekranı bekleniyor');
   const formOk = await waitReportForm(page, job);
-  if(!formOk) throw new Error('Rapid360 rapor ekranı açılmadı (Mağaza kutusu yok). Okta onayından sonra Satışları oku’ya tekrar basın.');
+  if(!formOk) robotFail(job, 'RAPID_PAGE', 'Rapid360 rapor ekranı açılmadı (Mağaza kutusu yok).');
   await takeShot(job, page);
-  setStatus(job, 'Tarih dolduruluyor…');
+  setStatus(job, 'Tarih dolduruluyor (bugün ' + todayTr + ')…');
   const startSel = 'input[aria-label*="Başlangıç" i], input[aria-label*="Baslangic" i], input[id*="FromDate" i], input[name*="FromDate" i], [data-dyn-controlname*="FromDate" i] input';
   const endSel = 'input[aria-label*="Bitiş" i], input[aria-label*="Bitis" i], input[id*="ToDate" i], input[name*="ToDate" i], [data-dyn-controlname*="ToDate" i] input';
-  if(start) await typeIntoD365(page, startSel, start);
-  if(end) await typeIntoD365(page, endSel, end);
+  await typeIntoD365(page, startSel, todayTr);
+  await typeIntoD365(page, endSel, todayTr);
+  robotLog(job, 'DATES_FILLED', 'Tarih ' + todayTr + ' — ' + todayTr);
   const mag = await selectMagaza(page, store, job);
-  job.meta = job.meta || {};
+  if(!magazaFilled(mag.value, store)){
+    robotFail(job, 'STORE_SELECTED', 'Mağaza kutusu 340334 değil (kutuda: ' + (mag.value || 'boş') + '). Sorgula basılmadı.');
+  }
+  robotLog(job, 'STORE_SELECTED', 'Mağaza seçildi: ' + mag.value);
   job.meta.magazaValue = mag.value || store;
   await takeShot(job, page);
-  setStatus(job, `Sorgula (mağaza ${mag.value || store})…`);
   let clicked = false;
   try{
     const btn = page.getByRole('button', { name: /sorgula/i }).first();
@@ -459,19 +686,23 @@ async function fillReportAndQuery(page, opts, job){
       return false;
     }).catch(() => false);
   }
-  if(!clicked) throw new Error('Sorgula düğmesi bulunamadı. Robotun gördüğü ekranı açın.');
-  setStatus(job, 'Rapid360 satışları sorgulanıyor…');
+  if(!clicked) robotFail(job, 'QUERY_CLICKED', 'Sorgula düğmesi bulunamadı.');
+  robotLog(job, 'QUERY_CLICKED', 'Sorgula basıldı');
   const until = Date.now() + 45000;
   while(Date.now() < until){
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2500);
     const stillMag = await readMagazaField(page);
     if(stillMag.ok && !magazaFilled(stillMag.value, store)){
-      throw new Error('Sorgula’dan sonra Mağaza kutusu yine boş. 340334 seçilmedi, satış listesi gelmez.');
+      robotFail(job, 'STORE_SELECTED', 'Sorgula’dan sonra Mağaza kutusu 340334 değil. Satış listesi gelmez.');
     }
-    const empty = await page.evaluate(() => /Burada gösterecek hiçbir şey bulamadık/i.test(document.body ? document.body.innerText : '')).catch(() => true);
-    if(!empty) return true;
+    const settled = await waitQuerySettled(page);
+    if(settled === 'rows' || settled === 'empty'){
+      robotLog(job, 'RESULTS_READY', settled === 'empty' ? 'Kayıt yok' : 'Sonuç tablosu yüklendi');
+      return settled === 'rows';
+    }
   }
-  return false;
+  await takeShot(job, page);
+  robotFail(job, 'RESULTS_READY', 'Sorgula sonrası tablo veya “kayıt yok” gelmedi.');
 }
 
 async function clickXmlExport(page){
@@ -518,7 +749,8 @@ async function downloadReportFile(page, opts, job){
     const buffer = fs.readFileSync(filePath);
     return { file: { originalname: dl.suggestedFilename() || 'rapid360.xml', buffer } };
   }catch(e){
-    if(e && /Mağaza|rapor ekranı|Sorgula düğmesi/i.test(String(e.message || ''))) throw e;
+    if(e && e.stage) throw e;
+    if(e && /Mağaza|rapor ekranı|Sorgula|İleri|şifre/i.test(String(e.message || ''))) throw e;
     return null;
   }
 }
@@ -543,15 +775,21 @@ async function runPull(job, opts = {}){
   try{
     page = ctx.pages()[0] || await ctx.newPage();
     setStatus(job, 'Rapid360 açılıyor…');
+    robotLog(job, 'USERNAME_PAGE', 'Rapid360 / Okta açılıyor');
     await page.goto(opts.reportUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
     const deadline = Date.now() + (opts.loginTimeoutMs || LOGIN_TIMEOUT_MS);
     let loggedIn = false;
     while(Date.now() < deadline){
       const kind = classifyUrl(page.url());
       if(kind === 'dynamics'){
-        const hasLoginForm = await page.$('input[name="loginfmt"], input[type="password"]').catch(() => null);
+        const hasLoginForm = await page.$('input[name="loginfmt"], input[name="identifier"]').catch(() => null);
         const hasForm = await page.$('[data-dyn-controlname], input[aria-label*="Mağaza" i]').catch(() => null);
-        if(!hasLoginForm && hasForm){ loggedIn = true; break; }
+        const passOnDyn = await passwordVisible(page);
+        if(!hasLoginForm && !passOnDyn && hasForm){
+          loggedIn = true;
+          robotLog(job, 'RAPID_PAGE', 'Rapid360 satış ekranı açıldı');
+          break;
+        }
       }
       if(kind === 'microsoft') await handleMicrosoft(page, opts, job);
       else if(kind === 'okta') await handleOkta(page, opts, job);
@@ -560,7 +798,7 @@ async function runPull(job, opts = {}){
     }
     if(!loggedIn){
       await takeShot(job, page);
-      throw new Error('Rapid360 girişi tamamlanamadı. Telefonda Okta bildirimini onaylayıp Satışları oku’ya tekrar basın.');
+      robotFail(job, job.stage || 'USERNAME_PAGE', 'Rapid360 girişi tamamlanamadı (son aşama: ' + (job.stage || '-') + '). Ekran fotoğrafına bakın.');
     }
     setStatus(job, 'Mağaza 340334 seçilecek…');
     await page.waitForTimeout(4000);
@@ -651,5 +889,12 @@ module.exports = {
   resolvePlaywrightPath,
   resolvePlaywrightMeta,
   isMagazaControlName,
-  magazaFilled
+  magazaFilled,
+  turkeyTodayIso,
+  isNextButtonLabel,
+  isLoginButtonLabel,
+  jobPublicView,
+  clickWithFallback,
+  clickNextAndWaitForPassword,
+  loadPlaywright
 };

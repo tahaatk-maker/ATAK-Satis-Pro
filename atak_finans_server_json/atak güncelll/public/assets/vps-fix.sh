@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.218-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.219-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.218-atak-geteinvoices
-EXPECT_BUILD=fix-v218
+EXPECT_HEALTH=6.3.219-atak-geteinvoices
+EXPECT_BUILD=fix-v219
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -203,6 +203,10 @@ check "okta oturum hatasi" grep -q "oturum açılamıyor" "$SRC/lib/rapid360-rob
 check "okta kullanici placeholder" grep -q "W340334.1@rapid360.arcelikpazarlama.com.tr" "$SRC/public/admin.html"
 check "robot magaza sec" grep -q "selectMagaza" "$SRC/lib/rapid360-robot.js"
 check "robot magaza dolu" grep -q "magazaFilled" "$SRC/lib/rapid360-robot.js"
+check "okta ileri asama" grep -q "NEXT_CLICKED" "$SRC/lib/rapid360-robot.js"
+check "okta ileri etiket" grep -q "isNextButtonLabel" "$SRC/lib/rapid360-robot.js"
+check "turkiye tarihi" grep -q "turkeyTodayIso" "$SRC/lib/rapid360-robot.js"
+check "robot stage api" grep -q "jobPublicView" "$SRC/server.js"
 check "rapid taslak needsCompletion" grep -q "needsCompletion" "$SRC/server.js"
 check "rapid taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/admin.js"
 check "personel taslak completeSaleId" grep -q "completeSaleId" "$SRC/public/assets/personel.js"

@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.218-atak-geteinvoices',
-    build:'fix-v218',
+    version:'6.3.219-atak-geteinvoices',
+    build:'fix-v219',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5596,8 +5596,9 @@ app.post('/web-api/admin/rapid360-robot-start',rapidSalesPerm,async(req,res)=>{
 app.get('/web-api/admin/rapid360-robot-poll/:id',rapidSalesPerm,(req,res)=>{
   const job=rapidRobot.getJob(req.params.id);
   if(!job)return res.status(404).json({error:'Robot işi bulunamadı. Satışları oku’ya tekrar basın.'});
-  if(!job.done)return res.json({pending:true,ok:false,message:job.status});
-  if(!job.ok)return res.status(400).json({error:job.error||'Robot hatası'});
+  const view=rapidRobot.jobPublicView(job);
+  if(!job.done)return res.json({pending:true,ok:false,message:job.status,...view});
+  if(!job.ok)return res.status(400).json({error:job.error||'Robot hatası',...view});
   let parsed=null;
   const r=job.result||{};
   if(r.probe){
@@ -5701,7 +5702,8 @@ app.get('/web-api/admin/rapid360-robot-last',rapidSalesPerm,(req,res)=>{
   res.json({ok:true,job:{
     id:job.id,status:job.status,error:job.error||'',done:job.done,okRun:job.ok,
     at:new Date(job.at).toISOString(),shotAt:job.shotAt||'',lastUrl:job.lastUrl||'',
-    hasShot:Boolean(job.shot)
+    hasShot:Boolean(job.shot),
+    ...rapidRobot.jobPublicView(job)
   }});
 });
 app.get('/web-api/admin/rapid360-robot-shot',rapidSalesPerm,(req,res)=>{
