@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.214-atak-geteinvoices',
-    build:'fix-v214',
+    version:'6.3.215-atak-geteinvoices',
+    build:'fix-v215',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -5600,6 +5600,9 @@ app.get('/web-api/admin/rapid360-robot-poll/:id',rapidSalesPerm,(req,res)=>{
   if(!job.ok)return res.status(400).json({error:job.error||'Robot hatası'});
   let parsed=null;
   const r=job.result||{};
+  if(r.probe){
+    return res.json({ok:true,pending:false,probe:r.probe,message:`Robot şu ekranı gördü: ${r.probe.kind} (${r.probe.url.slice(0,90)})`});
+  }
   try{
     if(r.json)parsed=rapidSalesXml.extractSalesFromJson(r.json);
     else if(r.file)parsed=parseRapid360SalesUpload(r.file);
@@ -5672,6 +5675,25 @@ app.post('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('setting
   audit(s,'Rapid Aktar Okta girişi güncellendi',rapid.oktaUser||'-',{passwordSet:Boolean(String(rapid.oktaPassword||'').trim())});
   writeStore(s);
   res.json({ok:true,oktaUser:rapid.oktaUser||'',oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+});
+app.post('/web-api/admin/rapid360-robot-test',rapidSalesPerm,async(req,res)=>{
+  if(!rapidRobot.available())return res.status(501).json({error:'Sunucuda Rapid robotu kurulu değil. Hostinger deploy scriptini çalıştırın.'});
+  const launch=await rapidRobot.verifyLaunch();
+  if(!launch.ok)return res.status(501).json({error:'Robot çalışamıyor: '+launch.error});
+  const s=readStore();
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  const user=String(rapid.oktaUser||'').trim()||d365Auth.DEFAULT_ACCOUNT;
+  try{
+    const job=rapidRobot.startProbe({
+      user,password:String(rapid.oktaPassword||'').trim(),oktaLogin:user.split('@')[0],
+      store:rapidSalesFetch.DEFAULT_STORE,company:rapidSalesFetch.DEFAULT_COMPANY,
+      reportUrl:d365Auth.dynamicsReportUrl({company:rapidSalesFetch.DEFAULT_COMPANY,store:rapidSalesFetch.DEFAULT_STORE}),
+      profileDir:path.join(ROOT,'data','rapid360-profile')
+    });
+    res.json({ok:true,jobId:job.id,message:'Robot test için Rapid360’ı açıyor…'});
+  }catch(e){
+    res.status(409).json({error:e.message||'Robot testi başlatılamadı'});
+  }
 });
 app.get('/web-api/admin/rapid360-robot-last',rapidSalesPerm,(req,res)=>{
   const job=rapidRobot.getLastJob();

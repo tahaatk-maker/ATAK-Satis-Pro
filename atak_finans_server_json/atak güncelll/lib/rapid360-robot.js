@@ -379,13 +379,13 @@ async function runPull(job, opts = {}){
       }
       if(kind === 'microsoft') await handleMicrosoft(page, opts, job);
       else if(kind === 'okta') await handleOkta(page, opts, job);
+      await takeShot(job, page);
       await page.waitForTimeout(2000);
     }
     if(!loggedIn){
       await takeShot(job, page);
       throw new Error('Rapid360 girişi tamamlanamadı. Telefonda Okta bildirimini onaylayıp Satışları oku’ya tekrar basın.');
-    }
-    setStatus(job, 'Satışlar okunuyor…');
+    }    setStatus(job, 'Satışlar okunuyor…');
     await page.waitForTimeout(4000);
     const dl = await downloadReportFile(page, opts, job);
     if(dl){ await takeShot(job, page); return dl; }
@@ -401,6 +401,37 @@ async function runPull(job, opts = {}){
   }
 }
 
+async function runProbe(job, opts = {}){
+  const pw = loadPlaywright();
+  if(!pw || !pw.chromium) throw new Error('Sunucuda tarayıcı (playwright) kurulu değil.');
+  fs.mkdirSync(opts.profileDir, { recursive: true });
+  const ctx = await pw.chromium.launchPersistentContext(opts.profileDir, {
+    headless: true,
+    viewport: { width: 1366, height: 900 },
+    locale: 'tr-TR',
+    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+  });
+  try{
+    const page = ctx.pages()[0] || await ctx.newPage();
+    setStatus(job, 'Robot Rapid360’ı açıyor…');
+    await page.goto(opts.reportUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+    const until = Date.now() + 25000;
+    while(Date.now() < until){
+      await takeShot(job, page);
+      setStatus(job, `Robot şu an: ${classifyUrl(page.url())} ekranında`);
+      await page.waitForTimeout(3000);
+    }
+    await takeShot(job, page);
+    return { probe: { url: String(page.url() || ''), kind: classifyUrl(page.url()) } };
+  }finally{
+    await ctx.close().catch(() => {});
+  }
+}
+
+function startProbe(opts = {}){
+  return startPull({ ...opts, runner: runProbe });
+}
+
 function resetForTests(){
   jobs.clear();
   runningJobId = '';
@@ -413,6 +444,8 @@ module.exports = {
   classifyUrl,
   trDate,
   startPull,
+  startProbe,
+  runProbe,
   getJob,
   getLastJob,
   runPull,

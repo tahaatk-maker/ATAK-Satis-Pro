@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v214 */
+/* ATAK_ADMIN_BUILD=fix-v215 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4617,6 +4617,30 @@ async function loadRapidSettings(){
     }catch(_){conn.innerHTML='<span style="color:#b91c1c;font-weight:800">🔴 Bağlı değil</span>'}
   }
 }
+q('#rapidRobotTestBtn')?.addEventListener('click',async()=>{
+  const st=q('#rapidSettingsStatus');
+  if(st){st.textContent='Robot testi başladı — sunucu Rapid360’ı açıyor…';st.className='form-status'}
+  try{
+    const start=await api('/web-api/admin/rapid360-robot-test',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const deadline=Date.now()+90000;
+    while(Date.now()<deadline){
+      await new Promise(r=>setTimeout(r,3000));
+      try{
+        const jr=await api('/web-api/admin/rapid360-robot-poll/'+encodeURIComponent(start.jobId));
+        if(jr.pending){if(st)st.textContent=jr.message||'Robot çalışıyor…';continue}
+        if(st){st.innerHTML=`${rapidOktaEsc(jr.message||'Test bitti')} — <a href="/web-api/admin/rapid360-robot-shot" target="_blank"><b>Robotun gördüğü ekranı aç</b></a>`;st.className='form-status success'}
+        loadRapidSettings().catch(()=>{});
+        return;
+      }catch(e){
+        if(st){st.innerHTML=`${rapidOktaEsc(e.message||'Robot hatası')} — <a href="/web-api/admin/rapid360-robot-shot" target="_blank"><b>Robotun gördüğü ekranı aç</b></a>`;st.className='form-status error'}
+        return;
+      }
+    }
+    if(st){st.textContent='Test zaman aşımı. Robotun gördüğü ekranı açmayı deneyin.';st.className='form-status error'}
+  }catch(e){
+    if(st){st.textContent=e.message;st.className='form-status error'}
+  }
+});
 q('#rapidSettingsForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
   const st=q('#rapidSettingsStatus');
