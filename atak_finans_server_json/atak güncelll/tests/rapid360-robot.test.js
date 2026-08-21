@@ -16,6 +16,11 @@ assert.equal(robot.classifyUrl('https://panel.atakhome.com.tr/web-admin'), 'othe
 assert.equal(robot.trDate('2026-08-18'), '18.08.2026');
 assert.equal(robot.trDate('2026-08-20T00:00:00'), '20.08.2026');
 assert.equal(robot.trDate(''), '');
+assert.equal(robot.isMagazaControlName('InventLocationId'), true);
+assert.equal(robot.isMagazaControlName('parmMagaza'), true);
+assert.equal(robot.isMagazaControlName('FromDate'), false);
+assert.equal(robot.magazaFilled('340334 ATAK', '340334'), true);
+assert.equal(robot.magazaFilled('', '340334'), false);
 
 async function run(){
   const v = await robot.verifyLaunch();

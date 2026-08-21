@@ -292,6 +292,74 @@ function trDate(iso){
   return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
 }
 
+function isMagazaControlName(name){
+  return /inventlocation|ma[gğ]aza|retailstore|storeid|^store$|dmrstore|warehouse/i.test(String(name || ''));
+}
+
+function magazaFilled(value, store){
+  const v = String(value || '').replace(/\s+/g, ' ');
+  const w = String(store || '340334');
+  return v.includes(w);
+}
+
+async function waitReportForm(page, job, timeoutMs = 45000){
+  setStatus(job, 'Rapor ekranı yükleniyor (Mağaza kutusu aranıyor)…');
+  try{
+    await page.waitForFunction(() => {
+      const named = [...document.querySelectorAll('[data-dyn-controlname]')];
+      if(named.some(el => /inventlocation|magaza|retailstore|storeid|^store$/i.test(el.getAttribute('data-dyn-controlname') || ''))) return true;
+      return [...document.querySelectorAll('input:not([type=hidden])')].some(i => /ma[gğ]aza/i.test(i.getAttribute('aria-label') || ''));
+    }, { timeout: timeoutMs });
+    return true;
+  }catch(_){
+    return false;
+  }
+}
+
+async function readMagazaField(page){
+  return page.evaluate(() => {
+    const vis = (el) => {
+      if(!el) return false;
+      const r = el.getBoundingClientRect();
+      const st = window.getComputedStyle(el);
+      return r.width > 8 && r.height > 8 && st.visibility !== 'hidden' && st.display !== 'none';
+    };
+    const named = [...document.querySelectorAll('[data-dyn-controlname]')];
+    const host = named.find(el => /inventlocation|^ma[gğ]aza$|parm+ma[gğ]aza|retailstore|^store$|storeid|dmrstore/i.test(el.getAttribute('data-dyn-controlname') || ''))
+      || named.find(el => /inventlocation|magaza|store|warehouse/i.test(el.getAttribute('data-dyn-controlname') || ''));
+    let input = host && [...host.querySelectorAll('input:not([type=hidden])')].find(vis);
+    if(!input){
+      input = [...document.querySelectorAll('input:not([type=hidden])')].find(i => vis(i) && /ma[gğ]aza|inventlocation|depo/i.test((i.getAttribute('aria-label') || '') + (i.id || '') + (i.name || '')));
+    }
+    if(!input) return { ok: false, value: '', name: host ? host.getAttribute('data-dyn-controlname') : '' };
+    input.setAttribute('data-atak-magaza', '1');
+    return {
+      ok: true,
+      value: String(input.value || ''),
+      name: host ? host.getAttribute('data-dyn-controlname') : '',
+      id: input.id || ''
+    };
+  }).catch(() => ({ ok: false, value: '', name: '' }));
+}
+
+async function clickMagazaLookupRow(page, store){
+  const w = String(store || '340334');
+  try{
+    const row = page.locator('[role="row"], .lookupFlyout tr, [data-dyn-role="GridRow"], .popupWin tr').filter({ hasText: w }).first();
+    if(await row.count()){
+      await row.click({ timeout: 4000 });
+      return true;
+    }
+  }catch(_){ }
+  return page.evaluate((magaza) => {
+    const rows = [...document.querySelectorAll('[role="row"], .lookupFlyout tr, [data-dyn-role="GridRow"], .popupWin tr, [id*="Lookup"] [role="option"]')];
+    const hit = rows.find(r => (r.innerText || '').includes(magaza) && /ATAK/i.test(r.innerText || ''))
+      || rows.find(r => (r.innerText || '').includes(magaza));
+    if(hit){ hit.click(); return true; }
+    return false;
+  }, w).catch(() => false);
+}
+
 async function typeIntoD365(page, selector, value, { pressEnter = true } = {}){
   const loc = page.locator(selector).first();
   if(!(await loc.count().catch(() => 0))) return false;
@@ -308,49 +376,76 @@ async function typeIntoD365(page, selector, value, { pressEnter = true } = {}){
   }
 }
 
+async function selectMagaza(page, store, job){
+  const w = String(store || '340334');
+  setStatus(job, `Mağaza ${w} yazılıyor…`);
+  for(let attempt = 1; attempt <= 5; attempt++){
+    const field = await readMagazaField(page);
+    if(field.ok && magazaFilled(field.value, w)){
+      setStatus(job, `Mağaza seçildi: ${field.value}`);
+      return field;
+    }
+    const loc = page.locator('[data-atak-magaza="1"], input[aria-label*="Mağaza" i], input[aria-label*="Magaza" i]').first();
+    if(await loc.count().catch(() => 0)){
+      await loc.click({ timeout: 5000 }).catch(() => {});
+      await loc.press('Control+A').catch(() => {});
+      await loc.press('Backspace').catch(() => {});
+      await page.keyboard.type(w, { delay: 80 });
+      await page.waitForTimeout(1600);
+      await clickMagazaLookupRow(page, w);
+      await loc.press('Tab').catch(() => {});
+      await page.waitForTimeout(800);
+    }else{
+      await page.evaluate((magaza) => {
+        const vis = (el) => {
+          const r = el.getBoundingClientRect();
+          const st = window.getComputedStyle(el);
+          return r.width > 8 && r.height > 8 && st.visibility !== 'hidden' && st.display !== 'none';
+        };
+        const named = [...document.querySelectorAll('[data-dyn-controlname]')];
+        const host = named.find(el => /inventlocation|magaza|retailstore|storeid|^store$/i.test(el.getAttribute('data-dyn-controlname') || ''));
+        const input = (host && [...host.querySelectorAll('input:not([type=hidden])')].find(vis))
+          || [...document.querySelectorAll('input:not([type=hidden])')].find(i => vis(i) && /ma[gğ]aza|inventlocation/i.test((i.getAttribute('aria-label') || '') + (i.id || '')));
+        if(!input) return;
+        input.focus(); input.click();
+        const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        if(d && d.set) d.set.call(input, magaza); else input.value = magaza;
+        ['input', 'change', 'blur'].forEach(t => input.dispatchEvent(new Event(t, { bubbles: true })));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      }, w).catch(() => {});
+      await page.waitForTimeout(1200);
+      await clickMagazaLookupRow(page, w);
+    }
+    const after = await readMagazaField(page);
+    if(after.ok && magazaFilled(after.value, w)){
+      setStatus(job, `Mağaza seçildi: ${after.value}`);
+      return after;
+    }
+    setStatus(job, `Mağaza henüz boş (deneme ${attempt}/5)…`);
+    await takeShot(job, page);
+    await page.waitForTimeout(1500);
+  }
+  const last = await readMagazaField(page);
+  throw new Error(`Mağaza ${w} seçilemedi${last.value ? ' (kutuda: ' + last.value + ')' : ''}. Sorgula basılmadı — boş rapor gelmesin diye. Ayarlar → Robot testi ile ekran fotoğrafına bakın.`);
+}
+
 async function fillReportAndQuery(page, opts, job){
   const start = trDate(opts.startDate);
   const end = trDate(opts.endDate);
-  setStatus(job, 'Tarih ve mağaza dolduruluyor…');
-  // Selenium mantığı: elemanın adresine git, tıkla, değeri yaz, listeden seç.
-  const startSel = 'input[aria-label*="Başlangıç" i], input[aria-label*="Baslangic" i], input[id*="FromDate" i], input[name*="FromDate" i]';
-  const endSel = 'input[aria-label*="Bitiş" i], input[aria-label*="Bitis" i], input[id*="ToDate" i], input[name*="ToDate" i]';
-  const magSel = 'input[aria-label*="Mağaza" i], input[aria-label*="Magaza" i], input[id*="Magaza" i], input[id*="InventLocation" i], input[name*="Store" i]';
-  const okStart = start ? await typeIntoD365(page, startSel, start) : false;
-  const okEnd = end ? await typeIntoD365(page, endSel, end) : false;
-  let okMag = await typeIntoD365(page, magSel, opts.store);
-  if(okMag){
-    // Lookup listesi açık kaldıysa ilk eşleşen satırı tıkla
-    await page.evaluate((magaza) => {
-      const rows = [...document.querySelectorAll('[data-dyn-role="LookupGrid"] [role="row"], .lookup-popup [role="row"], [id*="LookupGrid"] [role="row"]')];
-      const hit = rows.find(r => (r.innerText || '').includes(String(magaza)));
-      if(hit) hit.click();
-    }, opts.store).catch(() => {});
-    await page.waitForTimeout(800);
-  }
-  if(!okStart || !okEnd || !okMag){
-    await page.evaluate(({ start, end, magaza }) => {
-      const setVal = (input, v) => {
-        if(!input || !v) return;
-        input.focus(); input.click();
-        const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-        if(d && d.set) d.set.call(input, v); else input.value = v;
-        ['input', 'change'].forEach(t => input.dispatchEvent(new Event(t, { bubbles: true })));
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-        if(input.blur) input.blur();
-      };
-      const inputs = [...document.querySelectorAll('input:not([type=hidden])')];
-      const byLabel = (re) => inputs.find(i => re.test(
-        (i.getAttribute('aria-label') || '') + ' ' + (i.id || '') + ' ' + (i.name || '') + ' ' +
-        String((i.closest('[data-dyn-controlname]') || {}).getAttribute ? (i.closest('[data-dyn-controlname]').getAttribute('data-dyn-controlname') || '') : '')
-      ));
-      setVal(byLabel(/başlangıç|baslangic|fromdate|startdate/i), start);
-      setVal(byLabel(/bitiş|bitis|todate|enddate/i), end);
-      setVal(byLabel(/ma[gğ]aza|store|inventlocation/i), magaza);
-    }, { start, end, magaza: opts.store }).catch(() => {});
-  }
-  await page.waitForTimeout(1500);
-  setStatus(job, 'Sorgula’ya basılıyor…');
+  const store = String(opts.store || '340334');
+  const formOk = await waitReportForm(page, job);
+  if(!formOk) throw new Error('Rapid360 rapor ekranı açılmadı (Mağaza kutusu yok). Okta onayından sonra Satışları oku’ya tekrar basın.');
+  await takeShot(job, page);
+  setStatus(job, 'Tarih dolduruluyor…');
+  const startSel = 'input[aria-label*="Başlangıç" i], input[aria-label*="Baslangic" i], input[id*="FromDate" i], input[name*="FromDate" i], [data-dyn-controlname*="FromDate" i] input';
+  const endSel = 'input[aria-label*="Bitiş" i], input[aria-label*="Bitis" i], input[id*="ToDate" i], input[name*="ToDate" i], [data-dyn-controlname*="ToDate" i] input';
+  if(start) await typeIntoD365(page, startSel, start);
+  if(end) await typeIntoD365(page, endSel, end);
+  const mag = await selectMagaza(page, store, job);
+  job.meta = job.meta || {};
+  job.meta.magazaValue = mag.value || store;
+  await takeShot(job, page);
+  setStatus(job, `Sorgula (mağaza ${mag.value || store})…`);
   let clicked = false;
   try{
     const btn = page.getByRole('button', { name: /sorgula/i }).first();
@@ -364,10 +459,15 @@ async function fillReportAndQuery(page, opts, job){
       return false;
     }).catch(() => false);
   }
-  if(clicked) setStatus(job, 'Rapid360 satışları sorgulanıyor…');
+  if(!clicked) throw new Error('Sorgula düğmesi bulunamadı. Robotun gördüğü ekranı açın.');
+  setStatus(job, 'Rapid360 satışları sorgulanıyor…');
   const until = Date.now() + 45000;
   while(Date.now() < until){
     await page.waitForTimeout(3000);
+    const stillMag = await readMagazaField(page);
+    if(stillMag.ok && !magazaFilled(stillMag.value, store)){
+      throw new Error('Sorgula’dan sonra Mağaza kutusu yine boş. 340334 seçilmedi, satış listesi gelmez.');
+    }
     const empty = await page.evaluate(() => /Burada gösterecek hiçbir şey bulamadık/i.test(document.body ? document.body.innerText : '')).catch(() => true);
     if(!empty) return true;
   }
@@ -400,7 +500,7 @@ async function downloadReportFile(page, opts, job){
       await page.goto(opts.reportUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
     }
     setStatus(job, 'Rapor ekranı yükleniyor…');
-    await page.waitForTimeout(15000);
+    await page.waitForTimeout(4000);
     const hasRows = await fillReportAndQuery(page, opts, job);
     if(!hasRows){
       setStatus(job, 'Sorgu boş döndü, XML Aktar deneniyor…');
@@ -417,7 +517,8 @@ async function downloadReportFile(page, opts, job){
     const filePath = await dl.path();
     const buffer = fs.readFileSync(filePath);
     return { file: { originalname: dl.suggestedFilename() || 'rapid360.xml', buffer } };
-  }catch(_){
+  }catch(e){
+    if(e && /Mağaza|rapor ekranı|Sorgula düğmesi/i.test(String(e.message || ''))) throw e;
     return null;
   }
 }
@@ -449,7 +550,8 @@ async function runPull(job, opts = {}){
       const kind = classifyUrl(page.url());
       if(kind === 'dynamics'){
         const hasLoginForm = await page.$('input[name="loginfmt"], input[type="password"]').catch(() => null);
-        if(!hasLoginForm){ loggedIn = true; break; }
+        const hasForm = await page.$('[data-dyn-controlname], input[aria-label*="Mağaza" i]').catch(() => null);
+        if(!hasLoginForm && hasForm){ loggedIn = true; break; }
       }
       if(kind === 'microsoft') await handleMicrosoft(page, opts, job);
       else if(kind === 'okta') await handleOkta(page, opts, job);
@@ -459,7 +561,8 @@ async function runPull(job, opts = {}){
     if(!loggedIn){
       await takeShot(job, page);
       throw new Error('Rapid360 girişi tamamlanamadı. Telefonda Okta bildirimini onaylayıp Satışları oku’ya tekrar basın.');
-    }    setStatus(job, 'Satışlar okunuyor…');
+    }
+    setStatus(job, 'Mağaza 340334 seçilecek…');
     await page.waitForTimeout(4000);
     const dl = await downloadReportFile(page, opts, job);
     if(dl){ await takeShot(job, page); return dl; }
@@ -489,17 +592,27 @@ async function runProbe(job, opts = {}){
     const page = ctx.pages()[0] || await ctx.newPage();
     setStatus(job, 'Robot Rapid360’ı açıyor…');
     await page.goto(opts.reportUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
-    const until = Date.now() + 25000;
+    const until = Date.now() + 40000;
     while(Date.now() < until){
       const kind = classifyUrl(page.url());
       try{
         if(kind === 'microsoft') await handleMicrosoft(page, opts, job);
         else if(kind === 'okta') await handleOkta(page, opts, job);
+        else if(kind === 'dynamics'){
+          const want = opts.store || '340334';
+          const cur = await readMagazaField(page);
+          if(cur.ok && magazaFilled(cur.value, want)){
+            setStatus(job, `Mağaza seçildi: ${cur.value}`);
+          }else{
+            const form = await waitReportForm(page, job, 8000);
+            if(form) await selectMagaza(page, want, job);
+          }
+        }
       }catch(e){
-        setStatus(job, e && e.message ? e.message : 'Okta hatası');
+        setStatus(job, e && e.message ? e.message : 'Robot hatası');
       }
       await takeShot(job, page);
-      if(!/Oturum açılamıyor|bildirimini onaylayın|Ayarlar/i.test(String(job.status || ''))){
+      if(!/Oturum açılamıyor|bildirimini onaylayın|Mağaza/i.test(String(job.status || ''))){
         setStatus(job, `Robot şu an: ${classifyUrl(page.url())} ekranında`);
       }
       await page.waitForTimeout(3000);
@@ -536,5 +649,7 @@ module.exports = {
   LOGIN_TIMEOUT_MS,
   PW_SEARCH_PATHS,
   resolvePlaywrightPath,
-  resolvePlaywrightMeta
+  resolvePlaywrightMeta,
+  isMagazaControlName,
+  magazaFilled
 };
