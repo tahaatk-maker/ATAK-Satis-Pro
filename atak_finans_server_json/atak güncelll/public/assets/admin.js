@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v232 */
+/* ATAK_ADMIN_BUILD=fix-v233 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -720,6 +720,21 @@ function renderSelection(){q('#selectionBar').classList.toggle('hidden',selected
 q('#adminSearch').oninput=()=>{page=1;renderProducts()};q('#globalSearch').oninput=()=>{q('#adminSearch').value=q('#globalSearch').value;goTab('products');page=1;renderProducts()};q('#filterCategory').onchange=q('#filterStatus').onchange=()=>{page=1;renderProducts()};q('#prevPage').onclick=()=>{page--;renderProducts()};q('#nextPage').onclick=()=>{page++;renderProducts()};q('#selectAll').onchange=e=>{filteredProducts().slice((page-1)*pageSize,page*pageSize).forEach(p=>e.target.checked?selected.add(p.id):selected.delete(p.id));renderProducts()};q('#clearSelection').onclick=()=>{selected.clear();q('#selectAll').checked=false;renderProducts()};
 qa('[data-bulk]').forEach(b=>b.onclick=async()=>{const map={active:['active',true],passive:['active',false],featured:['featured',true],unfeatured:['featured',false]},[action,value]=map[b.dataset.bulk];if(!selected.size)return;await bulk({action,value});});
 async function bulk(body){const r=await api('/web-api/admin/bulk-products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[...selected],...body})});toast(`${r.count} ürün güncellendi`);selected.clear();await load()}
+q('#productsClearAllBtn')?.addEventListener('click',async()=>{
+  const n=(store.products||[]).length;
+  if(!confirm(`TÜM ürünler silinsin mi? (${n} kart)\nKategoriler durur. Müşteri ve satışlar silinmez.`))return;
+  if(!confirm('Son onay: ürün kartları geri gelmez. Kategoriler kalacak. Devam?'))return;
+  try{
+    const r=await api('/web-api/admin/products/clear-all',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({confirm:'SIL'})
+    });
+    selected.clear();
+    toast(`${r.removed||0} ürün silindi · ${r.categories||0} kategori duruyor`);
+    await load();
+  }catch(e){toast(e.message||'Ürünler silinemedi')}
+});
 q('#newProductBtn').onclick=()=>openProduct({active:true,featured:false,brand:'Beko',priceMode:'same',stock:0,tags:[],vatRate:20,purchasePrice:0,listPrice:0,cashPrice:0,cardPrice:0,minimumSalePrice:0,barcode:''});q('#quickNewProduct')?.addEventListener('click',()=>{goTab('products');q('#newProductBtn')?.click()});q('#closeModal').onclick=()=>q('#productModal').classList.add('hidden');window.editProduct=id=>openProduct(store.products.find(p=>p.id===id));window.disableProduct=async id=>{if(!confirm('Ürün pasife alınsın mı?'))return;await api('/web-api/admin/product/'+id,{method:'DELETE'});toast('Ürün pasife alındı');await load()};
 async function refreshProductsStockWarehouseOptions(){
   const sel=q('#productsStockWarehouse');if(!sel)return;

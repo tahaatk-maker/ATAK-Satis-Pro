@@ -1958,8 +1958,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.232-atak-geteinvoices',
-    build:'fix-v232',
+    version:'6.3.233-atak-geteinvoices',
+    build:'fix-v233',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -8640,6 +8640,23 @@ app.post('/web-api/admin/purchase-invoice/:id/revert',requireAdmin,(req,res)=>{
   }catch(e){
     res.status(400).json({error:e.message||'Geri alınamadı'});
   }
+});
+
+function clearAllProductsKeepCategories(s){
+  const removed=(s.products||[]).length;
+  const stocksCleared=(s.productStocks||[]).length;
+  s.products=[];
+  s.productStocks=[];
+  audit(s,'Tüm ürünler silindi',`${removed} ürün`,{removed,stocksCleared,categoriesKept:(s.categories||[]).length});
+  return {removed,stocksCleared,categories:(s.categories||[]).length};
+}
+app.post('/web-api/admin/products/clear-all',requireAdmin,(req,res)=>{
+  const ok=String(req.body?.confirm||'').trim().toLocaleUpperCase('tr-TR')==='SIL';
+  if(!ok)return res.status(400).json({error:'Onay için confirm=SIL yazın. Kategoriler durur, yalnızca ürünler silinir.'});
+  const s=readStore();
+  const result=clearAllProductsKeepCategories(s);
+  writeStore(s);
+  res.json({ok:true,...result});
 });
 
 /** Yüklenen ürünlerde sadece alış maliyetini sıfırla — ürün kartı silinmez */
