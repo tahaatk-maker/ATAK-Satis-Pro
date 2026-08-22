@@ -138,4 +138,29 @@ const xlsBuf=XLSX.write(wb,{type:'buffer',bookType:'xls'});
 const fromXls=parseWorkbook(XLSX,xlsBuf,'ATAK MUSTERILER .xls');
 assert(fromXls.ok&&fromXls.rows.some(r=>r.status==='ready'&&r.payload.phone==='05321234567'),'xls dosyası içeri alınır');
 
+assert(normalizeBirthDate('1973-01-20 00:00:00.000')==='1973-01-20','doğum sql datetime');
+assert(normalizeBirthDate('1/20/73')==='1973-01-20','doğum excel m/d/yy');
+const headerless=[
+  ['00000001','NULL','EYÜP','ERKAN','EYÜP ERKAN','nur sk no : 7/2','sarıyer','İSTANBUL','NULL','1973-01-20 00:00:00.000','NULL','NULL','İSTANBUL','NULL','NULL','NULL','05427823361'],
+  ['00000002','NULL','YILMAZ','BAYRAK','YILMAZ BAYRAK','FERAHEVLER YALCIN SOK NO : 20','SARIYER','İSTANBUL','NULL','NULL','NULL','NULL','İSTANBUL','NULL','NULL','NULL','2122992131'],
+  ['00001010','57361159298','RENGİN','GÜVEN','RENGİN GÜVEN','TARABYA MAH. NUROL SİTESİ','SARIYER','İSTANBUL','zeynep@x.com','NULL','ZEYNEP GÜR','FERAHEVLER NUROL','İSTANBUL','SARIYER','İSTANBUL-SARIYER','46465448988','5324615929'],
+  ['00001103','47788766766','ZEKİ','ÇAKIR','ZEKİ ÇAKIR','FERAHEVLER ADNAN KAHVECİ','SARIYER','İSTANBUL','NULL','1966-04-20 00:00:00.000','NULL','FERAHEVLER 109/3','İSTANBUL','SARIYER','NULL','47788766766','5324707630']
+];
+const noHead=parseAsistekMatrix(headerless);
+assert(noHead.ok,'başlıksız Asistek parse');
+const eyup=noHead.rows.find(r=>r.payload&&r.payload.firstName==='EYÜP');
+assert(eyup&&eyup.status==='ready'&&eyup.payload.phone==='05427823361','başlıksız ilk satır alınır');
+assert(eyup.payload.lastName==='ERKAN'&&eyup.payload.customerCode==='00000001','ad soyad + müşteri no');
+assert(eyup.payload.birthDate==='1973-01-20'&&!eyup.payload.email,'doğum + NULL mail boş');
+assert(eyup.payload.address.includes('nur sk')&&/sarıyer/i.test(eyup.payload.district),'ev adres');
+const rengin=noHead.rows.find(r=>r.payload&&r.payload.firstName==='RENGİN');
+assert(rengin&&rengin.payload.phone==='05324615929'&&rengin.payload.tckn==='57361159298','tc + 10 hane telefon');
+assert(rengin.payload.email==='zeynep@x.com','mail NULL değilse alınır');
+const bomHead=parseAsistekMatrix([['\ufeff00000001','','AYŞE','KAYA','AYŞE KAYA','Ev 1','Sarıyer','İstanbul','','','','','İstanbul','','','','05321112233'],headerless[1],headerless[2],headerless[3]]);
+assert(bomHead.ok&&bomHead.rows.some(r=>r.payload&&r.payload.phone==='05321112233'),'BOM’lu müşteri no okunur');
+
+const csvText=headerless.map(r=>r.join(';')).join('\n');
+const fromCsv=parseWorkbook(XLSX,Buffer.from(csvText,'utf8'),'musteriler.csv');
+assert(fromCsv.ok&&fromCsv.rows.some(r=>r.status==='ready'&&r.payload.phone==='05427823361'),'başlıksız csv içeri alınır');
+
 console.log('OK customer-excel-import tests passed');

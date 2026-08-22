@@ -19,7 +19,10 @@ function cellStr(v){
     if(Math.abs(v-Math.round(v))<1e-6)return String(Math.round(v));
     return String(v);
   }
-  return String(v).trim();
+  if(v instanceof Date && !Number.isNaN(v.getTime()))return v.toISOString().slice(0,10);
+  const s=String(v).replace(/^(?:\uFEFF|ï»¿)+/,'').trim();
+  if(/^(null|n\/a|undefined|#n\/a)$/i.test(s))return '';
+  return s;
 }
 function digits(v){return cellStr(v).replace(/\D/g,'')}
 function normalizePhone(v){
@@ -74,18 +77,28 @@ function normalizeBirthDate(v){
     if(!Number.isNaN(excel.getTime()))return excel.toISOString().slice(0,10);
   }
   const s=cellStr(v);
-  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
-  const m=s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
-  if(m){
-    const dd=m[1].padStart(2,'0');
-    const mm=m[2].padStart(2,'0');
-    return `${m[3]}-${mm}-${dd}`;
+  const iso=s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(iso)return iso[1];
+  const dotted=s.match(/^(\d{1,2})[.](\d{1,2})[.](\d{2,4})$/);
+  if(dotted){
+    let y=Number(dotted[3]);
+    if(dotted[3].length===2)y=y>=70?1900+y:2000+y;
+    return `${y}-${dotted[2].padStart(2,'0')}-${dotted[1].padStart(2,'0')}`;
+  }
+  const slashed=s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if(slashed){
+    const a=Number(slashed[1]); const b=Number(slashed[2]); let y=Number(slashed[3]);
+    if(slashed[3].length===2)y=y>=70?1900+y:2000+y;
+    const mdy=a<=12&&b>12;
+    const dd=String(mdy?b:a).padStart(2,'0');
+    const mm=String(mdy?a:b).padStart(2,'0');
+    return `${y}-${mm}-${dd}`;
   }
   return s.slice(0,32);
 }
 
 const COL_RULES=[
-  ['musteriKodu', /^(musteri kodu|musteri no|cari kod|cari no)$/],
+  ['musteriKodu', /^(musteri kodu|musteri no|musteri numarasi|cari kod|cari no)$/],
   ['tckn', /^(tc kimlik no|tckn|tc no|kimlik no|tc)$/],
   ['vergiNo', /^(vergi no|vkn|vergi numarasi)$/],
   ['vergiDaire', /^vergi dair/],
@@ -127,7 +140,7 @@ const COL_RULES=[
   ['sehir', /^(sehir)$/],
   ['cariTipi', /^cari tip/],
   ['muhasebe', /^muhasebe/],
-  ['unvan', /^(unvan|unvani|title|cari unvan)$/],
+  ['unvan', /^(unvan|unvani|title|cari unvan|ad soyad|adi soyadi)$/],
   ['adres', /^(adres|acik adres)$/]
 ];
 
@@ -215,9 +228,75 @@ function findHeader(matrix){
       best={index:start+count-1,cols:mapHeader(headers),headers,score};
     }
   }
-  if(!best)return null;
+  if(!best)return inferHeaderlessAsistek(rows);
   best.cols=inferPhoneColumn(rows,best.index,best.cols||{});
   return {index:best.index,cols:best.cols,headers:best.headers};
+}
+const ASISTEK_POS_17={
+  musteriKodu:0,tckn:1,ad:2,soyad:3,unvan:4,evAdres:5,nufusIlce:6,sehirIl:7,
+  email:8,dogumTarihi:9,kurumsalUnvan:10,kurumsalAdres:11,kurumsalIl:12,kurumsalIlce:13,
+  vergiDaire:14,vergiNo:15,isTel:16
+};
+const ASISTEK_POS_16={
+  musteriKodu:0,tckn:1,ad:2,soyad:3,evAdres:4,nufusIlce:5,sehirIl:6,
+  email:7,dogumTarihi:8,kurumsalUnvan:9,kurumsalAdres:10,kurumsalIl:11,kurumsalIlce:12,
+  vergiDaire:13,vergiNo:14,isTel:15
+};
+function looksLikeCustomerCode(v){
+  const s=cellStr(v);
+  if(!s)return false;
+  if(/^0\d{5,10}$/.test(s))return true;
+  if(/^[A-Za-z]\d{4,8}$/.test(s))return true;
+  if(/^\d{4,8}$/.test(s))return true;
+  if(/^\d{1,3}$/.test(s)&&Number(s)>0)return true;
+  return false;
+}
+function looksLikePersonName(v){
+  const s=cellStr(v);
+  if(!s||s.length>64)return false;
+  const k=fold(s);
+  if(/^(ad|adi|soyad|soyadi|unvan|tc|mail|il|ilce|null|musteri no)$/.test(k))return false;
+  return /[A-Za-zÇĞİÖŞÜçğıöşü]{2,}/.test(s);
+}
+function countColPhones(matrix,idx,limit=80){
+  let n=0;
+  for(const row of (matrix||[]).slice(0,limit)){
+    if(extractBestPhone([cellStr((row||[])[idx])]))n++;
+  }
+  return n;
+}
+function firstAsistekDataRow(matrix){
+  const max=Math.min(25,(matrix||[]).length);
+  for(let i=0;i<max;i++){
+    const r=matrix[i]||[];
+    if(looksLikeCustomerCode(r[0])&&looksLikePersonName(r[2])&&looksLikePersonName(r[3]))return i;
+  }
+  return -1;
+}
+function inferHeaderlessAsistek(matrix){
+  const start=firstAsistekDataRow(matrix);
+  if(start<0)return null;
+  const sample=(matrix||[]).slice(start,start+80);
+  let codes=0,names=0,wide=0;
+  for(const row of sample){
+    const r=row||[];
+    if(looksLikeCustomerCode(r[0]))codes++;
+    if(looksLikePersonName(r[2])&&looksLikePersonName(r[3]))names++;
+    if((r.length>=15)||r.filter(c=>cellStr(c)).length>=8)wide++;
+  }
+  const p16=countColPhones(sample,16);
+  const p15=countColPhones(sample,15);
+  if(codes<3||names<3||wide<3)return null;
+  if(p16<1&&p15<1)return null;
+  const use17=p16>=p15;
+  return {
+    index:start-1,
+    cols:use17?{...ASISTEK_POS_17}:{...ASISTEK_POS_16},
+    headers:use17
+      ?['Müşteri no','TC','Ad','Soyad','Ünvan','Ev adres','İlçe','İl','Mail','Doğum tarihi','Kurumsal ünvan','Kurumsal adres','İl','İlçe','Vergi dairesi','Vergi no','İş telefonu']
+      :['Müşteri no','TC','Ad','Soyad','Ev adres','İlçe','İl','Mail','Doğum tarihi','Kurumsal ünvan','Kurumsal adres','İl','İlçe','Vergi dairesi','Vergi no','İş telefonu'],
+    inferred:true
+  };
 }
 function mapHeader(cells){
   const cols={};
@@ -395,8 +474,8 @@ function mapDataRow(row,cols){
 }
 
 function parseAsistekMatrix(matrix){
-  const found=findHeader(matrix);
-  if(!found)return {ok:false,error:'Müşteri başlık satırı bulunamadı (Ünvan / Ad Soyad / Telefon / Müşteri No).',rows:[],header:null};
+  const found=findHeader(matrix)||inferHeaderlessAsistek(matrix);
+  if(!found)return {ok:false,error:'Müşteri başlık satırı bulunamadı (Ünvan / Ad Soyad / Telefon / Müşteri No). Başlık yoksa Asistek sırası: Müşteri no, TC, Ad, Soyad, Ev adres, İlçe, İl, Mail, Doğum tarihi, Kurumsal ünvan…, İş telefonu.',rows:[],header:null};
   found.cols=inferPhoneColumn(matrix,found.index,found.cols||{});
   const {index,cols,headers}=found;
   if(cols.telefon==null&&cols.gsm==null&&cols.evTel==null&&cols.isTel==null)return {ok:false,error:'Telefon / GSM / Ev Tel / İş Telefon sütunu yok. Başlık satırında İş telefonu olmalı.',rows:[],header:found};
@@ -579,11 +658,16 @@ function decodeBestLine(buf){
   return fixTrMojibake(scoreTr(dos)>scoreTr(iso)?dos:iso);
 }
 function decodeCsvText(buffer){
-  const utf=buffer.toString('utf8');
-  const head=utf.slice(0,2500);
-  const utfOk=!head.includes('\uFFFD') && (/Müşteri|Ünvan|İlçe|Şehir/.test(head) || !/[^\x00-\x7F]/.test(head.slice(0,80)));
-  if(utfOk && !/Müþteri|Ýþ Yeri|Þehir/.test(head))return utf.replace(/^\uFEFF/,'');
   const b=Buffer.isBuffer(buffer)?buffer:Buffer.from(buffer);
+  if(b.length>=3&&b[0]===0xEF&&b[1]===0xBB&&b[2]===0xBF)return b.slice(3).toString('utf8');
+  const utf=b.toString('utf8');
+  const head=utf.slice(0,2500);
+  let iso='';
+  try{iso=new TextDecoder('iso-8859-9').decode(b)}catch(_){iso=b.toString('latin1')}
+  const utfScore=scoreTr(head);
+  const isoScore=scoreTr(iso.slice(0,2500));
+  const utfOk=!head.includes('\uFFFD') && (utfScore>=isoScore || /Müşteri|Ünvan|İlçe|Şehir/.test(head) || !/[^\x00-\x7F]/.test(head.slice(0,80)));
+  if(utfOk && !/Müþteri|Ýþ Yeri|Þehir/.test(head))return utf.replace(/^\uFEFF/,'');
   const lines=[];
   let start=0;
   for(let i=0;i<b.length;i++){
