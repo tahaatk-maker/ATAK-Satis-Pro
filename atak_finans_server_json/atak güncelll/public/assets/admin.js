@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v222 */
+/* ATAK_ADMIN_BUILD=fix-v223 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2639,7 +2639,11 @@ async function sendCustomerSmsFromPanel(){
   }
 }
 q('#newCustomerBtn')?.addEventListener('click',()=>openCustomerModal(null));
-q('#customerExcelBtn')?.addEventListener('click',()=>q('#customerExcelFile')?.click());
+q('#customerExcelBtn')?.addEventListener('click',()=>{
+  q('#customerExcelModal')?.classList.remove('hidden');
+  const f=q('#customerExcelFile');
+  if(f){f.value='';f.click()}
+});
 q('#customerExcelClose')?.addEventListener('click',()=>q('#customerExcelModal')?.classList.add('hidden'));
 function customerExcelEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
 function renderCustomerExcelPreview(d){
@@ -2654,7 +2658,7 @@ function renderCustomerExcelPreview(d){
   const mapTxt=Object.entries(map).map(([k,v])=>`${k} ← ${v}`).join(' · ');
   if(q('#customerExcelMap'))q('#customerExcelMap').textContent=
     `Başlık satır ${d.headerRow||'-'}${d.sheet?` · sayfa ${d.sheet}`:''}${mapTxt?` · ${mapTxt}`:''}`;
-  const label={ready:'Yeni',existing:'Kayıtlı',skip_noname:'Ünvan yok',skip_short:'7 hane atlandı',skip_nophone:'Telefonsuz'};
+  const label={ready:'Yeni',existing:'Kayıtlı',skip_noname:'Ünvan yok',skip_short:'7 hane atlandı',skip_nophone:'Telefonsuz',skip_dupfile:'Dosyada tekrar'};
   const rows=d.preview||[];
   if(q('#customerExcelPreview'))q('#customerExcelPreview').innerHTML=rows.map(r=>{
     const fatura=r.invoiceType==='corporate'?'Kurumsal':'Bireysel';
@@ -2668,13 +2672,12 @@ function renderCustomerExcelPreview(d){
       <td>${customerExcelEsc(ids)}</td>
       <td>${customerExcelEsc([r.district,r.city].filter(Boolean).join(' / ')||'-')}</td>
     </tr>`;
-  }).join('')||'<tr><td colspan="6">Telefonlu satır yok</td></tr>';
+  }).join('')||'<tr><td colspan="6">Okunacak satır yok — başlık ve iş telefonu sütununu kontrol edin</td></tr>';
   const btn=q('#customerExcelImportBtn');
   if(btn)btn.disabled=!(c.ready>0);
   q('#customerExcelModal')?.classList.remove('hidden');
 }
-q('#customerExcelFile')?.addEventListener('change',async()=>{
-  const file=q('#customerExcelFile')?.files?.[0];
+async function previewCustomerExcelFile(file){
   const st=q('#customerExcelStatus');
   if(!file)return;
   const fd=new FormData();fd.append('file',file);
@@ -2682,13 +2685,38 @@ q('#customerExcelFile')?.addEventListener('change',async()=>{
   try{
     const d=await api('/web-api/admin/customers-excel-preview',{method:'POST',body:fd});
     renderCustomerExcelPreview(d);
-    if(st){st.textContent=d.note||'Önizleme hazır. Aktar’a basınca sadece yeniler eklenir.';st.className='form-status success'}
+    if(st){
+      const msg=d.counts?.ready>0
+        ?(d.note||'Önizleme hazır. Aktar’a basınca sadece yeniler eklenir.')
+        :`Yeni aktarılacak satır yok. Kayıtlı ${d.counts?.existing||0} · telefonsuz ${d.counts?.noPhone||0} · 7 hane ${d.counts?.shortPhone||0}`;
+      st.textContent=msg;st.className=d.counts?.ready>0?'form-status success':'form-status';
+    }
   }catch(err){
     if(st){st.textContent=err.message;st.className='form-status error'}
     toast(err.message||'Excel okunamadı');
     q('#customerExcelModal')?.classList.remove('hidden');
   }
-});
+}
+q('#customerExcelFile')?.addEventListener('change',()=>previewCustomerExcelFile(q('#customerExcelFile')?.files?.[0]));
+(()=>{
+  const drop=q('#customerExcelDrop');
+  if(!drop)return;
+  drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('drag')});
+  drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
+  drop.addEventListener('drop',e=>{
+    e.preventDefault();drop.classList.remove('drag');
+    const file=e.dataTransfer?.files?.[0];
+    if(!file)return;
+    const input=q('#customerExcelFile');
+    if(!input)return;
+    try{
+      const dt=new DataTransfer();
+      dt.items.add(file);
+      input.files=dt.files;
+    }catch(_){}
+    previewCustomerExcelFile(file);
+  });
+})();
 q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
   const file=q('#customerExcelFile')?.files?.[0];
   const st=q('#customerExcelStatus');

@@ -639,6 +639,9 @@ button.primary,.primary,button{font-size:12px}
 .customer-excel-summary b{display:block;font-size:20px;color:#0b2a4a}
 .customer-excel-summary span{font-size:11px;color:#6d7a90;font-weight:700}
 .customer-excel-table{max-height:360px;overflow:auto;margin-top:10px}
+.customer-excel-drop{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;border:2px dashed #8aa4c4;border-radius:12px;padding:16px;background:#f4f8fc;cursor:pointer;margin:10px 0;font-weight:700;color:#0b2a4a;text-align:center}
+.customer-excel-drop.drag{background:#e7f1ff;border-color:#0b4d8a}
+.customer-excel-drop input{max-width:100%}
 @media(max-width:900px){.customer-excel-summary{grid-template-columns:1fr 1fr}}
 .vkn-lookup-row{display:flex;gap:8px;align-items:stretch}
 .vkn-lookup-row input{flex:1;min-width:0}

@@ -69,6 +69,14 @@ const STORE_SEARCH_DIRS = Array.from(new Set([
 ]));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const customerExcelUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
+function customerExcelFile(req,res,next){
+  customerExcelUpload.single('file')(req,res,err=>{
+    if(!err)return next();
+    const tooBig=err.code==='LIMIT_FILE_SIZE';
+    return res.status(400).json({error:tooBig?'Excel 40 MB’dan küçük olmalı. Dosyayı xlsx/csv olarak kaydedip tekrar deneyin.':'Excel yüklenemedi: '+(err.message||'dosya hatası')});
+  });
+}
 const trainingUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 80 * 1024 * 1024 } });
 const COMMERCE_SYNC_URL = process.env.COMMERCE_SYNC_URL || 'http://127.0.0.1:3200/api/sync/beko';
 /** Resmi satıcı bilgileri — senet + satış sözleşmesinde sabit */
@@ -1919,8 +1927,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.222-atak-geteinvoices',
-    build:'fix-v222',
+    version:'6.3.223-atak-geteinvoices',
+    build:'fix-v223',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3668,6 +3676,7 @@ function customerExcelPreviewPayload(req){
   const preview=[
     ...by('ready').slice(0,50),
     ...by('existing').slice(0,10),
+    ...by('skip_dupfile').slice(0,8),
     ...by('skip_short').slice(0,12),
     ...by('skip_nophone').slice(0,8),
     ...by('skip_noname').slice(0,5)
@@ -3694,11 +3703,11 @@ function customerExcelPreviewPayload(req){
     note:'Sadece 10+ haneli telefon / GSM aktarılır. Telefonsuz ve 7 haneli sabit hatlar atlanır. Kayıtlı telefon / VKN / TCKN / aynı ad-soyad ezilmez.'
   };
 }
-app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers_manage'),dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers_manage'),customerExcelFile,(req,res)=>{
   try{res.json(customerExcelPreviewPayload(req))}
   catch(e){res.status(400).json({error:e.message||'Excel okunamadı'})}
 });
-app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_manage'),dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_manage'),customerExcelFile,(req,res)=>{
   try{
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer,req.file.originalname||'');

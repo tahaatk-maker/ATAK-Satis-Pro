@@ -134,13 +134,90 @@ const COL_RULES=[
 function isHeaderRow(cells){
   const folds=(cells||[]).map(c=>fold(c));
   const hasTel=folds.some(h=>
-    /telefon|gsm|^tel$|ev tel|is tel/.test(h)||h.startsWith('gsm')
+    /telefon|gsm|^tel$|ev tel|is tel|is telefon/.test(h)||h.startsWith('gsm')
   );
   const hasUnvan=folds.some(h=>h==='unvan'||h.includes('unvan')||h==='ad'||h==='soyad'||h==='adi'||h==='soyadi');
   const hasVergi=folds.some(h=>h.includes('vergi'));
   const hasCari=folds.some(h=>h.includes('cari tip'));
-  const hasKod=folds.some(h=>h==='musteri kodu'||h==='musteri no'||h==='cari kod');
-  return (hasTel||hasKod)&&(hasUnvan||hasVergi||hasCari||hasKod);
+  const hasKod=folds.some(h=>h==='musteri kodu'||h==='musteri no'||h==='cari kod'||h==='cari no');
+  const hasMail=folds.some(h=>h==='mail'||h==='e mail'||h==='email'||h==='eposta');
+  return (hasTel||hasKod)&&(hasUnvan||hasVergi||hasCari||hasKod||hasMail);
+}
+function headerHasPhone(cols){
+  return !!(cols&&(cols.telefon!=null||cols.gsm!=null||cols.isTel!=null||cols.evTel!=null));
+}
+function scoreHeaderCells(cells){
+  if(!isHeaderRow(cells))return 0;
+  const cols=mapHeader(cells);
+  let s=1;
+  if(headerHasPhone(cols))s+=20;
+  if(cols.ad!=null||cols.soyad!=null)s+=8;
+  if(cols.unvan!=null||cols.kurumsalUnvan!=null)s+=4;
+  if(cols.musteriKodu!=null)s+=3;
+  if(cols.tckn!=null)s+=2;
+  if(cols.evAdres!=null||cols.adres!=null)s+=2;
+  if(cols.email!=null)s+=1;
+  return s;
+}
+function combineHeaderRows(rows,start,count){
+  const slice=(rows||[]).slice(start,start+count);
+  const width=Math.max(0,...slice.map(r=>(r||[]).length));
+  return Array.from({length:width},(_,i)=>{
+    const parts=[];
+    for(const r of slice){
+      const v=cellStr((r||[])[i]);
+      if(!v)continue;
+      if(!parts.some(p=>fold(p)===fold(v)))parts.push(v);
+    }
+    return parts.join(' ');
+  });
+}
+function rowLooksLikeData(cells){
+  const filled=(cells||[]).map(cellStr).filter(Boolean);
+  if(filled.length<2)return false;
+  if(filled.some(v=>extractBestPhone([v])))return true;
+  if(filled.some(v=>digits(v).length>=10))return true;
+  return filled.filter(v=>v.length>42).length>=2;
+}
+function rowLooksLikeHeaderLabels(cells){
+  const filled=(cells||[]).map(cellStr).filter(Boolean);
+  if(!filled.length)return true;
+  if(rowLooksLikeData(cells))return false;
+  if(isHeaderRow(cells))return true;
+  return filled.length<=8&&filled.every(v=>String(v).length<=40);
+}
+function inferPhoneColumn(matrix,headerIndex,cols){
+  if(headerHasPhone(cols))return cols;
+  const start=headerIndex+1;
+  const width=Math.max(0,...(matrix||[]).slice(start,start+80).map(r=>(r||[]).length));
+  let bestI=-1,bestN=0;
+  for(let i=0;i<width;i++){
+    let n=0;
+    for(let r=start;r<Math.min((matrix||[]).length,start+80);r++){
+      if(extractBestPhone([cellStr((matrix[r]||[])[i])]))n++;
+    }
+    if(n>bestN){bestN=n;bestI=i}
+  }
+  if(bestN>=1&&bestI>=0)cols.isTel=bestI;
+  return cols;
+}
+function findHeader(matrix){
+  const rows=Array.isArray(matrix)?matrix:[];
+  const max=Math.min(rows.length,40);
+  let best=null;
+  for(let start=0;start<max;start++){
+    for(let count=1;count<=4&&start+count<=rows.length;count++){
+      const window=rows.slice(start,start+count);
+      if(count>1&&window.some(r=>!rowLooksLikeHeaderLabels(r)))break;
+      const headers=combineHeaderRows(rows,start,count);
+      const score=scoreHeaderCells(headers)-(count-1);
+      if(score<=(best&&best.score||0))continue;
+      best={index:start+count-1,cols:mapHeader(headers),headers,score};
+    }
+  }
+  if(!best)return null;
+  best.cols=inferPhoneColumn(rows,best.index,best.cols||{});
+  return {index:best.index,cols:best.cols,headers:best.headers};
 }
 function mapHeader(cells){
   const cols={};
@@ -166,14 +243,6 @@ function mapHeader(cells){
     }
   });
   return cols;
-}
-function findHeader(matrix){
-  const rows=Array.isArray(matrix)?matrix:[];
-  const max=Math.min(rows.length,30);
-  for(let i=0;i<max;i++){
-    if(isHeaderRow(rows[i]))return {index:i,cols:mapHeader(rows[i]),headers:(rows[i]||[]).map(cellStr)};
-  }
-  return null;
 }
 function pick(row,cols,field){
   const i=cols[field];
@@ -328,8 +397,9 @@ function mapDataRow(row,cols){
 function parseAsistekMatrix(matrix){
   const found=findHeader(matrix);
   if(!found)return {ok:false,error:'Müşteri başlık satırı bulunamadı (Ünvan / Ad Soyad / Telefon / Müşteri No).',rows:[],header:null};
+  found.cols=inferPhoneColumn(matrix,found.index,found.cols||{});
   const {index,cols,headers}=found;
-  if(cols.telefon==null&&cols.gsm==null&&cols.evTel==null&&cols.isTel==null)return {ok:false,error:'Telefon / GSM / Ev Tel / İş Telefon sütunu yok.',rows:[],header:found};
+  if(cols.telefon==null&&cols.gsm==null&&cols.evTel==null&&cols.isTel==null)return {ok:false,error:'Telefon / GSM / Ev Tel / İş Telefon sütunu yok. Başlık satırında İş telefonu olmalı.',rows:[],header:found};
   const rows=[];
   const seenPhone=new Set();
   const seenName=new Set();
@@ -456,6 +526,11 @@ function decodeCsvText(buffer){
 }
 function matrixFromWorkbook(XLSX,buffer,originalName=''){
   const name=String(originalName||'').toLocaleLowerCase('tr-TR');
+  const head=Buffer.isBuffer(buffer)?buffer.slice(0,400).toString('utf8'):String(buffer||'').slice(0,400);
+  if(/<html|<table/i.test(head)){
+    const wb=XLSX.read(String(buffer.toString?buffer.toString('utf8'):buffer),{type:'string'});
+    return {wb,decoded:true};
+  }
   const csvLike=!looksLikeZip(buffer)&&(/\.(csv|txt)$/.test(name)||!/\.xlsx?$/.test(name));
   if(csvLike){
     const text=decodeCsvText(buffer);
@@ -467,19 +542,23 @@ function matrixFromWorkbook(XLSX,buffer,originalName=''){
 function parseWorkbook(XLSX,buffer,originalName=''){
   const {wb}=matrixFromWorkbook(XLSX,buffer,originalName);
   let best=null;
+  let lastErr='';
   for(const sheetName of wb.SheetNames||[]){
     if(/^talimat/i.test(String(sheetName)))continue;
     const ws=wb.Sheets[sheetName];
     if(!ws)continue;
     const matrix=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
     const parsed=parseAsistekMatrix(matrix);
-    if(!parsed.ok)continue;
+    if(!parsed.ok){
+      lastErr=parsed.error||lastErr;
+      continue;
+    }
     const withPhone=(parsed.rows||[]).filter(r=>r.status==='ready'||r.phone).length;
     if(!best||withPhone>(best._withPhone||0)){
       best={...parsed,sheet:sheetName,_withPhone:withPhone};
     }
   }
-  if(!best)return {ok:false,error:'Excel/CSV’de müşteri başlığı (Ad / Ünvan / Telefon / Müşteri No) bulunan sayfa yok.',rows:[],header:null};
+  if(!best)return {ok:false,error:lastErr||'Excel/CSV’de müşteri başlığı (Ad / Ünvan / Telefon / Müşteri No) bulunan sayfa yok.',rows:[],header:null};
   delete best._withPhone;
   return best;
 }

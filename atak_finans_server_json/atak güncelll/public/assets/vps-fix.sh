@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.222-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.223-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.222-atak-geteinvoices
-EXPECT_BUILD=fix-v222
+EXPECT_HEALTH=6.3.223-atak-geteinvoices
+EXPECT_BUILD=fix-v223
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -225,6 +225,7 @@ check "vkn lookup admin ui" grep -q 'data-vkn-lookup="customerPage"' "$SRC/publi
 check "vkn lookup personel ui" grep -q 'id="qcVknLookupBtn"' "$SRC/public/personel.html"
 check "asistek musteri excel api" grep -q "customers-excel-import" "$SRC/server.js"
 check "asistek musteri excel ui" grep -q 'id="customerExcelBtn"' "$SRC/public/admin.html"
+check "musteri excel birakma" grep -q 'id="customerExcelDrop"' "$SRC/public/admin.html"
 check "senet resmi unvan" grep -q "ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ." "$SRC/public/assets/admin.js"
 check "senet Ferahevler adres" grep -q "Ferahevler Mah. Adnan Kahveci Cad. No:109" "$SRC/public/assets/admin.js"
 if grep -n "companyLegal=cfg.creditorName\|companyLegal=.*Atak Home\|address='Tarabya" "$SRC/public/assets/admin.js" "$SRC/public/assets/personel.js" "$SRC/server.js" >/dev/null 2>&1; then

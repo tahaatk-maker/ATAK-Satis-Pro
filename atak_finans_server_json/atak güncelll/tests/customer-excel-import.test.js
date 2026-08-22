@@ -105,4 +105,25 @@ const dupNameMatrix=[atakHeader,atakRow,['A000101','12345678902','AHMET','YILMAZ
 const dupParsed=parseAsistekMatrix(dupNameMatrix);
 assert(dupParsed.rows.filter(r=>r.status==='skip_dupfile').length===1,'aynı ad soyad dosyada tek kalır');
 
+const decoy=[
+  ['MÜŞTERİ NO','AD','SOYAD'],
+  ['MÜŞTERİ NO','AD','SOYAD','İŞ TELEFONU'],
+  ['A0001','AYŞE','KAYA','05321112233']
+];
+const decoyFound=findHeader(decoy);
+assert(decoyFound&&decoyFound.cols.isTel!=null,'telefonsuz ilk başlık atlanır');
+const decoyParsed=parseAsistekMatrix(decoy);
+assert(decoyParsed.ok&&decoyParsed.rows.some(r=>r.status==='ready'&&r.payload.phone==='05321112233'),'iş telefonlu satır alınır');
+
+const wrapped=[
+  ['MÜŞTERİ NO','TC','AD','SOYAD','EV ADRES','','','','','','','','','','',''],
+  ['','','','','','İLÇE','İL','MAİL','','','','','','','',''],
+  ['','','','','','','','','DOĞUM TARİHİ','KURUMSAL ÜNVAN','','','','','',''],
+  ['','','','','','','','','','','KURUMSAL ADRES','İL','İLÇE','VERGİ DAİRESİ','VERGİ NO','İŞ TELEFONU'],
+  ['B1','11111111111','AYŞE','KAYA','Ev 1','Sarıyer','İstanbul','a@x.com','1.1.1990','KAYA LTD','İş 1','İstanbul','Sarıyer','Sarıyer','1234567890','05329991122']
+];
+const wrapParsed=parseAsistekMatrix(wrapped);
+assert(wrapParsed.ok,'satırlara bölünmüş başlık okunur');
+assert(wrapParsed.rows.some(r=>r.status==='ready'&&r.payload.firstName==='AYŞE'&&r.payload.phone==='05329991122'),'bölünmüş başlıktan müşteri alınır');
+
 console.log('OK customer-excel-import tests passed');
