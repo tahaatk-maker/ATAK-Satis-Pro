@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v223 */
+/* ATAK_ADMIN_BUILD=fix-v224 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -38,11 +38,12 @@ async function api(url,opt={}){
   if(ct.includes('application/json')||/^\s*[{[]/.test(text)){
     try{d=JSON.parse(text||'{}')}catch(_){d={}}
   }else if(r.redirected||/^\s*</.test(text)){
-    // Eski sunucu bilinmeyen API'yi /personel HTML'ine yönlendiriyor
     throw new Error('API bulunamadı (sunucu güncellemesi gerekli)');
   }
   if(!r.ok){
-    const err=new Error(d.error||(r.status===401?'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.':'İşlem başarısız'));
+    const hint=String(d.error||d.message||d.detail||'').trim()
+      ||String(text||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,180);
+    const err=new Error(hint||(r.status===401?'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.':`Excel/işlem hatası (kod ${r.status})`));
     err.payload=d;
     err.status=r.status;
     throw err;
@@ -2641,19 +2642,24 @@ async function sendCustomerSmsFromPanel(){
 q('#newCustomerBtn')?.addEventListener('click',()=>openCustomerModal(null));
 q('#customerExcelBtn')?.addEventListener('click',()=>{
   q('#customerExcelModal')?.classList.remove('hidden');
-  const f=q('#customerExcelFile');
-  if(f){f.value='';f.click()}
+  if(q('#customerExcelStatus')){q('#customerExcelStatus').textContent='Excel seçin, sonra Önizle.';q('#customerExcelStatus').className='form-status'}
 });
 q('#customerExcelClose')?.addEventListener('click',()=>q('#customerExcelModal')?.classList.add('hidden'));
 function customerExcelEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
+function selectedCustomerExcelFile(){return q('#customerExcelFile')?.files?.[0]||window.__customerExcelFile||null}
+function setCustomerExcelFile(file){
+  window.__customerExcelFile=file||null;
+  if(q('#customerExcelFileName'))q('#customerExcelFileName').textContent=file?`${file.name} · ${Math.max(1,Math.round((file.size||0)/1024))} KB`:'Dosya seçilmedi';
+  if(q('#customerExcelImportBtn'))q('#customerExcelImportBtn').disabled=true;
+}
 function renderCustomerExcelPreview(d){
   const c=d.counts||{};
   if(q('#customerExcelSummary'))q('#customerExcelSummary').innerHTML=
-    `<article><b>${c.ready||0}</b><span>Yeni (10+ hane)</span></article>
-     <article><b>${c.corporate||0}</b><span>Kurumsal VKN</span></article>
+    `<article><b>${c.ready||0}</b><span>Yeni</span></article>
+     <article><b>${c.corporate||0}</b><span>Kurumsal</span></article>
      <article><b>${c.individual||0}</b><span>Bireysel</span></article>
-     <article><b>${c.existing||0}</b><span>Zaten kayıtlı</span></article>
-     <article><b>${(c.noPhone||0)+(c.shortPhone||0)}</b><span>Telefonsuz / 7 hane</span></article>`;
+     <article><b>${c.existing||0}</b><span>Kayıtlı</span></article>
+     <article><b>${(c.noPhone||0)+(c.shortPhone||0)}</b><span>Telefonsuz</span></article>`;
   const map=d.mapping||{};
   const mapTxt=Object.entries(map).map(([k,v])=>`${k} ← ${v}`).join(' · ');
   if(q('#customerExcelMap'))q('#customerExcelMap').textContent=
@@ -2662,7 +2668,7 @@ function renderCustomerExcelPreview(d){
   const rows=d.preview||[];
   if(q('#customerExcelPreview'))q('#customerExcelPreview').innerHTML=rows.map(r=>{
     const fatura=r.invoiceType==='corporate'?'Kurumsal':'Bireysel';
-    const ids=[r.taxNo?`VKN ${r.taxNo}`:'',r.tckn?`TCKN ${r.tckn}`:''].filter(Boolean).join(' · ')||'—';
+    const ids=[r.taxNo?`VKN ${r.taxNo}`:'',r.tckn?`TC ${r.tckn}`:''].filter(Boolean).join(' · ')||'—';
     const phoneTxt=r.phone||r.rawPhone||'-';
     return `<tr>
       <td>${customerExcelEsc(label[r.status]||r.status)}${r.reason?`<small>${customerExcelEsc(r.reason)}</small>`:''}</td>
@@ -2672,32 +2678,45 @@ function renderCustomerExcelPreview(d){
       <td>${customerExcelEsc(ids)}</td>
       <td>${customerExcelEsc([r.district,r.city].filter(Boolean).join(' / ')||'-')}</td>
     </tr>`;
-  }).join('')||'<tr><td colspan="6">Okunacak satır yok — başlık ve iş telefonu sütununu kontrol edin</td></tr>';
+  }).join('')||'<tr><td colspan="6">Önizlemede satır yok</td></tr>';
   const btn=q('#customerExcelImportBtn');
   if(btn)btn.disabled=!(c.ready>0);
   q('#customerExcelModal')?.classList.remove('hidden');
 }
 async function previewCustomerExcelFile(file){
   const st=q('#customerExcelStatus');
-  if(!file)return;
-  const fd=new FormData();fd.append('file',file);
-  if(st){st.textContent='Excel okunuyor…';st.className='form-status'}
+  const chosen=file||selectedCustomerExcelFile();
+  if(!chosen){
+    if(st){st.textContent='Önce Excel seçin.';st.className='form-status error'}
+    return;
+  }
+  setCustomerExcelFile(chosen);
+  const fd=new FormData();fd.append('file',chosen);
+  if(st){st.textContent=`${chosen.name} okunuyor…`;st.className='form-status'}
+  if(q('#customerExcelPreview'))q('#customerExcelPreview').innerHTML='<tr><td colspan="6">Okunuyor…</td></tr>';
   try{
     const d=await api('/web-api/admin/customers-excel-preview',{method:'POST',body:fd});
     renderCustomerExcelPreview(d);
     if(st){
-      const msg=d.counts?.ready>0
-        ?(d.note||'Önizleme hazır. Aktar’a basınca sadece yeniler eklenir.')
-        :`Yeni aktarılacak satır yok. Kayıtlı ${d.counts?.existing||0} · telefonsuz ${d.counts?.noPhone||0} · 7 hane ${d.counts?.shortPhone||0}`;
-      st.textContent=msg;st.className=d.counts?.ready>0?'form-status success':'form-status';
+      const ready=Number(d.counts?.ready||0);
+      st.textContent=ready>0
+        ?`Önizleme hazır: ${ready} yeni müşteri aktarılabilir. Aktar’a basın.`
+        :`Dosya okundu ama yeni aktarılacak satır yok. Kayıtlı ${d.counts?.existing||0} · telefonsuz ${d.counts?.noPhone||0} · 7 hane ${d.counts?.shortPhone||0}. ${d.error||d.note||''}`.trim();
+      st.className=ready>0?'form-status success':'form-status';
     }
   }catch(err){
-    if(st){st.textContent=err.message;st.className='form-status error'}
-    toast(err.message||'Excel okunamadı');
+    if(q('#customerExcelPreview'))q('#customerExcelPreview').innerHTML=`<tr><td colspan="6">${customerExcelEsc(err.message||'Excel okunamadı')}</td></tr>`;
+    if(st){st.textContent=err.message||'Excel okunamadı';st.className='form-status error'}
+    if(q('#customerExcelImportBtn'))q('#customerExcelImportBtn').disabled=true;
     q('#customerExcelModal')?.classList.remove('hidden');
   }
 }
-q('#customerExcelFile')?.addEventListener('change',()=>previewCustomerExcelFile(q('#customerExcelFile')?.files?.[0]));
+q('#customerExcelFile')?.addEventListener('change',()=>{
+  const file=q('#customerExcelFile')?.files?.[0];
+  setCustomerExcelFile(file||null);
+  if(file)previewCustomerExcelFile(file);
+});
+q('#customerExcelPreviewBtn')?.addEventListener('click',()=>previewCustomerExcelFile());
 (()=>{
   const drop=q('#customerExcelDrop');
   if(!drop)return;
@@ -2708,35 +2727,33 @@ q('#customerExcelFile')?.addEventListener('change',()=>previewCustomerExcelFile(
     const file=e.dataTransfer?.files?.[0];
     if(!file)return;
     const input=q('#customerExcelFile');
-    if(!input)return;
-    try{
-      const dt=new DataTransfer();
-      dt.items.add(file);
-      input.files=dt.files;
-    }catch(_){}
+    if(input){
+      try{
+        const dt=new DataTransfer();
+        dt.items.add(file);
+        input.files=dt.files;
+      }catch(_){}
+    }
+    setCustomerExcelFile(file);
     previewCustomerExcelFile(file);
   });
 })();
 q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
-  const file=q('#customerExcelFile')?.files?.[0];
+  const file=selectedCustomerExcelFile();
   const st=q('#customerExcelStatus');
-  if(!file){toast('Önce Excel seçin');return}
-  if(!confirm('10+ haneli telefonu olan yeni müşteriler eklensin mi?\nTelefonsuz, 7 haneli ve kayıtlı kartlar atlanır; mevcutlar değişmez.'))return;
+  if(!file){if(st){st.textContent='Önce Excel seçip Önizle’ye basın.';st.className='form-status error'}return}
   const fd=new FormData();fd.append('file',file);
   if(st){st.textContent='Aktarılıyor…';st.className='form-status'}
   const btn=q('#customerExcelImportBtn');if(btn)btn.disabled=true;
   try{
     const d=await api('/web-api/admin/customers-excel-import',{method:'POST',body:fd});
     const extra=(d.errors||[]).length?` · ${d.errors.slice(0,3).join(' | ')}`:'';
-    if(st){st.textContent=`${d.imported||0} yeni eklendi · ${d.existing||0} kayıtlı · ${d.noPhone||0} telefonsuz · ${d.shortPhone||0} yedi haneli${extra}`;st.className='form-status success'}
+    if(st){st.textContent=`Aktarıldı: ${d.imported||0} yeni · ${d.existing||0} kayıtlı · ${d.noPhone||0} telefonsuz · ${d.shortPhone||0} yedi haneli${extra}`;st.className='form-status success'}
     toast(`${d.imported||0} müşteri aktarıldı`);
-    if(btn)btn.disabled=true;
-    q('#customerExcelFile').value='';
     await loadCustomersPage().catch(()=>{});
   }catch(err){
-    if(st){st.textContent=err.message;st.className='form-status error'}
+    if(st){st.textContent=err.message||'Aktarılamadı';st.className='form-status error'}
     if(btn)btn.disabled=false;
-    toast(err.message||'Aktarım başarısız');
   }
 });
 q('#customerModalClose')?.addEventListener('click',()=>q('#customerModal')?.classList.add('hidden'));

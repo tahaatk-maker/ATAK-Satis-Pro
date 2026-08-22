@@ -77,8 +77,8 @@ assert(evren.payload.city==='İstanbul'&&/sarıyer/i.test(evren.payload.district
 assert(evren.payload.invoiceType==='individual','bu listede VKN yok, bireysel');
 assert(/Müşteri no 00012916/.test(evren.payload.note),'müşteri kodu nota');
 
-const{
-  normalizeBirthDate,mapHeader,mapDataRow,isHeaderRow
+const {
+  normalizeBirthDate,mapHeader,mapDataRow,isHeaderRow,parseWorkbook
 }=require(path.join(__dirname,'..','customer-excel-import.js'));
 assert(normalizeBirthDate('01.05.1980')==='1980-05-01','doğum gg.aa.yyyy');
 assert(normalizeBirthDate('1980-05-01')==='1980-05-01','doğum iso');
@@ -125,5 +125,17 @@ const wrapped=[
 const wrapParsed=parseAsistekMatrix(wrapped);
 assert(wrapParsed.ok,'satırlara bölünmüş başlık okunur');
 assert(wrapParsed.rows.some(r=>r.status==='ready'&&r.payload.firstName==='AYŞE'&&r.payload.phone==='05329991122'),'bölünmüş başlıktan müşteri alınır');
+
+const XLSX=require('xlsx');
+const bad=parseWorkbook(XLSX,Buffer.from('not-an-excel'),'ATAK MUSTERILER .xls');
+assert(bad&&bad.ok===false&&String(bad.error||'').length>5,'bozuk xls hata mesajı döner');
+const wb=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([atakHeader,atakRow]),'Musteri');
+const xlsxBuf=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+const fromXlsx=parseWorkbook(XLSX,xlsxBuf,'ATAK MUSTERILER.xlsx');
+assert(fromXlsx.ok&&fromXlsx.rows.some(r=>r.status==='ready'&&r.payload.phone==='05321234567'),'xlsx dosyası içeri alınır');
+const xlsBuf=XLSX.write(wb,{type:'buffer',bookType:'xls'});
+const fromXls=parseWorkbook(XLSX,xlsBuf,'ATAK MUSTERILER .xls');
+assert(fromXls.ok&&fromXls.rows.some(r=>r.status==='ready'&&r.payload.phone==='05321234567'),'xls dosyası içeri alınır');
 
 console.log('OK customer-excel-import tests passed');

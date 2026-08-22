@@ -479,6 +479,78 @@ function classifyParsed(parsed,customers){
 function looksLikeZip(buffer){
   return Buffer.isBuffer(buffer)&&buffer.length>3&&buffer[0]===0x50&&buffer[1]===0x4b;
 }
+function looksLikeOle(buffer){
+  return Buffer.isBuffer(buffer)&&buffer.length>8&&buffer[0]===0xD0&&buffer[1]===0xCF&&buffer[2]===0x11&&buffer[3]===0xE0;
+}
+function friendlyExcelError(e,originalName=''){
+  const raw=String(e&&e.message||e||'').trim();
+  const name=String(originalName||'');
+  if(/password|encrypt/i.test(raw))return 'Excel şifreli. Şifreyi kaldırıp xlsx olarak kaydedin.';
+  if(/codepage|cfb|ole|unsupported|cannot find|corrupt|bad zip/i.test(raw))
+    return `Excel okunamadı (${name||'dosya'}). Excel’de Farklı Kaydet → .xlsx yapıp tekrar yükleyin.`;
+  return raw?`Excel okunamadı: ${raw}`:`Excel okunamadı (${name||'dosya'}). xlsx veya csv olarak kaydedin.`;
+}
+function readWorkbookBuffer(XLSX,buffer,originalName=''){
+  const name=String(originalName||'').toLocaleLowerCase('tr-TR');
+  const head=Buffer.isBuffer(buffer)?buffer.slice(0,500).toString('utf8'):String(buffer||'').slice(0,500);
+  if(/<html|<table/i.test(head)||/ss:Workbook|<Workbook[\s>]|spreadsheetml/i.test(head)){
+    return XLSX.read(String(buffer.toString?buffer.toString('utf8'):buffer),{type:'string',raw:false});
+  }
+  const csvName=/\.(csv|txt)$/.test(name)||(!looksLikeZip(buffer)&&!looksLikeOle(buffer)&&!/\.xlsx?m?$/.test(name));
+  if(csvName&&!looksLikeZip(buffer)&&!looksLikeOle(buffer)){
+    const text=decodeCsvText(buffer);
+    return XLSX.read(text,{type:'string',FS:';',raw:false});
+  }
+  const payloads=[{type:'buffer',data:buffer},{type:'array',data:Uint8Array.from(buffer)}];
+  const extras=[{cellDates:false,raw:false},{cellDates:false,raw:true},{raw:false}];
+  let last;
+  for(const payload of payloads){
+    for(const extra of extras){
+      try{return XLSX.read(payload.data,{...extra,type:payload.type})}
+      catch(e){last=e}
+    }
+  }
+  if(looksLikeOle(buffer)||/\.xls$/.test(name)){
+    try{return XLSX.read(buffer,{type:'buffer',bookType:'xls',raw:false})}
+    catch(e){last=e}
+  }
+  throw last||new Error('Excel açılamadı');
+}
+function matrixFromWorkbook(XLSX,buffer,originalName=''){
+  return {wb:readWorkbookBuffer(XLSX,buffer,originalName),decoded:true};
+}
+function parseWorkbook(XLSX,buffer,originalName=''){
+  let wb;
+  try{
+    ({wb}=matrixFromWorkbook(XLSX,buffer,originalName));
+  }catch(e){
+    return {ok:false,error:friendlyExcelError(e,originalName),rows:[],header:null};
+  }
+  if(!wb||!Array.isArray(wb.SheetNames)||!wb.SheetNames.length)
+    return {ok:false,error:`Excel’de sayfa yok (${originalName||'dosya'}). xlsx olarak kaydedip tekrar deneyin.`,rows:[],header:null};
+  let best=null;
+  let lastErr='';
+  for(const sheetName of wb.SheetNames||[]){
+    if(/^talimat/i.test(String(sheetName)))continue;
+    const ws=wb.Sheets[sheetName];
+    if(!ws)continue;
+    let matrix;
+    try{matrix=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false})}
+    catch(e){lastErr=friendlyExcelError(e,originalName);continue}
+    const parsed=parseAsistekMatrix(matrix);
+    if(!parsed.ok){
+      lastErr=parsed.error||lastErr;
+      continue;
+    }
+    const withPhone=(parsed.rows||[]).filter(r=>r.status==='ready'||r.phone).length;
+    if(!best||withPhone>(best._withPhone||0)){
+      best={...parsed,sheet:sheetName,_withPhone:withPhone};
+    }
+  }
+  if(!best)return {ok:false,error:lastErr||`Excel’de müşteri başlığı bulunamadı (${originalName||'dosya'}). İlk satırda Ad, Soyad ve İş telefonu olsun.`,rows:[],header:null};
+  delete best._withPhone;
+  return best;
+}
 /* Asistek CSV: başlık ISO-8859-9, satırlar çoğu IBM-857 (DOS Türkçe) */
 const CP857={
   128:'Ç',129:'ü',130:'é',135:'ç',141:'ı',142:'Ä',144:'É',148:'ö',152:'İ',153:'Ö',154:'Ü',
@@ -523,44 +595,6 @@ function decodeCsvText(buffer){
   }
   if(start<b.length)lines.push(decodeBestLine(b.subarray(start)));
   return lines.join('\n');
-}
-function matrixFromWorkbook(XLSX,buffer,originalName=''){
-  const name=String(originalName||'').toLocaleLowerCase('tr-TR');
-  const head=Buffer.isBuffer(buffer)?buffer.slice(0,400).toString('utf8'):String(buffer||'').slice(0,400);
-  if(/<html|<table/i.test(head)){
-    const wb=XLSX.read(String(buffer.toString?buffer.toString('utf8'):buffer),{type:'string'});
-    return {wb,decoded:true};
-  }
-  const csvLike=!looksLikeZip(buffer)&&(/\.(csv|txt)$/.test(name)||!/\.xlsx?$/.test(name));
-  if(csvLike){
-    const text=decodeCsvText(buffer);
-    const wb=XLSX.read(text,{type:'string',FS:';',raw:false});
-    return {wb,decoded:true};
-  }
-  return {wb:XLSX.read(buffer,{type:'buffer',cellDates:false,raw:false,codepage:28599}),decoded:false};
-}
-function parseWorkbook(XLSX,buffer,originalName=''){
-  const {wb}=matrixFromWorkbook(XLSX,buffer,originalName);
-  let best=null;
-  let lastErr='';
-  for(const sheetName of wb.SheetNames||[]){
-    if(/^talimat/i.test(String(sheetName)))continue;
-    const ws=wb.Sheets[sheetName];
-    if(!ws)continue;
-    const matrix=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
-    const parsed=parseAsistekMatrix(matrix);
-    if(!parsed.ok){
-      lastErr=parsed.error||lastErr;
-      continue;
-    }
-    const withPhone=(parsed.rows||[]).filter(r=>r.status==='ready'||r.phone).length;
-    if(!best||withPhone>(best._withPhone||0)){
-      best={...parsed,sheet:sheetName,_withPhone:withPhone};
-    }
-  }
-  if(!best)return {ok:false,error:lastErr||'Excel/CSV’de müşteri başlığı (Ad / Ünvan / Telefon / Müşteri No) bulunan sayfa yok.',rows:[],header:null};
-  delete best._withPhone;
-  return best;
 }
 
 module.exports={
