@@ -8,9 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v220">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v220">
-<link rel="stylesheet" href="/assets/sip-call.css?v=fix-v220">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v221">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v221">
+<link rel="stylesheet" href="/assets/sip-call.css?v=fix-v221">
 </head>
 <body>
 
@@ -628,7 +628,7 @@
       <label class="field">Soyad *<input id="qcLastName" required placeholder="Soyadı" autocomplete="family-name"></label>
       <label class="field">Mail<input id="qcEmail" type="email" placeholder="ornek@mail.com"></label>
       <label class="field">Doğum tarihi<input id="qcBirthDate" type="date"></label>
-      <label class="field">İş telefonu *<input id="qcPhone" required placeholder="05xx xxx xx xx"></label>
+      <label class="field" id="qcPhoneWrap">Telefon *<input id="qcPhone" required placeholder="05xx xxx xx xx"></label>
       <label class="field">İlçe *<input id="qcDistrict" required></label>
       <label class="field">İl *<input id="qcCity" required></label>
       <label class="field wide">Ev adres *<textarea id="qcAddress" rows="2" required></textarea></label>
@@ -652,6 +652,7 @@
         <small class="muted" id="qcVknStatus">10 hane yazınca ünvan otomatik dolar</small>
       </label>
       <label class="field hidden" id="qcTaxOfficeWrap">Vergi dairesi *<input id="qcTaxOffice" placeholder="Varsa otomatik dolar"></label>
+      <label class="field hidden" id="qcWorkPhoneWrap">İş telefonu *<input id="qcWorkPhone" placeholder="05xx xxx xx xx"></label>
       <input type="hidden" id="qcInvoiceType" value="individual"/>
       <button class="primary-btn wide" type="submit">Kaydet ve Seç</button>
       <div id="qcStatus" class="status"></div>
@@ -776,7 +777,7 @@
     </div>
   </div>
 </div>
-<script src="/assets/sip-call.js?v=fix-v220"></script>
-<script src="/assets/personel.js?v=fix-v220"></script>
+<script src="/assets/sip-call.js?v=fix-v221"></script>
+<script src="/assets/personel.js?v=fix-v221"></script>
 </body>
 </html>

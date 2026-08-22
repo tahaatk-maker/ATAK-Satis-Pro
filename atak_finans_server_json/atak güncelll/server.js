@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.220-atak-geteinvoices',
-    build:'fix-v220',
+    version:'6.3.221-atak-geteinvoices',
+    build:'fix-v221',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3383,6 +3383,7 @@ function customerSnapshot(c={}){
     invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
     companyName:c.companyName||'',companyAddress:c.companyAddress||'',
     companyCity:c.companyCity||'',companyDistrict:c.companyDistrict||'',
+    workPhone:c.workPhone||'',
     taxOffice:c.taxOffice||'',note:c.note||'',
     customerCode:c.customerCode||c.rapidCustAccount||'',
     rapidCustAccount:c.rapidCustAccount||'',
@@ -3450,7 +3451,8 @@ function parseCustomerPayload(x={}){
     name=personName.joinPersonName(firstName,lastName);
   }
   if(!name)throw new Error('Ad ve soyad zorunludur');
-  const phone=String(x.phone||x.workPhone||x.isTelefon||x.isTelefonu||'').trim();
+  const workPhone=String(x.workPhone||x.isTelefon||x.isTelefonu||'').trim();
+  const phone=String(x.phone||workPhone||'').trim();
   const city=String(x.city||x.il||'').trim();
   const district=String(x.district||x.ilce||'').trim();
   const address=String(x.address||x.evAdres||x.evAdresi||'').trim();
@@ -3468,7 +3470,7 @@ function parseCustomerPayload(x={}){
   // taxNo = kurumsal VKN; tckn = şahıs (ikisi birden saklanır)
   const taxNo=String(x.taxNo||x.corporateTaxNo||x.vergiNo||'').trim();
   const tckn=String(x.tckn||x.individualTaxNo||x.tc||'').trim();
-  if(!phone)throw new Error('İş telefonu zorunludur');
+  if(!phone)throw new Error(invoiceType==='corporate'?'İş telefonu zorunludur':'Telefon zorunludur');
   if(!city||!district||!address)throw new Error('Ev adresi (il, ilçe, ev adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress)){
     throw new Error('Teslimat adresi fatura adresinden farklıysa il, ilçe ve açık adres zorunludur');
@@ -3493,6 +3495,7 @@ function parseCustomerPayload(x={}){
     invoiceType,
     companyName:invoiceType==='corporate'?companyName:'',
     companyAddress,companyCity,companyDistrict,
+    workPhone:invoiceType==='corporate'?(workPhone||phone):'',
     taxOffice:invoiceType==='corporate'?taxOffice:'',
     note:String(x.note||'').trim(),
     customerCode:customerCode.normalizeCustomerCode(x.customerCode||x.code||x.musteriKodu||x.musteriNo||''),
@@ -3538,7 +3541,8 @@ function customerSearchHandler(req,res){
       id:c.id,name:c.name||'',firstName:c.firstName||'',lastName:c.lastName||'',phone:c.phone||'',email:c.email||'',
       taxNo:c.taxNo||'',tckn:c.tckn||'',birthDate:c.birthDate||'',city:c.city||'',district:c.district||'',
       address:c.address||'',companyName:c.companyName||'',companyAddress:c.companyAddress||'',
-      companyCity:c.companyCity||'',companyDistrict:c.companyDistrict||'',taxOffice:c.taxOffice||'',
+      companyCity:c.companyCity||'',companyDistrict:c.companyDistrict||'',workPhone:c.workPhone||'',
+      taxOffice:c.taxOffice||'',
       invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
       hasCorporate:customerHasCorporateBilling(c),note:c.note||'',
       customerCode:c.customerCode||c.rapidCustAccount||'',

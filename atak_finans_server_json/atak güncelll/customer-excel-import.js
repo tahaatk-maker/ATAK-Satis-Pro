@@ -304,6 +304,7 @@ function mapDataRow(row,cols){
     companyAddress,
     companyCity,
     companyDistrict,
+    workPhone:useCorp?phone:'',
     taxOffice:useCorp?(taxOffice||companyCity||city||'Belirtilmedi'):'',
     taxNo:useCorp?vkn:'',
     tckn:tcknDigits.length===11?tcknDigits:'',

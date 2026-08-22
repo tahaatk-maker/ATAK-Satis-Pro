@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v220 */
+/* ATAK_PERSONEL_BUILD=fix-v221 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -2341,10 +2341,16 @@ function syncQcInvoiceUI(opts={}){
   $('#qcCompanyDistrictWrap')?.classList.toggle('hidden',!corp);
   $('#qcTaxOfficeWrap')?.classList.toggle('hidden',!corp);
   $('#qcTaxNoWrap')?.classList.toggle('hidden',!corp);
+  $('#qcWorkPhoneWrap')?.classList.toggle('hidden',!corp);
+  $('#qcPhoneWrap')?.classList.toggle('hidden',corp);
   if($('#qcTckn'))$('#qcTckn').required=false;
   if($('#qcCompanyName'))$('#qcCompanyName').required=corp;
   if($('#qcTaxOffice'))$('#qcTaxOffice').required=corp;
   if($('#qcTaxNo'))$('#qcTaxNo').required=corp;
+  if($('#qcPhone'))$('#qcPhone').required=!corp;
+  if($('#qcWorkPhone'))$('#qcWorkPhone').required=corp;
+  if(corp&&$('#qcWorkPhone')&&$('#qcPhone')&&!($('#qcWorkPhone').value||'').trim()&&($('#qcPhone').value||'').trim())$('#qcWorkPhone').value=$('#qcPhone').value;
+  if(!corp&&$('#qcPhone')&&$('#qcWorkPhone')&&!($('#qcPhone').value||'').trim()&&($('#qcWorkPhone').value||'').trim())$('#qcPhone').value=$('#qcWorkPhone').value;
   if(opts.focus&&corp){
     $('#qcTaxNo')?.focus();
     lookupQcVkn();
@@ -2446,6 +2452,9 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
       if(taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için 10 haneli VKN zorunludur');
     }
     if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TC girildiyse 11 hane olmalıdır');
+    const workPhone=invoiceType==='corporate'?($('#qcWorkPhone')?.value||'').trim():'';
+    const phone=(workPhone||($('#qcPhone')?.value||'')).trim();
+    if(!phone)throw new Error(invoiceType==='corporate'?'İş telefonu zorunludur':'Telefon zorunludur');
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -2453,7 +2462,8 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
         lastName:($('#qcLastName')?.value||'').trim(),
         name:[($('#qcFirstName')?.value||'').trim(),($('#qcLastName')?.value||'').trim()].filter(Boolean).join(' '),
         customerCode:($('#qcCode')?.value||'').trim(),
-        phone:$('#qcPhone').value,
+        phone,
+        workPhone:workPhone||(invoiceType==='corporate'?phone:''),
         email:($('#qcEmail')?.value||'').trim(),
         birthDate:($('#qcBirthDate')?.value||'').trim(),
         city:$('#qcCity').value,district:$('#qcDistrict').value,address:$('#qcAddress').value,

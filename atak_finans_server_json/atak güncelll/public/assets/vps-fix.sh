@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.220-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.221-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.220-atak-geteinvoices
-EXPECT_BUILD=fix-v220
+EXPECT_HEALTH=6.3.221-atak-geteinvoices
+EXPECT_BUILD=fix-v221
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -94,7 +94,7 @@ check "musteri ad soyad ayri" grep -q "customerPageFirstName" "$SRC/public/admin
 check "musteri kodu alani" grep -q "customerPageCode" "$SRC/public/admin.html"
 check "musteri dogum tarihi" grep -q 'id="customerPageBirthDate"' "$SRC/public/admin.html"
 check "musteri kurumsal adres" grep -q 'id="customerPageCompanyAddress"' "$SRC/public/admin.html"
-check "musteri is telefonu" grep -q "İş telefonu" "$SRC/public/admin.html"
+check "musteri is telefonu" grep -q 'id="customerPageWorkPhone"' "$SRC/public/admin.html"
 check "musteri kodu lib" test -f "$SRC/lib/customer-code.js"
 check "musteri kodu next api" grep -q "customer-code-next" "$SRC/server.js"
 check "person name lib" test -f "$SRC/lib/person-name.js"

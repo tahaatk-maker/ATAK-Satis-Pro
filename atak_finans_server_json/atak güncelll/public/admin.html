@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v220" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v220" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v220" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v220" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v221" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v221" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v221" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v221" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -762,7 +762,7 @@ body.inv-full #pageTitle{font-size:18px}
           <label>Mail<input id="salesQuickCustomerEmail" type="email" placeholder="ornek@mail.com"/></label>
           <label>Doğum tarihi<input id="salesQuickCustomerBirthDate" type="date"/></label>
         </div>
-        <label>İş telefonu *<input id="salesQuickCustomerPhone" required placeholder="05xx xxx xx xx"/></label>
+        <label id="salesQuickCustomerPhoneWrap">Telefon *<input id="salesQuickCustomerPhone" required placeholder="05xx xxx xx xx"/></label>
       </div>
       <div class="cust-form-sec"><div class="cust-form-sec-title">Ev adres</div>
         <div class="two-col">
@@ -804,6 +804,7 @@ body.inv-full #pageTitle{font-size:18px}
           <small class="field-hint" id="salesQuickCustomerVknStatus">10 hane yazınca ünvan otomatik dolar</small>
         </label>
         <label>Vergi dairesi *<input id="salesQuickCustomerTaxOffice" placeholder="Varsa otomatik dolar"/></label>
+        <label>İş telefonu *<input id="salesQuickCustomerWorkPhone" placeholder="05xx xxx xx xx"/></label>
       </div>
       <label>Müşteri Notu<textarea id="salesQuickCustomerNote" rows="2"></textarea></label>
       <button class="primary" type="submit">Kaydet ve Satışa Seç</button>
@@ -2279,7 +2280,7 @@ Bulunamayan → Diğer.
 <label>Doğum tarihi<input id="customerPageBirthDate" type="date"/></label>
 </div>
 <div class="two-col">
-<label>İş telefonu *<input autocomplete="tel" id="customerPagePhone" required placeholder="05xx xxx xx xx"/></label>
+<label id="customerPagePhoneWrap">Telefon *<input autocomplete="tel" id="customerPagePhone" required placeholder="05xx xxx xx xx"/></label>
 <label>Durum<select id="customerPageActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></label>
 </div>
 </div>
@@ -2323,6 +2324,7 @@ Bulunamayan → Diğer.
   <small class="field-hint" id="customerPageVknStatus">10 hane yazınca ünvan otomatik dolar</small>
 </label>
 <label>Vergi dairesi *<input id="customerPageTaxOffice" placeholder="Varsa otomatik dolar"/></label>
+<label>İş telefonu *<input autocomplete="tel" id="customerPageWorkPhone" placeholder="05xx xxx xx xx"/></label>
 </div>
 <label>Not<textarea id="customerPageNote" rows="2"></textarea></label>
 <button class="primary" id="customerPageSaveBtn" type="button">Müşteriyi Kaydet</button>
@@ -2907,6 +2909,6 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v220"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v220"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v221"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v221"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

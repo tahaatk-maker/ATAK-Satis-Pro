@@ -94,6 +94,6 @@ assert(atakMapped.payload.email==='a@b.com'&&atakMapped.payload.birthDate==='198
 assert(atakMapped.payload.companyName==='ATAK LTD'&&atakMapped.payload.companyAddress.includes('Ferahevler'),'kurumsal ünvan/adres');
 assert(atakMapped.payload.companyCity==='İstanbul'&&atakMapped.payload.companyDistrict==='Sarıyer','kurumsal il/ilçe');
 assert(atakMapped.payload.taxOffice==='Sarıyer'&&atakMapped.payload.taxNo==='0940148218','vergi');
-assert(atakMapped.payload.phone==='05321234567'&&atakMapped.payload.invoiceType==='corporate','iş telefonu + kurumsal');
+assert(atakMapped.payload.phone==='05321234567'&&atakMapped.payload.workPhone==='05321234567'&&atakMapped.payload.invoiceType==='corporate','iş telefonu + kurumsal');
 
 console.log('OK customer-excel-import tests passed');

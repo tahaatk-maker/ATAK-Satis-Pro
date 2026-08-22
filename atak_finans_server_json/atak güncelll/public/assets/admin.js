@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v220 */
+/* ATAK_ADMIN_BUILD=fix-v221 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1934,10 +1934,17 @@ function syncCustomerFormUI(prefix){
   const company=q(`#${prefix}CompanyName`);
   const office=q(`#${prefix}TaxOffice`);
   const vkn=q(`#${prefix}TaxNo`);
+  const phone=q(`#${prefix}Phone`);
+  const work=q(`#${prefix}WorkPhone`);
+  q(`#${prefix}PhoneWrap`)?.classList.toggle('hidden',corp);
   if(tckn)tckn.required=false;
   if(company)company.required=corp;
   if(office)office.required=corp;
   if(vkn)vkn.required=corp;
+  if(phone)phone.required=!corp;
+  if(work)work.required=corp;
+  if(corp&&work&&phone&&!String(work.value||'').trim()&&String(phone.value||'').trim())work.value=phone.value;
+  if(!corp&&phone&&work&&!String(phone.value||'').trim()&&String(work.value||'').trim())phone.value=work.value;
 }
 function splitCustomerName(full){
   const parts=String(full||'').replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
@@ -1949,7 +1956,9 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
   const firstName=(q(`#${prefix}FirstName`)?.value||'').trim();
   const lastName=(q(`#${prefix}LastName`)?.value||'').trim();
   const name=[firstName,lastName].filter(Boolean).join(' ').trim()||(q(`#${prefix}Name`)?.value||'').trim();
-  const phone=(q(`#${prefix}Phone`)?.value||'').trim();
+  const invoiceType=customerInvoiceType(prefix);
+  const workPhone=invoiceType==='corporate'?(q(`#${prefix}WorkPhone`)?.value||'').trim():'';
+  const phone=(workPhone||(q(`#${prefix}Phone`)?.value||'')).trim();
   const city=(q(`#${prefix}City`)?.value||'').trim();
   const district=(q(`#${prefix}District`)?.value||'').trim();
   const address=(q(`#${prefix}Address`)?.value||'').trim();
@@ -1957,14 +1966,13 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
   const deliveryCity=(q(`#${prefix}DeliveryCity`)?.value||'').trim();
   const deliveryDistrict=(q(`#${prefix}DeliveryDistrict`)?.value||'').trim();
   const deliveryAddress=(q(`#${prefix}DeliveryAddress`)?.value||'').trim();
-  const invoiceType=customerInvoiceType(prefix);
   const companyName=(q(`#${prefix}CompanyName`)?.value||'').trim();
   const taxOffice=(q(`#${prefix}TaxOffice`)?.value||'').trim();
   const taxNo=(q(`#${prefix}TaxNo`)?.value||'').trim();
   const tckn=(q(`#${prefix}Tckn`)?.value||'').trim();
   if(!firstName)throw new Error('Ad zorunludur');
   if(!lastName)throw new Error('Soyad zorunludur');
-  if(!phone)throw new Error('Telefon zorunludur');
+  if(!phone)throw new Error(invoiceType==='corporate'?'İş telefonu zorunludur':'Telefon zorunludur');
   if(!city||!district||!address)throw new Error('Ev adres (il, ilçe, ev adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress))throw new Error('Teslimat adresi için il, ilçe ve açık adres girin');
   if(invoiceType==='corporate'){
@@ -1987,6 +1995,7 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
     companyAddress:(q(`#${prefix}CompanyAddress`)?.value||'').trim(),
     companyCity:(q(`#${prefix}CompanyCity`)?.value||'').trim(),
     companyDistrict:(q(`#${prefix}CompanyDistrict`)?.value||'').trim(),
+    workPhone:workPhone||(invoiceType==='corporate'?phone:''),
     taxOffice:invoiceType==='corporate'?taxOffice:'',
     taxNo:invoiceType==='corporate'?taxNo:'',
     tckn:tckn||'',
@@ -2006,6 +2015,7 @@ function fillCustomerForm(prefix,c={}){
   if(q(`#${prefix}LastName`))q(`#${prefix}LastName`).value=c.lastName||split?.lastName||'';
   if(q(`#${prefix}Name`))q(`#${prefix}Name`).value=c.name||'';
   if(q(`#${prefix}Phone`))q(`#${prefix}Phone`).value=c.phone||'';
+  if(q(`#${prefix}WorkPhone`))q(`#${prefix}WorkPhone`).value=c.workPhone||c.phone||'';
   if(q(`#${prefix}Email`))q(`#${prefix}Email`).value=c.email||'';
   if(q(`#${prefix}City`))q(`#${prefix}City`).value=c.city||'';
   if(q(`#${prefix}District`))q(`#${prefix}District`).value=c.district||'';
