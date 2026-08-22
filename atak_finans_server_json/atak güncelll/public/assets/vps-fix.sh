@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.224-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.225-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.224-atak-geteinvoices
-EXPECT_BUILD=fix-v224
+EXPECT_HEALTH=6.3.225-atak-geteinvoices
+EXPECT_BUILD=fix-v225
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -470,6 +470,47 @@ echo "   NODE_PATH=$NODE_PATH_JOIN"
 NODE_PATH="$NODE_PATH_JOIN" ATAK_OWNER_ONLY=0 pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env
 pm2 save || true
 
+step "nginx/apache Excel yukleme limiti (413)"
+# 5-6 MB .xls, nginx varsayilan 1m ile 413 doner. Node 50 MB kabul eder.
+raise_upload_limit(){
+  if [ -d /etc/nginx/conf.d ] && [ -w /etc/nginx/conf.d ]; then
+    printf 'client_max_body_size 50m;\n' > /etc/nginx/conf.d/99-atak-upload.conf
+    echo "   nginx conf.d/99-atak-upload.conf = 50m"
+  elif [ -d /etc/nginx ] && [ -w /etc/nginx ]; then
+    printf 'client_max_body_size 50m;\n' > /etc/nginx/atak-upload.conf || true
+    echo "   nginx/atak-upload.conf = 50m"
+  else
+    echo "   nginx conf yazilamadi (dizin yok veya root degil)"
+  fi
+  if [ -d /etc/nginx ]; then
+    find /etc/nginx -type f \( -name '*.conf' -o -name '*.inc' \) 2>/dev/null | while read -r f; do
+      [ -f "$f" ] && [ -w "$f" ] || continue
+      grep -q 'client_max_body_size' "$f" || continue
+      sed -i -E 's/client_max_body_size[[:space:]]+[0-9]+[kKmM]/client_max_body_size 50m/g' "$f"
+    done
+  fi
+  if command -v nginx >/dev/null 2>&1; then
+    if nginx -t >/tmp/atak-nginx-t.txt 2>&1; then
+      systemctl reload nginx >/dev/null 2>&1 || service nginx reload >/dev/null 2>&1 || nginx -s reload >/dev/null 2>&1 || true
+      echo "   nginx reload ok"
+    else
+      echo "   nginx -t uyarisi (devam):"
+      tail -6 /tmp/atak-nginx-t.txt 2>/dev/null | sed 's/^/     /'
+    fi
+  else
+    echo "   nginx yok — atlandi"
+  fi
+  if [ -d /etc/apache2/conf-available ] && [ -w /etc/apache2/conf-available ]; then
+    printf 'LimitRequestBody 52428800\n' > /etc/apache2/conf-available/atak-upload.conf
+    a2enconf atak-upload >/dev/null 2>&1 || true
+    if command -v apache2ctl >/dev/null 2>&1 && apache2ctl configtest >/tmp/atak-apache-t.txt 2>&1; then
+      systemctl reload apache2 >/dev/null 2>&1 || service apache2 reload >/dev/null 2>&1 || true
+      echo "   apache LimitRequestBody 50m"
+    fi
+  fi
+}
+raise_upload_limit || echo "   yukleme limiti adimi atlandi"
+
 step "saglik kontrolu"
 HEALTH=""
 HEALTH_PORT=""
@@ -536,6 +577,7 @@ PROOF="$APP/public/assets/_deploy-check.txt"
   echo "admin_md5=$(md5sum "$APP/public/assets/admin.js" | awk '{print $1}')"
   echo "html_md5=$(md5sum "$APP/public/admin.html" | awk '{print $1}')"
   echo "server_md5=$(md5sum "$APP/server.js" | awk '{print $1}')"
+  echo "nginx_body=$(grep -h client_max_body_size /etc/nginx/conf.d/99-atak-upload.conf /etc/nginx/nginx.conf 2>/dev/null | head -1 || echo yok)"
   if [ -n "$FAIL_MSG" ]; then echo "status=FAIL $FAIL_MSG"; else echo "status=OK"; fi
   echo "DONE"
 } | tee "$PROOF" "$OUT"

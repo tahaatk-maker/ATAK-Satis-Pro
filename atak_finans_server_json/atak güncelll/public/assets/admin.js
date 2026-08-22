@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v224 */
+/* ATAK_ADMIN_BUILD=fix-v225 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -30,11 +30,21 @@ function salesProductUnitPrice(p,method=''){
   return cash||card||list||salesNum(p.salePrice)||salesNum(p.bekoPrice);
 }
 function toast(t){q('#toast').textContent=t;q('#toast').classList.remove('hidden');setTimeout(()=>q('#toast').classList.add('hidden'),2800)}
+function uploadTooLargeMessage(){
+  const f=typeof selectedCustomerExcelFile==='function'?selectedCustomerExcelFile():null;
+  const mb=f&&f.size?` Seçilen dosya ${(f.size/1024/1024).toFixed(1).replace('.',',')} MB.`:'';
+  return `Dosya sunucuya sığmadı.${mb} Hostinger’daki yeni deploy komutunu çalıştırın, sonra Ctrl+Shift+R ile yenileyip tekrar Önizle’ye basın.`;
+}
 async function api(url,opt={}){
   const r=await fetch(url,{credentials:'same-origin',...opt});
   const ct=String(r.headers.get('content-type')||'');
   const text=await r.text();
   let d={};
+  if(r.status===413){
+    const err=new Error(uploadTooLargeMessage());
+    err.status=413;
+    throw err;
+  }
   if(ct.includes('application/json')||/^\s*[{[]/.test(text)){
     try{d=JSON.parse(text||'{}')}catch(_){d={}}
   }else if(r.redirected||/^\s*</.test(text)){

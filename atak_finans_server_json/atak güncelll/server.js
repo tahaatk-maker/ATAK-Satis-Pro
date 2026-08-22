@@ -69,12 +69,12 @@ const STORE_SEARCH_DIRS = Array.from(new Set([
 ]));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
-const customerExcelUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
+const customerExcelUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 function customerExcelFile(req,res,next){
   customerExcelUpload.single('file')(req,res,err=>{
     if(!err)return next();
     const tooBig=err.code==='LIMIT_FILE_SIZE';
-    return res.status(400).json({error:tooBig?'Excel 40 MB’dan küçük olmalı. Dosyayı xlsx/csv olarak kaydedip tekrar deneyin.':'Excel yüklenemedi: '+(err.message||'dosya hatası')});
+    return res.status(400).json({error:tooBig?'Excel 50 MB’dan küçük olmalı. Dosyayı xlsx/csv olarak kaydedip tekrar deneyin.':'Excel yüklenemedi: '+(err.message||'dosya hatası')});
   });
 }
 const trainingUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 80 * 1024 * 1024 } });
@@ -1927,8 +1927,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.224-atak-geteinvoices',
-    build:'fix-v224',
+    version:'6.3.225-atak-geteinvoices',
+    build:'fix-v225',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
