@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v228 */
+/* ATAK_ADMIN_BUILD=fix-v229 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2657,13 +2657,14 @@ function renderCustomerExcelPreview(d){
     `<article><b>${c.ready||0}</b><span>Yeni</span></article>
      <article><b>${c.corporate||0}</b><span>Kurumsal</span></article>
      <article><b>${c.individual||0}</b><span>Bireysel</span></article>
+     <article><b>${c.update||0}</b><span>Düzeltilecek</span></article>
      <article><b>${c.existing||0}</b><span>Kayıtlı</span></article>
      <article><b>${(c.noPhone||0)+(c.shortPhone||0)}</b><span>Telefonsuz</span></article>`;
   const map=d.mapping||{};
   const mapTxt=Object.entries(map).map(([k,v])=>`${k} ← ${v}`).join(' · ');
   if(q('#customerExcelMap'))q('#customerExcelMap').textContent=
     `Başlık satır ${d.headerRow||'-'}${d.sheet?` · sayfa ${d.sheet}`:''}${mapTxt?` · ${mapTxt}`:''}`;
-  const label={ready:'Yeni',existing:'Kayıtlı',skip_noname:'Ünvan yok',skip_short:'7 hane atlandı',skip_nophone:'Telefonsuz',skip_dupfile:'Dosyada tekrar'};
+  const label={ready:'Yeni',update:'Güncellenecek',existing:'Kayıtlı',skip_noname:'Ünvan yok',skip_short:'7 hane atlandı',skip_nophone:'Telefonsuz',skip_dupfile:'Dosyada tekrar'};
   const rows=d.preview||[];
   if(q('#customerExcelPreview'))q('#customerExcelPreview').innerHTML=rows.map(r=>{
     const fatura=(r.companyName||r.taxNo)&&(r.tckn||r.name)?'Şahıs+Firma':(r.invoiceType==='corporate'||r.companyName||r.taxNo)?'Kurumsal':'Bireysel';
@@ -2679,7 +2680,7 @@ function renderCustomerExcelPreview(d){
     </tr>`;
   }).join('')||'<tr><td colspan="6">Önizlemede satır yok</td></tr>';
   const btn=q('#customerExcelImportBtn');
-  if(btn)btn.disabled=!(c.ready>0);
+  if(btn)btn.disabled=!(c.ready>0||c.update>0);
   q('#customerExcelModal')?.classList.remove('hidden');
 }
 async function previewCustomerExcelFile(file){
@@ -2761,14 +2762,14 @@ q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
       window.__customerExcelOffset=offset;
       const total=Number(last.totalReady||0);
       if(st)st.textContent=last.done
-        ?`Aktarıldı: ${last.imported||0} yeni · ${last.existing||0} kayıtlı · ${last.noPhone||0} telefonsuz`
-        :`Aktarılıyor… ${last.imported||0} / ${total||'?'} (sunucu parçalı yazıyor)`;
+        ?`Aktarıldı: ${last.imported||0} yeni · ${last.updated||0} düzeltildi · ${last.existing||0} kayıtlı · ${last.noPhone||0} telefonsuz`
+        :`Aktarılıyor… ${last.imported||0} yeni / ${last.updated||0} düzeltildi / ${total||'?'}`;
       if(last.done)break;
     }
     window.__customerExcelOffset=0;
     window.__customerExcelJobId='';
     const extra=(last.errors||[]).length?` · ${last.errors.slice(0,3).join(' | ')}`:'';
-    if(st){st.textContent=`Aktarıldı: ${last.imported||0} yeni · ${last.existing||0} kayıtlı · ${last.noPhone||0} telefonsuz · ${last.shortPhone||0} yedi haneli${extra}`;st.className='form-status success'}
+    if(st){st.textContent=`Aktarıldı: ${last.imported||0} yeni · ${last.updated||0} düzeltildi · ${last.existing||0} kayıtlı · ${last.noPhone||0} telefonsuz · ${last.shortPhone||0} yedi haneli${extra}`;st.className='form-status success'}
     toast(`${last.imported||0} müşteri aktarıldı`);
     await loadCustomersPage().catch(()=>{});
   }catch(err){

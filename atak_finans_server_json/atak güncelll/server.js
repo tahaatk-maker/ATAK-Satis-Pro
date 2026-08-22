@@ -1958,8 +1958,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.228-atak-geteinvoices',
-    build:'fix-v228',
+    version:'6.3.229-atak-geteinvoices',
+    build:'fix-v229',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3684,6 +3684,7 @@ function customerExcelPreviewPayload(req){
   const by=st=>classified.rows.filter(r=>r.status===st);
   const preview=[
     ...by('ready').slice(0,50),
+    ...by('update').slice(0,20),
     ...by('existing').slice(0,10),
     ...by('skip_dupfile').slice(0,8),
     ...by('skip_short').slice(0,12),
@@ -3705,7 +3706,7 @@ function customerExcelPreviewPayload(req){
   const jobId=crypto.randomUUID();
   excelImportJobs.set(jobId,{
     createdAt:Date.now(),
-    rows:(classified.rows||[]).filter(r=>r.status==='ready'&&r.payload),
+    rows:(classified.rows||[]).filter(r=>r.payload&&(r.status==='ready'||r.status==='update')),
     counts:classified.counts
   });
   return {
@@ -3737,7 +3738,7 @@ function loadExcelImportJob(req){
   const s=readStore();
   const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
   const id=crypto.randomUUID();
-  const job={createdAt:Date.now(),rows:(classified.rows||[]).filter(r=>r.status==='ready'&&r.payload),counts:classified.counts};
+  const job={createdAt:Date.now(),rows:(classified.rows||[]).filter(r=>r.payload&&(r.status==='ready'||r.status==='update')),counts:classified.counts};
   excelImportJobs.set(id,job);
   return {jobId:id,job};
 }
@@ -3753,13 +3754,27 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
     const slice=(job.rows||[]).slice(offset,offset+limit);
     const s=readStore();
     if(offset===0)customerDedupe.collapseDuplicateCustomersByName(s);
-    let imported=0,invalid=0;
+    let imported=0,updated=0,invalid=0;
     const errors=[];
     for(const row of slice){
       if(!row||!row.payload)continue;
       let data;
       try{
         data=parseCustomerPayload(row.payload);
+        const existing=row.existingId?(s.customers||[]).find(c=>String(c.id)===String(row.existingId)):null;
+        if(existing){
+          try{data.customerCode=customerCode.resolveForSave(s,data.customerCode,{existing})}
+          catch(_){data.customerCode=existing.customerCode||data.customerCode}
+          customerDedupe.fillEmptyFields(existing,data);
+          if(customerDedupe.isBlankField(existing.companyName)&&data.companyName)existing.companyName=data.companyName;
+          const taxD=String(existing.taxNo||'').replace(/\D/g,'');
+          const phoneD=String(existing.phone||'').replace(/\D/g,'');
+          if(/^5\d{9}$/.test(taxD)&&phoneD.endsWith(taxD))existing.taxNo=data.taxNo||'';
+          if(data.invoiceType==='corporate')existing.invoiceType='corporate';
+          existing.updatedAt=new Date().toISOString();
+          updated++;
+          continue;
+        }
         try{data.customerCode=customerCode.allocate(s,data.customerCode)}
         catch(_){data.customerCode=customerCode.allocate(s,'')}
       }
@@ -3774,6 +3789,7 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
     const nextOffset=offset+slice.length;
     const done=nextOffset>=(job.rows||[]).length;
     job.imported=(job.imported||0)+imported;
+    job.updated=(job.updated||0)+updated;
     job.invalid=(job.invalid||0)+invalid;
     if(done){
       audit(s,'Asistek müşteri Excel aktarıldı',`${job.imported||0} yeni`,{
@@ -3790,6 +3806,7 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
       nextOffset,
       chunkImported:imported,
       imported:job.imported||imported,
+      updated:job.updated||0,
       totalReady:(job.rows||[]).length,
       remaining:Math.max(0,(job.rows||[]).length-nextOffset),
       existing:job.counts?.existing||0,

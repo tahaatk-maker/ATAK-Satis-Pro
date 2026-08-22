@@ -57,7 +57,7 @@ assert(existing.counts.noPhone===1,'telefonsuz sayılır');
 const byName=classifyParsed(parsed,[
   {id:'c2',name:'Ahmet Yılmaz',firstName:'Ahmet',lastName:'Yılmaz',phone:'05990000000'}
 ]);
-assert(byName.counts.existing>=1,'aynı ad soyad mevcut sayılır');
+assert((byName.counts.existing+byName.counts.update)>=1,'aynı ad soyad mevcut sayılır');
 
 const addr=buildAddress({adres:'Barbaros 1',mahalle:'Dikilitaş',cadde:'Barbaros Cad.',sokak:'',kapi:'12',semt:'Levent',ilce:'Beşiktaş'});
 assert(/Barbaros 1/.test(addr)&&/No: 12/.test(addr)&&/Levent/.test(addr),'adres parçaları');
@@ -105,6 +105,20 @@ const bothMapped=mapDataRow(bothRow,atakCols);
 assert(bothMapped.payload.firstName==='RENGİN'&&bothMapped.payload.tckn==='57361159298','şahıs kimlik durur');
 assert(bothMapped.payload.companyName==='ZEYNEP GÜR'&&bothMapped.payload.companyAddress.includes('FERAHEVLER'),'kurumsal alt alana yazılır');
 assert(bothMapped.payload.invoiceType==='corporate'&&bothMapped.payload.phone==='05324615929','aynı kartta şahıs+firma');
+const gurkan=[
+  ['00018160','44665293100','GÜRKAN','GÜMÜŞSUYU','GÜMÜŞ SAĞLIK HİZMETLERİ TİCARET LTD ŞTİ','NULL','SARIYER','İSTANBUL','NULL','NULL','NULL','YENİKÖY MAH. ADNAN KAHVECİ CAD NO: 154/U','İSTANBUL','SARIYER','İSTANBUL-SARIYER','5337651177','5337651177'],
+  ['00018161','11111111111','AYŞE','KAYA','AYŞE KAYA','Ev 1','Sarıyer','İstanbul','','','','','İstanbul','','','','05321112233'],
+  ['00018162','22222222222','ALI','DEMIR','ALI DEMIR','Ev 2','Sarıyer','İstanbul','','','','','İstanbul','','','','05321113344']
+];
+const gurkanParsed=parseAsistekMatrix(gurkan);
+assert(gurkanParsed.ok,'Gürkan başlıksız parse');
+const gRow=gurkanParsed.rows.find(r=>r.payload&&r.payload.firstName==='GÜRKAN');
+assert(gRow&&gRow.payload.companyName==='GÜMÜŞ SAĞLIK HİZMETLERİ TİCARET LTD ŞTİ','sütun E şirket ünvanı kurumsala yazılır');
+assert(gRow.payload.lastName==='GÜMÜŞSUYU'&&gRow.payload.tckn==='44665293100','şahıs bilgisi durur');
+assert(!gRow.payload.taxNo,'telefon vergi no sanılmaz');
+const existingG={id:'x1',name:'GÜRKAN GÜMÜŞSUYU',firstName:'GÜRKAN',lastName:'GÜMÜŞSUYU',phone:'05337651177',companyName:'NULL',taxNo:'5337651177',customerCode:'00018160'};
+const classG=classifyParsed(gurkanParsed,[existingG]);
+assert(classG.rows.some(r=>r.status==='update'&&r.payload&&r.payload.companyName.includes('GÜMÜŞ SAĞLIK')),'kayıtlı kartta boş ünvan güncellenir');
 
 const dupNameMatrix=[atakHeader,atakRow,['A000101','12345678902','AHMET','YILMAZ','Başka adres','Sarıyer','İstanbul','b@b.com','15.03.1985','','','','','','','05329998877']];
 const dupParsed=parseAsistekMatrix(dupNameMatrix);

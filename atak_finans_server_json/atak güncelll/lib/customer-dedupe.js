@@ -62,12 +62,16 @@ const EMPTY_FILL_KEYS=[
   'customerCode','note'
 ];
 
+function isBlankField(v){
+  const s=String(v??'').trim();
+  return !s || /^(null|n\/a|undefined|#n\/a|-)$/i.test(s);
+}
 function fillEmptyFields(target,source){
   if(!target||!source)return target;
   for(const key of EMPTY_FILL_KEYS){
     const cur=String(target[key]||'').trim();
     const next=String(source[key]||'').trim();
-    if(cur||!next)continue;
+    if(!isBlankField(cur)||isBlankField(next))continue;
     if(key==='note')target.note=next;
     else target[key]=source[key];
   }
@@ -141,5 +145,5 @@ function collapseDuplicateCustomersByName(store){
 
 module.exports={
   foldName,personNameKey,findByPersonName,canMerge,pickKeeper,
-  fillEmptyFields,reassignCustomerId,collapseDuplicateCustomersByName
+  isBlankField,fillEmptyFields,reassignCustomerId,collapseDuplicateCustomersByName
 };

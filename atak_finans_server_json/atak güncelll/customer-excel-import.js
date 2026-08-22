@@ -371,9 +371,27 @@ function isCorporateTip(cariTipi){
 }
 function uniquePush(list,s){
   const t=String(s||'').trim();
-  if(!t)return;
+  if(!t||/^(null|n\/a|-)$/i.test(t))return;
   if(list.some(x=>fold(x)===fold(t)))return;
   list.push(t);
+}
+function looksLikeCompanyTitle(v){
+  const t=fold(v);
+  if(!t||t.length<4)return false;
+  return /ltd|l t d|sti|sirket|anonim|\ba s\b|ticaret|sanayi|hizmet|insaat|limited|kolektif|kooperatif|holding|pazarlama|gida|saglik|egitim|turizm|yazilim|muhendislik|danisman|organizasyon|lojistik|otomotiv|tekstil|mobilya|market|eczane|klinik|hastane|okul|universite/.test(t);
+}
+function looksLikeMobileDigits(d){
+  const x=String(d||'').replace(/\D/g,'');
+  return /^5\d{9}$/.test(x)||/^05\d{9}$/.test(x);
+}
+function titleFromUnvanColumn(unvan,ad,soyad){
+  const u=cellStr(unvan);
+  if(!u)return '';
+  const person=fold([ad,soyad].filter(Boolean).join(' '));
+  if(person&&fold(u)===person)return '';
+  if(looksLikeCompanyTitle(u))return u;
+  if(person&&fold(u)!==person&&u.length>=16)return u;
+  return '';
 }
 
 function mapDataRow(row,cols){
@@ -393,8 +411,8 @@ function mapDataRow(row,cols){
   const vergiDigits=digits(vergiRaw);
   let tcknDigits=digits(tcknRaw);
   let vkn='';
-  if(vergiDigits.length===10)vkn=vergiDigits;
-  else if(vergiDigits.length===11 && tcknDigits.length!==11)tcknDigits=vergiDigits;
+  if(vergiDigits.length===10&&!looksLikeMobileDigits(vergiDigits))vkn=vergiDigits;
+  else if(vergiDigits.length===11 && tcknDigits.length!==11&&!looksLikeMobileDigits(vergiDigits))tcknDigits=vergiDigits;
   const evAdres=firstFilled(row,cols,['yazismaAdres','evAdres','adres']);
   const isAdres=firstFilled(row,cols,['kurumsalAdres','isAdres']);
   const hasEv=cols.evAdres!=null||cols.evSehir!=null||cols.evIlce!=null;
@@ -434,8 +452,9 @@ function mapDataRow(row,cols){
   uniquePush(notes, isUnvan?`İş yeri: ${isUnvan}`:'');
   uniquePush(notes, yazismaUnvan&&yazismaUnvan!==displayName?`Yazışma: ${yazismaUnvan}`:'');
   uniquePush(notes, dogum?`Doğum ${dogum}`:'');
-  uniquePush(notes, kurumsalUnvan&&kurumsalUnvan!==displayName?`Kurumsal: ${kurumsalUnvan}`:'');
-  const companyName=kurumsalUnvan||(vkn?(yazismaUnvan||isUnvan||unvan||''):'');
+  const companyFromUnvan=titleFromUnvanColumn(unvan,ad,soyad);
+  uniquePush(notes, (kurumsalUnvan||companyFromUnvan)&& (kurumsalUnvan||companyFromUnvan)!==displayName?`Kurumsal: ${kurumsalUnvan||companyFromUnvan}`:'');
+  const companyName=kurumsalUnvan||companyFromUnvan||(vkn?(yazismaUnvan||isUnvan||''):'');
   const hasCorpInfo=Boolean(companyName||companyAddress||vkn||taxOffice);
   if(hasCorpInfo&&!vkn)uniquePush(notes,'Kurumsal alan var, 10 haneli VKN yok');
   if(vergiDigits && vergiDigits.length!==10 && vergiDigits.length!==11)
@@ -533,7 +552,7 @@ function findExistingCustomer(customers,payload){
 }
 
 function classifyParsed(parsed,customers){
-  const counts={total:0,noPhone:0,shortPhone:0,noName:0,dupFile:0,existing:0,ready:0,corporate:0,individual:0,both:0};
+  const counts={total:0,noPhone:0,shortPhone:0,noName:0,dupFile:0,existing:0,ready:0,update:0,corporate:0,individual:0,both:0};
   const out=[];
   for(const row of (parsed.rows||[])){
     counts.total++;
@@ -543,6 +562,15 @@ function classifyParsed(parsed,customers){
     if(row.status==='skip_dupfile'){counts.dupFile++;out.push(row);continue}
     const existing=findExistingCustomer(customers,row.payload);
     if(existing){
+      const blank=v=>!String(v||'').trim()||/^(null|n\/a|-)$/i.test(String(v||'').trim());
+      const canFill=['companyName','companyAddress','taxOffice','taxNo','tckn','email','birthDate']
+        .some(k=>blank(existing[k])&&!blank(row.payload[k]));
+      const taxLooksPhone=looksLikeMobileDigits(existing.taxNo)&&digits(existing.taxNo)===digits(existing.phone).slice(-10);
+      if(canFill||taxLooksPhone){
+        counts.update=(counts.update||0)+1;
+        out.push({...row,status:'update',reason:`Eksik alan doldurulacak: ${existing.name}`,existingId:existing.id,existingName:existing.name});
+        continue;
+      }
       counts.existing++;
       out.push({...row,status:'existing',reason:`Kayıtlı: ${existing.companyName||existing.name}`,existingId:existing.id,existingName:existing.name});
       continue;
