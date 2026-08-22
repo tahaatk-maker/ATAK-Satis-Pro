@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v219 */
+/* ATAK_PERSONEL_BUILD=fix-v220 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -2336,6 +2336,9 @@ function syncQcInvoiceUI(opts={}){
   // Bireysel bilgiler her zaman görünür; kurumsal alanlar sadece seçilince
   $('#qcIndividualSec')?.classList.remove('hidden');
   $('#qcCompanyWrap')?.classList.toggle('hidden',!corp);
+  $('#qcCompanyAddressWrap')?.classList.toggle('hidden',!corp);
+  $('#qcCompanyCityWrap')?.classList.toggle('hidden',!corp);
+  $('#qcCompanyDistrictWrap')?.classList.toggle('hidden',!corp);
   $('#qcTaxOfficeWrap')?.classList.toggle('hidden',!corp);
   $('#qcTaxNoWrap')?.classList.toggle('hidden',!corp);
   if($('#qcTckn'))$('#qcTckn').required=false;
@@ -2442,7 +2445,7 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
       if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
       if(taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için 10 haneli VKN zorunludur');
     }
-    if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
+    if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TC girildiyse 11 hane olmalıdır');
     const r=await api('/web-api/admin/customer',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -2451,10 +2454,15 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
         name:[($('#qcFirstName')?.value||'').trim(),($('#qcLastName')?.value||'').trim()].filter(Boolean).join(' '),
         customerCode:($('#qcCode')?.value||'').trim(),
         phone:$('#qcPhone').value,
+        email:($('#qcEmail')?.value||'').trim(),
+        birthDate:($('#qcBirthDate')?.value||'').trim(),
         city:$('#qcCity').value,district:$('#qcDistrict').value,address:$('#qcAddress').value,
         deliverySameAsBilling:true,invoiceType,
         tckn:tckn||'',
         companyName:invoiceType==='corporate'?companyName:'',
+        companyAddress:($('#qcCompanyAddress')?.value||'').trim(),
+        companyCity:($('#qcCompanyCity')?.value||'').trim(),
+        companyDistrict:($('#qcCompanyDistrict')?.value||'').trim(),
         taxOffice:invoiceType==='corporate'?taxOffice:'',
         taxNo:invoiceType==='corporate'?taxNo:''
       })

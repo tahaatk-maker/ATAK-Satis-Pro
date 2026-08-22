@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v219 */
+/* ATAK_ADMIN_BUILD=fix-v220 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1965,24 +1965,28 @@ function collectCustomerPayload(prefix,{requireActive=false}={}){
   if(!firstName)throw new Error('Ad zorunludur');
   if(!lastName)throw new Error('Soyad zorunludur');
   if(!phone)throw new Error('Telefon zorunludur');
-  if(!city||!district||!address)throw new Error('Adres (il, ilçe, açık adres) zorunludur');
+  if(!city||!district||!address)throw new Error('Ev adres (il, ilçe, ev adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress))throw new Error('Teslimat adresi için il, ilçe ve açık adres girin');
   if(invoiceType==='corporate'){
     if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
     if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
     if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
   }
-  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
+  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TC girildiyse 11 hane olmalıdır');
   const email=(q(`#${prefix}Email`)?.value||'').trim();
-  if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Geçerli bir e-posta girin (e-Fatura / e-Arşiv için)');
+  if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Geçerli bir mail girin (e-Fatura / e-Arşiv için)');
   const payload={
     firstName,lastName,name,phone,
     email,
+    birthDate:(q(`#${prefix}BirthDate`)?.value||'').trim(),
     city,district,address,
     deliverySameAsBilling:deliverySame,
     deliveryCity,deliveryDistrict,deliveryAddress,
     invoiceType,
     companyName:invoiceType==='corporate'?companyName:'',
+    companyAddress:(q(`#${prefix}CompanyAddress`)?.value||'').trim(),
+    companyCity:(q(`#${prefix}CompanyCity`)?.value||'').trim(),
+    companyDistrict:(q(`#${prefix}CompanyDistrict`)?.value||'').trim(),
     taxOffice:invoiceType==='corporate'?taxOffice:'',
     taxNo:invoiceType==='corporate'?taxNo:'',
     tckn:tckn||'',
@@ -2006,6 +2010,10 @@ function fillCustomerForm(prefix,c={}){
   if(q(`#${prefix}City`))q(`#${prefix}City`).value=c.city||'';
   if(q(`#${prefix}District`))q(`#${prefix}District`).value=c.district||'';
   if(q(`#${prefix}Address`))q(`#${prefix}Address`).value=c.address||'';
+  if(q(`#${prefix}BirthDate`))q(`#${prefix}BirthDate`).value=String(c.birthDate||'').slice(0,10);
+  if(q(`#${prefix}CompanyAddress`))q(`#${prefix}CompanyAddress`).value=c.companyAddress||'';
+  if(q(`#${prefix}CompanyCity`))q(`#${prefix}CompanyCity`).value=c.companyCity||'';
+  if(q(`#${prefix}CompanyDistrict`))q(`#${prefix}CompanyDistrict`).value=c.companyDistrict||'';
   if(q(`#${prefix}DeliverySame`))q(`#${prefix}DeliverySame`).checked=c.deliverySameAsBilling!==false;
   if(q(`#${prefix}DeliveryCity`))q(`#${prefix}DeliveryCity`).value=c.deliveryCity||'';
   if(q(`#${prefix}DeliveryDistrict`))q(`#${prefix}DeliveryDistrict`).value=c.deliveryDistrict||'';
@@ -2401,18 +2409,18 @@ function renderCustomerBillingCards(c={}){
     <article class="billing-card person">
       <small>BİREYSEL · SENET / ŞAHIS</small>
       <b>${c.name||'-'}</b>
-      <span>Müşteri kodu: ${c.customerCode||c.rapidCustAccount||'—'}</span>
-      <span>TCKN: ${c.tckn||'—'}</span>
+      <span>Müşteri no: ${c.customerCode||c.rapidCustAccount||'—'}</span>
+      <span>TC: ${c.tckn||'—'}${c.birthDate?' · Doğum '+String(c.birthDate).slice(0,10):''}</span>
       <span>${c.phone||'—'}${c.email?' · '+c.email:''}</span>
     </article>
     <article class="billing-card company${hasCorp?'':' empty'}">
       <small>KURUMSAL · FATURA FİRMASI</small>
       <b>${hasCorp?(c.companyName||'-'):'Firma bilgisi yok'}</b>
-      <span>${hasCorp?`VKN: ${c.taxNo||'—'} · ${c.taxOffice||'—'}`:'Şahsa senet / firmaya fatura için ekleyin'}</span>
-      <span>Varsayılan fatura: ${def}</span>
+      <span>${hasCorp?`Vergi no: ${c.taxNo||'—'} · ${c.taxOffice||'—'}`:'Şahsa senet / firmaya fatura için ekleyin'}</span>
+      <span>${hasCorp&&(c.companyAddress||c.companyDistrict||c.companyCity)?[c.companyAddress,c.companyDistrict,c.companyCity].filter(Boolean).join(', '):'Varsayılan fatura: '+def}</span>
     </article>
     <article class="billing-card address">
-      <small>ADRES</small>
+      <small>EV ADRES</small>
       <b>${addr}</b>
       <span>${deliv}</span>
       ${c.note?`<span>Not: ${c.note}</span>`:''}

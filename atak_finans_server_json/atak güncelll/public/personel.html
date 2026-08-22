@@ -8,9 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v219">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v219">
-<link rel="stylesheet" href="/assets/sip-call.css?v=fix-v219">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v220">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v220">
+<link rel="stylesheet" href="/assets/sip-call.css?v=fix-v220">
 </head>
 <body>
 
@@ -622,30 +622,35 @@
       <button id="salesQuickCustomerClose" class="ghost-btn" type="button">Kapat</button>
     </div>
     <form id="salesQuickCustomerForm" class="form-grid">
+      <label class="field">Müşteri no<input id="qcCode" placeholder="Boşsa otomatik A000001" autocomplete="off"></label>
+      <label class="field">TC<input id="qcTckn" placeholder="11 haneli TC" inputmode="numeric"></label>
       <label class="field">Ad *<input id="qcFirstName" required placeholder="Adı" autocomplete="given-name"></label>
       <label class="field">Soyad *<input id="qcLastName" required placeholder="Soyadı" autocomplete="family-name"></label>
-      <label class="field wide">Müşteri kodu<input id="qcCode" placeholder="Boşsa otomatik A000001" autocomplete="off"></label>
-      <label class="field">Telefon *<input id="qcPhone" required></label>
-      <label class="field">İl *<input id="qcCity" required></label>
+      <label class="field">Mail<input id="qcEmail" type="email" placeholder="ornek@mail.com"></label>
+      <label class="field">Doğum tarihi<input id="qcBirthDate" type="date"></label>
+      <label class="field">İş telefonu *<input id="qcPhone" required placeholder="05xx xxx xx xx"></label>
       <label class="field">İlçe *<input id="qcDistrict" required></label>
-      <label class="field wide">Açık adres *<textarea id="qcAddress" rows="2" required></textarea></label>
+      <label class="field">İl *<input id="qcCity" required></label>
+      <label class="field wide">Ev adres *<textarea id="qcAddress" rows="2" required></textarea></label>
       <div class="field wide" id="qcIndividualSec" style="display:grid;gap:8px">
-        <small style="font-weight:800;color:#0b2a4a">Bireysel bilgiler</small>
-        <small class="muted">Senet ve sözleşme bu bilgilere yazılır. TCKN zorunlu değildir.</small>
-        <label class="field" style="margin:0">TCKN<input id="qcTckn" placeholder="11 haneli TCKN" inputmode="numeric"></label>
+        <small style="font-weight:800;color:#0b2a4a">Fatura tipi</small>
+        <small class="muted">Senet şahıs adına kalır. Kurumsal fatura için aşağıdaki alanları doldurun.</small>
         <div style="display:flex;gap:14px;flex-wrap:wrap">
           <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="individual" checked/> Bireysel fatura</label>
           <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="corporate"/> Kurumsal fatura</label>
         </div>
       </div>
-      <label class="field hidden wide" id="qcTaxNoWrap">VKN *
+      <label class="field hidden wide" id="qcCompanyWrap">Kurumsal ünvan *<input id="qcCompanyName" placeholder="Otomatik dolar"></label>
+      <label class="field hidden wide" id="qcCompanyAddressWrap">Kurumsal adres<textarea id="qcCompanyAddress" rows="2" placeholder="Firma açık adresi"></textarea></label>
+      <label class="field hidden" id="qcCompanyDistrictWrap">İlçe<input id="qcCompanyDistrict" placeholder="Firma ilçe"></label>
+      <label class="field hidden" id="qcCompanyCityWrap">İl<input id="qcCompanyCity" placeholder="Firma il"></label>
+      <label class="field hidden wide" id="qcTaxNoWrap">Vergi no *
         <span class="vkn-lookup-row">
           <input id="qcTaxNo" placeholder="10 haneli VKN" inputmode="numeric" maxlength="11">
           <button class="ghost-btn" type="button" id="qcVknLookupBtn">Getir</button>
         </span>
         <small class="muted" id="qcVknStatus">10 hane yazınca ünvan otomatik dolar</small>
       </label>
-      <label class="field hidden" id="qcCompanyWrap">Firma ünvanı *<input id="qcCompanyName" placeholder="Otomatik dolar"></label>
       <label class="field hidden" id="qcTaxOfficeWrap">Vergi dairesi *<input id="qcTaxOffice" placeholder="Varsa otomatik dolar"></label>
       <input type="hidden" id="qcInvoiceType" value="individual"/>
       <button class="primary-btn wide" type="submit">Kaydet ve Seç</button>
@@ -771,7 +776,7 @@
     </div>
   </div>
 </div>
-<script src="/assets/sip-call.js?v=fix-v219"></script>
-<script src="/assets/personel.js?v=fix-v219"></script>
+<script src="/assets/sip-call.js?v=fix-v220"></script>
+<script src="/assets/personel.js?v=fix-v220"></script>
 </body>
 </html>

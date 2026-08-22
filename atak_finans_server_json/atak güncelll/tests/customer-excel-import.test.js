@@ -70,6 +70,30 @@ assert(evren?.status==='ready'&&evren.payload.phone==='05306129202','GSM 10 hane
 assert(evren.payload.address.includes('TARABYA'),'ev adresi');
 assert(evren.payload.city==='İstanbul'&&/sarıyer/i.test(evren.payload.district),'il/ilçe ev adresi');
 assert(evren.payload.invoiceType==='individual','bu listede VKN yok, bireysel');
-assert(/Asistek 00012916/.test(evren.payload.note),'müşteri kodu nota');
+assert(/Müşteri no 00012916/.test(evren.payload.note),'müşteri kodu nota');
+
+const{
+  normalizeBirthDate,mapHeader,mapDataRow,isHeaderRow
+}=require(path.join(__dirname,'..','customer-excel-import.js'));
+assert(normalizeBirthDate('01.05.1980')==='1980-05-01','doğum gg.aa.yyyy');
+assert(normalizeBirthDate('1980-05-01')==='1980-05-01','doğum iso');
+
+const atakHeader=['MÜŞTERİ NO','TC','AD','SOYAD','EV ADRES','İLÇE','İL','MAİL','DOĞUM TARİHİ','KURUMSAL ÜNVAN','KURUMSAL ADRES','İL','İLÇE','VERGİ DAİRESİ','VERGİ NO','İŞ TELEFONU'];
+assert(isHeaderRow(atakHeader),'ATAK müşteri başlığı tanınır');
+const atakCols=mapHeader(atakHeader);
+assert(atakCols.musteriKodu===0&&atakCols.tckn===1&&atakCols.ad===2&&atakCols.soyad===3,'kimlik sütunları');
+assert(atakCols.evAdres===4&&atakCols.nufusIlce===5&&atakCols.sehirIl===6&&atakCols.email===7,'ev adres sütunları');
+assert(atakCols.dogumTarihi===8&&atakCols.kurumsalUnvan===9&&atakCols.kurumsalAdres===10,'kurumsal + doğum');
+assert(atakCols.kurumsalIl===11&&atakCols.kurumsalIlce===12&&atakCols.vergiDaire===13&&atakCols.vergiNo===14&&atakCols.isTel===15,'ikinci il/ilçe + iş telefon');
+const atakRow=['A000100','12345678901','AHMET','YILMAZ','Kültür Sk 1','Sarıyer','İstanbul','a@b.com','15.03.1985','ATAK LTD','Ferahevler 10','İstanbul','Sarıyer','Sarıyer','0940148218','05321234567'];
+const atakMapped=mapDataRow(atakRow,atakCols);
+assert(atakMapped.payload.firstName==='AHMET'&&atakMapped.payload.lastName==='YILMAZ','ad soyad ayrı');
+assert(atakMapped.payload.tckn==='12345678901'&&atakMapped.payload.customerCode==='A000100','tc + müşteri no');
+assert(atakMapped.payload.address.includes('Kültür')&&atakMapped.payload.city==='İstanbul'&&atakMapped.payload.district==='Sarıyer','ev adres');
+assert(atakMapped.payload.email==='a@b.com'&&atakMapped.payload.birthDate==='1985-03-15','mail + doğum');
+assert(atakMapped.payload.companyName==='ATAK LTD'&&atakMapped.payload.companyAddress.includes('Ferahevler'),'kurumsal ünvan/adres');
+assert(atakMapped.payload.companyCity==='İstanbul'&&atakMapped.payload.companyDistrict==='Sarıyer','kurumsal il/ilçe');
+assert(atakMapped.payload.taxOffice==='Sarıyer'&&atakMapped.payload.taxNo==='0940148218','vergi');
+assert(atakMapped.payload.phone==='05321234567'&&atakMapped.payload.invoiceType==='corporate','iş telefonu + kurumsal');
 
 console.log('OK customer-excel-import tests passed');

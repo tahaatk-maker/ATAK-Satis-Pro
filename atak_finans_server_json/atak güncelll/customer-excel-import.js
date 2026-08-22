@@ -65,20 +65,44 @@ function phoneSkipReason(texts){
 function hasPhone(v){
   return extractBestPhone([v]).length===11;
 }
+function normalizeBirthDate(v){
+  if(v==null||v==='')return '';
+  if(typeof v==='number'&&Number.isFinite(v)&&v>20000&&v<80000){
+    const excel=new Date(Date.UTC(1899,11,30)+Math.round(v)*86400000);
+    if(!Number.isNaN(excel.getTime()))return excel.toISOString().slice(0,10);
+  }
+  const s=cellStr(v);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  const m=s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if(m){
+    const dd=m[1].padStart(2,'0');
+    const mm=m[2].padStart(2,'0');
+    return `${m[3]}-${mm}-${dd}`;
+  }
+  return s.slice(0,32);
+}
 
 const COL_RULES=[
-  ['musteriKodu', /^(musteri kodu|cari kod)$/],
-  ['tckn', /^(tc kimlik no|tckn|tc no|kimlik no)$/],
+  ['musteriKodu', /^(musteri kodu|musteri no|cari kod|cari no)$/],
+  ['tckn', /^(tc kimlik no|tckn|tc no|kimlik no|tc)$/],
   ['vergiNo', /^(vergi no|vkn|vergi numarasi)$/],
   ['vergiDaire', /^vergi dair/],
+  ['vergiHint', /^vergi$/],
+  ['ad', /^(ad|adi)$/],
+  ['soyad', /^(soyad|soyadi)$/],
+  ['yazismaUnvan', /^yazisma unvan/],
+  ['yazismaAdres', /^yazisma adres/],
+  ['dogumTarihi', /^dogum tarih/],
   ['gsm', /^(gsm|gsm no|gsm numarasi|cep telefonu)$/],
-  ['isTel', /is telefon/],
-  ['evTel', /ev telefon/],
+  ['isTel', /is (telefon|tel)/],
+  ['evTel', /ev (telefon|tel)/],
   ['telefon', /^(telefon|tel|telefon no)$/],
-  ['email', /^(e mail|email|eposta|e posta)$/],
+  ['email', /^(e mail|email|eposta|e posta|mail)$/],
   ['isUnvan', /is yeri unvan/],
-  ['evAdres', /^ev adresi$/],
-  ['isAdres', /^is adresi$/],
+  ['kurumsalUnvan', /kurumsal unvan/],
+  ['kurumsalAdres', /kurumsal adres/],
+  ['evAdres', /^ev adres/],
+  ['isAdres', /^is adres/],
   ['evMahalle', /^ev adresi mahalle$/],
   ['evCadde', /^ev adresi cadde$/],
   ['evSokak', /^ev adresi sokak$/],
@@ -92,6 +116,7 @@ const COL_RULES=[
   ['altSehir', /^alt adres sehir$/],
   ['altIlce', /^alt adres ilce$/],
   ['nufusIlce', /^(ilce)$/],
+  ['sehirIl', /^(il)$/],
   ['mahalle', /^(adres mahalle|mahalle)$/],
   ['cadde', /^(adres cadde|cadde)$/],
   ['sokak', /^(adres sokak|sokak)$/],
@@ -107,19 +132,32 @@ const COL_RULES=[
 function isHeaderRow(cells){
   const folds=(cells||[]).map(c=>fold(c));
   const hasTel=folds.some(h=>
-    /^(telefon|tel|cep|gsm|telefon no|gsm numarasi)$/.test(h)||h.includes('telefon')||h.startsWith('gsm')
+    /telefon|gsm|^tel$|ev tel|is tel/.test(h)||h.startsWith('gsm')
   );
-  const hasUnvan=folds.some(h=>h==='unvan'||h.startsWith('unvan')||h.includes('cari unvan'));
+  const hasUnvan=folds.some(h=>h==='unvan'||h.includes('unvan')||h==='ad'||h==='soyad'||h==='adi'||h==='soyadi');
   const hasVergi=folds.some(h=>h.includes('vergi'));
   const hasCari=folds.some(h=>h.includes('cari tip'));
-  const hasKod=folds.some(h=>h==='musteri kodu');
-  return hasTel&&(hasUnvan||hasVergi||hasCari||hasKod);
+  const hasKod=folds.some(h=>h==='musteri kodu'||h==='musteri no'||h==='cari kod');
+  return (hasTel||hasKod)&&(hasUnvan||hasVergi||hasCari||hasKod);
 }
 function mapHeader(cells){
   const cols={};
+  let ilCount=0,ilceCount=0;
   (cells||[]).forEach((h,idx)=>{
     const key=fold(h);
     if(!key)return;
+    if(key==='il'){
+      ilCount++;
+      if(ilCount===1){if(cols.sehirIl==null)cols.sehirIl=idx}
+      else if(cols.kurumsalIl==null)cols.kurumsalIl=idx;
+      return;
+    }
+    if(key==='ilce'){
+      ilceCount++;
+      if(ilceCount===1){if(cols.nufusIlce==null)cols.nufusIlce=idx}
+      else if(cols.kurumsalIlce==null)cols.kurumsalIlce=idx;
+      return;
+    }
     for(const [field,re] of COL_RULES){
       if(cols[field]!=null)continue;
       if(re.test(key)){cols[field]=idx;break}
@@ -191,22 +229,28 @@ function uniquePush(list,s){
 function mapDataRow(row,cols){
   const unvan=pick(row,cols,'unvan');
   const isUnvan=pick(row,cols,'isUnvan');
+  const yazismaUnvan=pick(row,cols,'yazismaUnvan');
+  const ad=pick(row,cols,'ad');
+  const soyad=pick(row,cols,'soyad');
+  const person= [ad,soyad].filter(Boolean).join(' ').trim();
   const cariTipi=pick(row,cols,'cariTipi');
   const muhasebe=pick(row,cols,'muhasebe');
   const kod=pick(row,cols,'musteriKodu');
   const vergiRaw=pick(row,cols,'vergiNo');
   const tcknRaw=pick(row,cols,'tckn');
+  const vergiHint=pick(row,cols,'vergiHint');
+  const dogum=pick(row,cols,'dogumTarihi');
   const vergiDigits=digits(vergiRaw);
   let tcknDigits=digits(tcknRaw);
   let vkn='';
   if(vergiDigits.length===10)vkn=vergiDigits;
   else if(vergiDigits.length===11 && tcknDigits.length!==11)tcknDigits=vergiDigits;
-  const evAdres=firstFilled(row,cols,['evAdres','adres']);
-  const isAdres=pick(row,cols,'isAdres');
+  const evAdres=firstFilled(row,cols,['yazismaAdres','evAdres','adres']);
+  const isAdres=firstFilled(row,cols,['kurumsalAdres','isAdres']);
   const hasEv=cols.evAdres!=null||cols.evSehir!=null||cols.evIlce!=null;
-  const city=firstFilled(row,cols,['evSehir','isSehir','altSehir','sehir']);
+  const city=firstFilled(row,cols,['evSehir','isSehir','altSehir','sehir','sehirIl']);
   const district=firstFilled(row,cols,hasEv
-    ?['evIlce','evSemt','isIlce','isSemt','altIlce','semt']
+    ?['evIlce','evSemt','nufusIlce','isIlce','isSemt','altIlce','semt']
     :['evIlce','evSemt','isIlce','isSemt','altIlce','nufusIlce','ilce','semt']);
   const address=buildAddress({
     adres:evAdres||isAdres,
@@ -217,9 +261,15 @@ function mapDataRow(row,cols){
     semt:firstFilled(row,cols,['evSemt','semt']),
     ilce:firstFilled(row,cols,['evIlce','ilce'])
   });
-  const inferred=inferPlace([address,city,district,unvan].join(' '));
-  const taxOffice=pick(row,cols,'vergiDaire');
-  const email=pick(row,cols,'email');
+  const displayName=person||yazismaUnvan||unvan||isUnvan||'';
+  const inferred=inferPlace([address,city,district,displayName].join(' '));
+  const taxOffice=pick(row,cols,'vergiDaire')||(/dair|vergi/i.test(vergiHint)&&digits(vergiHint).length<10?vergiHint:'');
+  const email=firstFilled(row,cols,['email']);
+  const kurumsalUnvan=pick(row,cols,'kurumsalUnvan');
+  const companyAddress=pick(row,cols,'kurumsalAdres')||isAdres;
+  const companyCity=firstFilled(row,cols,['kurumsalIl','isSehir']);
+  const companyDistrict=firstFilled(row,cols,['kurumsalIlce','isIlce']);
+  const birthDate=normalizeBirthDate(dogum);
   const phoneFields=[
     pick(row,cols,'gsm'),
     pick(row,cols,'telefon'),
@@ -228,44 +278,55 @@ function mapDataRow(row,cols){
   ];
   const phone=extractBestPhone(phoneFields);
   const notes=[];
-  uniquePush(notes, kod?`Asistek ${kod}`:'');
+  uniquePush(notes, kod?`Müşteri no ${kod}`:'');
   uniquePush(notes, muhasebe?`Muhasebe ${muhasebe}`:'');
   uniquePush(notes, cariTipi?`Cari tipi ${cariTipi}`:'');
   uniquePush(notes, isUnvan?`İş yeri: ${isUnvan}`:'');
-  const corporate=Boolean(vkn)||isCorporateTip(cariTipi);
+  uniquePush(notes, yazismaUnvan&&yazismaUnvan!==displayName?`Yazışma: ${yazismaUnvan}`:'');
+  uniquePush(notes, dogum?`Doğum ${dogum}`:'');
+  uniquePush(notes, kurumsalUnvan&&kurumsalUnvan!==displayName?`Kurumsal: ${kurumsalUnvan}`:'');
+  const corporate=Boolean(vkn)||isCorporateTip(cariTipi)||Boolean(kurumsalUnvan&&vkn);
   if(corporate&&!vkn)uniquePush(notes,'Kurumsal işaretli ama 10 haneli VKN yok');
   if(vergiDigits && vergiDigits.length!==10 && vergiDigits.length!==11)
     uniquePush(notes,`Vergi no ham: ${vergiRaw}`);
-  const name=unvan||isUnvan||'';
   const useCorp=Boolean(vkn);
+  const payload={
+    name:displayName,
+    phone,
+    email,
+    birthDate,
+    city:city||inferred.city||'İstanbul',
+    district:district||inferred.district||'Sarıyer',
+    address:address||'Belirtilmedi',
+    deliverySameAsBilling:true,
+    invoiceType:useCorp?'corporate':'individual',
+    companyName:useCorp?(kurumsalUnvan||yazismaUnvan||isUnvan||unvan||displayName):'',
+    companyAddress,
+    companyCity,
+    companyDistrict,
+    taxOffice:useCorp?(taxOffice||companyCity||city||'Belirtilmedi'):'',
+    taxNo:useCorp?vkn:'',
+    tckn:tcknDigits.length===11?tcknDigits:'',
+    customerCode:kod||'',
+    note:notes.join(' · '),
+    active:true
+  };
+  if(ad&&soyad){
+    payload.firstName=ad;
+    payload.lastName=soyad;
+  }
   return{
-    unvan,cariTipi,muhasebe,telefonRaw:phoneFields.filter(Boolean).join(' | '),
+    unvan:displayName,cariTipi,muhasebe,telefonRaw:phoneFields.filter(Boolean).join(' | '),
     phoneSkip:phone? '':phoneSkipReason(phoneFields),
-    payload:{
-      name,
-      phone,
-      email,
-      city:city||inferred.city||'İstanbul',
-      district:district||inferred.district||'Sarıyer',
-      address:address||'Belirtilmedi',
-      deliverySameAsBilling:true,
-      invoiceType:useCorp?'corporate':'individual',
-      companyName:useCorp?(isUnvan||unvan||name):'',
-      taxOffice:useCorp?(taxOffice||city||'Belirtilmedi'):'',
-      taxNo:useCorp?vkn:'',
-      tckn:tcknDigits.length===11?tcknDigits:'',
-      customerCode:kod||'',
-      note:notes.join(' · '),
-      active:true
-    }
+    payload
   };
 }
 
 function parseAsistekMatrix(matrix){
   const found=findHeader(matrix);
-  if(!found)return {ok:false,error:'Ünvan / Telefon başlık satırı bulunamadı (ilk 30 satır).',rows:[],header:null};
+  if(!found)return {ok:false,error:'Müşteri başlık satırı bulunamadı (Ünvan / Ad Soyad / Telefon / Müşteri No).',rows:[],header:null};
   const {index,cols,headers}=found;
-  if(cols.telefon==null&&cols.gsm==null)return {ok:false,error:'Telefon / GSM sütunu yok.',rows:[],header:found};
+  if(cols.telefon==null&&cols.gsm==null&&cols.evTel==null&&cols.isTel==null)return {ok:false,error:'Telefon / GSM / Ev Tel / İş Telefon sütunu yok.',rows:[],header:found};
   const rows=[];
   const seenPhone=new Set();
   for(let i=index+1;i<(matrix||[]).length;i++){
@@ -280,7 +341,7 @@ function parseAsistekMatrix(matrix){
       continue;
     }
     if(!String(mapped.payload.name||'').trim()){
-      rows.push({status:'skip_noname',reason:'Ünvan boş',payload:null,source:mapped,phone});
+      rows.push({status:'skip_noname',reason:'Ad / soyad / ünvan boş',payload:null,source:mapped,phone});
       continue;
     }
     if(seenPhone.has(phone)){
@@ -298,11 +359,14 @@ function findExistingCustomer(customers,payload){
   const phone=phoneKey(payload.phone);
   const vkn=digits(payload.taxNo);
   const tckn=digits(payload.tckn);
+  const kod=String(payload.customerCode||'').trim().toLocaleLowerCase('tr-TR');
   return (customers||[]).find(c=>{
     if(!c||c.active===false||c.deletedAt)return false;
     if(phone&&phoneKey(c.phone)===phone)return true;
     if(vkn.length===10&&digits(c.taxNo)===vkn)return true;
     if(tckn.length===11&&digits(c.tckn)===tckn)return true;
+    const existingKod=String(c.customerCode||c.rapidCustAccount||c.code||'').trim().toLocaleLowerCase('tr-TR');
+    if(kod&&existingKod&&kod===existingKod)return true;
     return false;
   })||null;
 }
@@ -403,13 +467,13 @@ function parseWorkbook(XLSX,buffer,originalName=''){
       best={...parsed,sheet:sheetName,_withPhone:withPhone};
     }
   }
-  if(!best)return {ok:false,error:'Excel/CSV’de Telefon + Ünvan başlığı bulunan sayfa yok.',rows:[],header:null};
+  if(!best)return {ok:false,error:'Excel/CSV’de müşteri başlığı (Ad / Ünvan / Telefon / Müşteri No) bulunan sayfa yok.',rows:[],header:null};
   delete best._withPhone;
   return best;
 }
 
 module.exports={
   fold,cellStr,digits,normalizePhone,hasPhone,extractBestPhone,phoneSkipReason,isValidTrPhone,
-  isHeaderRow,mapHeader,findHeader,mapDataRow,buildAddress,
+  normalizeBirthDate,isHeaderRow,mapHeader,findHeader,mapDataRow,buildAddress,
   parseAsistekMatrix,findExistingCustomer,classifyParsed,parseWorkbook,decodeCsvText
 };

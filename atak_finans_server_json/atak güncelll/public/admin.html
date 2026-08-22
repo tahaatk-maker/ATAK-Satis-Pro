@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v219" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v219" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v219" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v219" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v220" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v220" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v220" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v220" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -747,25 +747,29 @@ body.inv-full #pageTitle{font-size:18px}
   <div class="customer-modal-card customer-modal-wide">
     <div class="panel-head"><h2>Yeni Müşteri Ekle</h2><button class="secondary-btn" id="salesQuickCustomerClose" type="button">Kapat</button></div>
     <form id="salesQuickCustomerForm" class="form-stack" action="javascript:void(0)">
-      <div class="cust-form-sec"><div class="cust-form-sec-title">İletişim</div>
+      <div class="cust-form-sec"><div class="cust-form-sec-title">Kimlik</div>
+        <div class="two-col">
+          <label>Müşteri no<input id="salesQuickCustomerCode" placeholder="Boşsa otomatik A000001" autocomplete="off"/>
+          <small class="field-hint">Excel / Rapid numarası. Boşsa sırayla verilir.</small></label>
+          <label>TC<input id="salesQuickCustomerTckn" placeholder="11 haneli TC" inputmode="numeric"/></label>
+        </div>
         <div class="two-col">
           <label>Ad *<input id="salesQuickCustomerFirstName" required placeholder="Adı" autocomplete="given-name"/></label>
           <label>Soyad *<input id="salesQuickCustomerLastName" required placeholder="Soyadı" autocomplete="family-name"/></label>
         </div>
         <p class="field-hint" style="margin:0">Senet ve listelerde Ad Soyad olarak birleşir.</p>
-        <label>Müşteri kodu<input id="salesQuickCustomerCode" placeholder="Boşsa otomatik A000001" autocomplete="off"/>
-        <small class="field-hint">Rapid’ten gelen numaradır. Yeni kayıtta boş bırakırsanız sırayla verilir.</small></label>
         <div class="two-col">
-          <label>Telefon *<input id="salesQuickCustomerPhone" required placeholder="05xx xxx xx xx"/></label>
-          <label>E-posta<input id="salesQuickCustomerEmail" type="email"/></label>
+          <label>Mail<input id="salesQuickCustomerEmail" type="email" placeholder="ornek@mail.com"/></label>
+          <label>Doğum tarihi<input id="salesQuickCustomerBirthDate" type="date"/></label>
         </div>
+        <label>İş telefonu *<input id="salesQuickCustomerPhone" required placeholder="05xx xxx xx xx"/></label>
       </div>
-      <div class="cust-form-sec"><div class="cust-form-sec-title">Adres</div>
+      <div class="cust-form-sec"><div class="cust-form-sec-title">Ev adres</div>
         <div class="two-col">
-          <label>İl *<input id="salesQuickCustomerCity" required placeholder="Örn. İstanbul"/></label>
           <label>İlçe *<input id="salesQuickCustomerDistrict" required placeholder="Örn. Pendik"/></label>
+          <label>İl *<input id="salesQuickCustomerCity" required placeholder="Örn. İstanbul"/></label>
         </div>
-        <label>Açık adres *<textarea id="salesQuickCustomerAddress" required rows="2" placeholder="Mahalle, sokak, no, daire"></textarea></label>
+        <label>Ev adres *<textarea id="salesQuickCustomerAddress" required rows="2" placeholder="Mahalle, sokak, no, daire"></textarea></label>
         <label class="cust-check"><input id="salesQuickCustomerDeliverySame" type="checkbox" checked/> Teslimat adresim fatura adresim ile aynı</label>
         <div id="salesQuickCustomerDeliveryWrap" class="hidden">
           <div class="two-col">
@@ -776,25 +780,29 @@ body.inv-full #pageTitle{font-size:18px}
         </div>
       </div>
       <div class="cust-form-sec" id="salesQuickCustomerIndividualSec">
-        <div class="cust-form-sec-title">Bireysel bilgiler</div>
-        <p class="field-hint" style="margin:0">Senet ve sözleşme bu bilgilere yazılır. TCKN zorunlu değildir.</p>
-        <label>TCKN<input id="salesQuickCustomerTckn" placeholder="11 haneli TCKN" inputmode="numeric"/></label>
+        <div class="cust-form-sec-title">Fatura tipi</div>
+        <p class="field-hint" style="margin:0">Senet şahıs adına kalır. Kurumsal fatura için aşağıdaki alanları doldurun.</p>
         <div class="cust-invoice-type" style="margin-top:10px">
           <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="individual" checked/> Bireysel fatura</label>
           <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="corporate"/> Kurumsal fatura</label>
         </div>
       </div>
       <div class="cust-form-sec hidden" id="salesQuickCustomerCorporateSec">
-        <div class="cust-form-sec-title">Kurumsal fatura</div>
+        <div class="cust-form-sec-title">Kurumsal</div>
         <p class="field-hint" style="margin:0">Sadece <b>vergi no</b> yazın — ünvan e-Fatura’dan otomatik gelir.</p>
-        <label>VKN *
+        <label>Kurumsal ünvan *<input id="salesQuickCustomerCompanyName" placeholder="Otomatik dolar"/></label>
+        <label>Kurumsal adres<textarea id="salesQuickCustomerCompanyAddress" rows="2" placeholder="Firma açık adresi"></textarea></label>
+        <div class="two-col">
+          <label>İlçe<input id="salesQuickCustomerCompanyDistrict" placeholder="Firma ilçe"/></label>
+          <label>İl<input id="salesQuickCustomerCompanyCity" placeholder="Firma il"/></label>
+        </div>
+        <label>Vergi no *
           <span class="vkn-lookup-row">
             <input id="salesQuickCustomerTaxNo" placeholder="10 haneli VKN" inputmode="numeric" maxlength="11"/>
             <button class="secondary-btn" type="button" data-vkn-lookup="salesQuickCustomer">Getir</button>
           </span>
           <small class="field-hint" id="salesQuickCustomerVknStatus">10 hane yazınca ünvan otomatik dolar</small>
         </label>
-        <label>Firma ünvanı *<input id="salesQuickCustomerCompanyName" placeholder="Otomatik dolar"/></label>
         <label>Vergi dairesi *<input id="salesQuickCustomerTaxOffice" placeholder="Varsa otomatik dolar"/></label>
       </div>
       <label>Müşteri Notu<textarea id="salesQuickCustomerNote" rows="2"></textarea></label>
@@ -2232,7 +2240,7 @@ Bulunamayan → Diğer.
 <h2>Asistek Excel Aktar</h2>
 <button class="secondary-btn" id="customerExcelClose" type="button">Kapat</button>
 </div>
-<p class="note">Sadece <b>10+ haneli</b> telefon / GSM alınır. Telefonsuz ve <b>7 haneli</b> sabit hatlar atlanır. Kayıtlı telefon / VKN / TCKN <b>ezilmez</b>.</p>
+<p class="note">Başlıklar: <b>Müşteri no, TC, Ad, Soyad, Ev adres, İlçe, İl, Mail, Doğum tarihi, Kurumsal ünvan, Kurumsal adres, İl, İlçe, Vergi dairesi, Vergi no, İş telefonu</b>. Sadece <b>10+ haneli</b> iş telefonu / GSM alınır. Telefonsuz ve <b>7 haneli</b> hatlar atlanır. Kayıtlı telefon / vergi no / TC <b>ezilmez</b>.</p>
 <div id="customerExcelSummary" class="customer-excel-summary"></div>
 <div id="customerExcelMap" class="note"></div>
 <div class="table-wrap customer-excel-table">
@@ -2255,26 +2263,32 @@ Bulunamayan → Diğer.
 </div>
 <form action="javascript:void(0)" class="form-stack" id="customerPageForm" onsubmit="return false;">
 <input id="customerPageId" type="hidden"/>
-<div class="cust-form-sec"><div class="cust-form-sec-title">İletişim</div>
+<div class="cust-form-sec"><div class="cust-form-sec-title">Kimlik</div>
+<div class="two-col">
+<label>Müşteri no<input id="customerPageCode" placeholder="Boşsa otomatik A000001" autocomplete="off"/>
+<small class="field-hint">Excel / Rapid müşteri numarası. Boş bırakılırsa sıradaki kod yazılır.</small></label>
+<label>TC<input id="customerPageTckn" placeholder="11 haneli TC" inputmode="numeric"/></label>
+</div>
 <div class="two-col">
 <label>Ad *<input autocomplete="given-name" id="customerPageFirstName" required placeholder="Adı"/></label>
 <label>Soyad *<input autocomplete="family-name" id="customerPageLastName" required placeholder="Soyadı"/></label>
 </div>
 <p class="field-hint" style="margin:0">Senet ve listelerde Ad Soyad olarak birleşir.</p>
-<label>Müşteri kodu<input id="customerPageCode" placeholder="Boşsa otomatik A000001" autocomplete="off"/>
-<small class="field-hint">Rapid360 müşteri numarası buraya gelir. Elle eklerken sıradaki kod otomatik yazılır.</small></label>
 <div class="two-col">
-<label>Telefon *<input autocomplete="tel" id="customerPagePhone" required placeholder="05xx xxx xx xx"/></label>
-<label>E-posta (e-Fatura / e-Arşiv)<input autocomplete="email" id="customerPageEmail" type="email" placeholder="ornek@mail.com"/><small class="field-hint">Fatura gönderimi için önerilir</small></label>
+<label>Mail<input autocomplete="email" id="customerPageEmail" type="email" placeholder="ornek@mail.com"/><small class="field-hint">e-Fatura / e-Arşiv için önerilir</small></label>
+<label>Doğum tarihi<input id="customerPageBirthDate" type="date"/></label>
 </div>
+<div class="two-col">
+<label>İş telefonu *<input autocomplete="tel" id="customerPagePhone" required placeholder="05xx xxx xx xx"/></label>
 <label>Durum<select id="customerPageActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></label>
 </div>
-<div class="cust-form-sec"><div class="cust-form-sec-title">Adres</div>
-<div class="two-col">
-<label>İl *<input id="customerPageCity" required placeholder="Örn. İstanbul"/></label>
-<label>İlçe *<input id="customerPageDistrict" required placeholder="Örn. Pendik"/></label>
 </div>
-<label>Açık adres *<textarea id="customerPageAddress" required rows="2" placeholder="Mahalle, sokak, no, daire"></textarea></label>
+<div class="cust-form-sec"><div class="cust-form-sec-title">Ev adres</div>
+<div class="two-col">
+<label>İlçe *<input id="customerPageDistrict" required placeholder="Örn. Pendik"/></label>
+<label>İl *<input id="customerPageCity" required placeholder="Örn. İstanbul"/></label>
+</div>
+<label>Ev adres *<textarea id="customerPageAddress" required rows="2" placeholder="Mahalle, sokak, no, daire"></textarea></label>
 <label class="cust-check"><input id="customerPageDeliverySame" type="checkbox" checked/> Teslimat adresim fatura adresim ile aynı</label>
 <div id="customerPageDeliveryWrap" class="hidden">
 <div class="two-col">
@@ -2285,25 +2299,29 @@ Bulunamayan → Diğer.
 </div>
 </div>
 <div class="cust-form-sec" id="customerPageIndividualSec">
-<div class="cust-form-sec-title">Bireysel bilgiler</div>
-<p class="field-hint" style="margin:0">Senet ve sözleşme bu bilgilere yazılır. TCKN zorunlu değildir.</p>
-<label>TCKN<input id="customerPageTckn" placeholder="11 haneli TCKN" inputmode="numeric"/></label>
+<div class="cust-form-sec-title">Fatura tipi</div>
+<p class="field-hint" style="margin:0">Senet şahıs adına kalır. Kurumsal fatura için aşağıdaki alanları doldurun.</p>
 <div class="cust-invoice-type" style="margin-top:10px">
 <label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="individual" checked/> Bireysel fatura</label>
 <label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="corporate"/> Kurumsal fatura</label>
 </div>
 </div>
 <div class="cust-form-sec hidden" id="customerPageCorporateSec">
-<div class="cust-form-sec-title">Kurumsal fatura</div>
+<div class="cust-form-sec-title">Kurumsal</div>
 <p class="field-hint" style="margin:0">Sadece <b>vergi no</b> yazın — ünvan e-Fatura’dan otomatik gelir.</p>
-<label>VKN *
+<label>Kurumsal ünvan *<input id="customerPageCompanyName" placeholder="Otomatik dolar"/></label>
+<label>Kurumsal adres<textarea id="customerPageCompanyAddress" rows="2" placeholder="Firma açık adresi"></textarea></label>
+<div class="two-col">
+<label>İlçe<input id="customerPageCompanyDistrict" placeholder="Firma ilçe"/></label>
+<label>İl<input id="customerPageCompanyCity" placeholder="Firma il"/></label>
+</div>
+<label>Vergi no *
   <span class="vkn-lookup-row">
     <input id="customerPageTaxNo" placeholder="10 haneli VKN" inputmode="numeric" maxlength="11"/>
     <button class="secondary-btn" type="button" data-vkn-lookup="customerPage">Getir</button>
   </span>
   <small class="field-hint" id="customerPageVknStatus">10 hane yazınca ünvan otomatik dolar</small>
 </label>
-<label>Firma ünvanı *<input id="customerPageCompanyName" placeholder="Otomatik dolar"/></label>
 <label>Vergi dairesi *<input id="customerPageTaxOffice" placeholder="Varsa otomatik dolar"/></label>
 </div>
 <label>Not<textarea id="customerPageNote" rows="2"></textarea></label>
@@ -2889,6 +2907,6 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v219"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v219"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v220"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v220"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

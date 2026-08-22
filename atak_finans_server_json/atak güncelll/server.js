@@ -1918,8 +1918,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.219-atak-geteinvoices',
-    build:'fix-v219',
+    version:'6.3.220-atak-geteinvoices',
+    build:'fix-v220',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3376,11 +3376,14 @@ app.delete('/web-api/admin/finance-account/:id',requireAdmin,(req,res)=>{
 function customerSnapshot(c={}){
   return {
     name:c.name||'',firstName:c.firstName||'',lastName:c.lastName||'',phone:c.phone||'',email:c.email||'',taxNo:c.taxNo||'',tckn:c.tckn||'',
+    birthDate:c.birthDate||'',
     city:c.city||'',district:c.district||'',address:c.address||'',
     deliverySameAsBilling:c.deliverySameAsBilling!==false,deliveryCity:c.deliveryCity||'',
     deliveryDistrict:c.deliveryDistrict||'',deliveryAddress:c.deliveryAddress||'',
     invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
-    companyName:c.companyName||'',taxOffice:c.taxOffice||'',note:c.note||'',
+    companyName:c.companyName||'',companyAddress:c.companyAddress||'',
+    companyCity:c.companyCity||'',companyDistrict:c.companyDistrict||'',
+    taxOffice:c.taxOffice||'',note:c.note||'',
     customerCode:c.customerCode||c.rapidCustAccount||'',
     rapidCustAccount:c.rapidCustAccount||'',
     guarantor:normalizeGuarantor(c.guarantor),
@@ -3432,9 +3435,9 @@ function resolveCustomerInvoiceParty(customer={},prefer=''){
     companyName:useCorp?String(customer.companyName||'').trim():'',
     phone:customer.phone||'',
     email:customer.email||'',
-    address:customer.address||'',
-    city:customer.city||'',
-    district:customer.district||''
+    address:useCorp?(customer.companyAddress||customer.address||''):(customer.address||''),
+    city:useCorp?(customer.companyCity||customer.city||''):(customer.city||''),
+    district:useCorp?(customer.companyDistrict||customer.district||''):(customer.district||'')
   };
 }
 function parseCustomerPayload(x={}){
@@ -3447,34 +3450,39 @@ function parseCustomerPayload(x={}){
     name=personName.joinPersonName(firstName,lastName);
   }
   if(!name)throw new Error('Ad ve soyad zorunludur');
-  const phone=String(x.phone||'').trim();
-  const city=String(x.city||'').trim();
-  const district=String(x.district||'').trim();
-  const address=String(x.address||'').trim();
+  const phone=String(x.phone||x.workPhone||x.isTelefon||x.isTelefonu||'').trim();
+  const city=String(x.city||x.il||'').trim();
+  const district=String(x.district||x.ilce||'').trim();
+  const address=String(x.address||x.evAdres||x.evAdresi||'').trim();
   const invoiceType=String(x.invoiceType||'individual')==='corporate'?'corporate':'individual';
   const deliverySame=x.deliverySameAsBilling!==false&&x.deliverySameAsBilling!=='false';
   const deliveryCity=String(x.deliveryCity||'').trim();
   const deliveryDistrict=String(x.deliveryDistrict||'').trim();
   const deliveryAddress=String(x.deliveryAddress||'').trim();
-  const companyName=String(x.companyName||'').trim();
-  const taxOffice=String(x.taxOffice||'').trim();
+  const companyName=String(x.companyName||x.kurumsalUnvan||'').trim();
+  const taxOffice=String(x.taxOffice||x.vergiDairesi||'').trim();
+  const companyAddress=String(x.companyAddress||x.kurumsalAdres||'').trim();
+  const companyCity=String(x.companyCity||x.kurumsalIl||'').trim();
+  const companyDistrict=String(x.companyDistrict||x.kurumsalIlce||'').trim();
+  const birthDate=customerExcel.normalizeBirthDate(x.birthDate||x.dogumTarihi||'');
   // taxNo = kurumsal VKN; tckn = şahıs (ikisi birden saklanır)
-  const taxNo=String(x.taxNo||x.corporateTaxNo||'').trim();
-  const tckn=String(x.tckn||x.individualTaxNo||'').trim();
-  if(!phone)throw new Error('Telefon zorunludur');
-  if(!city||!district||!address)throw new Error('Fatura adresi (il, ilçe, açık adres) zorunludur');
+  const taxNo=String(x.taxNo||x.corporateTaxNo||x.vergiNo||'').trim();
+  const tckn=String(x.tckn||x.individualTaxNo||x.tc||'').trim();
+  if(!phone)throw new Error('İş telefonu zorunludur');
+  if(!city||!district||!address)throw new Error('Ev adresi (il, ilçe, ev adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress)){
     throw new Error('Teslimat adresi fatura adresinden farklıysa il, ilçe ve açık adres zorunludur');
   }
   if(invoiceType==='corporate'){
-    if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
+    if(!companyName)throw new Error('Kurumsal fatura için kurumsal ünvan zorunludur');
     if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
-    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
+    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli vergi no (10 hane) zorunludur');
   }
-  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
+  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TC girildiyse 11 hane olmalıdır');
   const out={
     name,firstName,lastName,phone,
-    email:String(x.email||'').trim(),
+    email:String(x.email||x.mail||'').trim(),
+    birthDate,
     taxNo:invoiceType==='corporate'?taxNo:'',
     tckn:tckn||'',
     city,district,address,
@@ -3484,9 +3492,10 @@ function parseCustomerPayload(x={}){
     deliveryAddress:deliverySame?address:deliveryAddress,
     invoiceType,
     companyName:invoiceType==='corporate'?companyName:'',
+    companyAddress,companyCity,companyDistrict,
     taxOffice:invoiceType==='corporate'?taxOffice:'',
     note:String(x.note||'').trim(),
-    customerCode:customerCode.normalizeCustomerCode(x.customerCode||x.code||x.musteriKodu||''),
+    customerCode:customerCode.normalizeCustomerCode(x.customerCode||x.code||x.musteriKodu||x.musteriNo||''),
     active:x.active!==false&&x.active!=='false',
     updatedAt:new Date().toISOString()
   };
@@ -3527,8 +3536,9 @@ function customerSearchHandler(req,res){
     .slice(0,limit)
     .map(c=>({
       id:c.id,name:c.name||'',firstName:c.firstName||'',lastName:c.lastName||'',phone:c.phone||'',email:c.email||'',
-      taxNo:c.taxNo||'',tckn:c.tckn||'',city:c.city||'',district:c.district||'',
-      address:c.address||'',companyName:c.companyName||'',taxOffice:c.taxOffice||'',
+      taxNo:c.taxNo||'',tckn:c.tckn||'',birthDate:c.birthDate||'',city:c.city||'',district:c.district||'',
+      address:c.address||'',companyName:c.companyName||'',companyAddress:c.companyAddress||'',
+      companyCity:c.companyCity||'',companyDistrict:c.companyDistrict||'',taxOffice:c.taxOffice||'',
       invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
       hasCorporate:customerHasCorporateBilling(c),note:c.note||'',
       customerCode:c.customerCode||c.rapidCustAccount||'',
