@@ -29,6 +29,7 @@ const d365Auth = require('./lib/rapid360-d365-auth');
 const personName = require('./lib/person-name');
 const customerCode = require('./lib/customer-code');
 const customerDedupe = require('./lib/customer-dedupe');
+const customerSearch = require('./lib/customer-search');
 
 const app = express();
 const ROOT = __dirname;
@@ -435,11 +436,18 @@ function recoverStoreFile(){
   }
   return storeFileSize(STORE_PATH)>=200;
 }
+let storeMem=null;
+let storeMemMtime=-1;
+function storeFileMtime(){
+  try{return fs.statSync(STORE_PATH).mtimeMs}catch(_){return -1}
+}
 function readStore(){
   if(storeFileSize(STORE_PATH)<200) recoverStoreFile();
   if(storeFileSize(STORE_PATH)<200){
     throw new Error('store.json eksik: '+STORE_PATH+' (yedek kopya da bulunamadi)');
   }
+  const mtime=storeFileMtime();
+  if(storeMem&&storeMemMtime===mtime)return storeMem;
   const s=ensureStore(JSON.parse(fs.readFileSync(STORE_PATH,'utf8')));
   if(s.__istikbalCategoryFixed){
     const n=s.__istikbalCategoryFixed;
@@ -489,18 +497,28 @@ function readStore(){
       console.log(`[rapid360] yabancı gelen fatura silindi: ${n}`);
     }catch(e){console.error('[rapid360] gelen kutu temizliği yazılamadı',e.message)}
   }
+  storeMem=s;
+  storeMemMtime=storeFileMtime();
   return s;
 }
 function writeStore(store){
+  if(store){
+    delete store.__custSearch;
+    delete store.__balMap;
+  }
   const clean={...ensureStore(store)};
   delete clean.__istikbalCategoryFixed;
   delete clean.__mobilyaPurchaseCleared;
   delete clean.__atakDmsSeeded;
   delete clean.__disableChairmanConsume;
   delete clean.__purgeChairmanInbox;
+  delete clean.__custSearch;
+  delete clean.__balMap;
   const t=`${STORE_PATH}.tmp`;
   fs.writeFileSync(t,JSON.stringify(clean,null,2),'utf8');
   fs.renameSync(t,STORE_PATH);
+  storeMem=store||clean;
+  storeMemMtime=storeFileMtime();
 }
 function normalizeNumber(value){
   if(value===null||value===undefined||value==='') return 0;
@@ -1835,8 +1853,21 @@ function accountBalance(s,accountId){
   },0);
   return Math.round((opening+movement)*100)/100;
 }
+function customerBalanceMap(s){
+  const txs=s.financeTransactions||[];
+  if(s.__balMap&&s.__balMap.n===txs.length)return s.__balMap.map;
+  const map=new Map();
+  for(const t of txs){
+    const id=String(t.customerId||'');
+    if(!id)continue;
+    map.set(id,(map.get(id)||0)+Number(t.customerDelta||0));
+  }
+  for(const [k,v] of map)map.set(k,Math.round(v*100)/100);
+  s.__balMap={n:txs.length,map};
+  return map;
+}
 function customerBalance(s,customerId){
-  return Math.round(s.financeTransactions.filter(x=>x.customerId===customerId).reduce((sum,t)=>sum+Number(t.customerDelta||0),0)*100)/100;
+  return customerBalanceMap(s).get(String(customerId))||0;
 }
 function financeSnapshot(s){
   const accounts=s.financeAccounts.filter(x=>x.active!==false).map(x=>({...x,balance:accountBalance(s,x.id)}));
@@ -1927,8 +1958,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.227-atak-geteinvoices',
-    build:'fix-v227',
+    version:'6.3.228-atak-geteinvoices',
+    build:'fix-v228',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3515,38 +3546,16 @@ function parseCustomerPayload(x={}){
 function applyCustomerData(row,data){Object.assign(row,data);return row}
 function customerSearchHandler(req,res){
   const s=readStore();
-  const collapsed=customerDedupe.collapseDuplicateCustomersByName(s);
-  if(collapsed.merged)writeStore(s);
-  const q=String(req.query.q||req.query.query||'').trim().toLocaleLowerCase('tr-TR');
+  const q=String(req.query.q||req.query.query||'').trim();
   const limit=Math.min(200,Math.max(1,Number(req.query.limit)||40));
   const id=String(req.query.id||'').trim();
   const listAll=['1','true','yes'].includes(String(req.query.list||'').toLowerCase());
-  const all=(s.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
-  let rows=all;
-  if(id){
-    rows=rows.filter(c=>String(c.id)===id);
-  }else if(q.length>=1){
-    // 1+ karakter: satış ekranında "a" / "atak" ile bulunsun
-    const digits=q.replace(/\D+/g,'');
-    rows=rows.filter(c=>{
-      const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.email||''} ${c.city||''} ${c.district||''} ${c.rapidCustAccount||''} ${c.customerCode||''}`.toLocaleLowerCase('tr-TR');
-      if(hay.includes(q))return true;
-      if(digits.length>=3){
-        const phoneDigits=String(c.phone||'').replace(/\D+/g,'');
-        const taxDigits=`${c.taxNo||''}${c.tckn||''}`.replace(/\D+/g,'');
-        if(phoneDigits.includes(digits)||taxDigits.includes(digits))return true;
-      }
-      return false;
-    });
-  }else if(!listAll){
-    // Boş aramada tüm listeyi yollama — 10k+ kayıt için güvenli
-    return res.json({ok:true,total:all.length,rows:[],needQuery:true});
-  }
-  const total=rows.length;
-  rows=rows
-    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'tr'))
-    .slice(0,limit)
-    .map(c=>({
+  const found=customerSearch.searchIndex(s,{q,id,limit,listAll});
+  if(found.needQuery)return res.json({ok:true,total:found.total,rows:[],needQuery:true,limit});
+  const bal=customerBalanceMap(s);
+  const rows=found.entries.map(entry=>{
+    const c=entry.c;
+    return {
       id:c.id,name:c.name||'',firstName:c.firstName||'',lastName:c.lastName||'',phone:c.phone||'',email:c.email||'',
       taxNo:c.taxNo||'',tckn:c.tckn||'',birthDate:c.birthDate||'',city:c.city||'',district:c.district||'',
       address:c.address||'',companyName:c.companyName||'',companyAddress:c.companyAddress||'',
@@ -3557,10 +3566,11 @@ function customerSearchHandler(req,res){
       customerCode:c.customerCode||c.rapidCustAccount||'',
       rapidCustAccount:c.rapidCustAccount||'',
       guarantor:normalizeGuarantor(c.guarantor),
-      balance:customerBalance(s,c.id),
+      balance:bal.get(String(c.id))||0,
       active:c.active!==false
-    }));
-  res.json({ok:true,total,rows,needQuery:false,limit});
+    };
+  });
+  res.json({ok:true,total:found.total,rows,needQuery:false,limit});
 }
 app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),customerSearchHandler);
 // Alias — bazı proxy/yönlendirmelerde /customers/search takılırsa

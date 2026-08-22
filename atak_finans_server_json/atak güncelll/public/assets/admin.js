@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v227 */
+/* ATAK_ADMIN_BUILD=fix-v228 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2188,22 +2188,8 @@ async function loadCustomersPage(){
       ? `/web-api/admin/customers/search?q=${encodeURIComponent(term)}&limit=100`
       : `/web-api/admin/customers/search?list=1&limit=200`;
     const d=await api(url);
-    let rows=d.rows||[];
-    // Arama boş / eksik kalırsa finance-center ile tamamla
-    if(!rows.length){
-      const fin=await api('/web-api/admin/finance-center');
-      rows=(fin.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
-      if(term){
-        const t=term.toLocaleLowerCase('tr-TR');
-        rows=rows.filter(c=>{
-          const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.customerCode||''} ${c.rapidCustAccount||''}`.toLocaleLowerCase('tr-TR');
-          return hay.includes(t);
-        });
-      }
-      customersPageData.total=rows.length;
-    }else{
-      customersPageData.total=Number(d.total!=null?d.total:rows.length);
-    }
+    const rows=d.rows||[];
+    customersPageData.total=Number(d.total!=null?d.total:rows.length);
     customersPageData.customers=rows;
   }catch(e){
     toast(e.message||'Müşteriler yüklenemedi');
@@ -2791,7 +2777,7 @@ q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
   }
 });
 q('#customerModalClose')?.addEventListener('click',()=>q('#customerModal')?.classList.add('hidden'));
-q('#customerPageSearch')?.addEventListener('input',()=>{clearTimeout(window.__custSearchT);window.__custSearchT=setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),220)});
+q('#customerPageSearch')?.addEventListener('input',()=>{clearTimeout(window.__custSearchT);window.__custSearchT=setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),140)});
 q('#customerPageDeliverySame')?.addEventListener('change',()=>syncCustomerFormUI('customerPage'));
 document.querySelectorAll('input[name="customerPageInvoiceType"]').forEach(r=>r.addEventListener('change',()=>onCustomerInvoiceTypeChange('customerPage')));
 ['customerPage','salesQuickCustomer'].forEach(bindVknLookup);
