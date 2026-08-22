@@ -1958,8 +1958,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.229-atak-geteinvoices',
-    build:'fix-v229',
+    version:'6.3.231-atak-geteinvoices',
+    build:'fix-v231',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3731,7 +3731,7 @@ function pruneExcelImportJobs(){
 function loadExcelImportJob(req){
   pruneExcelImportJobs();
   const jobId=String(req.body?.jobId||req.query?.jobId||'').trim();
-  if(jobId&&excelImportJobs.has(jobId))return {jobId,job:excelImportJobs.get(jobId)};
+  if(jobId&&excelImportJobs.has(jobId))return {jobId,job:excelImportJobs.get(jobId),fresh:false};
   if(!req.file)throw new Error('Önce Excel seçip Önizle’ye basın.');
   const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer,req.file.originalname||'');
   if(!parsed.ok)throw new Error(parsed.error||'Excel okunamadı');
@@ -3740,7 +3740,7 @@ function loadExcelImportJob(req){
   const id=crypto.randomUUID();
   const job={createdAt:Date.now(),rows:(classified.rows||[]).filter(r=>r.payload&&(r.status==='ready'||r.status==='update')),counts:classified.counts};
   excelImportJobs.set(id,job);
-  return {jobId:id,job};
+  return {jobId:id,job,fresh:true};
 }
 app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers_manage'),customerExcelFile,(req,res)=>{
   try{res.json(customerExcelPreviewPayload(req))}
@@ -3748,8 +3748,9 @@ app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers
 });
 app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_manage'),customerExcelFile,(req,res)=>{
   try{
-    const {jobId,job}=loadExcelImportJob(req);
-    const offset=Math.max(0,Number(req.body?.offset||req.query?.offset||0)||0);
+    const {jobId,job,fresh}=loadExcelImportJob(req);
+    let offset=Math.max(0,Number(req.body?.offset||req.query?.offset||0)||0);
+    if(fresh)offset=0;
     const limit=Math.min(500,Math.max(50,Number(req.body?.limit||400)||400));
     const slice=(job.rows||[]).slice(offset,offset+limit);
     const s=readStore();

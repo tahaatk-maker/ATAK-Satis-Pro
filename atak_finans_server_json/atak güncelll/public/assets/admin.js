@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v229 */
+/* ATAK_ADMIN_BUILD=fix-v231 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2640,6 +2640,20 @@ async function sendCustomerSmsFromPanel(){
 }
 q('#newCustomerBtn')?.addEventListener('click',()=>openCustomerModal(null));
 function excelImportJobKey(){return 'atakExcelImportJob'}
+function writeExcelImportStorage(job){
+  const raw=JSON.stringify(job);
+  try{localStorage.setItem(excelImportJobKey(),raw)}catch(_){}
+  try{sessionStorage.setItem(excelImportJobKey(),raw)}catch(_){}
+}
+function readExcelImportStorage(){
+  for(const store of [localStorage,sessionStorage]){
+    try{
+      const job=JSON.parse(store.getItem(excelImportJobKey())||'null');
+      if(job&&job.jobId)return job;
+    }catch(_){}
+  }
+  return null;
+}
 function saveExcelImportJob(extra={}){
   const job={
     jobId:window.__customerExcelJobId||'',
@@ -2654,11 +2668,17 @@ function saveExcelImportJob(extra={}){
   window.__customerExcelImported=job.imported;
   window.__customerExcelUpdated=job.updated;
   window.__customerExcelTotal=job.totalReady;
-  try{if(job.jobId)sessionStorage.setItem(excelImportJobKey(),JSON.stringify(job));else sessionStorage.removeItem(excelImportJobKey())}catch(_){}
+  try{
+    if(job.jobId)writeExcelImportStorage(job);
+    else {
+      localStorage.removeItem(excelImportJobKey());
+      sessionStorage.removeItem(excelImportJobKey());
+    }
+  }catch(_){}
 }
 function loadExcelImportJob(){
   try{
-    const job=JSON.parse(sessionStorage.getItem(excelImportJobKey())||'null');
+    const job=readExcelImportStorage();
     if(!job||!job.jobId||Date.now()-Number(job.ts||0)>40*60*1000)return null;
     window.__customerExcelJobId=job.jobId;
     window.__customerExcelOffset=Number(job.offset||0)||0;
@@ -2675,26 +2695,37 @@ function clearExcelImportJob(){
   window.__customerExcelImported=0;
   window.__customerExcelUpdated=0;
   window.__customerExcelTotal=0;
+  try{localStorage.removeItem(excelImportJobKey())}catch(_){}
   try{sessionStorage.removeItem(excelImportJobKey())}catch(_){}
+}
+function showExcelImportResume(job){
+  const st=q('#customerExcelStatus');
+  if(q('#customerExcelImportBtn'))q('#customerExcelImportBtn').disabled=false;
+  if(!st)return;
+  if(window.__customerExcelRunning){
+    st.textContent=`Aktarım sürüyor, silinmedi. ${job.imported||0}/${job.totalReady||'?'} yazıldı. Ekranı kapatmak iptal etmez.`;
+  }else{
+    st.textContent=`Aktarım durdu, silinmedi. ${job.imported||0}/${job.totalReady||'?'} yazıldı. Kapatmak iptal etmez. Tekrar Aktar’a basın.`;
+  }
+  st.className='form-status';
 }
 function openCustomerExcelModal(){
   q('#customerExcelModal')?.classList.remove('hidden');
   const job=loadExcelImportJob();
   const st=q('#customerExcelStatus');
   if(job){
-    if(q('#customerExcelImportBtn'))q('#customerExcelImportBtn').disabled=false;
-    if(st){
-      st.textContent=`Aktarım durdu, silinmedi. ${job.imported||0}/${job.totalReady||'?'} yazıldı. Kapatmak iptal etmez. Tekrar Aktar’a basın.`;
-      st.className='form-status';
-    }
+    showExcelImportResume(job);
     return;
   }
-  if(st&&!st.textContent){st.textContent='Excel seçin, sonra Önizle. Kapatmak yazılanları silmez.';st.className='form-status'}
+  if(st&&!st.textContent){st.textContent='Excel seçin, sonra Önizle. Bu ekrandan çıkmak yazılanları silmez.';st.className='form-status'}
 }
 q('#customerExcelBtn')?.addEventListener('click',()=>openCustomerExcelModal());
 q('#customerExcelClose')?.addEventListener('click',()=>{
   q('#customerExcelModal')?.classList.add('hidden');
   if(window.__customerExcelJobId)saveExcelImportJob();
+  toast(window.__customerExcelRunning
+    ?'Aktarım durmadı. Yazılan müşteriler silinmedi.'
+    :'Yazılan müşteriler silinmedi. Tekrar Excel Aktar → Aktar.');
 });
 function customerExcelEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
 function selectedCustomerExcelFile(){return q('#customerExcelFile')?.files?.[0]||window.__customerExcelFile||null}
@@ -2738,6 +2769,12 @@ function renderCustomerExcelPreview(d){
 async function previewCustomerExcelFile(file){
   const st=q('#customerExcelStatus');
   const chosen=file||selectedCustomerExcelFile();
+  const paused=loadExcelImportJob();
+  if(paused && Number(paused.offset||0)>0 && (!chosen || !paused.fileName || chosen.name===paused.fileName)){
+    setCustomerExcelFile(chosen||null);
+    showExcelImportResume(paused);
+    return;
+  }
   if(!chosen){
     if(st){st.textContent='Önce Excel seçin.';st.className='form-status error'}
     return;
@@ -2768,6 +2805,8 @@ async function previewCustomerExcelFile(file){
 }
 q('#customerExcelFile')?.addEventListener('change',()=>{
   const file=q('#customerExcelFile')?.files?.[0];
+  const paused=loadExcelImportJob();
+  if(paused && file && paused.fileName && file.name!==paused.fileName)clearExcelImportJob();
   setCustomerExcelFile(file||null);
   if(file)previewCustomerExcelFile(file);
 });
@@ -2796,17 +2835,22 @@ q('#customerExcelPreviewBtn')?.addEventListener('click',()=>previewCustomerExcel
 q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
   const file=selectedCustomerExcelFile();
   const st=q('#customerExcelStatus');
+  if(window.__customerExcelRunning){
+    if(st){st.textContent='Aktarım zaten sürüyor. Yazılanlar silinmedi.';st.className='form-status'}
+    return;
+  }
   if(!file&&!window.__customerExcelJobId){if(st){st.textContent='Önce Excel seçip Önizle’ye basın.';st.className='form-status error'}return}
-  if(st){st.textContent='Aktarılıyor…';st.className='form-status'}
+  if(st){st.textContent='Aktarılıyor… Ekranı kapatmak iptal etmez.';st.className='form-status'}
   const btn=q('#customerExcelImportBtn');if(btn)btn.disabled=true;
+  window.__customerExcelRunning=true;
   try{
     let jobId=window.__customerExcelJobId||'';
     let offset=Number(window.__customerExcelOffset||0)||0;
     let last=null;
     while(true){
       const fd=new FormData();
+      if(file)fd.append('file',file);
       if(jobId)fd.append('jobId',jobId);
-      else if(file)fd.append('file',file);
       fd.append('offset',String(offset));
       last=await api('/web-api/admin/customers-excel-import',{method:'POST',body:fd});
       jobId=last.jobId||jobId;
@@ -2829,6 +2873,8 @@ q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
     saveExcelImportJob();
     if(st){st.textContent=(err.message||'Aktarılamadı')+' Yazılanlar duruyor. Tekrar Aktar’a basın.';st.className='form-status error'}
     if(btn)btn.disabled=false;
+  }finally{
+    window.__customerExcelRunning=false;
   }
 });
 q('#customerModalClose')?.addEventListener('click',()=>q('#customerModal')?.classList.add('hidden'));

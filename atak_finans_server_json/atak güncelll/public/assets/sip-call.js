@@ -1,4 +1,4 @@
-/* ATAK_SIP_BUILD=fix-v229 — MicroSIP tıkla-ara (sip: bağlantısı) */
+/* ATAK_SIP_BUILD=fix-v231 — MicroSIP tıkla-ara (sip: bağlantısı) */
 (function(root){
   function sipDigits(raw){
     let d=String(raw==null?'':raw).replace(/\D+/g,'');
