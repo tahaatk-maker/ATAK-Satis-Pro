@@ -173,6 +173,35 @@ function resolveVatRate(p={}){
   return 20;
 }
 
+function brandNameKey(name){
+  return String(name||'').trim().toLocaleLowerCase('tr-TR');
+}
+function collapseDuplicateBrands(list){
+  const rows=Array.isArray(list)?list:[];
+  const keep=[];
+  const seen=new Map();
+  rows.forEach((b,i)=>{
+    const name=String(b&&b.name||'').trim()||'Marka';
+    const key=brandNameKey(name);
+    const row={
+      id:String(b&&b.id||slug(name)||crypto.randomUUID()),
+      name,
+      active:!b||b.active!==false,
+      sort:Number(b&&b.sort!=null?b.sort:i)||0,
+      logo:String(b&&b.logo||'')
+    };
+    if(key==='istikbal')row.id='istikbal';
+    if(seen.has(key)){
+      const prev=seen.get(key);
+      if(!prev.logo&&row.logo)prev.logo=row.logo;
+      if(row.id==='istikbal')prev.id='istikbal';
+      return;
+    }
+    seen.set(key,row);
+    keep.push(row);
+  });
+  return keep;
+}
 function ensureStore(store) {
   store.settings ||= { siteName:'Atak Home', tagline:'Eviniz için her şey', whatsapp:'905433585060', phone:'02122232871', email:'tarabyabeko@gmail.com', address:ATAK_COMPANY.address };
   // Resmi şirket bilgileri (senet + sözleşme)
@@ -320,7 +349,7 @@ function ensureStore(store) {
     store.brands.push({id:'istikbal',name:'İstikbal',active:true,sort:(store.brands||[]).length,logo:''});
   }
   store.categories = store.categories.map((c,i)=>({ id:c.id||slug(c.name)||crypto.randomUUID(), name:c.name||'Kategori', active:c.active!==false, sort:Number(c.sort??i), description:c.description||'' }));
-  store.brands = store.brands.map((b,i)=>({ id:b.id||slug(b.name)||crypto.randomUUID(), name:b.name||'Marka', active:b.active!==false, sort:Number(b.sort??i), logo:b.logo||'' }));
+  store.brands = collapseDuplicateBrands(store.brands);
   // İstikbal ürünleri yanlışlıkla "Diğer"de kaldıysa → Mobilya
   const mobilyaCat=(store.categories||[]).find(c=>c.id==='mobilya'||String(c.name||'').toLocaleLowerCase('tr-TR')==='mobilya');
   const mobilyaId=mobilyaCat?.id||'mobilya';
@@ -1955,19 +1984,31 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
     }
   }
 }));
-app.get('/health',(req,res)=>res.json({
-  ok:true,
-  service:'atakhome-erp-v2',
-    version:'6.3.233-atak-geteinvoices',
-    build:'fix-v233',
-  ownerOnly:ownerOnlyEnabled(),
-  storeOk:storeFileSize(STORE_PATH)>=200,
-  backup:autoBackup.status(),
-  mfa:mfaEnabled(),
-  mfaTrustHours:Math.round(mfaTrustMs()/3600000),
-  company:ATAK_COMPANY.legalName,
-  time:new Date().toISOString()
-}));
+app.get('/health',(req,res)=>{
+  let productCount=-1,brandCount=-1,categoryCount=-1;
+  try{
+    const s=readStore();
+    productCount=(s.products||[]).length;
+    brandCount=(s.brands||[]).length;
+    categoryCount=(s.categories||[]).length;
+  }catch(_){}
+  res.json({
+    ok:true,
+    service:'atakhome-erp-v2',
+    version:'6.3.234-atak-geteinvoices',
+    build:'fix-v234',
+    ownerOnly:ownerOnlyEnabled(),
+    storeOk:storeFileSize(STORE_PATH)>=200,
+    productCount,
+    brandCount,
+    categoryCount,
+    backup:autoBackup.status(),
+    mfa:mfaEnabled(),
+    mfaTrustHours:Math.round(mfaTrustMs()/3600000),
+    company:ATAK_COMPANY.legalName,
+    time:new Date().toISOString()
+  });
+});
 function handleAtakGetEInvoices(req,res){
   const ip=clientIp(req);
   const failKey=`dms:${ip}`;
@@ -8645,10 +8686,12 @@ app.post('/web-api/admin/purchase-invoice/:id/revert',requireAdmin,(req,res)=>{
 function clearAllProductsKeepCategories(s){
   const removed=(s.products||[]).length;
   const stocksCleared=(s.productStocks||[]).length;
+  const brandsBefore=(s.brands||[]).length;
   s.products=[];
   s.productStocks=[];
-  audit(s,'Tüm ürünler silindi',`${removed} ürün`,{removed,stocksCleared,categoriesKept:(s.categories||[]).length});
-  return {removed,stocksCleared,categories:(s.categories||[]).length};
+  s.brands=collapseDuplicateBrands(s.brands);
+  audit(s,'Tüm ürünler silindi',`${removed} ürün`,{removed,stocksCleared,categoriesKept:(s.categories||[]).length,brandsBefore,brandsAfter:(s.brands||[]).length});
+  return {removed,stocksCleared,categories:(s.categories||[]).length,brands:(s.brands||[]).length};
 }
 app.post('/web-api/admin/products/clear-all',requireAdmin,(req,res)=>{
   const ok=String(req.body?.confirm||'').trim().toLocaleUpperCase('tr-TR')==='SIL';
@@ -8749,9 +8792,16 @@ app.post('/web-api/admin/bulk-products',requireAdmin,(req,res)=>{ const s=readSt
 app.post('/web-api/admin/brand',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{};
   if(!x.name)return res.status(400).json({error:'Marka adı zorunlu'});
-  let b=s.brands.find(v=>v.id===x.id);
-  const data={name:String(x.name),active:x.active!==false,sort:Number(x.sort||0),logo:String(x.logo||'')};
-  if(b)Object.assign(b,data);else{b={id:slug(x.name)||crypto.randomUUID(),...data};if(s.brands.some(v=>v.id===b.id))b.id=`${b.id}-${Date.now()}`;s.brands.push(b);}
+  const data={name:String(x.name).trim(),active:x.active!==false,sort:Number(x.sort||0),logo:String(x.logo||'')};
+  const key=brandNameKey(data.name);
+  let b=s.brands.find(v=>v.id&&v.id===x.id)||s.brands.find(v=>brandNameKey(v.name)===key);
+  if(b)Object.assign(b,data);
+  else {
+    b={id:key==='istikbal'?'istikbal':(slug(data.name)||crypto.randomUUID()),...data};
+    s.brands.push(b);
+  }
+  s.brands=collapseDuplicateBrands(s.brands);
+  b=s.brands.find(v=>brandNameKey(v.name)===key)||b;
   audit(s,'Marka kaydedildi',b.name);writeStore(s);res.json({ok:true,brand:b});
 });
 app.delete('/web-api/admin/brand/:id',requireAdmin,(req,res)=>{
