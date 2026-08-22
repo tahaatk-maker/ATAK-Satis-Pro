@@ -1,38 +1,24 @@
 #!/bin/bash
 # Clear ALL products, keep categories / customers / sales.
-# ASCII only. Chrome translate must not rewrite this file.
+# ASCII only. Do not translate this file.
 set -euo pipefail
 echo "CLEAR-PRODUCTS START $(date -Is)"
 
-APP=""
-if command -v pm2 >/dev/null 2>&1; then
-  APP=$(pm2 jlist 2>/dev/null | python3 -c 'import json,sys
-try:
- d=json.load(sys.stdin)
- p=next((x for x in d if x.get("name")=="atak"),None)
- print((p or {}).get("pm2_env",{}).get("pm_cwd") or "")
-except Exception:
- print("")' || true)
-fi
-[ -n "$APP" ] || APP=/root/atak-v10
-if [ ! -f "$APP/data/store.json" ] && [ -f /root/atakhome-platform/data/store.json ]; then
-  APP=/root/atakhome-platform
-fi
-STORE="$APP/data/store.json"
-echo "APP=$APP"
-echo "STORE=$STORE"
-[ -f "$STORE" ] || { echo "FAIL_NO_STORE"; exit 1; }
-
-BAK="$STORE.bak-clear-products-$(date +%Y%m%d-%H%M%S)"
-cp -a "$STORE" "$BAK"
-echo "BACKUP=$BAK"
-
-python3 - "$STORE" <<'PY'
-import json, sys, uuid
+clear_one(){
+  local STORE="$1"
+  [ -f "$STORE" ] || return 0
+  local BAK="$STORE.bak-clear-products-$(date +%Y%m%d-%H%M%S)"
+  cp -a "$STORE" "$BAK"
+  echo "BACKUP=$BAK"
+  python3 - "$STORE" <<'PY'
+import json, sys, uuid, os
 from datetime import datetime, timezone
 path=sys.argv[1]
 with open(path, "r", encoding="utf-8") as f:
     s=json.load(f)
+if not isinstance(s, dict):
+    print("SKIP_NOT_OBJECT", path)
+    raise SystemExit(0)
 cats=s.get("categories") if isinstance(s.get("categories"), list) else []
 prods=s.get("products") if isinstance(s.get("products"), list) else []
 stocks=s.get("productStocks") if isinstance(s.get("productStocks"), list) else []
@@ -47,20 +33,40 @@ logs.insert(0,{
     "date": datetime.now(timezone.utc).isoformat(),
     "actor": "Yonetici",
     "action": "Tum urunler silindi",
-    "entity": f"{removed} urun",
+    "entity": str(removed)+" urun",
     "details": {"removed": removed, "stocksCleared": stocks_n, "categoriesKept": len(cats)}
 })
 s["auditLogs"]=logs[:300]
 tmp=path+".tmp"
 with open(tmp, "w", encoding="utf-8") as f:
     json.dump(s, f, ensure_ascii=False, separators=(",", ":"))
-import os
 os.replace(tmp, path)
-print(f"CLEARED products={removed} stocks={stocks_n} categories_kept={len(cats)}")
+print("SILINEN_URUN="+str(removed)+" SILINEN_STOK="+str(stocks_n)+" KALAN_KATEGORI="+str(len(cats))+" DOSYA="+path)
 PY
+}
+
+FOUND=0
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  echo "STORE=$f"
+  clear_one "$f"
+  FOUND=$((FOUND+1))
+done < <(
+  {
+    echo /root/atak-v10/data/store.json
+    echo /root/atakhome-platform/data/store.json
+    find /root /var/www /home -maxdepth 5 -type f -name store.json 2>/dev/null
+  } | awk 'NF && !seen[$0]++'
+)
+
+echo "STORE_COUNT=$FOUND"
+[ "$FOUND" -gt 0 ] || { echo "FAIL_NO_STORE"; exit 1; }
 
 if command -v pm2 >/dev/null 2>&1; then
   pm2 restart atak --update-env || true
+  pm2 restart atakhome-ticaret --update-env || true
+  pm2 restart atakhome-web --update-env || true
 fi
+
 echo "CLEAR-PRODUCTS_OK"
-echo "CHECK panel: Tüm Ürünler boş olmalı, Kategoriler durmalı."
+echo "PANEL: Ctrl+Shift+R  ->  Tum Urunler = 0   Kategoriler durur"
