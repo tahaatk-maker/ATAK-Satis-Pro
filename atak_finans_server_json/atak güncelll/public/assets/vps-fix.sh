@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.226-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.227-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.226-atak-geteinvoices
-EXPECT_BUILD=fix-v226
+EXPECT_HEALTH=6.3.227-atak-geteinvoices
+EXPECT_BUILD=fix-v227
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -474,7 +474,7 @@ step "nginx/apache Excel yukleme limiti (413)"
 # 5-6 MB .xls, nginx varsayilan 1m ile 413 doner. Node 50 MB kabul eder.
 raise_upload_limit(){
   if [ -d /etc/nginx/conf.d ] && [ -w /etc/nginx/conf.d ]; then
-    printf 'client_max_body_size 50m;\n' > /etc/nginx/conf.d/99-atak-upload.conf
+    printf 'client_max_body_size 50m;\nproxy_read_timeout 300s;\nproxy_send_timeout 300s;\nsend_timeout 300s;\n' > /etc/nginx/conf.d/99-atak-upload.conf
     echo "   nginx conf.d/99-atak-upload.conf = 50m"
   elif [ -d /etc/nginx ] && [ -w /etc/nginx ]; then
     printf 'client_max_body_size 50m;\n' > /etc/nginx/atak-upload.conf || true

@@ -435,11 +435,11 @@ function mapDataRow(row,cols){
   uniquePush(notes, yazismaUnvan&&yazismaUnvan!==displayName?`Yazışma: ${yazismaUnvan}`:'');
   uniquePush(notes, dogum?`Doğum ${dogum}`:'');
   uniquePush(notes, kurumsalUnvan&&kurumsalUnvan!==displayName?`Kurumsal: ${kurumsalUnvan}`:'');
-  const corporate=Boolean(vkn)||isCorporateTip(cariTipi)||Boolean(kurumsalUnvan&&vkn);
-  if(corporate&&!vkn)uniquePush(notes,'Kurumsal işaretli ama 10 haneli VKN yok');
+  const companyName=kurumsalUnvan||(vkn?(yazismaUnvan||isUnvan||unvan||''):'');
+  const hasCorpInfo=Boolean(companyName||companyAddress||vkn||taxOffice);
+  if(hasCorpInfo&&!vkn)uniquePush(notes,'Kurumsal alan var, 10 haneli VKN yok');
   if(vergiDigits && vergiDigits.length!==10 && vergiDigits.length!==11)
     uniquePush(notes,`Vergi no ham: ${vergiRaw}`);
-  const useCorp=Boolean(vkn);
   const payload={
     name:displayName,
     phone,
@@ -449,14 +449,14 @@ function mapDataRow(row,cols){
     district:district||inferred.district||'Sarıyer',
     address:address||'Belirtilmedi',
     deliverySameAsBilling:true,
-    invoiceType:useCorp?'corporate':'individual',
-    companyName:useCorp?(kurumsalUnvan||yazismaUnvan||isUnvan||unvan||displayName):'',
+    invoiceType:hasCorpInfo?'corporate':'individual',
+    companyName,
     companyAddress,
     companyCity,
     companyDistrict,
-    workPhone:useCorp?phone:'',
-    taxOffice:useCorp?(taxOffice||companyCity||city||'Belirtilmedi'):'',
-    taxNo:useCorp?vkn:'',
+    workPhone:phone,
+    taxOffice:taxOffice||(vkn?(companyCity||city||'Belirtilmedi'):''),
+    taxNo:vkn,
     tckn:tcknDigits.length===11?tcknDigits:'',
     customerCode:kod||'',
     note:notes.join(' · '),
@@ -533,7 +533,7 @@ function findExistingCustomer(customers,payload){
 }
 
 function classifyParsed(parsed,customers){
-  const counts={total:0,noPhone:0,shortPhone:0,noName:0,dupFile:0,existing:0,ready:0,corporate:0,individual:0};
+  const counts={total:0,noPhone:0,shortPhone:0,noName:0,dupFile:0,existing:0,ready:0,corporate:0,individual:0,both:0};
   const out=[];
   for(const row of (parsed.rows||[])){
     counts.total++;
@@ -548,8 +548,10 @@ function classifyParsed(parsed,customers){
       continue;
     }
     counts.ready++;
-    if(row.payload.invoiceType==='corporate')counts.corporate++;
+    const hasCorp=Boolean(row.payload.companyName||row.payload.taxNo);
+    if(hasCorp)counts.corporate++;
     else counts.individual++;
+    if(hasCorp&&(row.payload.firstName||row.payload.tckn))counts.both=(counts.both||0)+1;
     out.push(row);
   }
   return {counts,rows:out,header:parsed.header};

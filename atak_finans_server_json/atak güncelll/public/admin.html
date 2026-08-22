@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v226" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v226" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v226" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v226" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v227" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v227" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v227" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v227" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -781,15 +781,15 @@ body.inv-full #pageTitle{font-size:18px}
       </div>
       <div class="cust-form-sec" id="salesQuickCustomerIndividualSec">
         <div class="cust-form-sec-title">Fatura tipi</div>
-        <p class="field-hint" style="margin:0">Senet şahıs adına kalır. Kurumsal fatura için aşağıdaki alanları doldurun.</p>
+        <p class="field-hint" style="margin:0">Aynı kartta şahıs ve firma birlikte durur. Senet şahıs adına kalır.</p>
         <div class="cust-invoice-type" style="margin-top:10px">
           <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="individual" checked/> Bireysel fatura</label>
           <label class="cust-radio"><input type="radio" name="salesQuickCustomerInvoiceType" value="corporate"/> Kurumsal fatura</label>
         </div>
       </div>
-      <div class="cust-form-sec hidden" id="salesQuickCustomerCorporateSec">
+      <div class="cust-form-sec" id="salesQuickCustomerCorporateSec">
         <div class="cust-form-sec-title">Kurumsal</div>
-        <p class="field-hint" style="margin:0">Sadece <b>vergi no</b> yazın — ünvan e-Fatura’dan otomatik gelir.</p>
+        <p class="field-hint" style="margin:0">Excel’deki kurumsal ünvan / adres / vergi buraya gelir.</p>
         <label>Kurumsal ünvan *<input id="salesQuickCustomerCompanyName" placeholder="Otomatik dolar"/></label>
         <label>Kurumsal adres<textarea id="salesQuickCustomerCompanyAddress" rows="2" placeholder="Firma açık adresi"></textarea></label>
         <div class="two-col">
@@ -2306,15 +2306,15 @@ Bulunamayan → Diğer.
 </div>
 <div class="cust-form-sec" id="customerPageIndividualSec">
 <div class="cust-form-sec-title">Fatura tipi</div>
-<p class="field-hint" style="margin:0">Senet şahıs adına kalır. Kurumsal fatura için aşağıdaki alanları doldurun.</p>
+<p class="field-hint" style="margin:0">Aynı kartta şahıs ve firma birlikte durur. Senet şahıs adına kalır; fatura tipi hangisinin kesileceğini seçer.</p>
 <div class="cust-invoice-type" style="margin-top:10px">
 <label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="individual" checked/> Bireysel fatura</label>
 <label class="cust-radio"><input type="radio" name="customerPageInvoiceType" value="corporate"/> Kurumsal fatura</label>
 </div>
 </div>
-<div class="cust-form-sec hidden" id="customerPageCorporateSec">
+<div class="cust-form-sec" id="customerPageCorporateSec">
 <div class="cust-form-sec-title">Kurumsal</div>
-<p class="field-hint" style="margin:0">Sadece <b>vergi no</b> yazın — ünvan e-Fatura’dan otomatik gelir.</p>
+<p class="field-hint" style="margin:0">Excel’deki kurumsal ünvan / adres / vergi buraya gelir. Vergi no yazınca ünvan otomatik de dolabilir.</p>
 <label>Kurumsal ünvan *<input id="customerPageCompanyName" placeholder="Otomatik dolar"/></label>
 <label>Kurumsal adres<textarea id="customerPageCompanyAddress" rows="2" placeholder="Firma açık adresi"></textarea></label>
 <div class="two-col">
@@ -2914,6 +2914,6 @@ Bulunamayan → Diğer.
     </div>
   </div>
 </div>
-<script src="/web-admin-assets/sip-call.js?v=fix-v226"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v226"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/sip-call.js?v=fix-v227"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v227"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

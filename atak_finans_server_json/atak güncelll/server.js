@@ -1927,8 +1927,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.226-atak-geteinvoices',
-    build:'fix-v226',
+    version:'6.3.227-atak-geteinvoices',
+    build:'fix-v227',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3484,28 +3484,26 @@ function parseCustomerPayload(x={}){
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress)){
     throw new Error('Teslimat adresi fatura adresinden farklıysa il, ilçe ve açık adres zorunludur');
   }
-  if(invoiceType==='corporate'){
-    if(!companyName)throw new Error('Kurumsal fatura için kurumsal ünvan zorunludur');
-    if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
-    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli vergi no (10 hane) zorunludur');
+  if(invoiceType==='corporate'&&!companyName&&!taxNo){
+    throw new Error('Kurumsal fatura için kurumsal ünvan veya vergi no girin');
   }
   if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TC girildiyse 11 hane olmalıdır');
   const out={
     name,firstName,lastName,phone,
     email:String(x.email||x.mail||'').trim(),
     birthDate,
-    taxNo:invoiceType==='corporate'?taxNo:'',
+    taxNo:taxNo||'',
     tckn:tckn||'',
     city,district,address,
     deliverySameAsBilling:deliverySame,
     deliveryCity:deliverySame?city:deliveryCity,
     deliveryDistrict:deliverySame?district:deliveryDistrict,
     deliveryAddress:deliverySame?address:deliveryAddress,
-    invoiceType,
-    companyName:invoiceType==='corporate'?companyName:'',
+    invoiceType:companyName||taxNo?'corporate':invoiceType,
+    companyName,
     companyAddress,companyCity,companyDistrict,
-    workPhone:invoiceType==='corporate'?(workPhone||phone):'',
-    taxOffice:invoiceType==='corporate'?taxOffice:'',
+    workPhone:workPhone||phone,
+    taxOffice:taxOffice||'',
     note:String(x.note||'').trim(),
     customerCode:customerCode.normalizeCustomerCode(x.customerCode||x.code||x.musteriKodu||x.musteriNo||''),
     active:x.active!==false&&x.active!=='false',
@@ -3662,6 +3660,7 @@ function customerExcelPreviewPayload(req){
       phone:p.phone||r.phone||'',
       rawPhone:r.source?.telefonRaw||'',
       invoiceType:p.invoiceType||'individual',
+      companyName:p.companyName||'',
       taxNo:p.taxNo||'',
       tckn:p.tckn||'',
       taxOffice:p.taxOffice||'',
@@ -3692,16 +3691,45 @@ function customerExcelPreviewPayload(req){
   Object.entries(classified.header?.cols||{}).forEach(([k,idx])=>{
     mapping[colLabels[k]||k]=classified.header.headers[idx]||k;
   });
+  pruneExcelImportJobs();
+  const jobId=crypto.randomUUID();
+  excelImportJobs.set(jobId,{
+    createdAt:Date.now(),
+    rows:(classified.rows||[]).filter(r=>r.status==='ready'&&r.payload),
+    counts:classified.counts
+  });
   return {
     ok:true,
+    jobId,
     sheet:parsed.sheet||'',
-    headerRow:(classified.header?.index||0)+1,
+    headerRow:Number(classified.header?.index)+1,
     mapping,
     counts:classified.counts,
     preview,
     truncated:classified.counts.ready>50,
-    note:'Sadece 10+ haneli telefon / GSM aktarılır. Telefonsuz ve 7 haneli sabit hatlar atlanır. Kayıtlı telefon / VKN / TCKN / aynı ad-soyad ezilmez.'
+    note:'Aynı kartta şahıs + kurumsal durur. Sadece 10+ haneli telefon aktarılır. Telefonsuz ve 7 haneli hatlar atlanır.'
   };
+}
+const excelImportJobs=new Map();
+function pruneExcelImportJobs(){
+  const now=Date.now();
+  for(const [id,job] of excelImportJobs){
+    if(now-job.createdAt>45*60*1000)excelImportJobs.delete(id);
+  }
+}
+function loadExcelImportJob(req){
+  pruneExcelImportJobs();
+  const jobId=String(req.body?.jobId||req.query?.jobId||'').trim();
+  if(jobId&&excelImportJobs.has(jobId))return {jobId,job:excelImportJobs.get(jobId)};
+  if(!req.file)throw new Error('Önce Excel seçip Önizle’ye basın.');
+  const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer,req.file.originalname||'');
+  if(!parsed.ok)throw new Error(parsed.error||'Excel okunamadı');
+  const s=readStore();
+  const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
+  const id=crypto.randomUUID();
+  const job={createdAt:Date.now(),rows:(classified.rows||[]).filter(r=>r.status==='ready'&&r.payload),counts:classified.counts};
+  excelImportJobs.set(id,job);
+  return {jobId:id,job};
 }
 app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers_manage'),customerExcelFile,(req,res)=>{
   try{res.json(customerExcelPreviewPayload(req))}
@@ -3709,16 +3737,16 @@ app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers
 });
 app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_manage'),customerExcelFile,(req,res)=>{
   try{
-    if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
-    const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer,req.file.originalname||'');
-    if(!parsed.ok)return res.status(400).json({error:parsed.error||'Excel okunamadı'});
+    const {jobId,job}=loadExcelImportJob(req);
+    const offset=Math.max(0,Number(req.body?.offset||req.query?.offset||0)||0);
+    const limit=Math.min(500,Math.max(50,Number(req.body?.limit||400)||400));
+    const slice=(job.rows||[]).slice(offset,offset+limit);
     const s=readStore();
-    customerDedupe.collapseDuplicateCustomersByName(s);
-    const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
+    if(offset===0)customerDedupe.collapseDuplicateCustomersByName(s);
     let imported=0,invalid=0;
     const errors=[];
-    for(const row of classified.rows){
-      if(row.status!=='ready'||!row.payload)continue;
+    for(const row of slice){
+      if(!row||!row.payload)continue;
       let data;
       try{
         data=parseCustomerPayload(row.payload);
@@ -3733,20 +3761,35 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
       s.customers.push({id:crypto.randomUUID(),createdAt:new Date().toISOString(),...data});
       imported++;
     }
-    audit(s,'Asistek müşteri Excel aktarıldı',`${imported} yeni`,{
-      imported,existing:classified.counts.existing,noPhone:classified.counts.noPhone,shortPhone:classified.counts.shortPhone,invalid
-    });
+    const nextOffset=offset+slice.length;
+    const done=nextOffset>=(job.rows||[]).length;
+    job.imported=(job.imported||0)+imported;
+    job.invalid=(job.invalid||0)+invalid;
+    if(done){
+      audit(s,'Asistek müşteri Excel aktarıldı',`${job.imported||0} yeni`,{
+        imported:job.imported||0,existing:job.counts?.existing,noPhone:job.counts?.noPhone,shortPhone:job.counts?.shortPhone,invalid:job.invalid||0
+      });
+      excelImportJobs.delete(jobId);
+    }
     writeStore(s);
     res.json({
       ok:true,
-      imported,
-      existing:classified.counts.existing,
-      noPhone:classified.counts.noPhone,
-      shortPhone:classified.counts.shortPhone,
-      noName:classified.counts.noName,
-      invalid,
-      corporate:classified.counts.corporate,
-      individual:classified.counts.individual,
+      jobId,
+      done,
+      offset,
+      nextOffset,
+      chunkImported:imported,
+      imported:job.imported||imported,
+      totalReady:(job.rows||[]).length,
+      remaining:Math.max(0,(job.rows||[]).length-nextOffset),
+      existing:job.counts?.existing||0,
+      noPhone:job.counts?.noPhone||0,
+      shortPhone:job.counts?.shortPhone||0,
+      noName:job.counts?.noName||0,
+      invalid:job.invalid||0,
+      corporate:job.counts?.corporate||0,
+      individual:job.counts?.individual||0,
+      both:job.counts?.both||0,
       errors
     });
   }catch(e){

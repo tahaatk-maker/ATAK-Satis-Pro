@@ -100,6 +100,11 @@ assert(atakMapped.payload.companyName==='ATAK LTD'&&atakMapped.payload.companyAd
 assert(atakMapped.payload.companyCity==='İstanbul'&&atakMapped.payload.companyDistrict==='Sarıyer','kurumsal il/ilçe');
 assert(atakMapped.payload.taxOffice==='Sarıyer'&&atakMapped.payload.taxNo==='0940148218','vergi');
 assert(atakMapped.payload.phone==='05321234567'&&atakMapped.payload.workPhone==='05321234567'&&atakMapped.payload.invoiceType==='corporate','iş telefonu + kurumsal');
+const bothRow=['00001010','57361159298','RENGİN','GÜVEN','TARABYA NUROL','Sarıyer','İstanbul','a@x.com','','ZEYNEP GÜR','FERAHEVLER NUROL','İstanbul','Sarıyer','İSTANBUL-SARIYER','','5324615929'];
+const bothMapped=mapDataRow(bothRow,atakCols);
+assert(bothMapped.payload.firstName==='RENGİN'&&bothMapped.payload.tckn==='57361159298','şahıs kimlik durur');
+assert(bothMapped.payload.companyName==='ZEYNEP GÜR'&&bothMapped.payload.companyAddress.includes('FERAHEVLER'),'kurumsal alt alana yazılır');
+assert(bothMapped.payload.invoiceType==='corporate'&&bothMapped.payload.phone==='05324615929','aynı kartta şahıs+firma');
 
 const dupNameMatrix=[atakHeader,atakRow,['A000101','12345678902','AHMET','YILMAZ','Başka adres','Sarıyer','İstanbul','b@b.com','15.03.1985','','','','','','','05329998877']];
 const dupParsed=parseAsistekMatrix(dupNameMatrix);
