@@ -54,6 +54,11 @@ assert(existing.counts.existing===1,'aynı telefon atlanır');
 assert(existing.counts.ready===1,'yeni kurumsal kalır');
 assert(existing.counts.noPhone===1,'telefonsuz sayılır');
 
+const byName=classifyParsed(parsed,[
+  {id:'c2',name:'Ahmet Yılmaz',firstName:'Ahmet',lastName:'Yılmaz',phone:'05990000000'}
+]);
+assert(byName.counts.existing>=1,'aynı ad soyad mevcut sayılır');
+
 const addr=buildAddress({adres:'Barbaros 1',mahalle:'Dikilitaş',cadde:'Barbaros Cad.',sokak:'',kapi:'12',semt:'Levent',ilce:'Beşiktaş'});
 assert(/Barbaros 1/.test(addr)&&/No: 12/.test(addr)&&/Levent/.test(addr),'adres parçaları');
 
@@ -95,5 +100,9 @@ assert(atakMapped.payload.companyName==='ATAK LTD'&&atakMapped.payload.companyAd
 assert(atakMapped.payload.companyCity==='İstanbul'&&atakMapped.payload.companyDistrict==='Sarıyer','kurumsal il/ilçe');
 assert(atakMapped.payload.taxOffice==='Sarıyer'&&atakMapped.payload.taxNo==='0940148218','vergi');
 assert(atakMapped.payload.phone==='05321234567'&&atakMapped.payload.workPhone==='05321234567'&&atakMapped.payload.invoiceType==='corporate','iş telefonu + kurumsal');
+
+const dupNameMatrix=[atakHeader,atakRow,['A000101','12345678902','AHMET','YILMAZ','Başka adres','Sarıyer','İstanbul','b@b.com','15.03.1985','','','','','','','05329998877']];
+const dupParsed=parseAsistekMatrix(dupNameMatrix);
+assert(dupParsed.rows.filter(r=>r.status==='skip_dupfile').length===1,'aynı ad soyad dosyada tek kalır');
 
 console.log('OK customer-excel-import tests passed');

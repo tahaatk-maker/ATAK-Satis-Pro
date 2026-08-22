@@ -4,6 +4,8 @@
  */
 'use strict';
 
+const {personNameKey}=require('./lib/customer-dedupe');
+
 function fold(v){
   return String(v??'').trim().toLocaleLowerCase('tr-TR')
     .replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s')
@@ -330,6 +332,7 @@ function parseAsistekMatrix(matrix){
   if(cols.telefon==null&&cols.gsm==null&&cols.evTel==null&&cols.isTel==null)return {ok:false,error:'Telefon / GSM / Ev Tel / İş Telefon sütunu yok.',rows:[],header:found};
   const rows=[];
   const seenPhone=new Set();
+  const seenName=new Set();
   for(let i=index+1;i<(matrix||[]).length;i++){
     const line=matrix[i]||[];
     if(!line.some(c=>cellStr(c)))continue;
@@ -349,7 +352,13 @@ function parseAsistekMatrix(matrix){
       rows.push({status:'skip_dupfile',reason:'Aynı telefonda tekrar satır',payload:null,source:mapped,phone});
       continue;
     }
+    const nameKey=personNameKey(mapped.payload);
+    if(nameKey&&seenName.has(nameKey)){
+      rows.push({status:'skip_dupfile',reason:'Aynı ad soyadda tekrar satır',payload:null,source:mapped,phone});
+      continue;
+    }
     seenPhone.add(phone);
+    if(nameKey)seenName.add(nameKey);
     rows.push({status:'ready',reason:'',payload:mapped.payload,source:mapped,phone});
   }
   return {ok:true,header:{index,cols,headers},rows};
@@ -368,6 +377,8 @@ function findExistingCustomer(customers,payload){
     if(tckn.length===11&&digits(c.tckn)===tckn)return true;
     const existingKod=String(c.customerCode||c.rapidCustAccount||c.code||'').trim().toLocaleLowerCase('tr-TR');
     if(kod&&existingKod&&kod===existingKod)return true;
+    const nameKey=personNameKey(payload);
+    if(nameKey&&personNameKey(c)===nameKey)return true;
     return false;
   })||null;
 }

@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v221 */
+/* ATAK_PERSONEL_BUILD=fix-v222 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -2481,13 +2481,13 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
     const map=new Map(salesCustomers.map(c=>[String(c.id),c]));
     map.set(String(row.id),row);
     salesCustomers=[...map.values()];
-    salesCustomerTotal=Number(salesCustomerTotal||0)+1;
+    if(!r.reused)salesCustomerTotal=Number(salesCustomerTotal||0)+1;
     $('#salesQuickCustomerModal')?.classList.add('hidden');
     if($('#customerSearchSale'))$('#customerSearchSale').value=row.name||'';
     $('#salesCustomerSelect').innerHTML=`<option value="${row.id}">${customerOptionLabel(row)}</option>`;
     $('#salesCustomerSelect').value=row.id;
     if($('#salesCustomerCount'))$('#salesCustomerCount').textContent='1 sonuç';
-    if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent='Yeni müşteri kaydedildi ve seçildi.';
+    if($('#salesCustomerSearchHint'))$('#salesCustomerSearchHint').textContent=r.reused?'Bu ad soyad kayıtlıydı, mevcut müşteri seçildi.':'Yeni müşteri kaydedildi ve seçildi.';
     salesCustomerChanged();
     st.textContent='';
   }catch(err){st.textContent=err.message}

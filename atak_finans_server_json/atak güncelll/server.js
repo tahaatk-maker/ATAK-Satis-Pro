@@ -28,6 +28,7 @@ const rapidRobot = require('./lib/rapid360-robot');
 const d365Auth = require('./lib/rapid360-d365-auth');
 const personName = require('./lib/person-name');
 const customerCode = require('./lib/customer-code');
+const customerDedupe = require('./lib/customer-dedupe');
 
 const app = express();
 const ROOT = __dirname;
@@ -1918,8 +1919,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.221-atak-geteinvoices',
-    build:'fix-v221',
+    version:'6.3.222-atak-geteinvoices',
+    build:'fix-v222',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -3508,6 +3509,8 @@ function parseCustomerPayload(x={}){
 function applyCustomerData(row,data){Object.assign(row,data);return row}
 function customerSearchHandler(req,res){
   const s=readStore();
+  const collapsed=customerDedupe.collapseDuplicateCustomersByName(s);
+  if(collapsed.merged)writeStore(s);
   const q=String(req.query.q||req.query.query||'').trim().toLocaleLowerCase('tr-TR');
   const limit=Math.min(200,Math.max(1,Number(req.query.limit)||40));
   const id=String(req.query.id||'').trim();
@@ -3563,10 +3566,21 @@ app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,
   const s=readStore(),x=req.body||{};
   let data;
   try{data=parseCustomerPayload(x)}catch(e){return res.status(400).json({error:e.message})}
-  let row=s.customers.find(v=>v.id===x.id);
+  const collapsed=customerDedupe.collapseDuplicateCustomersByName(s);
+  let row=s.customers.find(v=>v.id===x.id&&v.active!==false&&!v.deletedAt);
+  if(!row&&!x.id){
+    row=customerDedupe.findByPersonName(s.customers,data);
+  }
   try{
     data.customerCode=customerCode.resolveForSave(s,data.customerCode,{existing:row||null});
   }catch(e){return res.status(400).json({error:e.message})}
+  if(!x.id&&row){
+    customerDedupe.fillEmptyFields(row,data);
+    row.updatedAt=new Date().toISOString();
+    audit(s,'Müşteri mevcut kayda bağlandı',`${row.customerCode||''} ${row.name}`.trim(),{merged:collapsed.merged||0});
+    writeStore(s);
+    return res.json({ok:true,reused:true,row:{...row,balance:customerBalance(s,row.id)}});
+  }
   // Yeni müşteri: doğrudan kaydet
   if(!row){
     row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),...data};
@@ -3677,7 +3691,7 @@ function customerExcelPreviewPayload(req){
     counts:classified.counts,
     preview,
     truncated:classified.counts.ready>50,
-    note:'Sadece 10+ haneli telefon / GSM aktarılır. Telefonsuz ve 7 haneli sabit hatlar atlanır. Kayıtlı telefon / VKN / TCKN ezilmez.'
+    note:'Sadece 10+ haneli telefon / GSM aktarılır. Telefonsuz ve 7 haneli sabit hatlar atlanır. Kayıtlı telefon / VKN / TCKN / aynı ad-soyad ezilmez.'
   };
 }
 app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers_manage'),dynamicsUpload.single('file'),(req,res)=>{
@@ -3690,6 +3704,7 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
     const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer,req.file.originalname||'');
     if(!parsed.ok)return res.status(400).json({error:parsed.error||'Excel okunamadı'});
     const s=readStore();
+    customerDedupe.collapseDuplicateCustomersByName(s);
     const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
     let imported=0,invalid=0;
     const errors=[];

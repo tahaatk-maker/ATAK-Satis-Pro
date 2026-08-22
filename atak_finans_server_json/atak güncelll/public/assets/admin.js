@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v221 */
+/* ATAK_ADMIN_BUILD=fix-v222 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2894,8 +2894,8 @@ q('#customerPageSaveBtn')?.addEventListener('click',async()=>{
       await loadApprovals().catch(()=>{});
       return;
     }
-    st.textContent='Müşteri kaydedildi.';st.className='form-status success';
-    toast('Müşteri kaydedildi');
+    st.textContent=r.reused?'Bu ad soyad kayıtlıydı, mevcut müşteri güncellendi.':'Müşteri kaydedildi.';st.className='form-status success';
+    toast(r.reused?'Bu ad soyad zaten vardı, tek kayıt kullanıldı':'Müşteri kaydedildi');
     await loadCustomersPage();
     if(r.row?.id)await selectCustomerPage(r.row.id);
   }catch(err){st.textContent=err.message;st.className='form-status error'}
@@ -4037,14 +4037,14 @@ q('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
     const map=new Map((salesCenterData.customers||[]).map(c=>[String(c.id),c]));
     map.set(String(row.id),row);
     salesCenterData.customers=[...map.values()];
-    salesCenterData.customerTotal=Number(salesCenterData.customerTotal||0)+1;
+    if(!r.reused)salesCenterData.customerTotal=Number(salesCenterData.customerTotal||0)+1;
     if(q('#salesCustomerSearch'))q('#salesCustomerSearch').value=payload.name||row.name||'';
     q('#salesCustomerSelect').innerHTML=`<option value="${row.id}">${customerOptionLabel(row)}</option>`;
     q('#salesCustomerSelect').value=row.id;
     if(q('#salesCustomerCount'))q('#salesCustomerCount').textContent='1 sonuç';
-    if(q('#salesCustomerSearchHint'))q('#salesCustomerSearchHint').textContent='Yeni müşteri kaydedildi ve seçildi.';
+    if(q('#salesCustomerSearchHint'))q('#salesCustomerSearchHint').textContent=r.reused?'Bu ad soyad kayıtlıydı, mevcut müşteri seçildi.':'Yeni müşteri kaydedildi ve seçildi.';
     salesCustomerChanged();
-    q('#salesQuickCustomerModal').classList.add('hidden');toast('Müşteri kaydedildi ve satışa seçildi.');
+    q('#salesQuickCustomerModal').classList.add('hidden');toast(r.reused?'Bu ad soyad zaten vardı, mevcut müşteri seçildi':'Müşteri kaydedildi ve satışa seçildi.');
   }catch(err){st.textContent=err.message;st.className='form-status error'}
 });
 
