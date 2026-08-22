@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v231 */
+/* ATAK_ADMIN_BUILD=fix-v232 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2520,6 +2520,11 @@ async function selectCustomerPage(id){
   customersPageData.selectedId=id;
   renderCustomerPageList();
   const empty=q('#customerEmptyState'),content=q('#customerDetailContent');
+  const emptyTitle=empty?.querySelector('h2');
+  const emptyText=empty?.querySelector('p');
+  empty?.classList.remove('hidden');content?.classList.add('hidden');
+  if(emptyTitle)emptyTitle.textContent='Kart açılıyor…';
+  if(emptyText)emptyText.textContent='Aktarım yazıyorsa birkaç saniye sürer. F5 aktarımı durdurmaz.';
   try{
     const d=await api('/web-api/admin/customer-detail/'+encodeURIComponent(id));
     const c=d.customer||{};
@@ -2580,7 +2585,12 @@ async function selectCustomerPage(id){
       delBtn.disabled=Boolean(d.pendingDelete)||c.active===false;
       delBtn.textContent=d.pendingDelete?'🗑 Silme onayı bekliyor':'🗑 Sil (Onaya)';
     }
-  }catch(e){toast(e.message);empty?.classList.remove('hidden');content?.classList.add('hidden')}
+  }catch(e){
+    toast(e.message);
+    empty?.classList.remove('hidden');content?.classList.add('hidden');
+    if(emptyTitle)emptyTitle.textContent='Kart açılamadı';
+    if(emptyText)emptyText.textContent=e.message||'Sunucu meşgul. Birkaç saniye bekleyip tekrar tıklayın. F5 aktarımı durdurmaz.';
+  }
 }
 async function openCustomerSmsPanel(type){
   const c=customersPageData._selected;
@@ -2832,6 +2842,11 @@ q('#customerExcelPreviewBtn')?.addEventListener('click',()=>previewCustomerExcel
     previewCustomerExcelFile(file);
   });
 })();
+window.addEventListener('beforeunload',e=>{
+  if(!window.__customerExcelRunning)return;
+  e.preventDefault();
+  e.returnValue='Aktarım sürüyor. F5 yazılanları silmez ama sayfa sunucunun bitirmesini bekler.';
+});
 q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
   const file=selectedCustomerExcelFile();
   const st=q('#customerExcelStatus');

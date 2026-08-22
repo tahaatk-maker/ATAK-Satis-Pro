@@ -515,7 +515,7 @@ function writeStore(store){
   delete clean.__custSearch;
   delete clean.__balMap;
   const t=`${STORE_PATH}.tmp`;
-  fs.writeFileSync(t,JSON.stringify(clean,null,2),'utf8');
+  fs.writeFileSync(t,JSON.stringify(clean),'utf8');
   fs.renameSync(t,STORE_PATH);
   storeMem=store||clean;
   storeMemMtime=storeFileMtime();
@@ -1958,8 +1958,8 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
 app.get('/health',(req,res)=>res.json({
   ok:true,
   service:'atakhome-erp-v2',
-    version:'6.3.231-atak-geteinvoices',
-    build:'fix-v231',
+    version:'6.3.232-atak-geteinvoices',
+    build:'fix-v232',
   ownerOnly:ownerOnlyEnabled(),
   storeOk:storeFileSize(STORE_PATH)>=200,
   backup:autoBackup.status(),
@@ -2046,16 +2046,29 @@ app.get('/web-api/me',(req,res)=>{
   }
   res.json({authenticated:authed,user:currentSessionUser(req),ownerOnly:ownerOnlyEnabled()});
 });
+function publicAdminStore(s){
+  return {
+    ...s,
+    customers:[],
+    customerCount:(s.customers||[]).filter(c=>c.active!==false&&!c.deletedAt).length,
+    financeTransactions:[],
+    promissoryNotes:[],
+    customerComms:[],
+    smsLogs:[],
+    invoiceQueue:[],
+    auditLogs:(s.auditLogs||[]).slice(0,20),
+    staff:(s.staff||[]).map(x=>publicStaff(x,s)),
+    users:[],
+    stores:s.stores||[],
+    security:{ownerOnly:ownerOnlyEnabled(),ownerUsernames:ownerUsernames()}
+  };
+}
 app.get('/web-api/admin/store',requireAdmin,(req,res)=>{
   const s=readStore();
   if(promoteStaffToUsers(s)>0)writeStore(s);
-  res.json({
-    ...s,
-    staff:(s.staff||[]).map(x=>publicStaff(x,s)),
-    users:hasPermission(req,'users_manage')?(s.users||[]).map(u=>publicUser(u,s)):[],
-    stores:s.stores||[],
-    security:{ownerOnly:ownerOnlyEnabled(),ownerUsernames:ownerUsernames()}
-  });
+  const out=publicAdminStore(s);
+  out.users=hasPermission(req,'users_manage')?(s.users||[]).map(u=>publicUser(u,s)):[];
+  res.json(out);
 });
 
 
@@ -3754,7 +3767,7 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
     const limit=Math.min(500,Math.max(50,Number(req.body?.limit||400)||400));
     const slice=(job.rows||[]).slice(offset,offset+limit);
     const s=readStore();
-    if(offset===0)customerDedupe.collapseDuplicateCustomersByName(s);
+    if(offset===0&&(s.customers||[]).length<2500)customerDedupe.collapseDuplicateCustomersByName(s);
     let imported=0,updated=0,invalid=0;
     const errors=[];
     for(const row of slice){
@@ -4296,8 +4309,8 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
     pendingDelete,
     canManage:isSystemManager(req),
     accounts:s.financeAccounts.filter(x=>x.active!==false).map(x=>({...x,balance:accountBalance(s,x.id)})),
-    products:(s.products||[]).filter(x=>x.active!==false).map(x=>({code:x.code,name:x.name,price:Number(x.cashPrice||x.salePrice||x.price||0),cardPrice:Number(x.cardPrice||x.cashPrice||x.salePrice||0),brand:x.brand||''})),
-    warehouses:(s.warehouses||[]).filter(x=>x.active!==false),
+    products:[],
+    warehouses:[],
     promissoryNotes:(s.promissoryNotes||[])
       .filter(n=>n.customerId===customer.id)
       .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))
