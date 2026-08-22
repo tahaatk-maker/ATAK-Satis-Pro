@@ -2639,11 +2639,63 @@ async function sendCustomerSmsFromPanel(){
   }
 }
 q('#newCustomerBtn')?.addEventListener('click',()=>openCustomerModal(null));
-q('#customerExcelBtn')?.addEventListener('click',()=>{
+function excelImportJobKey(){return 'atakExcelImportJob'}
+function saveExcelImportJob(extra={}){
+  const job={
+    jobId:window.__customerExcelJobId||'',
+    offset:Number(window.__customerExcelOffset||0)||0,
+    fileName:selectedCustomerExcelFile()?.name||window.__customerExcelFileName||'',
+    imported:Number(extra.imported||window.__customerExcelImported||0)||0,
+    updated:Number(extra.updated||window.__customerExcelUpdated||0)||0,
+    totalReady:Number(extra.totalReady||window.__customerExcelTotal||0)||0,
+    ts:Date.now()
+  };
+  window.__customerExcelFileName=job.fileName;
+  window.__customerExcelImported=job.imported;
+  window.__customerExcelUpdated=job.updated;
+  window.__customerExcelTotal=job.totalReady;
+  try{if(job.jobId)sessionStorage.setItem(excelImportJobKey(),JSON.stringify(job));else sessionStorage.removeItem(excelImportJobKey())}catch(_){}
+}
+function loadExcelImportJob(){
+  try{
+    const job=JSON.parse(sessionStorage.getItem(excelImportJobKey())||'null');
+    if(!job||!job.jobId||Date.now()-Number(job.ts||0)>40*60*1000)return null;
+    window.__customerExcelJobId=job.jobId;
+    window.__customerExcelOffset=Number(job.offset||0)||0;
+    window.__customerExcelFileName=job.fileName||'';
+    window.__customerExcelImported=Number(job.imported||0)||0;
+    window.__customerExcelUpdated=Number(job.updated||0)||0;
+    window.__customerExcelTotal=Number(job.totalReady||0)||0;
+    return job;
+  }catch(_){return null}
+}
+function clearExcelImportJob(){
+  window.__customerExcelJobId='';
+  window.__customerExcelOffset=0;
+  window.__customerExcelImported=0;
+  window.__customerExcelUpdated=0;
+  window.__customerExcelTotal=0;
+  try{sessionStorage.removeItem(excelImportJobKey())}catch(_){}
+}
+function openCustomerExcelModal(){
   q('#customerExcelModal')?.classList.remove('hidden');
-  if(q('#customerExcelStatus')){q('#customerExcelStatus').textContent='Excel seçin, sonra Önizle.';q('#customerExcelStatus').className='form-status'}
+  const job=loadExcelImportJob();
+  const st=q('#customerExcelStatus');
+  if(job){
+    if(q('#customerExcelImportBtn'))q('#customerExcelImportBtn').disabled=false;
+    if(st){
+      st.textContent=`Aktarım durdu, silinmedi. ${job.imported||0}/${job.totalReady||'?'} yazıldı. Kapatmak iptal etmez. Tekrar Aktar’a basın.`;
+      st.className='form-status';
+    }
+    return;
+  }
+  if(st&&!st.textContent){st.textContent='Excel seçin, sonra Önizle. Kapatmak yazılanları silmez.';st.className='form-status'}
+}
+q('#customerExcelBtn')?.addEventListener('click',()=>openCustomerExcelModal());
+q('#customerExcelClose')?.addEventListener('click',()=>{
+  q('#customerExcelModal')?.classList.add('hidden');
+  if(window.__customerExcelJobId)saveExcelImportJob();
 });
-q('#customerExcelClose')?.addEventListener('click',()=>q('#customerExcelModal')?.classList.add('hidden'));
 function customerExcelEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
 function selectedCustomerExcelFile(){return q('#customerExcelFile')?.files?.[0]||window.__customerExcelFile||null}
 function setCustomerExcelFile(file){
@@ -2698,6 +2750,7 @@ async function previewCustomerExcelFile(file){
     const d=await api('/web-api/admin/customers-excel-preview',{method:'POST',body:fd});
     window.__customerExcelJobId=d.jobId||'';
     window.__customerExcelOffset=0;
+    saveExcelImportJob({imported:0,updated:0,totalReady:Number(d.counts?.ready||0)+Number(d.counts?.update||0)});
     renderCustomerExcelPreview(d);
     if(st){
       const ready=Number(d.counts?.ready||0);
@@ -2761,19 +2814,20 @@ q('#customerExcelImportBtn')?.addEventListener('click',async()=>{
       offset=Number(last.nextOffset||offset);
       window.__customerExcelOffset=offset;
       const total=Number(last.totalReady||0);
+      saveExcelImportJob({imported:last.imported||0,updated:last.updated||0,totalReady:total});
       if(st)st.textContent=last.done
         ?`Aktarıldı: ${last.imported||0} yeni · ${last.updated||0} düzeltildi · ${last.existing||0} kayıtlı · ${last.noPhone||0} telefonsuz`
-        :`Aktarılıyor… ${last.imported||0} yeni / ${last.updated||0} düzeltildi / ${total||'?'}`;
+        :`Aktarılıyor… ${last.imported||0} yeni / ${last.updated||0} düzeltildi / ${total||'?'} · Kapatmak iptal etmez`;
       if(last.done)break;
     }
-    window.__customerExcelOffset=0;
-    window.__customerExcelJobId='';
+    clearExcelImportJob();
     const extra=(last.errors||[]).length?` · ${last.errors.slice(0,3).join(' | ')}`:'';
     if(st){st.textContent=`Aktarıldı: ${last.imported||0} yeni · ${last.updated||0} düzeltildi · ${last.existing||0} kayıtlı · ${last.noPhone||0} telefonsuz · ${last.shortPhone||0} yedi haneli${extra}`;st.className='form-status success'}
     toast(`${last.imported||0} müşteri aktarıldı`);
     await loadCustomersPage().catch(()=>{});
   }catch(err){
-    if(st){st.textContent=err.message||'Aktarılamadı';st.className='form-status error'}
+    saveExcelImportJob();
+    if(st){st.textContent=(err.message||'Aktarılamadı')+' Yazılanlar duruyor. Tekrar Aktar’a basın.';st.className='form-status error'}
     if(btn)btn.disabled=false;
   }
 });
