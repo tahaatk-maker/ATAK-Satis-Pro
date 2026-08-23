@@ -1995,8 +1995,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.234-atak-geteinvoices',
-    build:'fix-v234',
+    version:'6.3.235-atak-geteinvoices',
+    build:'fix-v235',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,

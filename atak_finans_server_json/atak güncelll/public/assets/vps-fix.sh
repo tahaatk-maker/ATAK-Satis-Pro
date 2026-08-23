@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.234-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.235-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.234-atak-geteinvoices
-EXPECT_BUILD=fix-v234
+EXPECT_HEALTH=6.3.235-atak-geteinvoices
+EXPECT_BUILD=fix-v235
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -377,18 +377,25 @@ PORT_NOW=$(grep -E '^PORT=' "$ENVF" 2>/dev/null | tail -1 | cut -d= -f2 | tr -d 
 [ -n "$PORT_NOW" ] || PORT_NOW=3100
 echo "PORT=$PORT_NOW"
 
+# Only recycle the ERP process named "atak". Do NOT kill atakhome-web / ticaret
+# (those serve https://atakhome.com.tr). Do NOT pkill every server.js.
 pm2 delete atak 2>/dev/null || true
 sleep 1
-pkill -f 'node .*server\.js' 2>/dev/null || true
-sleep 1
-for P in 3000 3100 "$PORT_NOW"; do
-  PID=$(ss -lntp 2>/dev/null | awk -v p=":$P" '$4 ~ p {print}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1 || true)
+ERP_PORT="${PORT_NOW:-3100}"
+if [ "$ERP_PORT" = "3000" ] || [ "$ERP_PORT" = "3200" ]; then
+  echo "   ERP port $ERP_PORT looks like the public site — will not kill it"
+else
+  PID=$(ss -lntp 2>/dev/null | awk -v p=":$ERP_PORT" '$4 ~ p {print}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1 || true)
   if [ -n "${PID:-}" ]; then
     CMD=$(ps -p "$PID" -o args= 2>/dev/null || true)
-    echo "   LISTEN $P pid=$PID"
-    if echo "$CMD" | grep -qE 'server\.js|node'; then kill -9 "$PID" 2>/dev/null || true; fi
+    echo "   LISTEN $ERP_PORT pid=$PID"
+    if echo "$CMD" | grep -qE 'atak-v10|atakhome-platform|/atak '; then
+      kill -9 "$PID" 2>/dev/null || true
+    else
+      echo "   skip kill (not ERP): $CMD"
+    fi
   fi
-done
+fi
 sleep 1
 
 step "personel girisi aciliyor (ATAK_OWNER_ONLY=0)"

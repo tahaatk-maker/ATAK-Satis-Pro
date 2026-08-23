@@ -99,8 +99,6 @@ echo "STORE_COUNT=$FOUND"
 
 if command -v pm2 >/dev/null 2>&1; then
   pm2 restart atak --update-env || true
-  pm2 restart atakhome-ticaret --update-env || true
-  pm2 restart atakhome-web --update-env || true
 fi
 
 sleep 2
