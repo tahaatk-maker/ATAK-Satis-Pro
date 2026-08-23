@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Atak Home — Eviniz için her şey</title>
-  <meta name="description" content="Atak Home Sarıyer. Beko, İstikbal ve ev yaşam çözümleri. Beyaz eşya, mobilya, klima ve TV.">
+  <meta name="description" content="Atak Home Sarıyer. Beko, İstikbal, beyaz eşya, mobilya, klima ve TV.">
   <link rel="icon" href="/atak-header-logo.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,108 +14,46 @@
 <body>
   <header class="top">
     <div class="wrap top-row">
-      <a class="brand" href="#top" aria-label="Atak Home">
+      <a class="brand" href="#/" aria-label="Atak Home">
         <img src="/atak-header-logo.svg" alt="Atak Pazarlama" width="180" height="52">
       </a>
-      <nav class="nav" id="nav">
-        <a href="#urunler">Ürünler</a>
-        <a href="#kampanyalar">Kampanyalar</a>
-        <a href="#magaza">Mağaza</a>
-        <a href="#iletisim">İletişim</a>
-      </nav>
+      <form class="search" id="searchForm">
+        <input id="searchInput" type="search" placeholder="Buzdolabı, klima, kanepe ara" autocomplete="off">
+        <button type="submit">Ara</button>
+      </form>
       <div class="top-actions">
-        <a class="btn btn-ghost" href="tel:+902122232871">0212 223 28 71</a>
-        <a class="btn btn-wa" href="https://wa.me/905433585060" target="_blank" rel="noopener">WhatsApp</a>
-        <button class="menu-btn" id="menuBtn" type="button" aria-label="Menü">☰</button>
+        <a class="btn btn-ghost" id="phoneBtn" href="tel:+902122232871">0212 223 28 71</a>
+        <a class="btn btn-wa" id="waBtn" href="https://wa.me/905433585060" target="_blank" rel="noopener">WhatsApp</a>
+        <button class="cart-btn" id="cartBtn" type="button">Sepet <b id="cartCount">0</b></button>
       </div>
     </div>
+    <div class="cats-bar wrap" id="catsBar"></div>
   </header>
 
-  <main id="top">
-    <section class="hero">
-      <div class="wrap hero-grid">
-        <div>
-          <p class="eyebrow">Sarıyer · Showroom</p>
-          <h1 id="heroTitle">Evinizi sadece döşemeyin. Yaşatın.</h1>
-          <p class="lead" id="heroText">Beko ürünleri, mobilya, klima, TV ve ev yaşam çözümleri Atak Home’da.</p>
-          <div class="hero-cta">
-            <a class="btn btn-primary" href="#urunler">Ürünleri keşfet</a>
-            <a class="btn btn-line" href="https://wa.me/905433585060?text=Merhaba%2C%20Atak%20Home%20urunleri%20hakkinda%20bilgi%20almak%20istiyorum." target="_blank" rel="noopener">Danışmanla yaz</a>
-          </div>
-          <ul class="hero-points">
-            <li>Yetkili Beko ve İstikbal satışı</li>
-            <li>Çeyiz, klima ve TV paketleri</li>
-            <li>Sarıyer mağazada yerinde inceleme</li>
-          </ul>
-        </div>
-        <aside class="hero-card">
-          <p class="hero-card-kicker">Mağaza</p>
-          <strong>Atak Home Showroom</strong>
-          <p>Ferahevler Mah. Adnan Kahveci Cad. No:109<br>Sarıyer / İstanbul</p>
-          <a class="btn btn-primary wide" href="https://maps.google.com/?q=Ferahevler+Mah.+Adnan+Kahveci+Cad.+No:109+Sariyer" target="_blank" rel="noopener">Yol tarifi</a>
-        </aside>
+  <main id="app"></main>
+
+  <aside class="drawer hidden" id="cartDrawer" aria-label="Sepet">
+    <div class="drawer-bg" id="cartClose"></div>
+    <div class="drawer-box">
+      <div class="drawer-head">
+        <h2>Sepet</h2>
+        <button type="button" id="cartX">Kapat</button>
       </div>
-    </section>
-
-    <section class="brands wrap" aria-label="Markalar">
-      <img src="/beko-logo.svg" alt="Beko" height="36">
-      <img src="/istikbal-logo.svg" alt="İstikbal" height="36">
-      <span class="brand-pill">Grundig</span>
-    </section>
-
-    <section class="section wrap" id="urunler">
-      <div class="section-head">
-        <h2>Kategoriler</h2>
-        <p>Showroom’daki ana gruplar. Ürün eklenince burada listelenir.</p>
+      <div id="cartItems"></div>
+      <div class="drawer-foot">
+        <p>Toplam <b id="cartTotal">0 TL</b></p>
+        <a class="btn btn-primary wide" id="cartWa" href="#" target="_blank" rel="noopener">WhatsApp ile sipariş</a>
+        <p class="tiny">Ödeme ve teslimat mağazada netleşir.</p>
       </div>
-      <div class="cats" id="cats"></div>
-    </section>
+    </div>
+  </aside>
 
-    <section class="section wrap" id="kampanyalar">
-      <div class="section-head">
-        <h2>Kampanyalar</h2>
-        <p>Güncel fırsatlar için mağazayı arayın veya WhatsApp yazın.</p>
-      </div>
-      <div class="cams" id="cams"></div>
-    </section>
-
-    <section class="section wrap" id="liste">
-      <div class="section-head">
-        <h2>Ürün vitrini</h2>
-        <p id="prodNote">Panelden eklenen aktif ürünler burada görünür.</p>
-      </div>
-      <div class="prods" id="prods"></div>
-    </section>
-
-    <section class="visit" id="magaza">
-      <div class="wrap visit-grid">
-        <div>
-          <h2>Sarıyer’de sizi bekliyoruz</h2>
-          <p>Beyaz eşya, mobilya ve ev elektroniğini yerinde görün. Ölçü, teslimat ve çeyiz paketi için ekibimiz yardımcı olur.</p>
-          <p class="addr">Ferahevler Mah. Adnan Kahveci Cad. No:109<br>Sarıyer / İstanbul</p>
-          <div class="hero-cta">
-            <a class="btn btn-primary" href="tel:+902122232871">0212 223 28 71</a>
-            <a class="btn btn-line" href="https://wa.me/905433585060" target="_blank" rel="noopener">WhatsApp</a>
-          </div>
-        </div>
-        <div class="hours">
-          <h3>İletişim</h3>
-          <p>Telefon<br><a href="tel:+902122232871">0212 223 28 71</a></p>
-          <p>E-posta<br><a href="mailto:tarabyabeko@gmail.com">tarabyabeko@gmail.com</a></p>
-          <p>WhatsApp<br><a href="https://wa.me/905433585060" target="_blank" rel="noopener">0543 358 50 60</a></p>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="foot" id="iletisim">
+  <footer class="foot">
     <div class="wrap">
       <p><strong>ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.</strong></p>
-      <p>Vergi Dairesi Sarıyer · VN 0940148218</p>
-      <p>Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul</p>
+      <p id="footAddr">Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul</p>
     </div>
   </footer>
-
   <script src="/app.js"></script>
 </body>
 </html>

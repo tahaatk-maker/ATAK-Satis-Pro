@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v236 */
+/* ATAK_ADMIN_BUILD=fix-v240 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -167,6 +167,7 @@ function goTab(id,{remember=true}={}){
   if(id==='customersPage')setTimeout(()=>loadCustomersPage().catch(e=>toast(e.message)),20);
   if(id==='salesCenter')setTimeout(()=>loadSalesCenter(),20);
   if(id==='webOrders')setTimeout(()=>loadWebOrders(),20);
+  if(id==='webSite')setTimeout(()=>renderWebSite(),20);
   if(id==='settings')setTimeout(()=>{
     setSettingsTab(settingsTabView);
     loadPromissorySettings();
@@ -198,7 +199,7 @@ document.addEventListener('click',e=>{
 });
 q('#productsMenuToggle')?.addEventListener('click',()=>setProductsMenu(!q('#productsNavGroup')?.classList.contains('open')));
 q('#submenuNewProduct')?.addEventListener('click',()=>{goTab('products');q('#newProductBtn')?.click()});
-function renderAll(){renderDashboard();renderCategoryOptions();renderBrandOptions();renderProducts();renderBrands();renderCategories();renderCampaigns();renderBanners();renderRevenue();renderUsers();refreshProductsStockWarehouseOptions().catch(()=>{})}
+function renderAll(){renderDashboard();renderCategoryOptions();renderBrandOptions();renderProducts();renderBrands();renderCategories();renderCampaigns();renderBanners();renderWebSite();renderRevenue();renderUsers();refreshProductsStockWarehouseOptions().catch(()=>{})}
 function localDate(d=new Date()){const z=new Date(d.getTime()-d.getTimezoneOffset()*60000);return z.toISOString().slice(0,10)}
 function weekStart(d=new Date()){const x=new Date(d),day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return localDate(x)}
 async function fetchRevenueSummary(startDate,endDate){return api(`/web-api/admin/revenue-summary?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`)}
@@ -892,6 +893,35 @@ function renderBanners(){
     toast('Banner silindi');await load();resetBannerForm();
   });
 }
+function renderWebSite(){
+  if(!store||!q('#webSiteForm'))return;
+  const s=store.settings||{};
+  const live=(store.products||[]).filter(p=>p.active!==false).length;
+  const banners=(store.banners||[]).filter(b=>b.active).length;
+  const camps=(store.campaigns||[]).filter(c=>c.active).length;
+  if(q('#webSiteStats'))q('#webSiteStats').innerHTML=`<div class="health"><b>${live}</b><span>Vitrinde ürün</span></div><div class="health"><b>${banners}</b><span>Aktif banner</span></div><div class="health"><b>${camps}</b><span>Aktif kampanya</span></div><div class="health"><b>atakhome.com.tr</b><span>Canlı adres</span></div>`;
+  if(q('#webSiteName'))q('#webSiteName').value=s.siteName||'Atak Home';
+  if(q('#webSiteTagline'))q('#webSiteTagline').value=s.tagline||'';
+  if(q('#webSitePhone'))q('#webSitePhone').value=s.phone||'';
+  if(q('#webSiteWhatsapp'))q('#webSiteWhatsapp').value=s.whatsapp||'';
+  if(q('#webSiteEmail'))q('#webSiteEmail').value=s.email||'';
+  if(q('#webSiteAddress'))q('#webSiteAddress').value=s.address||'';
+}
+q('#webSiteForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#webSiteStatus');
+  if(st)st.textContent='Kaydediliyor...';
+  try{
+    await api('/web-api/admin/site-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      siteName:q('#webSiteName').value,tagline:q('#webSiteTagline').value,
+      phone:q('#webSitePhone').value,whatsapp:q('#webSiteWhatsapp').value,
+      email:q('#webSiteEmail').value,address:q('#webSiteAddress').value
+    })});
+    toast('Site ayarları kaydedildi');
+    if(st)st.textContent='Kaydedildi. Vitrin birkaç saniyede güncellenir.';
+    await load();
+  }catch(err){if(st)st.textContent=err.message;toast(err.message)}
+});
 window.editBanner=id=>{
   const b=store.banners.find(x=>x.id===id);if(!b)return;
   q('#bannerId').value=b.id;q('#bannerHeadline').value=b.headline;q('#bannerSubheadline').value=b.subheadline||'';

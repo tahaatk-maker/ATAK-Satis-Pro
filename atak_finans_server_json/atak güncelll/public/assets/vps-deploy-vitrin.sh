@@ -1,5 +1,5 @@
 #!/bin/bash
-# Public shop only. Do not copy ERP. Do not restart commerce.
+# Public shop + panel web tab. Do not copy into commerce. Do not restart commerce.
 # Do not restore Hostinger backups. Do not touch panel data.
 # ASCII only. Chrome translate OFF.
 set +e
@@ -72,9 +72,15 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+    location /uploads/ {
+        proxy_pass http://127.0.0.1:%s/uploads/;
+        proxy_set_header Host panel.atakhome.com.tr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
     location / { try_files $uri /index.html; }
 }
-'''%(ssl, dest, port)
+'''%(ssl, dest, port, port)
 os.makedirs("/etc/nginx/conf.d", exist_ok=True)
 os.makedirs("/etc/nginx/sites-available", exist_ok=True)
 os.makedirs("/etc/nginx/sites-enabled", exist_ok=True)
@@ -132,4 +138,18 @@ curl -sL -m 8 https://atakhome.com.tr/ | head -c 400
 echo
 echo "PANEL still"
 curl -sSI -m 8 https://panel.atakhome.com.tr/personel | head -8
+
+APP=$(cd "$HERE/../.." && pwd)
+echo "PANEL_FILES $APP"
+for D in /root/atak-v10 /root/atakhome-platform; do
+  case "$D" in *commerce*|*checkout*|*vitrin*) echo "SKIP_SHOP $D"; continue ;; esac
+  [ -d "$D" ] || { echo "SKIP_MISSING $D"; continue; }
+  if [ ! -f "$D/public/admin.html" ]; then echo "SKIP_NOT_ERP $D"; continue; fi
+  cp -f "$APP/public/admin.html" "$D/public/admin.html"
+  cp -f "$APP/public/assets/admin.js" "$D/public/assets/admin.js"
+  cp -f "$APP/server.js" "$D/server.js"
+  echo "PANEL_PATCH $D"
+done
+pm2 restart atak --update-env
+sleep 2
 echo "VITRIN-DEPLOY DONE"

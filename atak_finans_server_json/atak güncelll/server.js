@@ -1995,8 +1995,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.239-atak-geteinvoices',
-    build:'fix-v239',
+    version:'6.3.240-atak-geteinvoices',
+    build:'fix-v240',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -2044,7 +2044,34 @@ function handleAtakGetEInvoices(req,res){
 }
 app.get(atakGetE.PATH,handleAtakGetEInvoices);
 app.get(atakGetE.PATH_ALIAS,handleAtakGetEInvoices);
-app.get('/web-api/public',(req,res)=>{ const s=readStore(); res.json({settings:s.settings,categories:s.categories.filter(c=>c.active).sort((a,b)=>a.sort-b.sort),products:s.products.filter(p=>p.active).map(p=>({...p,salePrice:calculateSalePrice(p)})),campaigns:s.campaigns.filter(isCampaignLive).sort((a,b)=>a.sort-b.sort),banners:s.banners.filter(b=>b.active).sort((a,b)=>a.sort-b.sort)}); });
+function publicProduct(p){
+  const sale=calculateSalePrice(p);
+  return {
+    id:p.id,code:p.code,name:p.name,brand:p.brand,category:p.category,
+    image:p.image||'',images:Array.isArray(p.images)?p.images.slice(0,8):[],
+    description:String(p.description||'').slice(0,800),
+    salePrice:sale,cashPrice:p.cashPrice||sale,cardPrice:p.cardPrice||sale,
+    listPrice:p.listPrice||p.oldPrice||0,oldPrice:p.oldPrice||0,
+    stock:p.stock,featured:!!p.featured,tags:p.tags||[],campaignId:p.campaignId||''
+  };
+}
+app.get('/web-api/public',(req,res)=>{ const s=readStore(); res.json({settings:{
+  siteName:s.settings.siteName,tagline:s.settings.tagline,whatsapp:s.settings.whatsapp,
+  phone:s.settings.phone,email:s.settings.email,address:s.settings.address
+},categories:s.categories.filter(c=>c.active).sort((a,b)=>a.sort-b.sort),products:s.products.filter(p=>p.active).map(publicProduct),campaigns:s.campaigns.filter(isCampaignLive).sort((a,b)=>a.sort-b.sort),banners:s.banners.filter(b=>b.active).sort((a,b)=>a.sort-b.sort)}); });
+app.post('/web-api/admin/site-settings',requireAdmin,(req,res)=>{
+  const s=readStore(),x=req.body||{};
+  s.settings=s.settings||{};
+  if(x.siteName!=null)s.settings.siteName=String(x.siteName).trim()||s.settings.siteName;
+  if(x.tagline!=null)s.settings.tagline=String(x.tagline).trim();
+  if(x.phone!=null)s.settings.phone=String(x.phone).replace(/\s/g,'');
+  if(x.whatsapp!=null)s.settings.whatsapp=String(x.whatsapp).replace(/\D/g,'');
+  if(x.email!=null)s.settings.email=String(x.email).trim();
+  if(x.address!=null)s.settings.address=String(x.address).trim();
+  audit(s,'Web sitesi ayarları güncellendi','Web Sitesi');
+  writeStore(s);
+  res.json({ok:true,settings:s.settings});
+});
 app.post('/web-api/login',async(req,res)=>{
   try{
     const username=String(req.body.username||'').trim().toLocaleLowerCase('tr-TR'),password=String(req.body.password||'');

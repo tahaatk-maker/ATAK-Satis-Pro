@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v236" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v236" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v236" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v236" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v240" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v240" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v240" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v240" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -616,13 +616,14 @@ body.inv-full #pageTitle{font-size:18px}
 <button data-tab="prices" type="button">₺ Toplu Fiyat</button>
 <button data-tab="brands" type="button">◇ Markalar</button>
 <small class="menu-label">WEB SİTESİ</small>
+<button data-tab="webSite" type="button">◉ Web Sitesi</button>
 <button data-tab="webOrders" type="button">🛒 Web Siparişleri</button>
 <button data-tab="productImport" type="button">＋ Siteye Ürün Ekle</button>
 <button data-tab="products" type="button">▣ Web Ürünleri</button>
 <button data-tab="campaigns" type="button">％ Kampanyalar</button>
 <button data-tab="banners" type="button">▧ Banner / Slider</button>
 <button data-tab="categories" type="button">◫ Kategoriler</button>
-<a href="https://beta.atakhome.com.tr" rel="noopener" target="_blank">↗ Siteyi Aç</a>
+<a href="https://atakhome.com.tr" rel="noopener" target="_blank">↗ Siteyi Aç</a>
 <small class="menu-label">YÖNETİM</small>
 <button data-tab="revenue" type="button">◉ Ciro Kanalları</button>
 <button data-tab="sync" type="button">↻ Veri Aktarımı</button>
@@ -1174,6 +1175,39 @@ body.inv-full #pageTitle{font-size:18px}
   <div id="salesTrackingStatus" class="form-status"></div>
 </div></section>
 <section class="tab" id="products"><div class="toolbar advanced products-toolbar"><input id="adminSearch" placeholder="Kod, ürün veya marka ara"/><select id="filterCategory"><option value="all">Tüm kategoriler</option></select><select id="filterStatus"><option value="all">Tüm durumlar</option><option value="active">Yayında</option><option value="passive">Pasif</option><option value="featured">Öne çıkan</option></select><div class="products-toolbar-actions"><button class="backup-btn" id="productsExcelExportBtn" type="button" title="Seçili kategoriye göre Excel indir">⬇ Excel İndir</button><select id="productsStockWarehouse" title="Stok yüklenecek depo"><option value="">Depo seç</option></select><button class="secondary-btn" id="productsExcelImportBtn" type="button" title="Adet doldurulmuş Excel ile stok gir">Excel'den stok yükle</button><input accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" id="productsExcelImportFile" type="file"/><button class="secondary-btn" id="productsClearMobilyaPurchaseBtn" type="button" title="Mobilya kategorisindeki alış fiyatlarını 0 yap">Mobilya alışlarını sil</button><button class="mini-btn danger" id="productsClearAllBtn" type="button" title="Kategoriler kalır, tüm ürün kartları silinir">Tüm ürünleri sil</button><button class="primary" id="newProductBtn" type="button">+ Yeni ürün</button></div></div><div class="selection-bar hidden" id="selectionBar"><b><span id="selectedCount">0</span> ürün seçildi</b><button data-bulk="active" type="button">Yayına al</button><button data-bulk="passive" type="button">Pasife al</button><button data-bulk="featured" type="button">Öne çıkar</button><button data-bulk="unfeatured" type="button">Öne çıkarmayı kaldır</button><button id="clearSelection" type="button">Seçimi temizle</button></div><div class="panel table-wrap"><table><thead><tr><th><input id="selectAll" type="checkbox"/></th><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Marka</th><th>Kategori</th><th>Alış</th><th>Liste</th><th>Nakit</th><th>Kart</th><th>KDV</th><th>Stok</th><th>Durum</th><th></th></tr></thead><tbody id="productTable"></tbody></table><div class="pagination"><button id="prevPage" type="button">←</button><span id="pageInfo"></span><button id="nextPage" type="button">→</button></div></div></section>
+<section class="tab" id="webSite">
+<div class="panel">
+  <div class="panel-head">
+    <div>
+      <small class="eyebrow">ATAK HOME VİTRİN</small>
+      <h2>Web Sitesi</h2>
+      <p class="note">Banner, kampanya ve aktif ürünler <b>atakhome.com.tr</b> vitrinine düşer. Personel ve yönetim ayrı kalır.</p>
+    </div>
+    <a class="primary" href="https://atakhome.com.tr" target="_blank" rel="noopener">Siteyi aç ↗</a>
+  </div>
+  <div class="web-order-stats" id="webSiteStats"></div>
+</div>
+<form class="panel form-stack" id="webSiteForm">
+  <h2>Site yazıları</h2>
+  <div class="two-cols">
+    <label>Site adı<input id="webSiteName" placeholder="Atak Home"/></label>
+    <label>Slogan<input id="webSiteTagline" placeholder="Eviniz için her şey"/></label>
+  </div>
+  <div class="two-cols">
+    <label>Telefon<input id="webSitePhone" placeholder="02122232871"/></label>
+    <label>WhatsApp<input id="webSiteWhatsapp" placeholder="905433585060"/></label>
+  </div>
+  <label>E-posta<input id="webSiteEmail" placeholder="tarabyabeko@gmail.com"/></label>
+  <label>Adres<textarea id="webSiteAddress" rows="2"></textarea></label>
+  <div class="button-row">
+    <button class="primary" type="submit">Site ayarlarını kaydet</button>
+    <button class="secondary-btn" data-go="banners" type="button">Banner / Slider</button>
+    <button class="secondary-btn" data-go="campaigns" type="button">Kampanyalar</button>
+    <button class="secondary-btn" data-go="products" type="button">Web ürünleri</button>
+  </div>
+  <div class="form-status" id="webSiteStatus"></div>
+</form>
+</section>
 <section class="tab" id="webOrders">
 <div class="web-orders-head panel">
 <div><small>ATAK HOME WEB SİTESİ</small><h2>Web Siparişleri</h2><p>İnternet sitesinden gelen siparişleri tek ekrandan takip edin.</p></div>
@@ -2915,5 +2949,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v236"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v240"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
