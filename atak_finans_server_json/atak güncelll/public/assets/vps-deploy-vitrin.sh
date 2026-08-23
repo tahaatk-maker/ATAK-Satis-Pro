@@ -64,7 +64,7 @@ server {
         return 302 https://panel.atakhome.com.tr/personel;
     }
     location ^~ /web-admin {
-        return 302 https://panel.atakhome.com.tr/web-admin;
+        return 302 https://atakhome.com.tr/;
     }
     location = /web-api/public {
         proxy_pass http://127.0.0.1:%s/web-api/public;

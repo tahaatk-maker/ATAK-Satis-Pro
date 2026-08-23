@@ -14,7 +14,7 @@ block='''    location ^~ /personel {
         return 302 https://panel.atakhome.com.tr/personel;
     }
     location ^~ /web-admin {
-        return 302 https://panel.atakhome.com.tr/web-admin;
+        return 302 https://atakhome.com.tr/;
     }
 '''
 needle="    location / { try_files $uri /index.html; }"

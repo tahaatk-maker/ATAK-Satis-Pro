@@ -1995,8 +1995,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.238-atak-geteinvoices',
-    build:'fix-v238',
+    version:'6.3.239-atak-geteinvoices',
+    build:'fix-v239',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -8927,8 +8927,20 @@ app.post('/web-api/admin/beko-sync/start',requireAdmin,async(req,res)=>{const s=
 app.post('/web-api/admin/import-csv',requireAdmin,upload.single('file'),(req,res)=>{if(!req.file)return res.status(400).json({error:'CSV dosyası seçilmedi'});let rows;try{rows=parse(req.file.buffer.toString('utf8'),{columns:true,skip_empty_lines:true,bom:true,trim:true});}catch(e){return res.status(400).json({error:`CSV okunamadı: ${e.message}`});}const s=readStore();let added=0,updated=0,skipped=0;for(const r of rows){const brand=String(r.brand||r.marka||r['Marka']||'Beko').trim(),cat=String(r.category||r.kategori||r['Kategori']||'');if(!(brand.toLowerCase()==='beko'||(brand.toLowerCase()==='grundig'&&/kişisel|kisisel/i.test(cat)))){skipped++;continue;}const code=String(r.code||r.urun_kodu||r['Ürün Kodu']||'').trim(),name=String(r.name||r.urun_adi||r['Ürün Adı']||'').trim();if(!code||!name){skipped++;continue;}const i=s.products.findIndex(p=>p.code.toLowerCase()===code.toLowerCase());const p=sanitizeProduct({...r,code,name},i>=0?s.products[i]:{});if(i>=0){s.products[i]=p;updated++;}else{s.products.push(p);added++;}}s.syncLogs.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),source:'csv',added,updated,skipped});audit(s,'CSV ürün aktarımı','Ürünler',{added,updated,skipped});writeStore(s);res.json({ok:true,added,updated,skipped});});
 app.get('/web-api/admin/export-csv',requireAdmin,(req,res)=>{const s=readStore(),h=['code','barcode','brand','name','category','vatRate','purchasePrice','listPrice','cashPrice','cardPrice','minimumSalePrice','bekoPrice','oldPrice','salePrice','priceMode','priceValue','stock','active','featured','tags','image','description','sourceUrl'];const esc=v=>`"${String(Array.isArray(v)?v.join('|'):(v??'')).replace(/"/g,'""')}"`;const lines=[h.join(',')].concat(s.products.map(p=>h.map(k=>esc(p[k])).join(',')));res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="atakhome-products.csv"');res.send('\ufeff'+lines.join('\n'));});
 
-app.get('/web-admin',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
-app.get('/web-admin/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
+function isPublicShopHostEarly(req){
+  const h=String(req.headers['x-forwarded-host']||req.headers.host||'').split(',')[0].trim().toLowerCase().replace(/:\d+$/,'');
+  return h==='atakhome.com.tr'||h==='www.atakhome.com.tr';
+}
+app.get('/web-admin',(req,res)=>{
+  if(isPublicShopHostEarly(req))return res.redirect(302,'https://atakhome.com.tr/');
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+  res.sendFile(path.join(ROOT,'public','admin.html'));
+});
+app.get('/web-admin/*',(req,res)=>{
+  if(isPublicShopHostEarly(req))return res.redirect(302,'https://atakhome.com.tr/');
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+  res.sendFile(path.join(ROOT,'public','admin.html'));
+});
 app.get('/e-fatura',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','fatura.html'))});
 app.get('/e-fatura/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','fatura.html'))});
 app.get('/web-admin-v5',(req,res)=>res.redirect('/web-admin'));
