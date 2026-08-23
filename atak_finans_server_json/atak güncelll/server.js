@@ -1995,8 +1995,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.240-atak-geteinvoices',
-    build:'fix-v240',
+    version:'6.3.241-atak-geteinvoices',
+    build:'fix-v241',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -9009,6 +9009,13 @@ app.get(['/styles.css','/app.js','/atak-header-logo.svg','/beko-logo.svg','/isti
   const name=path.basename(req.path);
   const files=[path.join(ROOT,'public','vitrin',name),path.join(ROOT,'public','assets',name)];
   for(const f of files){ if(fs.existsSync(f)) return res.sendFile(f); }
+  next();
+});
+app.get('/img/:file',(req,res,next)=>{
+  if(!isPublicShopHost(req))return next();
+  const name=path.basename(req.params.file||'');
+  const f=path.join(ROOT,'public','vitrin','img',name);
+  if(fs.existsSync(f)) return res.sendFile(f);
   next();
 });
 app.get('/assets/*',(req,res)=>res.status(404).type('text').send('Not found'));

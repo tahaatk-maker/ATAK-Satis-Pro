@@ -16,14 +16,15 @@ if [ ! -f "$VITRIN/index.html" ]; then
   exit 1
 fi
 
-mkdir -p "$DEST"
+mkdir -p "$DEST/img"
 cp -f "$VITRIN/index.html" "$DEST/index.html"
 cp -f "$VITRIN/styles.css" "$DEST/styles.css"
 cp -f "$VITRIN/app.js" "$DEST/app.js"
+cp -f "$VITRIN"/img/* "$DEST/img/" 2>/dev/null
 cp -f "$HERE/atak-header-logo.svg" "$DEST/atak-header-logo.svg" 2>/dev/null
 cp -f "$HERE/beko-logo.svg" "$DEST/beko-logo.svg" 2>/dev/null
 cp -f "$HERE/istikbal-logo.svg" "$DEST/istikbal-logo.svg" 2>/dev/null
-echo "COPIED $(ls -1 "$DEST" | wc -l) files"
+echo "COPIED $(ls -1 "$DEST" "$DEST/img" 2>/dev/null | wc -l) files"
 
 ERP_PORT=$(pm2 jlist 2>/dev/null | python3 -c '
 import json,sys
