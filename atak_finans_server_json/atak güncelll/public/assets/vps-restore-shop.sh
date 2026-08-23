@@ -1,148 +1,120 @@
 #!/bin/bash
-# Restore designed public shop on atakhome.com.tr
-# Do NOT touch web-admin or /personel (ERP on atak / atakhome-platform).
-# ASCII only. Turn Chrome translate OFF.
+# Put the DESIGNED shop back on atakhome.com.tr.
+# Do not touch atak / atakhome-web (panel + personel).
+# ASCII only. Chrome translate OFF.
 set +e
 echo "SHOP-RESTORE START $(date -Is)"
 
+is_erp_dir(){
+  local d="$1"
+  [ -d "$d" ] || return 1
+  [ -f "$d/public/personel.html" ] && return 0
+  [ -f "$d/public/admin.html" ] && grep -q "atakhome-erp\|redirect('/personel')" "$d/server.js" 2>/dev/null && return 0
+  return 1
+}
+
+score_shop(){
+  local d="$1" n=0
+  [ -d "$d" ] || { echo 0; return; }
+  is_erp_dir "$d" && { echo 0; return; }
+  n=10
+  [ -f "$d/package.json" ] && n=$((n+20))
+  grep -qiE 'next|vite|nuxt|checkout|commerce' "$d/package.json" 2>/dev/null && n=$((n+40))
+  [ -d "$d/app" ] || [ -d "$d/src" ] || [ -d "$d/pages" ] && n=$((n+20))
+  echo "$d" | grep -qi 'backup\|live-support\|v4-4' && n=$((n+15))
+  echo "$n"
+}
+
 SHOP_DIR=""
-for d in \
-  /root/atakhome-commerce-v4-5-checkout \
-  /root/atakhome-commerce \
-  /root/atakhome-commerce-v4 \
-  /var/www/atakhome
- do
-  [ -d "$d" ] && SHOP_DIR="$d" && break
-done
-if [ -z "$SHOP_DIR" ] && command -v pm2 >/dev/null 2>&1; then
+if command -v pm2 >/dev/null 2>&1; then
   SHOP_DIR=$(pm2 jlist 2>/dev/null | python3 -c '
 import json,sys
-try:
-  d=json.load(sys.stdin)
-except Exception:
-  raise SystemExit(0)
+try: d=json.load(sys.stdin)
+except Exception: raise SystemExit(0)
 for p in d:
-  n=str(p.get("name") or "")
-  if "commerce" in n or n in ("atakhome-shop","shop"):
+  if "commerce" in str(p.get("name") or ""):
     print((p.get("pm2_env") or {}).get("pm_cwd") or "")
     break
 ')
 fi
-echo "SHOP_DIR=${SHOP_DIR:-none}"
-echo "PM2"
-pm2 list 2>/dev/null
+[ -n "$SHOP_DIR" ] || SHOP_DIR=/root/atakhome-commerce-v4-5-checkout
+echo "SHOP_DIR=$SHOP_DIR"
+echo "PM2"; pm2 list
 
-if [ -n "$SHOP_DIR" ] && [ -d "$SHOP_DIR" ]; then
-  echo "SHOP_LS"
-  ls -la "$SHOP_DIR" | head -25
-  if [ -f "$SHOP_DIR/public/personel.html" ] || grep -q "res.redirect('/personel')" "$SHOP_DIR/server.js" 2>/dev/null; then
-    echo "SHOP_OVERWRITTEN_BY_ERP"
-    if [ -d "$SHOP_DIR/.git" ]; then
-      echo "GIT_REMOTE"
-      git -C "$SHOP_DIR" remote -v
-      git -C "$SHOP_DIR" log --oneline -8
-      git -C "$SHOP_DIR" fetch --all --prune 2>/tmp/shop-git-fetch.txt
-      cat /tmp/shop-git-fetch.txt | tail -6
-      BR=$(git -C "$SHOP_DIR" rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's#origin/##')
-      [ -n "$BR" ] || BR=main
-      echo "GIT_RESET origin/$BR"
-      git -C "$SHOP_DIR" reset --hard "origin/$BR"
-      echo "GIT_HEAD $(git -C "$SHOP_DIR" log -1 --oneline)"
-    else
-      echo "NO_GIT_IN_SHOP"
-      echo "LOOKING_BACKUPS"
-      ls -d /root/atakhome-commerce* /root/*checkout* /root/*vitrin* 2>/dev/null
-      ls -d "$SHOP_DIR".bak* "$SHOP_DIR"-bak* 2>/dev/null
-    fi
-  else
-    echo "SHOP_SOURCE_LOOKS_OK"
-  fi
-  if [ -f "$SHOP_DIR/public/personel.html" ] && [ -f "$SHOP_DIR/public/admin.html" ]; then
-    echo "STILL_ERP_FILES_IN_SHOP"
-  fi
-  pm2 restart atakhome-commerce --update-env >/tmp/shop-pm2.txt 2>&1
-  tail -8 /tmp/shop-pm2.txt
-else
-  echo "FAIL_NO_SHOP_DIR"
+echo "SCAN_BACKUPS"
+BEST=""
+BESTN=0
+while IFS= read -r d; do
+  [ -d "$d" ] || continue
+  n=$(score_shop "$d")
+  erp=no
+  is_erp_dir "$d" && erp=yes
+  echo "CAND $d score=$n erp=$erp"
+  if [ "$n" -gt "$BESTN" ]; then BEST="$d"; BESTN="$n"; fi
+done < <(ls -1d /root/atakhome-commerce* /root/*checkout* /root/*vitrin* /root/*live-support* 2>/dev/null)
+
+echo "BEST_SRC=${BEST:-none} score=$BESTN"
+
+if [ -z "$BEST" ] || [ "$BESTN" -lt 10 ]; then
+  echo "FAIL_NO_SHOP_BACKUP"
+  echo "Panel ve personel duruyor. Vitrin yedegi ERP olmayan klasorde degil."
+  exit 1
 fi
 
-# Classify local ports after restore
-python3 - <<'PY'
-import os,re,subprocess
+if [ ! -d "$SHOP_DIR" ]; then
+  echo "FAIL_NO_SHOP_DIR $SHOP_DIR"
+  exit 1
+fi
 
-def curl(url):
-    p=subprocess.run(["curl","-sS","-m","3","-D","-","-o","/tmp/atak-b.txt",url],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
-    body=""
-    try: body=open("/tmp/atak-b.txt","r",encoding="utf-8",errors="ignore").read()
-    except Exception: body=""
-    return (p.stdout or "")+"\n"+body
+if [ "$BEST" = "$SHOP_DIR" ] && ! is_erp_dir "$SHOP_DIR"; then
+  echo "SHOP_ALREADY_GOOD $SHOP_DIR"
+else
+  echo "COPY $BEST -> $SHOP_DIR (keep .env node_modules data)"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude node_modules --exclude .env --exclude data --exclude '.git' \
+      --exclude '*.bak-*' \
+      "$BEST"/ "$SHOP_DIR"/
+  else
+    # keep env
+    [ -f "$SHOP_DIR/.env" ] && cp -a "$SHOP_DIR/.env" /tmp/atak-shop.env.bak
+    find "$SHOP_DIR" -mindepth 1 -maxdepth 1 ! -name node_modules ! -name .env ! -name data ! -name .git -exec rm -rf {} +
+    find "$BEST" -mindepth 1 -maxdepth 1 ! -name node_modules ! -name .env ! -name data ! -name .git -exec cp -a {} "$SHOP_DIR"/ \;
+    [ -f /tmp/atak-shop.env.bak ] && cp -a /tmp/atak-shop.env.bak "$SHOP_DIR/.env"
+  fi
+fi
 
-erp=shop=None
-for port in (3000,3100,3200,3001):
-    blob=curl("http://127.0.0.1:%s/"%port).lower()
-    health=curl("http://127.0.0.1:%s/health"%port).lower()
-    print("PORT",port,"personel",("/personel" in blob),"erp_health",("atakhome-erp-v2" in health),"len",len(blob))
-    if "atakhome-erp-v2" in health or "redirecting to /personel" in blob:
-        if erp is None: erp=port
-    elif blob.strip() and "redirecting to /personel" not in blob and "personel gir" not in blob:
-        if shop is None: shop=port
+# Force PORT=3200 in shop .env without touching ERP .env
+if [ -f "$SHOP_DIR/.env" ]; then
+  sed -i -E '/^[[:space:]]*(export[[:space:]]+)?PORT[[:space:]]*=/d' "$SHOP_DIR/.env"
+  echo "PORT=3200" >> "$SHOP_DIR/.env"
+else
+  echo "PORT=3200" > "$SHOP_DIR/.env"
+fi
+echo "SHOP_ENV_PORT=3200"
 
-# prefer 3200 for shop if it is not erp
-blob3200=curl("http://127.0.0.1:3200/")
-if "redirecting to /personel" not in blob3200.lower() and "personel gir" not in blob3200.lower() and blob3200.strip():
-    shop=3200
-if shop is None:
-    shop=3200
-if erp is None:
-    erp=3000
-open("/tmp/atak-shop-ports.env","w").write("ERP_PORT=%s\nSHOP_PORT=%s\n"%(erp,shop))
-print("ERP_PORT",erp,"SHOP_PORT",shop)
-PY
-. /tmp/atak-shop-ports.env 2>/dev/null
-echo "ERP_PORT=${ERP_PORT:-3000} SHOP_PORT=${SHOP_PORT:-3200}"
+if is_erp_dir "$SHOP_DIR"; then
+  echo "FAIL_STILL_ERP_AFTER_COPY src=$BEST"
+  exit 1
+fi
+echo "SHOP_FILES_OK"
 
-# Write dedicated public vhost. Do not edit panel block except remove public names from ERP default.
+# Restart ONLY commerce
+pm2 restart atakhome-commerce --update-env --cwd "$SHOP_DIR" >/tmp/shop-pm2.txt 2>&1
+tail -15 /tmp/shop-pm2.txt
+sleep 3
+
+# nginx public -> 3200 (already written before; write again)
 python3 - <<'PY'
 import os,re,glob
-erp=os.environ.get("ERP_PORT") or "3000"
-shop=os.environ.get("SHOP_PORT") or "3200"
-try:
-    env=open("/tmp/atak-shop-ports.env").read()
-    for line in env.splitlines():
-        if "=" in line:
-            k,v=line.split("=",1)
-            if k=="ERP_PORT" and v: erp=v
-            if k=="SHOP_PORT" and v: shop=v
-except Exception:
-    pass
-
-ssl_cert=""
-ssl_key=""
-for path in glob.glob("/etc/letsencrypt/live/atakhome.com.tr/fullchain.pem") + glob.glob("/etc/letsencrypt/live/*/fullchain.pem"):
-    if "atakhome" in path or not ssl_cert:
-        ssl_cert=path
-        ssl_key=path.replace("fullchain.pem","privkey.pem")
-        if "atakhome.com.tr" in path:
-            break
-if not ssl_cert:
-    for dp,dns,fns in os.walk("/etc/nginx"):
-        for fn in fns:
-            if not fn.endswith((".conf",".inc")): continue
-            p=os.path.join(dp,fn)
-            try: t=open(p,encoding="utf-8",errors="ignore").read()
-            except Exception: continue
-            m=re.search(r"ssl_certificate\s+(\S+);",t)
-            k=re.search(r"ssl_certificate_key\s+(\S+);",t)
-            if m and k:
-                ssl_cert=m.group(1); ssl_key=k.group(1)
-                break
-
-ssl_lines=""
+shop="3200"
+ssl_cert=ssl_key=""
+for path in glob.glob("/etc/letsencrypt/live/atakhome.com.tr/fullchain.pem"):
+    ssl_cert=path; ssl_key=path.replace("fullchain.pem","privkey.pem")
+ssl=""
 if ssl_cert and os.path.isfile(ssl_cert):
-    ssl_lines="    ssl_certificate %s;\n    ssl_certificate_key %s;\n"%(ssl_cert,ssl_key)
-
-conf='''# Public shop only. panel.atakhome.com.tr stays on ERP.
-server {
+    ssl="    ssl_certificate %s;\n    ssl_certificate_key %s;\n"%(ssl_cert,ssl_key)
+conf='''server {
     listen 80;
     listen [::]:80;
     server_name atakhome.com.tr www.atakhome.com.tr;
@@ -163,20 +135,18 @@ server {
         proxy_set_header Connection "upgrade";
     }
 }
-'''%(ssl_lines, shop)
-
-os.makedirs("/etc/nginx/sites-available", exist_ok=True)
-os.makedirs("/etc/nginx/sites-enabled", exist_ok=True)
+'''%(ssl, shop)
+os.makedirs("/etc/nginx/sites-available",exist_ok=True)
+os.makedirs("/etc/nginx/sites-enabled",exist_ok=True)
 open("/etc/nginx/sites-available/atakhome-public.conf","w").write(conf)
 link="/etc/nginx/sites-enabled/atakhome-public.conf"
-if os.path.islink(link) or os.path.isfile(link):
-    try: os.remove(link)
-    except Exception: pass
+try:
+    if os.path.lexists(link): os.remove(link)
+except Exception:
+    pass
 os.symlink("/etc/nginx/sites-available/atakhome-public.conf", link)
-print("WROTE", link, "shop", shop, "ssl", ssl_cert or "none")
-
-# Remove public names from other server_name lines so this vhost wins
-changed=0
+print("NGINX_SHOP 3200")
+# strip public names from other vhosts
 for dp,dns,fns in os.walk("/etc/nginx"):
     for fn in fns:
         if not fn.endswith((".conf",".inc")): continue
@@ -185,44 +155,39 @@ for dp,dns,fns in os.walk("/etc/nginx"):
         try: txt=open(path,encoding="utf-8",errors="ignore").read()
         except Exception: continue
         if "atakhome.com.tr" not in txt: continue
-        def drop_public(m):
+        def drop(m):
             names=m.group(1)
             names=re.sub(r"(^|\s)www\.atakhome\.com\.tr(\s|$)"," ",names)
             names=re.sub(r"(^|\s)atakhome\.com\.tr(\s|$)"," ",names)
             names=re.sub(r"\s+"," ",names).strip()
             return "server_name %s;"%names if names else "server_name _;"
-        new=re.sub(r"server_name([^;]+);", drop_public, txt)
+        new=re.sub(r"server_name([^;]+);", drop, txt)
         if new!=txt:
             bak=path+".bak-shop-restore"
-            if not os.path.isfile(bak):
-                open(bak,"w").write(txt)
+            if not os.path.isfile(bak): open(bak,"w").write(txt)
             open(path,"w").write(new)
-            changed+=1
-            print("STRIP_PUBLIC_NAME", path)
-print("STRIPPED", changed)
+            print("STRIP", path)
 PY
 
-if command -v nginx >/dev/null 2>&1; then
-  if nginx -t >/tmp/atak-nginx-t.txt 2>&1; then
-    systemctl reload nginx >/dev/null 2>&1 || nginx -s reload
-    echo "NGINX_RELOAD ok"
-  else
-    echo "NGINX_TEST_FAIL"
-    cat /tmp/atak-nginx-t.txt
-  fi
-fi
+nginx -t >/tmp/atak-nginx-t.txt 2>&1 && { systemctl reload nginx 2>/dev/null || nginx -s reload; echo NGINX_RELOAD; } || { echo NGINX_FAIL; cat /tmp/atak-nginx-t.txt; }
 
 sleep 2
-echo "CHECK"
-echo -n "HOST_3200 "; curl -sS -m 4 -o /tmp/h3200.html -w "%{http_code}" -H "Host: atakhome.com.tr" http://127.0.0.1:${SHOP_PORT:-3200}/; echo
-head -c 120 /tmp/h3200.html 2>/dev/null; echo
-echo -n "PUBLIC "; curl -sSI -m 8 https://atakhome.com.tr/ | head -12
-echo -n "PANEL "; curl -sS -m 6 https://panel.atakhome.com.tr/health; echo
-echo -n "PERSONEL "; curl -sS -m 6 -o /tmp/per.html -w "%{http_code}" https://panel.atakhome.com.tr/personel; echo
+echo "CHECK_3200"
+curl -sS -m 4 -D - -o /tmp/c3200.html http://127.0.0.1:3200/ | head -15
+echo "BODY3200"; head -c 160 /tmp/c3200.html; echo
+echo "CHECK_PUBLIC"
+curl -sSI -m 8 https://atakhome.com.tr/ | head -15
+echo "CHECK_PANEL"
+curl -sS -m 6 https://panel.atakhome.com.tr/health; echo
+curl -sS -m 6 -o /dev/null -w "PERSONEL_HTTP=%{http_code}\n" https://panel.atakhome.com.tr/personel
 
-if curl -sSI -m 8 https://atakhome.com.tr/ | grep -qi "location: /personel"; then
-  echo "STILL_PERSONEL — shop files may still be ERP. Need original commerce git/backup."
-else
-  echo "SHOP_RESTORE_OK"
+if grep -qi "redirecting to /personel\|Personel Girişi" /tmp/c3200.html; then
+  echo "FAIL_3200_STILL_ERP"
+  exit 1
 fi
+if curl -sSI -m 8 https://atakhome.com.tr/ | grep -qi "location: /personel"; then
+  echo "FAIL_PUBLIC_STILL_PERSONEL"
+  exit 1
+fi
+echo "SHOP_RESTORE_OK"
 echo "SHOP-RESTORE DONE"
