@@ -20,6 +20,7 @@ assert.match(html, /search-ico/);
 assert.doesNotMatch(html, /href="\/personel"/);
 assert.doesNotMatch(html, /web-admin/);
 assert.match(css, /--blue:#0a4d94/);
+assert.match(css, /width:calc\(100% - 48px\)/);
 assert.match(js, /web-api\/public/);
 assert.match(js, /Evinizi sadece döşemeyin/);
 assert.match(js, /#\/urunler/);
