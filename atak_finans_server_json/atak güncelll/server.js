@@ -8936,14 +8936,38 @@ app.get('/web-admin-v5',(req,res)=>res.redirect('/web-admin'));
 app.get('/panel-ornek',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','panel-v2.html'))});
 app.get('/panel-ornek-2',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','panel-v3.html'))});
 app.get('/web-admin-legacy',(req,res)=>res.sendFile(path.join(ROOT,'public','admin-v5.html')));
-app.get('/personel',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','personel.html'))});
-app.get('/personel/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','personel.html'))});
-app.get('/',(req,res)=>res.redirect('/personel'));
+function requestHost(req){
+  return String(req.headers['x-forwarded-host']||req.headers.host||'').split(',')[0].trim().toLowerCase().replace(/:\d+$/,'');
+}
+function isPublicShopHost(req){
+  const h=requestHost(req);
+  return h==='atakhome.com.tr'||h==='www.atakhome.com.tr';
+}
+function sendPublicShopHold(res){
+  res.status(200).type('html').set('Cache-Control','no-store').send(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atak Home</title></head><body style="font-family:sans-serif;max-width:640px;margin:12vh auto;padding:24px"><h1>Atak Home</h1><p>Bu adres vitrin sitesidir. Personel girişi burada açılmaz.</p><p>Personel: <a href="https://panel.atakhome.com.tr/personel">panel.atakhome.com.tr/personel</a><br>Yönetim: <a href="https://panel.atakhome.com.tr/web-admin">panel.atakhome.com.tr/web-admin</a></p></body></html>`);
+}
+app.get('/personel',(req,res)=>{
+  if(isPublicShopHost(req))return sendPublicShopHold(res);
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+  res.sendFile(path.join(ROOT,'public','personel.html'));
+});
+app.get('/personel/*',(req,res)=>{
+  if(isPublicShopHost(req))return sendPublicShopHold(res);
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+  res.sendFile(path.join(ROOT,'public','personel.html'));
+});
+app.get('/',(req,res)=>{
+  if(isPublicShopHost(req))return sendPublicShopHold(res);
+  res.redirect('/personel');
+});
 app.get('/assets/*',(req,res)=>res.status(404).type('text').send('Not found'));
 app.get('/web-admin-assets/*',(req,res)=>res.status(404).type('text').send('Not found'));
 app.get('/web-api/*',(req,res)=>res.status(404).json({error:'Bulunamadı'}));
 app.get('/foundation-api/*',(req,res)=>res.status(404).json({error:'Bulunamadı'}));
-app.get('*',(req,res)=>res.redirect('/personel'));
+app.get('*',(req,res)=>{
+  if(isPublicShopHost(req))return sendPublicShopHold(res);
+  res.redirect('/personel');
+});
 app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'Sunucu hatası'});});
 recoverStoreFile();
 ensureStore(readStore()); writeStore(readStore());
