@@ -60,6 +60,12 @@ server {
     server_name atakhome.com.tr www.atakhome.com.tr;
 %s    root %s;
     index index.html;
+    location ^~ /personel {
+        return 302 https://panel.atakhome.com.tr/personel;
+    }
+    location ^~ /web-admin {
+        return 302 https://panel.atakhome.com.tr/web-admin;
+    }
     location = /web-api/public {
         proxy_pass http://127.0.0.1:%s/web-api/public;
         proxy_set_header Host panel.atakhome.com.tr;

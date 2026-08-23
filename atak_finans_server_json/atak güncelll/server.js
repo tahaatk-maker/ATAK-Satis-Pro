@@ -1995,8 +1995,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.237-atak-geteinvoices',
-    build:'fix-v237',
+    version:'6.3.238-atak-geteinvoices',
+    build:'fix-v238',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -8952,12 +8952,12 @@ function sendPublicShopHold(res){
   res.status(200).type('html').set('Cache-Control','no-store').send(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atak Home</title></head><body style="font-family:sans-serif;max-width:640px;margin:12vh auto;padding:24px"><h1>Atak Home</h1><p>Bu adres vitrin sitesidir. Personel girişi burada açılmaz.</p></body></html>`);
 }
 app.get('/personel',(req,res)=>{
-  if(isPublicShopHost(req))return sendPublicShopHold(res);
+  if(isPublicShopHost(req))return res.redirect(302,'https://panel.atakhome.com.tr/personel');
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
   res.sendFile(path.join(ROOT,'public','personel.html'));
 });
 app.get('/personel/*',(req,res)=>{
-  if(isPublicShopHost(req))return sendPublicShopHold(res);
+  if(isPublicShopHost(req))return res.redirect(302,'https://panel.atakhome.com.tr/personel');
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
   res.sendFile(path.join(ROOT,'public','personel.html'));
 });
