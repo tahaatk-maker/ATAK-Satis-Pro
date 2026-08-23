@@ -1995,8 +1995,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.236-atak-geteinvoices',
-    build:'fix-v236',
+    version:'6.3.237-atak-geteinvoices',
+    build:'fix-v237',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -8944,7 +8944,12 @@ function isPublicShopHost(req){
   return h==='atakhome.com.tr'||h==='www.atakhome.com.tr';
 }
 function sendPublicShopHold(res){
-  res.status(200).type('html').set('Cache-Control','no-store').send(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atak Home</title></head><body style="font-family:sans-serif;max-width:640px;margin:12vh auto;padding:24px"><h1>Atak Home</h1><p>Bu adres vitrin sitesidir. Personel girişi burada açılmaz.</p><p>Personel: <a href="https://panel.atakhome.com.tr/personel">panel.atakhome.com.tr/personel</a><br>Yönetim: <a href="https://panel.atakhome.com.tr/web-admin">panel.atakhome.com.tr/web-admin</a></p></body></html>`);
+  const vitrin=path.join(ROOT,'public','vitrin','index.html');
+  if(fs.existsSync(vitrin)){
+    res.status(200).set('Cache-Control','no-store').sendFile(vitrin);
+    return;
+  }
+  res.status(200).type('html').set('Cache-Control','no-store').send(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atak Home</title></head><body style="font-family:sans-serif;max-width:640px;margin:12vh auto;padding:24px"><h1>Atak Home</h1><p>Bu adres vitrin sitesidir. Personel girişi burada açılmaz.</p></body></html>`);
 }
 app.get('/personel',(req,res)=>{
   if(isPublicShopHost(req))return sendPublicShopHold(res);
@@ -8959,6 +8964,13 @@ app.get('/personel/*',(req,res)=>{
 app.get('/',(req,res)=>{
   if(isPublicShopHost(req))return sendPublicShopHold(res);
   res.redirect('/personel');
+});
+app.get(['/styles.css','/app.js','/atak-header-logo.svg','/beko-logo.svg','/istikbal-logo.svg'],(req,res,next)=>{
+  if(!isPublicShopHost(req))return next();
+  const name=path.basename(req.path);
+  const files=[path.join(ROOT,'public','vitrin',name),path.join(ROOT,'public','assets',name)];
+  for(const f of files){ if(fs.existsSync(f)) return res.sendFile(f); }
+  next();
 });
 app.get('/assets/*',(req,res)=>res.status(404).type('text').send('Not found'));
 app.get('/web-admin-assets/*',(req,res)=>res.status(404).type('text').send('Not found'));

@@ -108,6 +108,8 @@ for path in ("/root/atak-v10/server.js","/root/atakhome-platform/server.js"):
                     "app.get('*',(req,res)=>{if(isPublicShopHost(req))return sendPublicShopHold(res);res.redirect('/personel');});")
     txt=txt.replace("app.get('/personel',(req,res)=>{",
                     "app.get('/personel',(req,res)=>{if(isPublicShopHost(req))return sendPublicShopHold(res);")
+    txt=txt.replace("app.get('/personel/*',(req,res)=>{",
+                    "app.get('/personel/*',(req,res)=>{if(isPublicShopHost(req))return sendPublicShopHold(res);")
     open(path,"w").write(txt)
     print("PATCHED", path)
 PY
