@@ -1,9 +1,9 @@
 echo "VPS-FIX START $(date -Is)"
-# ATAK VPS kesin deploy — health 6.3.235-atak-geteinvoices olmadan DONE yazmaz
+# ATAK VPS kesin deploy — health 6.3.236-atak-geteinvoices olmadan DONE yazmaz
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/fatura-ayri-sekme-474e}"
-EXPECT_HEALTH=6.3.235-atak-geteinvoices
-EXPECT_BUILD=fix-v235
+EXPECT_HEALTH=6.3.236-atak-geteinvoices
+EXPECT_BUILD=fix-v236
 TMP=/tmp/atak-fix-$(date +%s)
 OUT=/tmp/atak-deploy-result.txt
 
@@ -277,17 +277,13 @@ fi
 [ -n "$APP" ] || APP=/root/atak-v10
 echo "APP=$APP"
 
-mapfile -t DIRS < <(
-  {
-    echo "$APP"
-    echo /root/atak-v10
-    echo /root/atakhome-platform
-    find /root /var/www /home -maxdepth 4 -type f -name server.js 2>/dev/null | while read -r f; do
-      d=$(dirname "$f")
-      if [ -f "$d/public/admin.html" ] || [ -d "$d/public/assets" ]; then echo "$d"; fi
-    done
-  } | awk 'NF && !seen[$0]++'
-)
+# ONLY ERP panel dirs. Never rsync into atakhome-commerce (vitrin site).
+DIRS=()
+for D in "$APP" /root/atak-v10 /root/atakhome-platform; do
+  [ -d "$D" ] || continue
+  case "$D" in *commerce*|*checkout*|*v4-5*|*vitrin*) echo "SKIP_SHOP $D"; continue ;; esac
+  DIRS+=("$D")
+done
 
 step "dosyalar kopyalaniyor"
 SYNCED=0
