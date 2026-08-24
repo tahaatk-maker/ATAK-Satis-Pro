@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v248" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v248" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v248" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v248" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v249" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v249" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v249" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v249" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1554,7 +1554,7 @@ Bulunamayan → Diğer.
 <div id="purchaseExcelPanel">
   <div class="dynamics-import-grid">
     <div class="panel dynamics-import-form">
-      <label>Arçelik / Tedarikçi Excel<input id="purchaseExcelFile" type="file" accept=".xlsx,.xls,.csv"/></label>
+      <label>İstikbal / Arçelik Excel veya CSV<input id="purchaseExcelFile" type="file" accept=".xlsx,.xls,.csv,.txt,text/csv"/><small>xlsx, xls veya csv · en fazla 50 MB · 4 MB İstikbal stok.csv yüklenir</small></label>
       <label>Tedarikçi (Excelde yoksa)
         <select id="purchaseExcelSupplier">
           <option value="Arçelik A.Ş.">Arçelik A.Ş.</option>
@@ -1585,7 +1585,7 @@ Bulunamayan → Diğer.
       <label class="check-row"><input id="purchaseExcelIncVat" type="checkbox" checked/> Fiyatlarda KDV dahil</label>
       <div class="dynamics-info-box"><b>İki seçenek</b><span><b>Sadece maliyet</b> → alış fiyatını yazar (stok dokunulmaz). <b>Sadece stok</b> → miktarı depoya ekler ve <b>hareketli ortalama</b> maliyeti günceller. Stok için <b>fatura no zorunlu</b>; aynı fatura + aynı ürün ikinci kez işlenmez. Günlük mal girişini Stok Merkezi’nden de yapabilirsiniz.</span></div>
       <div class="dynamics-import-actions" style="flex-wrap:wrap">
-        <button id="purchasePreviewBtn" class="secondary-btn" type="button">Excel'i Önizle</button>
+        <button id="purchasePreviewBtn" class="secondary-btn" type="button">Excel / CSV Önizle</button>
         <button id="purchaseCostBtn" class="primary" type="button" disabled>Sadece Maliyet Aktar</button>
         <button id="purchaseStockBtn" class="primary" type="button" disabled style="background:#0f766e">Sadece Stok Aktar</button>
       </div>
@@ -1607,7 +1607,7 @@ Bulunamayan → Diğer.
       <thead><tr><th>DURUM</th><th>ÜRÜN</th><th>KATEGORİ</th><th>MİKTAR</th><th>BİRİM FİYAT</th><th>MEVCUT ALIŞ</th><th>FATURA</th></tr></thead>
       <tbody id="purchasePreviewTable"></tbody>
     </table>
-    <div id="purchasePreviewEmpty" class="empty">Excel seçip “Excel'i Önizle”ye basın.</div>
+    <div id="purchasePreviewEmpty" class="empty">CSV veya Excel seçip “Excel / CSV Önizle”ye basın. İstikbal stok.csv (Malzeme1 + Birim Fiyat) doğrudan yüklenir.</div>
   </div>
 </div>
 
@@ -2998,5 +2998,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v248"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v249"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

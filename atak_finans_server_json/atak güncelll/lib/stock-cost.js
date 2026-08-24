@@ -24,10 +24,10 @@ function productQtyTotal(store, productCode){
 
 function countImportColumns(header){
   const h=(header||[]).map(x=>String(x??'').trim().toLocaleLowerCase('tr-TR'));
-  const codeIndex=h.findIndex(x=>/ürün.?kodu|urun.?kodu|^kod$|product.?code|item.?code/.test(x));
-  let qtyIndex=h.findIndex(x=>/^adet$|girilecek.?adet|yeni.?stok|quantity|qty/.test(x));
+  const codeIndex=h.findIndex(x=>/ürün.?kodu|urun.?kodu|^kod$|product.?code|item.?code|madde.?kodu|malzeme1|^malzeme$/.test(x));
+  let qtyIndex=h.findIndex(x=>/^adet$|girilecek.?adet|yeni.?stok|quantity|qty|^miktar$/.test(x));
   if(qtyIndex<0)qtyIndex=h.findIndex(x=>/^(stok|stock)$/.test(x));
-  const costIndex=h.findIndex(x=>/birim.?maliyet|alış.?fiyat|alis.?fiyat|unit.?cost|^maliyet$/.test(x));
+  const costIndex=h.findIndex(x=>/birim.?maliyet|alış.?fiyat|alis.?fiyat|unit.?cost|^maliyet$|birim.?fiyat/.test(x));
   return {codeIndex,qtyIndex,costIndex};
 }
 

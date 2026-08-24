@@ -35,6 +35,7 @@ const stockCost = require('./lib/stock-cost');
 const appMail = require('./lib/mail');
 const passwordReset = require('./lib/password-reset');
 const staffEmail = require('./lib/staff-email');
+const purchaseCsv = require('./lib/purchase-csv');
 
 const app = express();
 const ROOT = __dirname;
@@ -73,14 +74,24 @@ const STORE_SEARCH_DIRS = Array.from(new Set([
   '/root/atakhome-platform/data',
   '/root/atakhome-platform/data/backups',
 ]));
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
-const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 const customerExcelUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+function excelTooBigMessage(){
+  return 'Dosya 50 MB’dan küçük olmalı. 4 MB İstikbal CSV/Excel yüklenir — sayfayı yenileyip tekrar deneyin.';
+}
 function customerExcelFile(req,res,next){
   customerExcelUpload.single('file')(req,res,err=>{
     if(!err)return next();
     const tooBig=err.code==='LIMIT_FILE_SIZE';
-    return res.status(400).json({error:tooBig?'Excel 50 MB’dan küçük olmalı. Dosyayı xlsx/csv olarak kaydedip tekrar deneyin.':'Excel yüklenemedi: '+(err.message||'dosya hatası')});
+    return res.status(tooBig?413:400).json({error:tooBig?excelTooBigMessage():'Excel yüklenemedi: '+(err.message||'dosya hatası')});
+  });
+}
+function excelFile(req,res,next){
+  dynamicsUpload.single('file')(req,res,err=>{
+    if(!err)return next();
+    const tooBig=err.code==='LIMIT_FILE_SIZE';
+    return res.status(tooBig?413:400).json({error:tooBig?excelTooBigMessage():'Dosya yüklenemedi: '+(err.message||'yükleme hatası')});
   });
 }
 const trainingUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 80 * 1024 * 1024 } });
@@ -1981,8 +1992,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.248-reset-form',
-    build:'fix-v248',
+    version:'6.3.249-istikbal-csv',
+    build:'fix-v249',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -3267,11 +3278,12 @@ function parseStockImportRows(buffer,originalName=''){
       pushFromMatrix(XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false}));
     }
   }else{
-    const text=buffer.toString('utf8').replace(/^\uFEFF/,'');
+    const text=purchaseCsv.bufferText(buffer);
     const lines=text.split(/\r?\n/).filter(Boolean);
     if(lines.length<2)return rows;
-    const delimiter=(lines[0].match(/;/g)||[]).length>=(lines[0].match(/,/g)||[]).length?';':',';
-    pushFromMatrix(lines.map(line=>line.split(delimiter).map(x=>x.trim().replace(/^"|"$/g,''))));
+    const start=purchaseCsv.headerIndex(lines);
+    const delimiter=purchaseCsv.detectDelim(lines[start]||lines[0]);
+    pushFromMatrix(lines.slice(start).map(line=>line.split(delimiter).map(x=>x.trim().replace(/^"|"$/g,''))));
   }
   // Aynı kod birden fazla satırdaysa son adet geçerli
   const map=new Map();
@@ -3279,7 +3291,7 @@ function parseStockImportRows(buffer,originalName=''){
   return [...map.values()];
 }
 
-app.post('/web-api/admin/stock-import',requireAdmin,dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/stock-import',requireAdmin,excelFile,(req,res)=>{
   try{
     if(!req.file)return res.status(400).json({error:'Excel/CSV dosyası seçilmedi'});
     const warehouseId=String(req.body?.warehouseId||'');
@@ -5695,7 +5707,7 @@ function mapRapidSaleItems(s,sale){
 function rapidSalesPerm(req,res,next){
   return requireAdminOrStaffAny('orders_manage','screen_sales_center','screen_sales_tracking')(req,res,next);
 }
-app.post('/web-api/admin/rapid360-sales-preview',rapidSalesPerm,dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/rapid360-sales-preview',rapidSalesPerm,excelFile,(req,res)=>{
   try{
     const parsed=parseRapid360SalesUpload(req.file);
     if(!parsed.sales.length) return res.status(400).json({error:emptyRapidSalesError(parsed,true)});
@@ -5708,7 +5720,7 @@ app.post('/web-api/admin/rapid360-sales-preview',rapidSalesPerm,dynamicsUpload.s
     res.status(400).json({error:e.message||'XML okunamadı'});
   }
 });
-app.post('/web-api/admin/rapid360-sales-import',rapidSalesPerm,dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/rapid360-sales-import',rapidSalesPerm,excelFile,(req,res)=>{
   try{
     const parsed=parseRapid360SalesUpload(req.file);
     if(!parsed.sales.length) return res.status(400).json({error:emptyRapidSalesError(parsed,true)});
@@ -7976,7 +7988,7 @@ function dynamicsSuggestedCategoryId(s,searchName=''){
   return ids.diger;
 }
 
-app.post('/web-api/admin/dynamics-excel-preview',requireAdmin,dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/dynamics-excel-preview',requireAdmin,excelFile,(req,res)=>{
   try{
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const s=readStore(),rows=parseDynamicsWorkbook(req.file.buffer);
@@ -8021,7 +8033,7 @@ app.post('/web-api/admin/dynamics-excel-preview',requireAdmin,dynamicsUpload.sin
     res.status(400).json({error:e.message||'Excel okunamadı'})
   }
 });
-app.post('/web-api/admin/dynamics-excel-import',requireAdmin,dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/dynamics-excel-import',requireAdmin,excelFile,(req,res)=>{
   try{
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const s=readStore(),rows=parseDynamicsWorkbook(req.file.buffer);
@@ -8098,10 +8110,7 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,dynamicsUpload.sing
 
 /* ===== Alış Faturaları (Arçelik vb. tedarikçi) — manuel + Excel ===== */
 function purchaseHeaderKey(h){
-  return String(h||'').toLocaleLowerCase('tr-TR')
-    .replace(/ı/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g')
-    .replace(/ü/g,'u').replace(/ö/g,'o').replace(/ç/g,'c')
-    .replace(/[^a-z0-9]+/g,'');
+  return purchaseCsv.purchaseHeaderKey(h);
 }
 function purchasePick(row,aliases){
   const map=new Map();
@@ -8115,66 +8124,35 @@ function purchasePick(row,aliases){
   }
   return '';
 }
+function purchaseProductLookup(s){
+  const map=new Map();
+  const add=(k,p)=>{const n=normKey(k);if(n&&!map.has(n))map.set(n,p)};
+  for(const p of s.products||[]){
+    add(p.code,p);add(p.searchName,p);add(p.itemCode,p);add(p.barcode,p);add(p.dynamicsProductId,p);add(p.name,p);
+  }
+  return (code,name='',itemCode='')=>{
+    for(const k of [code,itemCode,name]){
+      const hit=map.get(normKey(k));
+      if(hit)return hit;
+    }
+    return null;
+  };
+}
+const purchaseLookupCache=new WeakMap();
 function findProductForPurchase(s,code,name='',itemCode=''){
-  const keys=[code,itemCode,name].map(normKey).filter(Boolean);
   const list=s.products||[];
-  for(const k of keys){
-    const exact=list.find(p=>
-      normKey(p.code)===k||normKey(p.searchName)===k||normKey(p.itemCode)===k||
-      normKey(p.barcode)===k||normKey(p.dynamicsProductId)===k
-    );
-    if(exact)return exact;
+  let lookup=purchaseLookupCache.get(list);
+  if(!lookup){
+    lookup=purchaseProductLookup(s);
+    try{purchaseLookupCache.set(list,lookup)}catch(_){}
   }
-  const nk=normKey(name);
-  if(nk){
-    const byName=list.find(p=>normKey(p.name)===nk);
-    if(byName)return byName;
-  }
-  return null;
+  return lookup(code,name,itemCode);
 }
 function purchaseBufferText(buffer){
-  const utf8=String(buffer.toString('utf8')||'').replace(/^\uFEFF/,'');
-  if(/Madde kodu|Maliyet|Arama ad|Ürün numar/i.test(utf8.slice(0,1000)))return utf8;
-  // Excel TR bazen Windows-1254 kaydeder — latin1 ile dene
-  const latin=String(buffer.toString('latin1')||'').replace(/^\uFEFF/,'');
-  if(/Madde|Maliyet|Arama|Fatura/i.test(latin.slice(0,1000)))return latin;
-  return utf8;
+  return purchaseCsv.bufferText(buffer);
 }
 function parsePurchaseCsvBuffer(buffer){
-  const text=purchaseBufferText(buffer);
-  const first=text.split(/\r?\n/).find(l=>String(l||'').trim())||'';
-  const semi=(first.match(/;/g)||[]).length;
-  const comma=(first.match(/,/g)||[]).length;
-  const tab=(first.match(/\t/g)||[]).length;
-  // İstikbal 3 kolon: Malzeme1;Metin;Birim Fiyat → sadece 2 adet ';'
-  const delim=semi>=1&&semi>=comma&&semi>=tab?';':(tab>=1&&tab>=comma?'\t':',');
-  const lines=text.split(/\r?\n/).filter(l=>String(l||'').trim());
-  if(lines.length<2)return [];
-  const headers=lines[0].split(delim).map(h=>String(h||'').trim().replace(/^"|"$/g,'').replace(/^\uFEFF/,''));
-  return lines.slice(1).map(line=>{
-    const cols=line.split(delim).map(c=>String(c||'').trim().replace(/^"|"$/g,''));
-    const row={};
-    headers.forEach((h,i)=>{row[h]=cols[i]!=null?cols[i]:''});
-    // Dynamics sabit kolon sırası yedek eşleme
-    if(headers.length>=13 && (!row['Maliyet tutarı']&&!row['Madde kodu'])){
-      row['Ürün numarası']=cols[0]||'';
-      row['Madde kodu']=cols[1]||'';
-      row['Arama adı']=cols[2]||'';
-      row['Ürün adı']=cols[3]||'';
-      row['Fiili tarih']=cols[4]||'';
-      row['Taraf']=cols[7]||'';
-      row['Miktar']=cols[10]||'';
-      row['Maliyet tutarı']=cols[12]||'';
-      row['Arçelik Fatura Numarası']=cols[14]||'';
-    }
-    // İstikbal fiyat listesi: Malzeme1 ; Malzeme Uzun Metni ; Birim Fiyat
-    if(headers.length>=3 && (purchaseHeaderKey(headers[0]).startsWith('malzeme')||/malzeme1/i.test(headers[0]||'')) && !row['Madde kodu']&&!row['Malzeme1']){
-      row['Malzeme1']=cols[0]||'';
-      row['Malzeme Uzun Metni E']=cols[1]||'';
-      row['Birim Fiyat']=cols[2]||'';
-    }
-    return row;
-  });
+  return purchaseCsv.parseCsvBuffer(buffer);
 }
 function purchasePickContains(row,needles=[]){
   const map=new Map();
@@ -8670,7 +8648,7 @@ app.get('/web-api/admin/purchase-invoice-template',requireAdmin,(req,res)=>{
   res.send(Buffer.from(buf));
 });
 
-app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,excelFile,(req,res)=>{
   try{
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const s=readStore();
@@ -8699,16 +8677,16 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,dynamicsUpload.s
       ok:true,
       total:preview.length,matched,willCreate,unmatched:willCreate,invalid,stockOk,withCost,
       invoiceNos,
-      preview:preview.slice(0,400),
-      truncated:preview.length>400,
-      note:'Dynamics CSV (Maliyet tutarı / Madde kodu) desteklenir. Aktarımı sonra listeden geri alıp silebilirsiniz.'
+      preview:preview.slice(0,800),
+      truncated:preview.length>800,
+      note:'İstikbal CSV (Malzeme1 + Birim Fiyat) ve Arçelik Excel 50 MB’a kadar yüklenir. Aktarımı sonra listeden geri alabilirsiniz.'
     });
   }catch(e){
     res.status(400).json({error:e.message||'Excel okunamadı'});
   }
 });
 
-app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,res)=>{
   try{
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const s=readStore();
@@ -8777,8 +8755,11 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,dynamicsUpload.si
       return res.status(400).json({error:`${missingCats.length} yeni ürünün kategorisi eksik — tabloda satır satır seçin`});
     }
 
-    const invoiceNo=String(req.body?.invoiceNo||rows.find(r=>r.invoiceNo)?.invoiceNo||'').trim();
     const date=String(req.body?.date||rows.find(r=>r.date)?.date||todayISO()).slice(0,10);
+    let invoiceNo=String(req.body?.invoiceNo||rows.find(r=>r.invoiceNo)?.invoiceNo||'').trim();
+    if(addStock&&!stockCost.normalizeInvoiceNo(invoiceNo)&&furniture){
+      invoiceNo=`IST-STOK-${date.replace(/-/g,'')}`;
+    }
     const supplierName=furniture
       ? supplierFallback
       : String(rows.find(r=>r.supplierName)?.supplierName||supplierFallback).trim();

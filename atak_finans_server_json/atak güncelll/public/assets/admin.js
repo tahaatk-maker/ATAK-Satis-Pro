@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v248 */
+/* ATAK_ADMIN_BUILD=fix-v249 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -31,9 +31,14 @@ function salesProductUnitPrice(p,method=''){
 }
 function toast(t){q('#toast').textContent=t;q('#toast').classList.remove('hidden');setTimeout(()=>q('#toast').classList.add('hidden'),2800)}
 function uploadTooLargeMessage(){
-  const f=typeof selectedCustomerExcelFile==='function'?selectedCustomerExcelFile():null;
+  const f=q('#purchaseExcelFile')?.files?.[0]
+    ||q('#stockImportFile')?.files?.[0]
+    ||q('#productsExcelImportFile')?.files?.[0]
+    ||(typeof selectedCustomerExcelFile==='function'?selectedCustomerExcelFile():null)
+    ||q('#csvFile')?.files?.[0]
+    ||null;
   const mb=f&&f.size?` Seçilen dosya ${(f.size/1024/1024).toFixed(1).replace('.',',')} MB.`:'';
-  return `Dosya sunucuya sığmadı.${mb} Hostinger’daki yeni deploy komutunu çalıştırın, sonra Ctrl+Shift+R ile yenileyip tekrar Önizle’ye basın.`;
+  return `Dosya sunucuya sığmadı.${mb} CSV/Excel 50 MB’a kadar yüklenir (4 MB İstikbal stok.csv olur). Ctrl+Shift+R ile yenileyip tekrar deneyin.`;
 }
 async function api(url,opt={}){
   const r=await fetch(url,{credentials:'same-origin',...opt});
@@ -5709,15 +5714,16 @@ function renderPurchasePreview(d){
 q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
   const status=q('#purchaseExcelStatus');
   const file=q('#purchaseExcelFile')?.files?.[0];
-  if(!file){toast('Önce Excel seçin');return}
+  if(!file){toast('Önce CSV veya Excel seçin');return}
   try{
-    status.textContent='Excel okunuyor…';status.className='form-status';
+    status.textContent='CSV / Excel okunuyor…';status.className='form-status';
     const fd=new FormData();fd.append('file',file);
     const d=await api('/web-api/admin/purchase-invoice-preview',{method:'POST',body:fd});
     renderPurchasePreview(d);
     const will=Number(d.willCreate||d.unmatched||0);
     const withCost=Number(d.withCost||0);
     status.textContent=`${d.total} satır · ${withCost} maliyetli · ${will} yeni · “Sadece Maliyet” veya “Sadece Stok” seç`;
+    if(d.truncated)status.textContent+=` · listede ilk 800, aktarımın tamamı ${d.total} satır`;
     status.className='form-status success';
   }catch(e){
     status.textContent=e.message;status.className='form-status error';
@@ -5726,7 +5732,7 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
 async function runPurchaseImport(mode){
   const status=q('#purchaseExcelStatus');
   const file=q('#purchaseExcelFile')?.files?.[0];
-  if(!file){toast('Önce Excel seçin');return}
+  if(!file){toast('Önce CSV veya Excel seçin');return}
   const will=Number(purchasePreviewData?.willCreate||purchasePreviewData?.unmatched||0);
   const matched=Number(purchasePreviewData?.matched||0);
   const withCost=Number(purchasePreviewData?.withCost||0);
