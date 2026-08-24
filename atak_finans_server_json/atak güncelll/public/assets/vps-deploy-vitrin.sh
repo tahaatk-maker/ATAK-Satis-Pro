@@ -62,7 +62,7 @@ server {
 %s    root %s;
     index index.html;
     location ^~ /personel {
-        return 302 https://panel.atakhome.com.tr/personel;
+        return 302 https://panel.atakhome.com.tr/personel$is_args$args;
     }
     location ^~ /web-admin {
         return 302 https://atakhome.com.tr/;

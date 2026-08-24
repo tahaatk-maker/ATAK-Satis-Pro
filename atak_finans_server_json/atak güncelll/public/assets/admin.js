@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v244 */
+/* ATAK_ADMIN_BUILD=fix-v245 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -67,15 +67,26 @@ async function api(url,opt={}){
   return d;
 }
 let pendingMfaChallengeId='';
+function resetTokenFromUrl(){
+  try{return new URLSearchParams(location.search).get('reset')||''}catch(_){return ''}
+}
+function showAdminLoginPanel(which){
+  q('#loginView')?.classList.remove('hidden');
+  q('#appView')?.classList.add('hidden');
+  q('#loginForm')?.classList.toggle('hidden',which!=='login');
+  q('#mfaForm')?.classList.toggle('hidden',which!=='mfa');
+  q('#forgotForm')?.classList.toggle('hidden',which!=='forgot');
+  q('#resetForm')?.classList.toggle('hidden',which!=='reset');
+  if(which==='forgot'&&q('#forgotError')){q('#forgotError').textContent='';q('#forgotError').className='form-status'}
+  if(which==='reset'&&q('#resetError')){q('#resetError').textContent='';q('#resetError').className='form-status'}
+}
 function showLoginPassword(){
-  q('#loginForm')?.classList.remove('hidden');
-  q('#mfaForm')?.classList.add('hidden');
   pendingMfaChallengeId='';
+  showAdminLoginPanel('login');
 }
 function showLoginMfa(r){
   pendingMfaChallengeId=r.challengeId||'';
-  q('#loginForm')?.classList.add('hidden');
-  q('#mfaForm')?.classList.remove('hidden');
+  showAdminLoginPanel('mfa');
   const hours=r.trustHours||6;
   if(q('#mfaHint'))q('#mfaHint').textContent=`Kod ${r.emailHint||'e-posta'} adresine gitti. Bu tarayıcı ${hours} saat tanınır; sonra yeniden kod istenir.`;
   if(q('#mfaCode')){q('#mfaCode').value='';q('#mfaCode').focus()}
@@ -98,6 +109,49 @@ q('#mfaForm')?.addEventListener('submit',async e=>{
   }catch(err){toast(err.message)}
 });
 q('#mfaBackBtn')?.addEventListener('click',()=>showLoginPassword());
+q('#forgotOpenBtn')?.addEventListener('click',()=>showAdminLoginPanel('forgot'));
+q('#forgotBackBtn')?.addEventListener('click',()=>showLoginPassword());
+q('#resetBackBtn')?.addEventListener('click',()=>{
+  try{history.replaceState({},'',location.pathname)}catch(_){}
+  showLoginPassword();
+});
+q('#forgotForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#forgotError');
+  if(st){st.textContent='';st.className='form-status'}
+  try{
+    const r=await api('/web-api/forgot-password',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:q('#forgotUser')?.value||''})
+    });
+    if(st){st.textContent=r.message||'Mail gönderildiyse gelen kutunuzu kontrol edin.';st.className='form-status success'}
+  }catch(err){
+    if(st){st.textContent=err.message;st.className='form-status error'}
+  }
+});
+q('#resetForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=q('#resetError');
+  if(st){st.textContent='';st.className='form-status'}
+  const p1=q('#resetPassword')?.value||'';
+  const p2=q('#resetPassword2')?.value||'';
+  if(p1!==p2){if(st){st.textContent='Şifreler uyuşmuyor';st.className='form-status error'}return}
+  const token=resetTokenFromUrl();
+  if(!token){if(st){st.textContent='Geçersiz link';st.className='form-status error'}return}
+  try{
+    const r=await api('/web-api/reset-password',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token,password:p1})
+    });
+    if(st){st.textContent=r.message||'Şifre güncellendi';st.className='form-status success'}
+    setTimeout(()=>{
+      try{history.replaceState({},'',location.pathname)}catch(_){}
+      showLoginPassword();
+    },900);
+  }catch(err){
+    if(st){st.textContent=err.message;st.className='form-status error'}
+  }
+});
 function isMobileUi(){
   try{return window.matchMedia('(max-width:950px)').matches}catch(_){return false}
 }
@@ -4963,10 +5017,10 @@ async function loadMailSettings(){
   try{
     const d=await api('/web-api/admin/mail-settings');
     const s=d.settings||{};
-    if(q('#mailEnabled'))q('#mailEnabled').checked=s.enabled===true;
+    if(q('#mailEnabled'))q('#mailEnabled').checked=s.configured===true||s.enabled===true;
     if(q('#mailHost'))q('#mailHost').value=s.host||'smtp.gmail.com';
-    if(q('#mailPort'))q('#mailPort').value=s.port||465;
-    if(q('#mailSecure'))q('#mailSecure').checked=s.secure!==false;
+    if(q('#mailPort'))q('#mailPort').value=s.port||587;
+    if(q('#mailSecure'))q('#mailSecure').checked=s.secure===true;
     if(q('#mailUser'))q('#mailUser').value=s.user||'';
     if(q('#mailPass'))q('#mailPass').value=s.pass||'';
     if(q('#mailFrom'))q('#mailFrom').value=s.from||'';
@@ -4980,8 +5034,8 @@ q('#mailSettingsForm')?.addEventListener('submit',async e=>{
     const r=await api('/web-api/admin/mail-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       enabled:q('#mailEnabled')?.checked===true,
       host:q('#mailHost')?.value,
-      port:q('#mailPort')?.value,
-      secure:q('#mailSecure')?.checked!==false,
+      port:q('#mailPort')?.value||587,
+      secure:q('#mailSecure')?.checked===true,
       user:q('#mailUser')?.value,
       pass:q('#mailPass')?.value,
       from:q('#mailFrom')?.value
@@ -4997,8 +5051,8 @@ q('#mailTestBtn')?.addEventListener('click',async()=>{
     await api('/web-api/admin/mail-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       enabled:true,
       host:q('#mailHost')?.value,
-      port:q('#mailPort')?.value,
-      secure:q('#mailSecure')?.checked!==false,
+      port:q('#mailPort')?.value||587,
+      secure:q('#mailSecure')?.checked===true,
       user:q('#mailUser')?.value,
       pass:q('#mailPass')?.value,
       from:q('#mailFrom')?.value
@@ -7406,7 +7460,11 @@ q('#custPayForm')?.addEventListener('submit',async e=>{
 });
 
 loadPermissionDefinitions();loadCurrentAdminPermissions();
-check().catch(()=>{});
+if(resetTokenFromUrl()){
+  showAdminLoginPanel('reset');
+}else{
+  check().catch(()=>{});
+}
 
 /* ——— Eğitim Merkezi ——— */
 let trainingState={videos:[],categories:[],filter:'all',selectedId:'',canManage:false};
