@@ -9,8 +9,8 @@ log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
 BRANCH="${ATAK_BRANCH:-cursor/asist-fatura-aktarim-474e}"
-EXPECT_V="${EXPECT_HEALTH:-6.3.254-kategori-tahmin}"
-EXPECT_B="${EXPECT_BUILD:-fix-v254}"
+EXPECT_V="${EXPECT_HEALTH:-6.3.255-hizli-onizle}"
+EXPECT_B="${EXPECT_BUILD:-fix-v255}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"
@@ -154,6 +154,36 @@ log "HEALTH=$H1"
 echo "$H1" | grep -q "$EXPECT_V" || die "health version yok — disk: $(grep -o "version:'[^']*'" "$START_DIR/server.js" | head -1) cwd=$START_DIR"
 echo "$H1" | grep -q "$EXPECT_B" || die "health build yok"
 echo "$H1" | grep -q '"storeOk":false' && die "storeOk=false"
+
+# Ürün kartları boşsa otomatik yedekten geri yükle (deploy sonrası productCount=0 felaketi)
+DATA_DIR="$START_DIR/data"
+if echo "$H1" | grep -q '"productCount":0'; then
+  log "UYARI: productCount=0 — yedekten geri yukleme deneniyor"
+  BEST=""
+  BEST_N=0
+  for CAND in \
+    $(ls -1t "$DATA_DIR"/store.json.bak-asist-* 2>/dev/null | head -5) \
+    $(ls -1t "$DATA_DIR"/backups/store-*.json 2>/dev/null | head -8)
+  do
+    [ -f "$CAND" ] || continue
+    N=$(python3 -c "import json,sys; s=json.load(open(sys.argv[1])); print(len(s.get('products') or []))" "$CAND" 2>/dev/null || echo 0)
+    log "   aday $CAND products=$N"
+    if [ "${N:-0}" -gt "$BEST_N" ]; then BEST="$CAND"; BEST_N="$N"; fi
+  done
+  if [ -n "$BEST" ] && [ "$BEST_N" -gt 100 ]; then
+    cp -a "$DATA_DIR/store.json" "$DATA_DIR/store.json.bak-empty-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+    cp -a "$BEST" "$DATA_DIR/store.json"
+    log "   RESTORE $BEST ($BEST_N urun)"
+    pm2 restart atak --update-env >/dev/null 2>&1 || true
+    sleep 4
+    H1=$(curl -sS -m 8 http://127.0.0.1:3100/health 2>/dev/null || true)
+    log "HEALTH_AFTER_RESTORE=$H1"
+  else
+    log "FAIL: dolu yedek bulunamadi (productCount=0). Elle restore gerekli."
+    die "productCount=0 ve yedek yok"
+  fi
+fi
+echo "$H1" | grep -q '"productCount":0' && die "productCount hala 0"
 
 log "5) panel HTML"
 HTML=$(curl -sS -m 12 https://panel.atakhome.com.tr/web-admin || true)

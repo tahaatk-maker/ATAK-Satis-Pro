@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v254 */
+/* ATAK_ADMIN_BUILD=fix-v255 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -5855,6 +5855,12 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
       q('#purchaseExcelInvoiceNo').value=d.suggestedInvoiceNo;
       q('#purchaseExcelInvoiceNo').placeholder=d.suggestedInvoiceNo;
     }
+    if(d.storeEmpty){
+      status.textContent=`Önizleme geldi ama ürün kartları BOŞ (0 ürün). Önce store yedeğini geri yükleyin; aksi halde ${will} satırın hepsi yeni kart sayılır.`;
+      status.className='form-status error';
+      toast('Ürün kartları boş — yedek geri yükleyin');
+      return;
+    }
     status.textContent=`Önizleme hazır · ${d.total} satır · ${invCount} fatura (${ready} uygun) · ${will} tanımsız · ${d.matched||0} eşleşen`;
     if(d.furniture)status.textContent+=` · Mobilya · KDV %10`;
     if(d.ms!=null)status.textContent+=` · ${d.ms} ms`;
@@ -5865,8 +5871,8 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
     toast(`${d.total} kayıt önizlendi`);
   }catch(e){
     const msg=String(e.message||'');
-    status.textContent=/uzun sürdü|502|504|524/i.test(msg)
-      ?'Önizleme zaman aşımı — dosya büyük olabilir. Sayfayı yenileyip tekrar Önizle; hâlâ olursa CSV olarak kaydedip deneyin.'
+    status.textContent=/uzun sürdü|502|504|524|Failed to fetch|NetworkError|timeout/i.test(msg)
+      ?'Önizleme zaman aşımı — dosya çok büyük. Sayfayı Ctrl+F5 ile yenileyip tekrar Önizle. Hâlâ olursa CSV’yi bölerek (ör. 2–3 bin satır) deneyin.'
       :msg;
     status.className='form-status error';
   }finally{
