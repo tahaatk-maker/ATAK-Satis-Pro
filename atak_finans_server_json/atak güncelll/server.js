@@ -1992,8 +1992,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.250-sanal-fatura',
-    build:'fix-v250',
+    version:'6.3.251-istikbal-kod',
+    build:'fix-v251',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -8126,27 +8126,33 @@ function purchasePick(row,aliases){
 }
 function purchaseProductLookup(s){
   const map=new Map();
-  const add=(k,p)=>{const n=normKey(k);if(n&&!map.has(n))map.set(n,p)};
-  for(const p of s.products||[]){
-    add(p.code,p);add(p.searchName,p);add(p.itemCode,p);add(p.barcode,p);add(p.dynamicsProductId,p);add(p.name,p);
-  }
-  return (code,name='',itemCode='')=>{
-    for(const k of [code,itemCode,name]){
-      const hit=map.get(normKey(k));
-      if(hit)return hit;
-    }
-    return null;
+  const add=(k,p)=>{
+    const n=normKey(k);
+    if(n&&!map.has(n))map.set(n,p);
+  };
+  const register=(p)=>{
+    if(!p)return;
+    add(p.code,p);
+    add(p.searchName,p);
+    add(p.itemCode,p);
+    add(p.barcode,p);
+    add(p.dynamicsProductId,p);
+    add(p.name,p);
+  };
+  for(const p of s.products||[])register(p);
+  return{
+    find(code,name='',itemCode=''){
+      for(const k of [code,itemCode,name]){
+        const hit=map.get(normKey(k));
+        if(hit)return hit;
+      }
+      return null;
+    },
+    register
   };
 }
-const purchaseLookupCache=new WeakMap();
 function findProductForPurchase(s,code,name='',itemCode=''){
-  const list=s.products||[];
-  let lookup=purchaseLookupCache.get(list);
-  if(!lookup){
-    lookup=purchaseProductLookup(s);
-    try{purchaseLookupCache.set(list,lookup)}catch(_){}
-  }
-  return lookup(code,name,itemCode);
+  return purchaseProductLookup(s).find(code,name,itemCode);
 }
 function purchaseBufferText(buffer){
   return purchaseCsv.bufferText(buffer);
@@ -8356,16 +8362,20 @@ function resolvePurchaseCategoryId(s,categoryId,supplierName,hint=''){
   return dynamicsSuggestedCategoryId(s,hint)||ids.diger||ids.beyazEsya||'';
 }
 function ensureProductFromPurchase(s,{productCode,productName,itemCode,searchName,unitCost,vatRate,supplierName,importBatchId,categoryId}){
-  const code=String(productCode||itemCode||searchName||productName||'').trim();
-  if(!code)return null;
   const furniture=isIstikbalSupplier(supplierName);
-  // İstikbal: Malzeme1 = kod, Malzeme Uzun Metni = ad (satışta malzeme adı üstte)
+  // İstikbal: Malzeme1 = ürün kodu (kart kodu + itemCode). Aynı kod ikinci kez kart açmaz.
+  const materialCode=String(itemCode||productCode||'').trim();
+  const code=String(
+    furniture
+      ?(materialCode||searchName||productName||'')
+      :(productCode||itemCode||searchName||productName||'')
+  ).trim();
+  if(!code)return null;
   const niceName=String(productName||searchName||'').trim();
   const name=(furniture?(niceName||code):(niceName||searchName||productCode||code)).trim()||code;
   const materialLabel=furniture
     ? String(niceName||name).trim()||code
     : String(searchName||niceName||code).trim()||code;
-  // Seçilen kategori öncelikli; yoksa İstikbal→Mobilya / diğerinde öneri
   const category=resolvePurchaseCategoryId(s,categoryId,supplierName,`${name} ${searchName||''} ${code}`);
   const brand=furniture?'İstikbal':purchaseBrandFromSupplier(supplierName,`${name} ${searchName||''}`);
   const resolvedVat=furniture?10:(normalizeNumber(vatRate||20)||20);
@@ -8373,7 +8383,7 @@ function ensureProductFromPurchase(s,{productCode,productName,itemCode,searchNam
     code,
     name,
     searchName:materialLabel,
-    itemCode:String(itemCode||code).trim(),
+    itemCode:String(materialCode||code).trim(),
     brand,
     category,
     purchasePrice:normalizeNumber(unitCost||0),
@@ -8415,6 +8425,9 @@ function applyPurchaseInvoiceToStore(s,{
   const chosenCategoryId=String(categoryId||'').trim();
   const rawItems=Array.isArray(items)?items:[];
   const seenStockCodes=new Set();
+  const lookup=purchaseProductLookup(s);
+  const catIds=furniture?ensureDynamicsCoreCategories(s):null;
+  const furnitureCategoryId=furniture?(chosenCategoryId||catIds.mobilya):chosenCategoryId;
 
   if(addStock){
     if(!stockCost.normalizeInvoiceNo(invoiceNo)){
@@ -8428,7 +8441,7 @@ function applyPurchaseInvoiceToStore(s,{
   for(const raw of rawItems){
     const productCode=String(raw.productCode||raw.searchName||'').trim();
     const productName=String(raw.productName||'').trim();
-    const itemCode=String(raw.itemCode||'').trim();
+    const itemCode=String(raw.itemCode||productCode||'').trim();
     const searchName=String(raw.searchName||productCode||'').trim();
     const qty=Math.max(0,normalizeNumber(raw.quantity||0));
     let unitCost=normalizeNumber(raw.unitCost||0);
@@ -8439,7 +8452,7 @@ function applyPurchaseInvoiceToStore(s,{
     if(updatePurchasePrice&&!(unitCost>0)&&!furniture){unmatched++;continue}
     if(!pricesIncludeVat&&unitCost>0)unitCost=round(unitCost*(1+vatRate/100));
 
-    let product=findProductForPurchase(s,productCode,productName,itemCode);
+    let product=lookup.find(productCode,productName,itemCode);
     let createdNow=false;
     if(!product&&createMissingProducts){
       product=ensureProductFromPurchase(s,{
@@ -8447,9 +8460,13 @@ function applyPurchaseInvoiceToStore(s,{
         productName,itemCode,searchName,
         unitCost:unitCost>0?unitCost:0,
         vatRate,supplierName,importBatchId,
-        categoryId:String(raw.categoryId||chosenCategoryId||'').trim()
+        categoryId:String(raw.categoryId||furnitureCategoryId||'').trim()
       });
-      if(product){created++;createdNow=true}
+      if(product){
+        created++;
+        createdNow=true;
+        lookup.register(product);
+      }
     }
     const prevCost=createdNow?0:normalizeNumber(product?.purchasePrice||0);
     const lineTotal=round(qty*Math.max(unitCost,0));
@@ -8476,20 +8493,25 @@ function applyPurchaseInvoiceToStore(s,{
       }
       seenStockCodes.add(resolved);
     }
-    // İstikbal eşleşenlerde marka + malzeme adı düzelt; kategori seçildiyse onu kullan
+    // İstikbal eşleşenlerde marka + ürün kodu + malzeme adı düzelt; kategori Mobilya; KDV %10
     if(furniture){
       product.brand='İstikbal';
-      const rowCat=String(raw.categoryId||chosenCategoryId||'').trim();
+      const rowCat=String(raw.categoryId||furnitureCategoryId||'').trim();
       product.category=resolvePurchaseCategoryId(s,rowCat,supplierName,`${product.name||''} ${productCode}`);
       product.vatRate=10;
       if(productName){
         product.name=productName;
-        product.searchName=productName; // satışta malzeme adı (üstte)
+        product.searchName=productName;
       }
-      if(itemCode)product.itemCode=itemCode;
+      const codeKey=String(itemCode||productCode||'').trim();
+      if(codeKey){
+        product.itemCode=codeKey;
+        product.code=codeKey; // Malzeme1 → kart kodu (tekrar yüklemede aynı kod eşleşir)
+      }
       product.updatedAt=new Date().toISOString();
       const tags=new Set([...(product.tags||[]).map(String),'istikbal','mobilya','alis-faturasi']);
       product.tags=[...tags];
+      lookup.register(product);
     } else if(createdNow===false&&chosenCategoryId&&!product.category){
       product.category=resolvePurchaseCategoryId(s,chosenCategoryId,supplierName,'');
     }
@@ -8653,6 +8675,13 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,excelFile,(req,r
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const s=readStore();
     const rows=parsePurchaseWorkbook(req.file.buffer,req.file.originalname||'');
+    const supplierHint=String(req.body?.supplierName||'');
+    const furniture=isIstikbalSupplier(supplierHint);
+    const catIds=furniture?ensureDynamicsCoreCategories(s):null;
+    const autoCatId=furniture?(catIds.mobilya||''):'';
+    const autoCatName=furniture
+      ?((s.categories||[]).find(c=>String(c.id)===String(autoCatId))?.name||'Mobilya')
+      :'';
     let matched=0,willCreate=0,invalid=0,stockOk=0,withCost=0;
     const preview=rows.map(r=>{
       const hasCode=Boolean(r.productCode||r.itemCode||r.productName||r.searchName);
@@ -8660,20 +8689,43 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,excelFile,(req,r
       if(!hasCode||!(r.quantity>0)){
         invalid++;
         const why=!hasCode?'ürün kodu yok':'miktar yok';
-        return{...r,status:'invalid',reason:why,matchCode:'',currentPurchasePrice:0};
+        return{...r,status:'invalid',reason:why,matchCode:'',currentPurchasePrice:0,vatRate:furniture?10:r.vatRate};
       }
       const p=findProductForPurchase(s,r.productCode||r.searchName,r.productName,r.itemCode);
       const hasCost=r.unitCost>0;
       if(hasCost)withCost++; else stockOk++;
       if(p){
         matched++;
-        return{...r,status:'matched',reason:hasCost?'':'maliyet yok (stok aktarılabilir)',matchCode:p.code,productName:r.productName||p.name,currentPurchasePrice:normalizeNumber(p.purchasePrice||0)};
+        return{
+          ...r,
+          status:'matched',
+          reason:hasCost?'aynı ürün kodu · kart açılmaz':('aynı ürün kodu · maliyet yok'),
+          matchCode:p.code,
+          productName:r.productName||p.name,
+          itemCode:r.itemCode||r.productCode||p.itemCode||'',
+          categoryId:p.category||autoCatId,
+          categoryName:(s.categories||[]).find(c=>String(c.id)===String(p.category))?.name||autoCatName||'',
+          vatRate:furniture?10:(normalizeNumber(p.vatRate||r.vatRate||20)||20),
+          currentPurchasePrice:normalizeNumber(p.purchasePrice||0)
+        };
       }
       willCreate++;
-      return{...r,status:'will_create',reason:hasCost?'':'maliyet yok (stok aktarılabilir)',matchCode:'',currentPurchasePrice:0};
+      return{
+        ...r,
+        status:'will_create',
+        reason:furniture
+          ?(hasCost?'yeni kart · kod işlenecek · Mobilya · KDV %10':'yeni kart · Mobilya · KDV %10')
+          :(hasCost?'':'maliyet yok (stok aktarılabilir)'),
+        matchCode:'',
+        itemCode:r.itemCode||r.productCode||'',
+        categoryId:r.categoryId||autoCatId||'',
+        categoryName:autoCatName||'',
+        vatRate:furniture?10:(normalizeNumber(r.vatRate||20)||20),
+        currentPurchasePrice:0,
+        autoCategory:Boolean(furniture)
+      };
     });
     const invoiceNos=[...new Set(preview.map(x=>x.invoiceNo).filter(Boolean))];
-    const supplierHint=String(req.body?.supplierName||'');
     const suggestedInvoiceNo=invoiceNos.length
       ?''
       :purchaseCsv.virtualInvoiceNo({supplier:supplierHint||'İstikbal',date:todayISO(),mode:'stock'});
@@ -8683,11 +8735,19 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,excelFile,(req,r
       invoiceNos,
       hasInvoiceNo:invoiceNos.length>0,
       suggestedInvoiceNo,
+      furniture,
+      autoCategoryId:autoCatId,
+      autoCategoryName:autoCatName,
+      autoVatRate:furniture?10:null,
       preview:preview.slice(0,800),
       truncated:preview.length>800,
-      note:invoiceNos.length
-        ?'Dosyadaki fatura numaraları kullanılacak.'
-        :'Dosyada fatura no yok. Aktarımda sanal fatura no verilir (IST-SANAL-…); gerçek faturalarla karışmaz.'
+      note:furniture
+        ?(invoiceNos.length
+          ?'İstikbal: ürün kodu (Malzeme1) kart koduna yazılır. Aynı kod ikinci kez kart açmaz. Kategori Mobilya, KDV %10.'
+          :'İstikbal: ürün kodu aktarılır · aynı kod tekrar kart açmaz · Mobilya · KDV %10 · sanal fatura no verilir.')
+        :(invoiceNos.length
+          ?'Dosyadaki fatura numaraları kullanılacak.'
+          :'Dosyada fatura no yok. Aktarımda sanal fatura no verilir.')
     });
   }catch(e){
     res.status(400).json({error:e.message||'Excel okunamadı'});
@@ -8725,7 +8785,9 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,re
     };
     if(addStock&&!warehouseId)return res.status(400).json({error:'Stok aktarımı için depo seçilmelidir'});
     const furniture=isIstikbalSupplier(supplierFallback);
+    const furnitureCatId=furniture?(ensureDynamicsCoreCategories(s).mobilya||''):'';
     const validCatIds=new Set((s.categories||[]).filter(c=>c&&c.active!==false).map(c=>String(c.id)));
+    if(furnitureCatId)validCatIds.add(String(furnitureCatId));
 
     const items=rows
       .filter(r=>{
@@ -8737,11 +8799,11 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,re
         return true; // stock: miktar yeterli
       })
       .map(r=>{
-        const rowCat=lookupRowCategory(r);
+        const rowCat=lookupRowCategory(r)||furnitureCatId;
         return{
           productCode:r.productCode,
           productName:r.productName,
-          itemCode:r.itemCode,
+          itemCode:r.itemCode||r.productCode||'',
           searchName:r.searchName,
           quantity:r.quantity>0?r.quantity:1,
           unitCost:r.unitCost>0?r.unitCost:0,
@@ -8754,12 +8816,14 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,re
     const missingCats=[];
     for(const r of items){
       if(findProductForPurchase(s,r.productCode||r.searchName,r.productName,r.itemCode))continue;
-      if(!r.categoryId){missingCats.push(r.itemCode||r.productCode||r.productName||'?');continue}
+      const rowCat=String(r.categoryId||furnitureCatId||'').trim();
+      if(!rowCat){missingCats.push(r.itemCode||r.productCode||r.productName||'?');continue}
+      r.categoryId=rowCat;
       if(!validCatIds.has(String(r.categoryId))){
         return res.status(400).json({error:`Geçersiz kategori: ${r.categoryId}`});
       }
     }
-    if(missingCats.length){
+    if(missingCats.length&&!furniture){
       return res.status(400).json({error:`${missingCats.length} yeni ürünün kategorisi eksik — tabloda satır satır seçin`});
     }
 

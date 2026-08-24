@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v250 */
+/* ATAK_ADMIN_BUILD=fix-v251 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -5594,6 +5594,25 @@ function purchaseApplyDefaultCategoryToRows(){
   });
   toast(n?`${n} yeni ürüne kategori uygulandı`:'Uygulanacak yeni ürün yok');
 }
+function purchaseIsIstikbal(){
+  return /istikbal|doğtaş|dogtas/i.test(String(q('#purchaseExcelSupplier')?.value||''));
+}
+function purchaseApplyIstikbalDefaults(d){
+  if(!d?.furniture&&!purchaseIsIstikbal())return;
+  const catId=String(d.autoCategoryId||'').trim();
+  const sel=q('#purchaseExcelCategory');
+  if(sel&&catId){
+    if(![...sel.options].some(o=>o.value===catId)){
+      const opt=document.createElement('option');
+      opt.value=catId;opt.textContent=d.autoCategoryName||'Mobilya';
+      sel.appendChild(opt);
+    }
+    sel.value=catId;
+  }
+  (d.preview||[]).forEach(r=>{
+    if((r.status==='will_create'||r.status==='unmatched')&&!r.categoryId&&catId)r.categoryId=catId;
+  });
+}
 function purchaseCollectCategoryMap(){
   const map={};
   qa('#purchasePreviewTable select[data-purchase-row-cat]').forEach(sel=>{
@@ -5673,11 +5692,12 @@ function renderPurchasePreview(d){
   const willCreate=Number(d.willCreate||d.unmatched||0);
   const withCost=Number(d.withCost||0);
   const stockRows=Number(d.matched||0)+willCreate;
-  const defCat=String(q('#purchaseExcelCategory')?.value||'').trim();
+  const furniture=Boolean(d.furniture||purchaseIsIstikbal());
+  const defCat=String(q('#purchaseExcelCategory')?.value||d.autoCategoryId||'').trim();
   q('#purchaseExcelSummary').innerHTML=
     `<article><b>${d.total||0}</b><span>Toplam Satır</span></article>
-     <article class="good"><b>${d.matched||0}</b><span>Eşleşen ürün</span></article>
-     <article class="warn"><b>${willCreate}</b><span>Yeni eklenecek</span></article>
+     <article class="good"><b>${d.matched||0}</b><span>Eşleşen kod (kart yok)</span></article>
+     <article class="warn"><b>${willCreate}</b><span>Yeni ürün kodu</span></article>
      <article class="bad"><b>${d.invalid||0}</b><span>Hatalı</span></article>`;
   const rows=d.preview||[];
   const label={matched:'Eşleşti',will_create:'Yeni eklenecek',unmatched:'Yeni eklenecek',invalid:'Hatalı'};
@@ -5688,11 +5708,14 @@ function renderPurchasePreview(d){
     const selected=String(r.categoryId||defCat||'').trim();
     if(st==='will_create'&&selected)r.categoryId=selected;
     const catCell=st==='will_create'
-      ?`<select class="purchase-row-cat" data-purchase-row-cat="${purchaseEsc(key)}">${purchaseCategoryOptionsHtml(selected)}</select>`
-      :(st==='matched'?`<span class="muted">${purchaseEsc(r.categoryName||'—')}</span>`:'—');
+      ?(furniture
+        ?`<span class="muted">${purchaseEsc(r.categoryName||d.autoCategoryName||'Mobilya')} · KDV %10</span>`
+        :`<select class="purchase-row-cat" data-purchase-row-cat="${purchaseEsc(key)}">${purchaseCategoryOptionsHtml(selected)}</select>`)
+      :(st==='matched'?`<span class="muted">${purchaseEsc(r.categoryName||'—')}${furniture?' · KDV %10':''}</span>`:'—');
+    const codeLine=[r.itemCode||r.productCode||r.matchCode,r.matchCode&&r.productCode&&r.matchCode!==r.productCode?`sistem: ${r.matchCode}`:''].filter(Boolean).join(' · ');
     return `<tr class="dynamics-preview-row ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">
     <td><span class="dynamics-status ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">${label[st]||st}</span>${why}</td>
-    <td><b>${purchaseEsc(r.productName||r.searchName||r.productCode||r.itemCode||'-')}</b><small>${purchaseEsc([r.itemCode||r.productCode||r.matchCode,r.matchCode&&r.productCode&&r.matchCode!==r.productCode?`sistem: ${r.matchCode}`:''].filter(Boolean).join(' · ')||'')}</small></td>
+    <td><b>${purchaseEsc(r.productName||r.searchName||r.productCode||r.itemCode||'-')}</b><small>${purchaseEsc(codeLine||'')}</small></td>
     <td>${catCell}</td>
     <td>${Number(r.quantity||0)}</td>
     <td><b>${money(r.unitCost)}</b></td>
@@ -5720,6 +5743,7 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
     const fd=new FormData();fd.append('file',file);
     fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'');
     const d=await api('/web-api/admin/purchase-invoice-preview',{method:'POST',body:fd});
+    purchaseApplyIstikbalDefaults(d);
     renderPurchasePreview(d);
     const will=Number(d.willCreate||d.unmatched||0);
     const withCost=Number(d.withCost||0);
@@ -5727,7 +5751,8 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
       q('#purchaseExcelInvoiceNo').value=d.suggestedInvoiceNo;
       q('#purchaseExcelInvoiceNo').placeholder=d.suggestedInvoiceNo;
     }
-    status.textContent=`${d.total} satır · ${withCost} maliyetli · ${will} yeni · “Sadece Maliyet” veya “Sadece Stok” seç`;
+    status.textContent=`${d.total} satır · ${withCost} maliyetli · ${will} yeni kod · ${d.matched||0} eşleşen kod`;
+    if(d.furniture)status.textContent+=` · Mobilya · KDV %10`;
     if(!d.hasInvoiceNo)status.textContent+=` · sanal fatura: ${d.suggestedInvoiceNo||q('#purchaseExcelInvoiceNo')?.value||'otomatik'}`;
     if(d.truncated)status.textContent+=` · listede ilk 800, aktarımın tamamı ${d.total} satır`;
     status.className='form-status success';
@@ -5750,9 +5775,9 @@ async function runPurchaseImport(mode){
     q('#purchaseExcelWarehouseBox')?.classList.add('need-stock');
     return;
   }
-  const categoryId=String(q('#purchaseExcelCategory')?.value||'').trim();
+  const categoryId=String(q('#purchaseExcelCategory')?.value||purchasePreviewData?.autoCategoryId||'').trim();
   const categoryMap=purchaseCollectCategoryMap();
-  if(will>0){
+  if(will>0&&!purchaseIsIstikbal()&&!(purchasePreviewData?.furniture)){
     const miss=purchaseMissingCategoryCount();
     if(miss>0&&!categoryId){
       toast(`${miss} yeni ürünün kategorisi eksik — satırdan seç veya üstten uygula`);
@@ -5772,6 +5797,14 @@ async function runPurchaseImport(mode){
         }
       });
     }
+  }else if((purchaseIsIstikbal()||purchasePreviewData?.furniture)&&categoryId){
+    (purchasePreviewData?.preview||[]).forEach(r=>{
+      if((r.status==='will_create'||r.status==='unmatched')&&!r.categoryId){
+        r.categoryId=categoryId;
+        const key=purchaseRowKey(r);
+        if(key)categoryMap[key]=categoryId;
+      }
+    });
   }
   const label=mode==='stock'?'Sadece stok':mode==='cost'?'Sadece maliyet':'Aktarım';
   if(!confirm(`${label} aktarılsın mı?\n${matched} eşleşen · ${will} yeni${mode==='cost'?` · ${withCost} maliyetli`:''}${will>0?`\nKategori: satır satır (${Object.keys(categoryMap).length} seçili)`:''}\nSonra Geri Al ile silebilirsin.`))return;

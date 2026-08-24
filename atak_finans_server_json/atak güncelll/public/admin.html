@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v250" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v250" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v250" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v250" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v251" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v251" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v251" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v251" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1603,7 +1603,7 @@ Bulunamayan → Diğer.
         <article class="warn"><b>0</b><span>Yeni eklenecek</span></article>
         <article class="bad"><b>0</b><span>Hatalı</span></article>
       </div>
-      <p class="note" style="margin-top:12px">Arçelik: Madde kodu + Maliyet tutarı. Yeni ürünlerin kategorisini <b>tabloda ürünün yanında</b> seçersin. Üstteki varsayılan ile hepsine birden de uygulanır. İstikbal / Doğtaş → marka İstikbal (Malzeme1 + Birim Fiyat).</p>
+      <p class="note" style="margin-top:12px">Arçelik: Madde kodu + Maliyet. İstikbal CSV: <b>Malzeme1 = ürün kodu</b> (kart koduna yazılır). Aynı kod ikinci yüklemede yeni kart açmaz. Otomatik <b>Mobilya</b> + <b>KDV %10</b>. Fatura no yoksa sanal no verilir.</p>
     </div>
   </div>
   <div class="panel table-wrap dynamics-preview-wrap">
@@ -3002,5 +3002,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v250"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v251"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
