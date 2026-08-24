@@ -107,11 +107,33 @@ function parseCsvBuffer(buffer){
   });
 }
 
+/** İstikbal stok listesinde fatura yok → her aktarıma tek sanal no (gerçek faturalarla karışmaz). */
+function virtualInvoiceNo({supplier='',date='',mode='',now=new Date()}={}){
+  const supplierKey=String(supplier||'').toLocaleLowerCase('tr-TR')
+    .replace(/ı/g,'i').replace(/İ/g,'i');
+  const furniture=/istikbal|dogtas|doğtaş/.test(supplierKey);
+  const d=String(date||'').replace(/\D/g,'').slice(0,8)||[
+    now.getFullYear(),
+    String(now.getMonth()+1).padStart(2,'0'),
+    String(now.getDate()).padStart(2,'0')
+  ].join('');
+  const t=[
+    String(now.getHours()).padStart(2,'0'),
+    String(now.getMinutes()).padStart(2,'0'),
+    String(now.getSeconds()).padStart(2,'0')
+  ].join('');
+  const rand=Math.random().toString(36).slice(2,6).toUpperCase();
+  const kind=String(mode||'')==='stock'?'STOK':(String(mode||'')==='cost'?'FIYAT':'AKTAR');
+  const prefix=furniture?`IST-SANAL-${kind}`:`SANAL-${kind}`;
+  return `${prefix}-${d}-${t}-${rand}`;
+}
+
 module.exports={
   purchaseHeaderKey,
   looksLikeHeaderLine,
   bufferText,
   detectDelim,
   headerIndex,
-  parseCsvBuffer
+  parseCsvBuffer,
+  virtualInvoiceNo
 };

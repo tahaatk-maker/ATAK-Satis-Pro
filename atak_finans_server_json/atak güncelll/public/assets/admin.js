@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v249 */
+/* ATAK_ADMIN_BUILD=fix-v250 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -5718,11 +5718,17 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
   try{
     status.textContent='CSV / Excel okunuyor…';status.className='form-status';
     const fd=new FormData();fd.append('file',file);
+    fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'');
     const d=await api('/web-api/admin/purchase-invoice-preview',{method:'POST',body:fd});
     renderPurchasePreview(d);
     const will=Number(d.willCreate||d.unmatched||0);
     const withCost=Number(d.withCost||0);
+    if(d.suggestedInvoiceNo&&q('#purchaseExcelInvoiceNo')&&!q('#purchaseExcelInvoiceNo').value){
+      q('#purchaseExcelInvoiceNo').value=d.suggestedInvoiceNo;
+      q('#purchaseExcelInvoiceNo').placeholder=d.suggestedInvoiceNo;
+    }
     status.textContent=`${d.total} satır · ${withCost} maliyetli · ${will} yeni · “Sadece Maliyet” veya “Sadece Stok” seç`;
+    if(!d.hasInvoiceNo)status.textContent+=` · sanal fatura: ${d.suggestedInvoiceNo||q('#purchaseExcelInvoiceNo')?.value||'otomatik'}`;
     if(d.truncated)status.textContent+=` · listede ilk 800, aktarımın tamamı ${d.total} satır`;
     status.className='form-status success';
   }catch(e){
@@ -5779,10 +5785,11 @@ async function runPurchaseImport(mode){
     fd.append('categoryId',categoryId);
     fd.append('categoryMap',JSON.stringify(categoryMap));
     fd.append('pricesIncludeVat',q('#purchaseExcelIncVat')?.checked?'1':'0');
+    fd.append('invoiceNo',q('#purchaseExcelInvoiceNo')?.value||'');
     const d=await api('/web-api/admin/purchase-invoice-import',{method:'POST',body:fd});
     status.textContent=mode==='stock'
-      ?`Stok tamam · ${d.invoice.stockUpdated||0} stok hareketi · ${d.invoice.created||0} yeni ürün`
-      :`Maliyet tamam · ${d.invoice.priceUpdated||0} alış güncellendi · ${d.invoice.created||0} yeni ürün · ${money(d.invoice.total)}`;
+      ?`Stok tamam · fatura ${d.invoice.invoiceNo||'-'}${d.invoice.virtualInvoice?' (sanal)':''} · ${d.invoice.stockUpdated||0} stok · ${d.invoice.created||0} yeni`
+      :`Maliyet tamam · fatura ${d.invoice.invoiceNo||'-'}${d.invoice.virtualInvoice?' (sanal)':''} · ${d.invoice.priceUpdated||0} alış · ${d.invoice.created||0} yeni · ${money(d.invoice.total)}`;
     status.className='form-status success';
     toast(label+' aktarıldı');
     if(mode==='stock'){

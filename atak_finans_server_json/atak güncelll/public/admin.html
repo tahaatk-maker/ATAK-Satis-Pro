@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v249" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v249" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v249" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v249" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v250" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v250" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v250" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v250" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1583,6 +1583,10 @@ Bulunamayan → Diğer.
       </div>
       <button id="purchaseApplyCategoryBtn" class="secondary-btn" type="button" style="margin-top:4px">Seçileni tüm yenilere uygula</button>
       <label class="check-row"><input id="purchaseExcelIncVat" type="checkbox" checked/> Fiyatlarda KDV dahil</label>
+      <label>Sanal fatura no (CSV’de yoksa)
+        <input id="purchaseExcelInvoiceNo" type="text" placeholder="Boş bırakın → IST-SANAL-STOK-… otomatik"/>
+        <small>Gerçek fatura numarası yoksa sistem sanal no verir; gerçek faturalarla karışmaz.</small>
+      </label>
       <div class="dynamics-info-box"><b>İki seçenek</b><span><b>Sadece maliyet</b> → alış fiyatını yazar (stok dokunulmaz). <b>Sadece stok</b> → miktarı depoya ekler ve <b>hareketli ortalama</b> maliyeti günceller. Stok için <b>fatura no zorunlu</b>; aynı fatura + aynı ürün ikinci kez işlenmez. Günlük mal girişini Stok Merkezi’nden de yapabilirsiniz.</span></div>
       <div class="dynamics-import-actions" style="flex-wrap:wrap">
         <button id="purchasePreviewBtn" class="secondary-btn" type="button">Excel / CSV Önizle</button>
@@ -2998,5 +3002,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v249"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v250"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

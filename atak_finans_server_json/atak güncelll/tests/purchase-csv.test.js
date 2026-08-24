@@ -35,4 +35,11 @@ assert.deepEqual(
   {codeIndex:0,qtyIndex:1,costIndex:2}
 );
 
+const virt=csv.virtualInvoiceNo({supplier:'İstikbal / Doğtaş',date:'2026-08-24',mode:'stock',now:new Date('2026-08-24T15:30:45')});
+assert.match(virt,/^IST-SANAL-STOK-20260824-153045-[A-Z0-9]{4}$/);
+const virt2=csv.virtualInvoiceNo({supplier:'İstikbal',date:'2026-08-24',mode:'stock',now:new Date('2026-08-24T15:30:45')});
+assert.notEqual(virt,virt2,'her çağrıda farklı sonek');
+const costNo=csv.virtualInvoiceNo({supplier:'İstikbal',date:'2026-08-24',mode:'cost',now:new Date('2026-08-24T15:30:45')});
+assert.match(costNo,/^IST-SANAL-FIYAT-/);
+
 console.log('OK purchase-csv tests passed');

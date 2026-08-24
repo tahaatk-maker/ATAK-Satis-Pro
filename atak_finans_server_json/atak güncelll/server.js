@@ -1992,8 +1992,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.249-istikbal-csv',
-    build:'fix-v249',
+    version:'6.3.250-sanal-fatura',
+    build:'fix-v250',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -8673,13 +8673,21 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,excelFile,(req,r
       return{...r,status:'will_create',reason:hasCost?'':'maliyet yok (stok aktarılabilir)',matchCode:'',currentPurchasePrice:0};
     });
     const invoiceNos=[...new Set(preview.map(x=>x.invoiceNo).filter(Boolean))];
+    const supplierHint=String(req.body?.supplierName||'');
+    const suggestedInvoiceNo=invoiceNos.length
+      ?''
+      :purchaseCsv.virtualInvoiceNo({supplier:supplierHint||'İstikbal',date:todayISO(),mode:'stock'});
     res.json({
       ok:true,
       total:preview.length,matched,willCreate,unmatched:willCreate,invalid,stockOk,withCost,
       invoiceNos,
+      hasInvoiceNo:invoiceNos.length>0,
+      suggestedInvoiceNo,
       preview:preview.slice(0,800),
       truncated:preview.length>800,
-      note:'İstikbal CSV (Malzeme1 + Birim Fiyat) ve Arçelik Excel 50 MB’a kadar yüklenir. Aktarımı sonra listeden geri alabilirsiniz.'
+      note:invoiceNos.length
+        ?'Dosyadaki fatura numaraları kullanılacak.'
+        :'Dosyada fatura no yok. Aktarımda sanal fatura no verilir (IST-SANAL-…); gerçek faturalarla karışmaz.'
     });
   }catch(e){
     res.status(400).json({error:e.message||'Excel okunamadı'});
@@ -8757,8 +8765,10 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,re
 
     const date=String(req.body?.date||rows.find(r=>r.date)?.date||todayISO()).slice(0,10);
     let invoiceNo=String(req.body?.invoiceNo||rows.find(r=>r.invoiceNo)?.invoiceNo||'').trim();
-    if(addStock&&!stockCost.normalizeInvoiceNo(invoiceNo)&&furniture){
-      invoiceNo=`IST-STOK-${date.replace(/-/g,'')}`;
+    let virtualInvoice=false;
+    if(!stockCost.normalizeInvoiceNo(invoiceNo)&&(addStock||furniture||mode==='cost')){
+      invoiceNo=purchaseCsv.virtualInvoiceNo({supplier:supplierFallback,date,mode,now:new Date()});
+      virtualInvoice=true;
     }
     const supplierName=furniture
       ? supplierFallback
@@ -8766,20 +8776,20 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,re
 
     const invoice=applyPurchaseInvoiceToStore(s,{
       supplierName,invoiceNo,date,warehouseId,
-      note:String(req.body?.note||`Excel alış (${mode})`),
+      note:String(req.body?.note||(virtualInvoice?`Sanal fatura · Excel alış (${mode})`:`Excel alış (${mode})`)),
       source:'excel',
       updatePurchasePrice,addStock,pricesIncludeVat,createMissingProducts,
       categoryId,items,actor
     });
     audit(s,'Alış faturası Excel aktarımı',invoice.invoiceNo||invoice.id,{
-      mode,matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total
+      mode,matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total,virtualInvoice
     });
     writeStore(s);
     res.json({ok:true,invoice:{
       id:invoice.id,date:invoice.date,invoiceNo:invoice.invoiceNo,supplierName:invoice.supplierName,
       total:invoice.total,matched:invoice.matched,unmatched:invoice.unmatched,created:invoice.created,
       priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,itemCount:invoice.items.length,
-      mode,reverted:false
+      mode,reverted:false,virtualInvoice
     }});
   }catch(e){
     res.status(400).json({error:e.message||'Excel aktarılamadı'});
