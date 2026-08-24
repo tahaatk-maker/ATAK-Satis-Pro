@@ -135,6 +135,21 @@
   background:#fff7ed;border:1px solid #f0d2a8;color:#9a3412;font-size:13px;font-weight:700
 }
 #profitCenter .warn-banner.hidden{display:none}
+#profitCenter .profit-howto{margin:0 0 14px}
+#profitCenter .profit-howto ol{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none
+}
+#profitCenter .profit-howto li{
+  background:#f8fafc;border:1px solid var(--ck-line,#dce4ef);border-radius:14px;padding:14px 16px;
+  display:grid;gap:8px;align-content:start
+}
+#profitCenter .profit-howto li b{font-size:14px;color:#0c1a33}
+#profitCenter .profit-howto li span{font-size:13px;line-height:1.5;color:#4b5d73;font-weight:600}
+#profitCenter .profit-howto .mini-btn{justify-self:start;min-height:34px}
+#profitCenter .profit-example{
+  margin-top:12px;padding:14px 16px;background:#fffbeb;border:1px dashed #f0d2a8;
+  border-radius:14px;font-size:13px;line-height:1.6;color:#7c4a12;font-weight:650
+}
 .profit-filters{
   display:flex;gap:12px;align-items:end;flex-wrap:wrap
 }
@@ -145,23 +160,38 @@
 .profit-filters .primary{min-height:44px;border-radius:11px;padding:0 18px}
 .profit-quick{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
 .profit-quick .mini-btn{min-height:38px;padding:0 14px;border-radius:10px}
-.profit-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:16px 0}
-.profit-kpis article{
+.profit-kpis{display:block;margin:16px 0}
+.profit-formula{
+  display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch
+}
+.profit-formula article{
   background:#fff;border:1px solid var(--ck-line,#dce4ef);border-radius:18px;padding:18px;
   display:grid;gap:4px;box-shadow:0 8px 22px rgba(7,26,51,.06)
 }
-.profit-kpis small{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#667890}
-.profit-kpis b{font-size:24px;color:#0c1a33;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.profit-kpis span{font-size:12px;color:#8a97ab;font-weight:650}
+.profit-formula small,.profit-kpis small{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#667890}
+.profit-formula b,.profit-kpis b{font-size:26px;color:#0c1a33;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.profit-formula span:not(.profit-op),.profit-kpis article span{font-size:12px;color:#8a97ab;font-weight:650}
+.profit-formula .profit-op{
+  align-self:center;font-size:32px;font-weight:800;color:#8a97ab;padding:0 4px
+}
 .profit-kpis .profit-gross{border-color:#b7e4c7;background:linear-gradient(180deg,#fff,#f0fdf4)}
 .profit-kpis .profit-gross b{color:#15803d}
+.profit-kpis .profit-loss{border-color:#fecaca;background:linear-gradient(180deg,#fff,#fef2f2)}
+.profit-kpis .profit-loss b{color:#b91c1c}
 .profit-kpis .profit-net{border-color:#8fb4e5;background:linear-gradient(180deg,#fff,#eef5ff)}
 .profit-kpis .profit-net b{color:#0b4d94}
+.profit-side{
+  display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px;font-size:13px;color:#667890;font-weight:700
+}
 #profitCenter .turnover-table table{min-width:640px}
 #profitCenter td small.warn-text{display:block;font-size:11px}
-@media(max-width:1200px){.profit-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.products-stock-hint{margin:8px 16px 12px;max-width:1100px}
+@media(max-width:1200px){
+  #profitCenter .profit-howto ol{grid-template-columns:1fr}
+  .profit-formula{grid-template-columns:1fr;gap:8px}
+  .profit-formula .profit-op{display:none}
+}
 @media(max-width:760px){
-  .profit-kpis{grid-template-columns:1fr 1fr}
   .profit-filters{flex-direction:column;align-items:stretch}
   .profit-quick{margin-left:0}
 }

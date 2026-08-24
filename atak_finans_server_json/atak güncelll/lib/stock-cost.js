@@ -22,6 +22,15 @@ function productQtyTotal(store, productCode){
   },0);
 }
 
+function countImportColumns(header){
+  const h=(header||[]).map(x=>String(x??'').trim().toLocaleLowerCase('tr-TR'));
+  const codeIndex=h.findIndex(x=>/ürün.?kodu|urun.?kodu|^kod$|product.?code|item.?code/.test(x));
+  let qtyIndex=h.findIndex(x=>/^adet$|girilecek.?adet|yeni.?stok|quantity|qty/.test(x));
+  if(qtyIndex<0)qtyIndex=h.findIndex(x=>/^(stok|stock)$/.test(x));
+  const costIndex=h.findIndex(x=>/birim.?maliyet|alış.?fiyat|alis.?fiyat|unit.?cost|^maliyet$/.test(x));
+  return {codeIndex,qtyIndex,costIndex};
+}
+
 function weightedAverage(oldQty, oldUnitCost, addQty, addUnitCost){
   const oq=Math.max(0,Number(oldQty)||0);
   const aq=Math.max(0,Number(addQty)||0);
@@ -168,6 +177,7 @@ module.exports={
   normalizeInvoiceNo,
   normalizeProductCode,
   productQtyTotal,
+  countImportColumns,
   weightedAverage,
   receiptKey,
   findProductInStore,

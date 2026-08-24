@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v243 */
+/* ATAK_ADMIN_BUILD=fix-v244 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -311,17 +311,24 @@ function renderProfitReport(d){
   if(warn){
     if(Number(s.missingCostCount||0)>0){
       warn.classList.remove('hidden');
-      warn.innerHTML=`<b>Dikkat:</b> ${s.missingCostCount} satış kaleminde alış fiyatı girilmemiş (${money(s.missingCostRevenue)} ciro). Bu kalemler maliyetsiz sayıldığı için <b>kâr olduğundan yüksek görünüyor</b>. Ürün kartlarına “Alış fiyatı” girin.`;
+      warn.innerHTML=`<b>Dikkat:</b> ${s.missingCostCount} satış kaleminde alış fiyatı yok (${money(s.missingCostRevenue)} ciro). Maliyetsiz sayıldığı için <b>kâr yüksek görünür</b>. Tüm Ürünler Excel’inde Birim Maliyet doldurup yükleyin.`;
     }else{
       warn.classList.add('hidden');
     }
   }
   q('#profitKpis').innerHTML=`
-    <article><small>Net Satış (KDV dahil)</small><b>${money(s.revenue)}</b><span>${Number(s.count||0)} satış · iskonto ${money(s.discount)}</span></article>
-    <article><small>Matrah (KDV hariç)</small><b>${money(s.revenueExVat)}</b><span>KDV ${money(s.vatAmount)}</span></article>
-    <article><small>Maliyet (KDV hariç)</small><b>${money(s.cost)}</b><span>satılan malın maliyeti</span></article>
-    <article class="profit-gross"><small>Brüt Kâr</small><b>${money(s.grossProfit)}</b><span>marj ${profitPct(s.marginPct)}</span></article>
-    <article class="profit-net"><small>Net Kâr (prim sonrası)</small><b>${money(s.netProfit)}</b><span>prim ${money(s.commission)}</span></article>`;
+    <div class="profit-formula">
+      <article class="profit-sales"><small>Satış</small><b>${money(s.revenueExVat)}</b><span>KDV hariç · ${Number(s.count||0)} satış</span></article>
+      <span class="profit-op" aria-hidden="true">−</span>
+      <article><small>Maliyet</small><b>${money(s.cost)}</b><span>satılan malın alış bedeli</span></article>
+      <span class="profit-op profit-eq" aria-hidden="true">=</span>
+      <article class="${Number(s.grossProfit||0)<0?'profit-loss':'profit-gross'}"><small>${Number(s.grossProfit||0)<0?'Zarar':'Kâr'}</small><b>${money(s.grossProfit)}</b><span>marj ${profitPct(s.marginPct)}</span></article>
+    </div>
+    <div class="profit-side">
+      <span>KDV dahil ciro ${money(s.revenue)}</span>
+      <span>İskonto ${money(s.discount)}</span>
+      ${Number(s.commission||0)?`<span>Prim ${money(s.commission)} · prim sonrası ${money(s.netProfit)}</span>`:'<span>Prim yok</span>'}
+    </div>`;
 
   const brandRow=(label,cls,v)=>`<tr>
     <td><span class="ck-brand-pill ${cls}">${label}</span></td>
@@ -769,7 +776,7 @@ q('#productsExcelExportBtn')?.addEventListener('click',async()=>{
     a.href=url;a.download=`atak-stok-giris-${catName}.xlsx`;
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1500);
-    toast('Excel indirildi — Adet sütununu doldurup yükleyin');
+    toast('Excel indirildi — Adet ve Birim Maliyet sütunlarını doldurup yükleyin');
   }catch(e){toast(e.message||'Excel indirilemedi')}
 });
 q('#productsExcelImportBtn')?.addEventListener('click',async()=>{
@@ -789,7 +796,7 @@ q('#productsExcelImportFile')?.addEventListener('change',async e=>{
     fd.append('file',file);
     fd.append('warehouseId',warehouseId);
     const r=await api('/web-api/admin/stock-import',{method:'POST',body:fd});
-    toast(`${r.imported||0} ürün stoğu güncellendi${r.skipped?` · ${r.skipped} atlandı`:''}`);
+    toast(`${r.imported||0} ürün stoğu güncellendi${r.costsUpdated?` · ${r.costsUpdated} ürüne birim maliyet işlendi`:''}${r.skipped?` · ${r.skipped} atlandı`:''}`);
     await load();
   }catch(err){toast(err.message||'Stok yüklenemedi')}
 });
@@ -1508,7 +1515,7 @@ q('#stockAdjustForm')?.addEventListener('submit',async e=>{
   }catch(err){toast(err.message)}
 });
 q('#stockTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/stock-transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productCode:q('#transferProduct').value,fromWarehouseId:q('#transferFrom').value,toWarehouseId:q('#transferTo').value,quantity:q('#transferQuantity').value,note:q('#transferNote').value})});e.target.reset();q('#transferQuantity').value=1;await loadStockCenter();toast('Transfer tamamlandı')});
-q('#stockImportForm')?.addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData();fd.append('file',q('#stockImportFile').files[0]);fd.append('warehouseId',q('#importWarehouse').value);const r=await api('/web-api/admin/stock-import',{method:'POST',body:fd});e.target.reset();await loadStockCenter();toast(`${r.imported} stok satırı aktarıldı`)});
+q('#stockImportForm')?.addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData();fd.append('file',q('#stockImportFile').files[0]);fd.append('warehouseId',q('#importWarehouse').value);const r=await api('/web-api/admin/stock-import',{method:'POST',body:fd});e.target.reset();await loadStockCenter();toast(`${r.imported} stok satırı aktarıldı${r.costsUpdated?` · ${r.costsUpdated} ürüne birim maliyet işlendi`:''}`)});
 q('#stockZeroAllBtn')?.addEventListener('click',async()=>{
   if(!confirm('TÜM depolardaki fiziksel stoklar 0 yapılsın mı?\nRezerveler de temizlenir. Hareket kaydı tutulur.'))return;
   if(!confirm('Emin misin? Bu işlem stok bakiyelerini sıfırlar.'))return;

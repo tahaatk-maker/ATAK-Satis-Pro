@@ -1998,8 +1998,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.243-stock-receipt',
-    build:'fix-v243',
+    version:'6.3.244-profit-cost',
+    build:'fix-v244',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -3237,20 +3237,17 @@ function parseStockImportRows(buffer,originalName=''){
   const rows=[];
   const pushFromMatrix=(matrix)=>{
     if(!Array.isArray(matrix)||matrix.length<2)return;
-    const header=matrix[0].map(x=>String(x??'').trim().toLocaleLowerCase('tr-TR'));
-    const codeIndex=header.findIndex(x=>/ürün.?kodu|urun.?kodu|^kod$|product.?code|item.?code/.test(x));
-    // Adet sütunu tercih; "Mevcut Stok" hariç
-    let qtyIndex=header.findIndex(x=>/^adet$|girilecek.?adet|yeni.?stok|quantity|qty/.test(x));
-    if(qtyIndex<0)qtyIndex=header.findIndex(x=>/^(stok|stock)$/.test(x));
-    if(codeIndex<0||qtyIndex<0)return;
+    const cols=stockCost.countImportColumns(matrix[0]);
+    if(cols.codeIndex<0||cols.qtyIndex<0)return;
     for(const line of matrix.slice(1)){
-      const cols=Array.isArray(line)?line:[];
-      const code=String(cols[codeIndex]??'').trim();
+      const cells=Array.isArray(line)?line:[];
+      const code=String(cells[cols.codeIndex]??'').trim();
       if(!code||/^kategori$/i.test(code))continue;
-      const raw=cols[qtyIndex];
+      const raw=cells[cols.qtyIndex];
       if(raw===''||raw==null)continue;
       const qty=Math.max(0,Math.round(normalizeNumber(raw)));
-      rows.push({code,qty});
+      const unitCost=cols.costIndex>=0?Math.max(0,normalizeNumber(cells[cols.costIndex])):0;
+      rows.push({code,qty,unitCost});
     }
   };
   if(isExcel){
@@ -3281,16 +3278,25 @@ app.post('/web-api/admin/stock-import',requireAdmin,dynamicsUpload.single('file'
     if(!warehouseId)return res.status(400).json({error:'Depo seçilmelidir'});
     const parsed=parseStockImportRows(req.file.buffer,req.file.originalname||'');
     if(!parsed.length)return res.status(400).json({error:'Dosyada Ürün Kodu + Adet dolu satır bulunamadı. Adet sütununu doldurun.'});
-    const s=readStore();let imported=0,skipped=0,updatedCatalog=0;
-    for(const {code,qty} of parsed){
+    const s=readStore();let imported=0,skipped=0,updatedCatalog=0,costsUpdated=0;
+    const now=new Date().toISOString();
+    for(const {code,qty,unitCost} of parsed){
       const product=s.products.find(p=>String(p.code||'').toLocaleLowerCase('tr-TR')===code.toLocaleLowerCase('tr-TR'));
       if(!product){skipped++;continue}
       const current=Number(currentStock(s,code,warehouseId)?.quantity||0);
       addStockMovement(s,{productCode:code,warehouseId,type:'import',quantity:qty-current,reference:'Excel/CSV Stok Aktarımı',note:'Toplu stok aktarımı',user:currentActor(req)?.name||'Admin'});
-      if(Number(product.stock||0)!==qty){product.stock=qty;product.updatedAt=new Date().toISOString();updatedCatalog++}
+      if(Number(product.stock||0)!==qty){product.stock=qty;product.updatedAt=now;updatedCatalog++}
+      const cost=Number(unitCost||0);
+      if(cost>0){
+        product.purchasePrice=cost;
+        product.purchasePriceSource='count-import';
+        product.purchasePriceUpdatedAt=now;
+        product.updatedAt=now;
+        costsUpdated++;
+      }
       imported++;
     }
-    audit(s,'Excel/CSV stok aktarımı',warehouseId,{imported,skipped,updatedCatalog});writeStore(s);res.json({ok:true,imported,skipped,updatedCatalog});
+    audit(s,'Excel/CSV stok aktarımı',warehouseId,{imported,skipped,updatedCatalog,costsUpdated});writeStore(s);res.json({ok:true,imported,skipped,updatedCatalog,costsUpdated});
   }catch(error){res.status(500).json({error:error.message||'Stok aktarımı başarısız'})}
 });
 
@@ -3322,22 +3328,22 @@ app.get('/web-api/admin/products-stock-excel',requireAdmin,(req,res)=>{
       'Barkod':p.barcode||'',
       'Ürün Adı':p.name||'',
       'Marka':p.brand||'',
-      'Alış Fiyatı':Number(p.purchasePrice||0),
       'Mevcut Stok':Number(p.stock||0),
-      'Adet':'' // kullanıcı doldurur → stok girişi
+      'Adet':'', // sayılan adet — kullanıcı doldurur
+      'Birim Maliyet':Number(p.purchasePrice||0)||'' // alış fiyatı; 0 ise boş, kullanıcı doldurur
     });
-    const colWidths=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:12},{wch:12},{wch:10}];
+    const colWidths=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:12},{wch:10},{wch:14}];
     const wb=XLSX.utils.book_new();
     const talimat=XLSX.utils.aoa_to_sheet([
-      ['ATAK Stok Giriş Excel'],
+      ['ATAK Sayım Excel — adet + birim maliyet'],
       [''],
-      ['1) İstediğiniz kategoriyi seçip "Excel İndir" ile indirin (veya tümünü).'],
-      ['2) "Adet" sütununa gireceğiniz stok adedini yazın. Boş satırlar atlanır.'],
-      ['3) "Alış Fiyatı" bilgilendirme içindir; stok yüklerken zorunlu değildir.'],
-      ['4) "Mevcut Stok" bilgilendirme içindir; değiştirmeyin.'],
-      ['5) Ürün Kodu sütununu değiştirmeyin.'],
-      ['6) Tüm Ürünler → Excel\'den stok yükle ile depoyu seçip bu dosyayı yükleyin.'],
-      ['7) Adet = o depodaki yeni stok adedi (mutlak değer).']
+      ['1) Tüm Ürünler’den "Excel İndir" ile indirin (kategori süzebilirsiniz).'],
+      ['2) "Adet" = saydığınız stok. Boş satırlar atlanır. Adet o depodaki YENİ stok adedidir.'],
+      ['3) "Birim Maliyet" = birim alış fiyatı (KDV dahil). İlk sayımda doldurun; kâr buradan hesaplanır.'],
+      ['4) "Mevcut Stok" bilgilendirme içindir; değiştirmeyin. Ürün Kodu sütununu değiştirmeyin.'],
+      ['5) Depo seçip "Excel\'den stok yükle" veya Stok Merkezi’nden bu dosyayı yükleyin.'],
+      ['6) Sonraki mal girişleri bu Excel ile değil: Stok Merkezi → Stok Girişi (fatura no + birim alış).'],
+      ['7) Yeni alış, eldeki stokla hareketli ortalama yapar. Eski satışların kârı değişmez.']
     ]);
     XLSX.utils.book_append_sheet(wb,talimat,'Talimat');
     const allRows=list.map(toRow);

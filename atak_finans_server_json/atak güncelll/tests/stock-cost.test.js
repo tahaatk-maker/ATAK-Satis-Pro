@@ -6,6 +6,18 @@ assert.equal(stock.normalizeInvoiceNo(' ata-123 / a '), 'ATA123A');
 assert.equal(stock.weightedAverage(10,10000,0,12000), 10000);
 assert.equal(stock.weightedAverage(0,10000,10,12000), 12000);
 assert.equal(stock.weightedAverage(5,10000,10,12000), 11333.33);
+assert.equal(stock.weightedAverage(10,10000,10,12000), 11000);
+
+// Comfort yatak: 10×10.000, 5 satıldı (kalan 5), 10×12.000 alındı
+assert.equal(stock.weightedAverage(5,10000,10,12000), 11333.33);
+assert.deepEqual(
+  stock.countImportColumns(['Ürün Kodu','Mevcut Stok','Adet','Birim Maliyet']),
+  {codeIndex:0,qtyIndex:2,costIndex:3}
+);
+assert.deepEqual(
+  stock.countImportColumns(['kod','girilecek adet','alış fiyatı']),
+  {codeIndex:0,qtyIndex:1,costIndex:2}
+);
 
 const store={
   products:[{id:'p1',code:'COMFORT',name:'Comfort Yatak',purchasePrice:10000,itemCode:'comfort'}],

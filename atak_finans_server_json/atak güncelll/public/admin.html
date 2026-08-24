@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v243" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v243" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v243" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v243" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v244" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v244" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v244" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v244" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1174,7 +1174,7 @@ body.inv-full #pageTitle{font-size:18px}
   <div class="table-wrap"><table><thead><tr><th>Satış No</th><th>Müşteri</th><th>Bayi / Satıcı</th><th>Tutar</th><th>Durum</th><th>Müşteri Notu</th><th>İşlem</th></tr></thead><tbody id="salesTrackingTable"></tbody></table></div>
   <div id="salesTrackingStatus" class="form-status"></div>
 </div></section>
-<section class="tab" id="products"><div class="toolbar advanced products-toolbar"><input id="adminSearch" placeholder="Kod, ürün veya marka ara"/><select id="filterCategory"><option value="all">Tüm kategoriler</option></select><select id="filterStatus"><option value="all">Tüm durumlar</option><option value="active">Yayında</option><option value="passive">Pasif</option><option value="featured">Öne çıkan</option></select><div class="products-toolbar-actions"><button class="backup-btn" id="productsExcelExportBtn" type="button" title="Seçili kategoriye göre Excel indir">⬇ Excel İndir</button><select id="productsStockWarehouse" title="Stok yüklenecek depo"><option value="">Depo seç</option></select><button class="secondary-btn" id="productsExcelImportBtn" type="button" title="Adet doldurulmuş Excel ile stok gir">Excel'den stok yükle</button><input accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" id="productsExcelImportFile" type="file"/><button class="secondary-btn" id="productsClearMobilyaPurchaseBtn" type="button" title="Mobilya kategorisindeki alış fiyatlarını 0 yap">Mobilya alışlarını sil</button><button class="mini-btn danger" id="productsClearAllBtn" type="button" title="Kategoriler kalır, tüm ürün kartları silinir">Tüm ürünleri sil</button><button class="primary" id="newProductBtn" type="button">+ Yeni ürün</button></div></div><div class="selection-bar hidden" id="selectionBar"><b><span id="selectedCount">0</span> ürün seçildi</b><button data-bulk="active" type="button">Yayına al</button><button data-bulk="passive" type="button">Pasife al</button><button data-bulk="featured" type="button">Öne çıkar</button><button data-bulk="unfeatured" type="button">Öne çıkarmayı kaldır</button><button id="clearSelection" type="button">Seçimi temizle</button></div><div class="panel table-wrap"><table><thead><tr><th><input id="selectAll" type="checkbox"/></th><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Marka</th><th>Kategori</th><th>Alış</th><th>Liste</th><th>Nakit</th><th>Kart</th><th>KDV</th><th>Stok</th><th>Durum</th><th></th></tr></thead><tbody id="productTable"></tbody></table><div class="pagination"><button id="prevPage" type="button">←</button><span id="pageInfo"></span><button id="nextPage" type="button">→</button></div></div></section>
+<section class="tab" id="products"><div class="toolbar advanced products-toolbar"><input id="adminSearch" placeholder="Kod, ürün veya marka ara"/><select id="filterCategory"><option value="all">Tüm kategoriler</option></select><select id="filterStatus"><option value="all">Tüm durumlar</option><option value="active">Yayında</option><option value="passive">Pasif</option><option value="featured">Öne çıkan</option></select><div class="products-toolbar-actions"><button class="backup-btn" id="productsExcelExportBtn" type="button" title="Seçili kategoriye göre Excel indir">⬇ Excel İndir</button><select id="productsStockWarehouse" title="Stok yüklenecek depo"><option value="">Depo seç</option></select><button class="secondary-btn" id="productsExcelImportBtn" type="button" title="Adet ve birim maliyet doldurulmuş Excel ile sayım yükle">Excel'den stok yükle</button><input accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" id="productsExcelImportFile" type="file"/><button class="secondary-btn" id="productsClearMobilyaPurchaseBtn" type="button" title="Mobilya kategorisindeki alış fiyatlarını 0 yap">Mobilya alışlarını sil</button><button class="mini-btn danger" id="productsClearAllBtn" type="button" title="Kategoriler kalır, tüm ürün kartları silinir">Tüm ürünleri sil</button><button class="primary" id="newProductBtn" type="button">+ Yeni ürün</button></div></div><p class="note products-stock-hint">İlk sayım: Excel İndir → <b>Adet</b> ve <b>Birim Maliyet</b> doldur → depo seç → Excel'den stok yükle. Sonraki alışlar Stok Merkezi’nde fatura no ile girilir; kâr hareketli ortalama ile çıkar.</p><div class="selection-bar hidden" id="selectionBar"><b><span id="selectedCount">0</span> ürün seçildi</b><button data-bulk="active" type="button">Yayına al</button><button data-bulk="passive" type="button">Pasife al</button><button data-bulk="featured" type="button">Öne çıkar</button><button data-bulk="unfeatured" type="button">Öne çıkarmayı kaldır</button><button id="clearSelection" type="button">Seçimi temizle</button></div><div class="panel table-wrap"><table><thead><tr><th><input id="selectAll" type="checkbox"/></th><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Marka</th><th>Kategori</th><th>Alış</th><th>Liste</th><th>Nakit</th><th>Kart</th><th>KDV</th><th>Stok</th><th>Durum</th><th></th></tr></thead><tbody id="productTable"></tbody></table><div class="pagination"><button id="prevPage" type="button">←</button><span id="pageInfo"></span><button id="nextPage" type="button">→</button></div></div></section>
 <section class="tab" id="webSite">
 <div class="panel">
   <div class="panel-head">
@@ -1804,7 +1804,7 @@ Bulunamayan → Diğer.
 
 <section class="tab" id="stockCenter">
 <div class="foundation-head panel">
-<div><small class="eyebrow">V3.1 STOK</small><h2>Stok Merkezi</h2><p class="note"><b>Stok girişi</b> mal gelince adet ekler (fatura no zorunlu). <b>Sayım</b> depodaki adedi yeni sayıya çeker — birbirine karışmaz. Maliyet hareketli ortalamadır.</p></div>
+<div><small class="eyebrow">V3.1 STOK</small><h2>Stok Merkezi</h2><p class="note"><b>İlk sayım</b> Excel ile (adet + birim maliyet). <b>Stok girişi</b> mal gelince adet ekler (fatura no + birim alış). <b>Sayım</b> yalnızca adedi düzeltir. Maliyet hareketli ortalamadır — son alış tek başına yazılmaz.</p></div>
 <div class="stock-head-actions">
   <button class="secondary-btn" type="button" data-go="foundation" id="stockGoWarehouseBtn">Depo Ayarları →</button>
   <button class="danger-btn" type="button" id="stockZeroAllBtn">Tüm Stokları Sıfırla</button>
@@ -1851,7 +1851,7 @@ Bulunamayan → Diğer.
 <div class="turnover-table" id="receiptTable"></div>
 </div>
 <div class="panel stock-import-panel">
-<div><h2>Excel / CSV ile Sayım Aktar</h2><p class="note">Tüm Ürünler’den indirdiğiniz Excel’de “Ürün Kodu” ve “Adet” sütunlarını doldurup yükleyin. Bu işlem sayımıdır (adet yazar, fatura ile giriş değildir).</p></div>
+<div><h2>Excel / CSV ile Sayım Aktar</h2><p class="note">Tüm Ürünler Excel’inde <b>Adet</b> ve <b>Birim Maliyet</b> (alış fiyatı) doldurun. Bu işlem sayımıdır: adedi yazar, dolu maliyetleri ürün kartına işler. Günlük mal girişi fatura no ile yukarıdadır.</p></div>
 <form id="stockImportForm"><select id="importWarehouse" required=""></select><input accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" id="stockImportFile" required="" type="file"/><button type="submit">Excel / CSV Aktar</button></form>
 </div>
 <div class="panel">
@@ -2394,8 +2394,19 @@ Bulunamayan → Diğer.
 </section>
 <section class="tab" id="profitCenter">
 <div class="foundation-head panel">
-  <div><small class="eyebrow">KÂR & MALİYET</small><h2>Kârlılık Raporu</h2><p class="note">Kâr <b>KDV hariç</b>. Maliyet <b>hareketli ortalama</b>dır: satış anında ürün kartındaki alış fiyatı sabitlenir. Yeni alış geçmiş satış kârını değiştirmez. Mal girişi Stok Merkezi’nde fatura no ile yapılır.</p></div>
+  <div><small class="eyebrow">KÂR & MALİYET</small><h2>Kâr / Zarar</h2><p class="note">Üç sayı: <b>Satış − Maliyet = Kâr</b>. Hepsi KDV hariç. Satış anındaki alış fiyatı kilitlenir; sonra mal alsanız eski kâr değişmez.</p></div>
   <button class="backup-btn" id="profitExportBtn" type="button">⬇ Excel / CSV İndir</button>
+</div>
+
+<div class="panel profit-howto" id="profitHowTo">
+  <ol>
+    <li><b>1. İlk sayım</b><span>Tüm Ürünler → Excel İndir. <b>Adet</b> ve <b>Birim Maliyet</b> doldurup yükleyin. Örnek: 10 Comfort yatak, birim alış 10.000 ₺.</span> <button class="mini-btn" data-go="products" type="button">Excel sayım →</button></li>
+    <li><b>2. Alış ve satış</b><span>Mal gelince Stok Girişi: fatura no + gelen adet + birim alış. Satış personel ekranından. Comfort’tan 3 adet 15.000 ₺’ye gittiyse kâr o 3 adet üzerinden çıkar.</span> <button class="mini-btn" data-go="stockCenter" type="button">Stok girişi →</button></li>
+    <li><b>3. Yeni parti</b><span>10 yatak daha 12.000 ₺’ye alındıysa maliyet <b>son alışa göre değil</b>, elde kalan + yeni gelen <b>hareketli ortalama</b>dır. Eski satışların kârı aynı kalır.</span></li>
+  </ol>
+  <div class="profit-example" id="profitExample">
+    <b>Comfort örneği:</b> 10 adet × 10.000 ₺ alış. 3 adet 15.000 ₺’ye satıldı → kâr 3 × 5.000 = <b>15.000 ₺</b>. 2 adet daha satıldı → +10.000 ₺. Elde 5 kaldı. 10 adet 12.000 ₺’ye alındı → yeni birim maliyet (5×10.000 + 10×12.000) / 15 = <b>11.333 ₺</b>. Bundan sonraki satışlar bu ortalama üzerinden hesaplanır.
+  </div>
 </div>
 
 <div class="panel profit-filters">
@@ -2969,5 +2980,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v243"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v244"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
