@@ -5855,12 +5855,6 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
       q('#purchaseExcelInvoiceNo').value=d.suggestedInvoiceNo;
       q('#purchaseExcelInvoiceNo').placeholder=d.suggestedInvoiceNo;
     }
-    if(d.storeEmpty){
-      status.textContent=`Önizleme geldi ama ürün kartları BOŞ (0 ürün). Önce store yedeğini geri yükleyin; aksi halde ${will} satırın hepsi yeni kart sayılır.`;
-      status.className='form-status error';
-      toast('Ürün kartları boş — yedek geri yükleyin');
-      return;
-    }
     status.textContent=`Önizleme hazır · ${d.total} satır · ${invCount} fatura (${ready} uygun) · ${will} tanımsız · ${d.matched||0} eşleşen`;
     if(d.furniture)status.textContent+=` · Mobilya · KDV %10`;
     if(d.ms!=null)status.textContent+=` · ${d.ms} ms`;
