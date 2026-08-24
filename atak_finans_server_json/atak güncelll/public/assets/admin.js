@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v248 */
+/* ATAK_ADMIN_BUILD=fix-v251 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -31,9 +31,14 @@ function salesProductUnitPrice(p,method=''){
 }
 function toast(t){q('#toast').textContent=t;q('#toast').classList.remove('hidden');setTimeout(()=>q('#toast').classList.add('hidden'),2800)}
 function uploadTooLargeMessage(){
-  const f=typeof selectedCustomerExcelFile==='function'?selectedCustomerExcelFile():null;
+  const f=q('#purchaseExcelFile')?.files?.[0]
+    ||q('#stockImportFile')?.files?.[0]
+    ||q('#productsExcelImportFile')?.files?.[0]
+    ||(typeof selectedCustomerExcelFile==='function'?selectedCustomerExcelFile():null)
+    ||q('#csvFile')?.files?.[0]
+    ||null;
   const mb=f&&f.size?` Seçilen dosya ${(f.size/1024/1024).toFixed(1).replace('.',',')} MB.`:'';
-  return `Dosya sunucuya sığmadı.${mb} Hostinger’daki yeni deploy komutunu çalıştırın, sonra Ctrl+Shift+R ile yenileyip tekrar Önizle’ye basın.`;
+  return `Dosya sunucuya sığmadı.${mb} Limit 50 MB. Ctrl+Shift+R ile yenileyip Alış Faturaları’ndan tekrar yükleyin.`;
 }
 async function api(url,opt={}){
   const r=await fetch(url,{credentials:'same-origin',...opt});
@@ -5589,6 +5594,25 @@ function purchaseApplyDefaultCategoryToRows(){
   });
   toast(n?`${n} yeni ürüne kategori uygulandı`:'Uygulanacak yeni ürün yok');
 }
+function purchaseIsIstikbal(){
+  return /istikbal|doğtaş|dogtas/i.test(String(q('#purchaseExcelSupplier')?.value||''));
+}
+function purchaseApplyIstikbalDefaults(d){
+  if(!d?.furniture&&!purchaseIsIstikbal())return;
+  const catId=String(d.autoCategoryId||'').trim();
+  const sel=q('#purchaseExcelCategory');
+  if(sel&&catId){
+    if(![...sel.options].some(o=>o.value===catId)){
+      const opt=document.createElement('option');
+      opt.value=catId;opt.textContent=d.autoCategoryName||'Mobilya';
+      sel.appendChild(opt);
+    }
+    sel.value=catId;
+  }
+  (d.preview||[]).forEach(r=>{
+    if((r.status==='will_create'||r.status==='unmatched')&&!r.categoryId&&catId)r.categoryId=catId;
+  });
+}
 function purchaseCollectCategoryMap(){
   const map={};
   qa('#purchasePreviewTable select[data-purchase-row-cat]').forEach(sel=>{
@@ -5668,11 +5692,12 @@ function renderPurchasePreview(d){
   const willCreate=Number(d.willCreate||d.unmatched||0);
   const withCost=Number(d.withCost||0);
   const stockRows=Number(d.matched||0)+willCreate;
-  const defCat=String(q('#purchaseExcelCategory')?.value||'').trim();
+  const furniture=Boolean(d.furniture||purchaseIsIstikbal());
+  const defCat=String(q('#purchaseExcelCategory')?.value||d.autoCategoryId||'').trim();
   q('#purchaseExcelSummary').innerHTML=
     `<article><b>${d.total||0}</b><span>Toplam Satır</span></article>
-     <article class="good"><b>${d.matched||0}</b><span>Eşleşen ürün</span></article>
-     <article class="warn"><b>${willCreate}</b><span>Yeni eklenecek</span></article>
+     <article class="good"><b>${d.matched||0}</b><span>Eşleşen kod (kart yok)</span></article>
+     <article class="warn"><b>${willCreate}</b><span>Yeni ürün kodu</span></article>
      <article class="bad"><b>${d.invalid||0}</b><span>Hatalı</span></article>`;
   const rows=d.preview||[];
   const label={matched:'Eşleşti',will_create:'Yeni eklenecek',unmatched:'Yeni eklenecek',invalid:'Hatalı'};
@@ -5683,11 +5708,14 @@ function renderPurchasePreview(d){
     const selected=String(r.categoryId||defCat||'').trim();
     if(st==='will_create'&&selected)r.categoryId=selected;
     const catCell=st==='will_create'
-      ?`<select class="purchase-row-cat" data-purchase-row-cat="${purchaseEsc(key)}">${purchaseCategoryOptionsHtml(selected)}</select>`
-      :(st==='matched'?`<span class="muted">${purchaseEsc(r.categoryName||'—')}</span>`:'—');
+      ?(furniture
+        ?`<span class="muted">${purchaseEsc(r.categoryName||d.autoCategoryName||'Mobilya')} · KDV %10</span>`
+        :`<select class="purchase-row-cat" data-purchase-row-cat="${purchaseEsc(key)}">${purchaseCategoryOptionsHtml(selected)}</select>`)
+      :(st==='matched'?`<span class="muted">${purchaseEsc(r.categoryName||'—')}${furniture?' · KDV %10':''}</span>`:'—');
+    const codeLine=[r.itemCode||r.productCode||r.matchCode,r.matchCode&&r.productCode&&r.matchCode!==r.productCode?`sistem: ${r.matchCode}`:''].filter(Boolean).join(' · ');
     return `<tr class="dynamics-preview-row ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">
     <td><span class="dynamics-status ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">${label[st]||st}</span>${why}</td>
-    <td><b>${purchaseEsc(r.productName||r.searchName||r.productCode||r.itemCode||'-')}</b><small>${purchaseEsc([r.itemCode||r.productCode||r.matchCode,r.matchCode&&r.productCode&&r.matchCode!==r.productCode?`sistem: ${r.matchCode}`:''].filter(Boolean).join(' · ')||'')}</small></td>
+    <td><b>${purchaseEsc(r.productName||r.searchName||r.productCode||r.itemCode||'-')}</b><small>${purchaseEsc(codeLine||'')}</small></td>
     <td>${catCell}</td>
     <td>${Number(r.quantity||0)}</td>
     <td><b>${money(r.unitCost)}</b></td>
@@ -5709,15 +5737,24 @@ function renderPurchasePreview(d){
 q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
   const status=q('#purchaseExcelStatus');
   const file=q('#purchaseExcelFile')?.files?.[0];
-  if(!file){toast('Önce Excel seçin');return}
+  if(!file){toast('Önce CSV veya Excel seçin');return}
   try{
-    status.textContent='Excel okunuyor…';status.className='form-status';
+    status.textContent='CSV / Excel okunuyor…';status.className='form-status';
     const fd=new FormData();fd.append('file',file);
+    fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'');
     const d=await api('/web-api/admin/purchase-invoice-preview',{method:'POST',body:fd});
+    purchaseApplyIstikbalDefaults(d);
     renderPurchasePreview(d);
     const will=Number(d.willCreate||d.unmatched||0);
     const withCost=Number(d.withCost||0);
-    status.textContent=`${d.total} satır · ${withCost} maliyetli · ${will} yeni · “Sadece Maliyet” veya “Sadece Stok” seç`;
+    if(d.suggestedInvoiceNo&&q('#purchaseExcelInvoiceNo')&&!q('#purchaseExcelInvoiceNo').value){
+      q('#purchaseExcelInvoiceNo').value=d.suggestedInvoiceNo;
+      q('#purchaseExcelInvoiceNo').placeholder=d.suggestedInvoiceNo;
+    }
+    status.textContent=`${d.total} satır · ${withCost} maliyetli · ${will} yeni kod · ${d.matched||0} eşleşen kod`;
+    if(d.furniture)status.textContent+=` · Mobilya · KDV %10`;
+    if(!d.hasInvoiceNo)status.textContent+=` · sanal fatura: ${d.suggestedInvoiceNo||q('#purchaseExcelInvoiceNo')?.value||'otomatik'}`;
+    if(d.truncated)status.textContent+=` · listede ilk 800, aktarımın tamamı ${d.total} satır`;
     status.className='form-status success';
   }catch(e){
     status.textContent=e.message;status.className='form-status error';
@@ -5726,7 +5763,7 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
 async function runPurchaseImport(mode){
   const status=q('#purchaseExcelStatus');
   const file=q('#purchaseExcelFile')?.files?.[0];
-  if(!file){toast('Önce Excel seçin');return}
+  if(!file){toast('Önce CSV veya Excel seçin');return}
   const will=Number(purchasePreviewData?.willCreate||purchasePreviewData?.unmatched||0);
   const matched=Number(purchasePreviewData?.matched||0);
   const withCost=Number(purchasePreviewData?.withCost||0);
@@ -5738,9 +5775,9 @@ async function runPurchaseImport(mode){
     q('#purchaseExcelWarehouseBox')?.classList.add('need-stock');
     return;
   }
-  const categoryId=String(q('#purchaseExcelCategory')?.value||'').trim();
+  const categoryId=String(q('#purchaseExcelCategory')?.value||purchasePreviewData?.autoCategoryId||'').trim();
   const categoryMap=purchaseCollectCategoryMap();
-  if(will>0){
+  if(will>0&&!purchaseIsIstikbal()&&!(purchasePreviewData?.furniture)){
     const miss=purchaseMissingCategoryCount();
     if(miss>0&&!categoryId){
       toast(`${miss} yeni ürünün kategorisi eksik — satırdan seç veya üstten uygula`);
@@ -5760,6 +5797,14 @@ async function runPurchaseImport(mode){
         }
       });
     }
+  }else if((purchaseIsIstikbal()||purchasePreviewData?.furniture)&&categoryId){
+    (purchasePreviewData?.preview||[]).forEach(r=>{
+      if((r.status==='will_create'||r.status==='unmatched')&&!r.categoryId){
+        r.categoryId=categoryId;
+        const key=purchaseRowKey(r);
+        if(key)categoryMap[key]=categoryId;
+      }
+    });
   }
   const label=mode==='stock'?'Sadece stok':mode==='cost'?'Sadece maliyet':'Aktarım';
   if(!confirm(`${label} aktarılsın mı?\n${matched} eşleşen · ${will} yeni${mode==='cost'?` · ${withCost} maliyetli`:''}${will>0?`\nKategori: satır satır (${Object.keys(categoryMap).length} seçili)`:''}\nSonra Geri Al ile silebilirsin.`))return;
@@ -5773,10 +5818,11 @@ async function runPurchaseImport(mode){
     fd.append('categoryId',categoryId);
     fd.append('categoryMap',JSON.stringify(categoryMap));
     fd.append('pricesIncludeVat',q('#purchaseExcelIncVat')?.checked?'1':'0');
+    fd.append('invoiceNo',q('#purchaseExcelInvoiceNo')?.value||'');
     const d=await api('/web-api/admin/purchase-invoice-import',{method:'POST',body:fd});
     status.textContent=mode==='stock'
-      ?`Stok tamam · ${d.invoice.stockUpdated||0} stok hareketi · ${d.invoice.created||0} yeni ürün`
-      :`Maliyet tamam · ${d.invoice.priceUpdated||0} alış güncellendi · ${d.invoice.created||0} yeni ürün · ${money(d.invoice.total)}`;
+      ?`Stok tamam · fatura ${d.invoice.invoiceNo||'-'}${d.invoice.virtualInvoice?' (sanal)':''} · ${d.invoice.stockUpdated||0} stok · ${d.invoice.created||0} yeni`
+      :`Maliyet tamam · fatura ${d.invoice.invoiceNo||'-'}${d.invoice.virtualInvoice?' (sanal)':''} · ${d.invoice.priceUpdated||0} alış · ${d.invoice.created||0} yeni · ${money(d.invoice.total)}`;
     status.className='form-status success';
     toast(label+' aktarıldı');
     if(mode==='stock'){
