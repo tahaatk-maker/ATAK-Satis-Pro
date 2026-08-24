@@ -32,7 +32,7 @@ const customerDedupe = require('./lib/customer-dedupe');
 const customerSearch = require('./lib/customer-search');
 const stockCost = require('./lib/stock-cost');
 const appMail = require('./lib/mail');
-const passwordReset = require('./lib/password-reset');
+const staffEmail = require('./lib/staff-email');
 
 const app = express();
 const ROOT = __dirname;
@@ -222,9 +222,7 @@ function ensureStore(store) {
   store.auditLogs = Array.isArray(store.auditLogs) ? store.auditLogs : [];
   store.users = Array.isArray(store.users) ? store.users : [];
   store.passwordResets = Array.isArray(store.passwordResets) ? store.passwordResets : [];
-  store.settings.smtp = (store.settings.smtp && typeof store.settings.smtp==='object') ? store.settings.smtp : {
-    enabled:false,host:'smtp.gmail.com',port:587,secure:false,user:'',pass:'',from:''
-  };
+  store.settings.mailDomain = staffEmail.normalizeDomain(store.settings.mailDomain||staffEmail.DEFAULT_DOMAIN);
   store.settings.sms = (store.settings.sms && typeof store.settings.sms==='object') ? store.settings.sms : {
     enabled:false,
     provider:'generic',
@@ -1981,8 +1979,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.245-mail-reset',
-    build:'fix-v245',
+    version:'6.3.246-staff-email',
+    build:'fix-v246',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -2169,6 +2167,39 @@ app.delete('/web-api/admin/user/:id',requirePermission('users_manage'),(req,res)
   audit(s,'Kullanıcı pasife alındı',user.username,{role:user.role});
   writeStore(s);
   res.json({ok:true,softDeleted:true,canForceDelete:true,message:'Kullanıcı pasife alındı. Tekrar Sil ile kalıcı silebilirsiniz.'});
+});
+
+app.get('/web-api/admin/staff-emails',requirePermission('users_manage'),(req,res)=>{
+  const s=readStore();
+  const domain=staffEmail.normalizeDomain(s.settings?.mailDomain||staffEmail.DEFAULT_DOMAIN);
+  const users=(s.users||[]).filter(u=>u.active!==false);
+  res.json({
+    ok:true,
+    domain,
+    missing:users.filter(u=>!String(u.email||'').trim()).length,
+    rows:staffEmail.preview(users,domain)
+  });
+});
+app.post('/web-api/admin/staff-emails',requirePermission('users_manage'),(req,res)=>{
+  try{
+    const s=readStore(),x=req.body||{};
+    const result=staffEmail.applyAssignments(s,{
+      domain:x.domain,
+      fillMissing:x.fillMissing===true,
+      items:x.items
+    });
+    audit(s,'Personel e-posta güncellendi',result.domain,{updated:result.updated,fillMissing:x.fillMissing===true});
+    writeStore(s);
+    const users=(s.users||[]).filter(u=>u.active!==false);
+    res.json({
+      ok:true,
+      ...result,
+      missing:users.filter(u=>!String(u.email||'').trim()).length,
+      rows:staffEmail.preview(users,result.domain)
+    });
+  }catch(e){
+    res.status(400).json({error:e.message||'E-posta kaydedilemedi'});
+  }
 });
 
 app.get('/web-api/admin/mail-settings',requirePermission('settings_manage'),(req,res)=>{

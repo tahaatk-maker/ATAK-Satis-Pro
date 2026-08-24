@@ -1,0 +1,14 @@
+'use strict';
+const assert=require('assert');
+const fs=require('fs');
+const path=require('path');
+const root=path.join(__dirname,'..');
+const server=fs.readFileSync(path.join(root,'server.js'),'utf8');
+const adminHtml=fs.readFileSync(path.join(root,'public','admin.html'),'utf8');
+const adminJs=fs.readFileSync(path.join(root,'public','assets','admin.js'),'utf8');
+assert.match(server,/require\('\.\/lib\/staff-email'\)/);
+assert.match(server,/app\.get\('\/web-api\/admin\/staff-emails'/);
+assert.match(adminHtml,/id="staffEmailPanel"/);
+assert.match(adminHtml,/id="staffMailFillBtn"/);
+assert.match(adminJs,/\/web-api\/admin\/staff-emails/);
+console.log('staff-email-ui.test.js ok');
