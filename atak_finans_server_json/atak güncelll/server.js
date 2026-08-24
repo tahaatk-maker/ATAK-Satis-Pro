@@ -14,6 +14,7 @@ const { runBekoSync } = require('./lib/beko-sync');
 const qnbSolist = require('./qnb-solist-adapter');
 const customerExcel = require('./customer-excel-import');
 const invoicePrint = require('./lib/invoice-print');
+const invoicePaymentNote = require('./lib/invoice-payment-note');
 const branchLock = require('./lib/branch-lock');
 const customerComms = require('./lib/customer-comms');
 const salaryProrate = require('./lib/salary-prorate');
@@ -1979,8 +1980,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.246-staff-email',
-    build:'fix-v246',
+    version:'6.3.247-invoice-pay-note',
+    build:'fix-v247',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -4787,6 +4788,7 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   sale.paymentMethod=paymentMethod;
   sale.payments=normalizedPayments.map(p=>isHavaleMethod(p.method)?{...p,pending:true,collectedAmount:0}:p)
     .concat(promissoryAmount>0?[{method:'Senet',amount:promissoryAmount,accountId:''}]:[]);
+  sale.paymentNote=invoicePaymentNote.formatInvoicePaymentNote(sale);
   sale.warehouseId=(deductStock||reserveStock)?warehouseId:'';
   sale.deductStock=deductStock;
   sale.reserveStock=reserveStock;
@@ -4815,7 +4817,7 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     s.invoiceIntegration=invCfg;
     sale.invoiceNumber=alloc.number;
     sale.invoiceType=docTypeHint;
-    const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',docType:docTypeHint,provider:invCfg.provider||'qnb-solist',providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:alloc.number,invoiceDate:sale.invoiceDate||'',error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+    const invoiceRecord={id:crypto.randomUUID(),saleId:sale.id,reference:ref,customerId:customer.id,customer:{name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district},items:cleanItems.map(i=>({...i,vatRate:Number((s.products||[]).find(p=>String(p.code)===String(i.productCode))?.vatRate||20)})),total,status:sale.invoiceStatus==='issued'?'issued':'pending',invoiceType:'auto',docType:docTypeHint,provider:invCfg.provider||'qnb-solist',providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:alloc.number,invoiceDate:sale.invoiceDate||'',error:'',ublXml:'',paymentNote:sale.paymentNote||'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
     s.invoiceQueue.push(invoiceRecord);
     sale.invoiceQueueId=invoiceRecord.id;
   }else{
@@ -7245,18 +7247,21 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_man
       items:(sale.items||[]).map(i=>({...i})),total:Number(sale.total||0),
       status:'pending',invoiceType:'auto',provider:cfg.provider||'qnb-solist',
       providerDocumentId:'',uuid:crypto.randomUUID(),invoiceNumber:sale.invoiceNumber||'',invoiceDate:todayISO(),
-      error:'',ublXml:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
+      error:'',ublXml:'',paymentNote:invoicePaymentNote.formatInvoicePaymentNote(sale),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
     };
     s.invoiceQueue.push(record);
     sale.invoiceQueueId=record.id;
   }else{
     record.customer={name:invoiceParty.name,phone:invoiceParty.phone,email:invoiceParty.email,taxNumber:invoiceParty.taxNumber,taxNo:invoiceParty.taxNo,tckn:invoiceParty.tckn,taxOffice:invoiceParty.taxOffice,companyName:invoiceParty.companyName,invoiceType:invoiceParty.invoiceType,address:invoiceParty.address,city:invoiceParty.city,district:invoiceParty.district};
+    record.paymentNote=invoicePaymentNote.formatInvoicePaymentNote(sale);
   }
   const docTypeHint=qnbSolist.detectDocumentType(invoiceParty,cfg);
   const alloc=allocateInvoiceNumber(cfg,docTypeHint,record.invoiceNumber||sale.invoiceNumber||'');
   s.invoiceIntegration=cfg;
   record.invoiceNumber=alloc.number;
   sale.invoiceNumber=alloc.number;
+  sale.paymentNote=invoicePaymentNote.formatInvoicePaymentNote(sale);
+  record.paymentNote=sale.paymentNote;
   const out=await qnbSolist.sendOrQueueInvoice({record,sale:{...sale,invoiceNumber:alloc.number},customer:invoiceParty,cfg});
   record.status=out.status||'ready';
   record.docType=out.docType||docTypeHint;
