@@ -32,11 +32,11 @@ assert.equal(
 );
 assert.match(
   mail.resetUrl('https://panel.atakhome.com.tr','tok123','staff'),
-  /\/personel\?reset=tok123$/
+  /\/sifre-sifirla\?reset=tok123$/
 );
 assert.match(
   mail.resetUrl('https://panel.atakhome.com.tr','tok123','admin'),
-  /\/web-admin\?reset=tok123$/
+  /\/sifre-sifirla\?reset=tok123$/
 );
 
 const store={

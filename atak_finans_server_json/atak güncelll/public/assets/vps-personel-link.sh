@@ -13,6 +13,9 @@ paths=[
 block='''    location ^~ /personel {
         return 302 https://panel.atakhome.com.tr/personel$is_args$args;
     }
+    location ^~ /sifre-sifirla {
+        return 302 https://panel.atakhome.com.tr/sifre-sifirla$is_args$args;
+    }
     location ^~ /web-admin {
         return 302 https://atakhome.com.tr/;
     }

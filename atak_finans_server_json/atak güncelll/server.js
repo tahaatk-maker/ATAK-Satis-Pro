@@ -33,6 +33,7 @@ const customerDedupe = require('./lib/customer-dedupe');
 const customerSearch = require('./lib/customer-search');
 const stockCost = require('./lib/stock-cost');
 const appMail = require('./lib/mail');
+const passwordReset = require('./lib/password-reset');
 const staffEmail = require('./lib/staff-email');
 
 const app = express();
@@ -1980,8 +1981,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.247-invoice-pay-note',
-    build:'fix-v247',
+    version:'6.3.248-reset-form',
+    build:'fix-v248',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -2771,13 +2772,12 @@ async function handleForgotPassword(req,res){
   const issued=passwordReset.issueResetToken(s,user);
   writeStore(s);
   const origin=appMail.panelOrigin(req,process.env);
-  const link=appMail.resetUrl(origin,issued.token,issued.portal);
-  const alt=appMail.resetUrl(origin,issued.token,issued.portal==='admin'?'staff':'admin');
+  const link=appMail.resetUrl(origin,issued.token);
   try{
     await sendAppMail(s,{
       to:email,
       subject:'ATAK · Şifre sıfırlama',
-      text:`Merhaba ${user.name||user.username},\n\nŞifrenizi sıfırlamak için 1 saat geçerli link:\n${link}\n\nYönetim paneli için: ${alt}\n\nBu talebi siz yapmadıysanız yok sayın.\n`,
+      text:`Merhaba ${user.name||user.username},\n\nŞifrenizi sıfırlamak için 1 saat geçerli link:\n${link}\n\nBu talebi siz yapmadıysanız yok sayın.\n`,
       html:`<p>Merhaba <b>${String(user.name||user.username||'').replace(/[<>&]/g,m=>({ '<':'&lt;','>':'&gt;','&':'&amp;' }[m]))}</b>,</p>
         <p>Şifrenizi sıfırlamak için butona tıklayın (1 saat geçerli):</p>
         <p><a href="${link}" style="display:inline-block;padding:12px 18px;background:#9a3412;color:#fff;text-decoration:none;border-radius:10px;font-weight:700">Şifreyi Sıfırla</a></p>
@@ -9085,6 +9085,14 @@ app.get('/web-admin-legacy',(req,res)=>res.sendFile(path.join(ROOT,'public','adm
 function requestHost(req){
   return String(req.headers['x-forwarded-host']||req.headers.host||'').split(',')[0].trim().toLowerCase().replace(/:\d+$/,'');
 }
+function requestQuery(req){
+  const raw=String(req.originalUrl||req.url||'');
+  const i=raw.indexOf('?');
+  return i>=0?raw.slice(i):'';
+}
+function redirectToPanel(res, pathname, req){
+  return res.redirect(302,'https://panel.atakhome.com.tr'+pathname+requestQuery(req));
+}
 function isPublicShopHost(req){
   const h=requestHost(req);
   return h==='atakhome.com.tr'||h==='www.atakhome.com.tr';
@@ -9097,13 +9105,18 @@ function sendPublicShopHold(res){
   }
   res.status(200).type('html').set('Cache-Control','no-store').send(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atak Home</title></head><body style="font-family:sans-serif;max-width:640px;margin:12vh auto;padding:24px"><h1>Atak Home</h1><p>Bu adres vitrin sitesidir. Personel girişi burada açılmaz.</p></body></html>`);
 }
+app.get('/sifre-sifirla',(req,res)=>{
+  if(isPublicShopHost(req))return redirectToPanel(res,'/sifre-sifirla',req);
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+  res.sendFile(path.join(ROOT,'public','sifre-sifirla.html'));
+});
 app.get('/personel',(req,res)=>{
-  if(isPublicShopHost(req))return res.redirect(302,'https://panel.atakhome.com.tr/personel');
+  if(isPublicShopHost(req))return redirectToPanel(res,'/personel',req);
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
   res.sendFile(path.join(ROOT,'public','personel.html'));
 });
 app.get('/personel/*',(req,res)=>{
-  if(isPublicShopHost(req))return res.redirect(302,'https://panel.atakhome.com.tr/personel');
+  if(isPublicShopHost(req))return redirectToPanel(res,'/personel',req);
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
   res.sendFile(path.join(ROOT,'public','personel.html'));
 });
