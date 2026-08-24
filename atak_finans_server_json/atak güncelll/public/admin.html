@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v251" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v251" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v251" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v251" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v252" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v252" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v252" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v252" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1541,7 +1541,7 @@ Bulunamayan → Diğer.
   <div>
     <small class="eyebrow">ÜRÜN & STOK · MALİYET</small>
     <h2>Alış Faturaları</h2>
-    <p class="note">Önizle → <b>Sadece Maliyet</b> veya <b>Sadece Stok</b>. Eksik ürün otomatik açılır. Beğenmezsen geçmişten <b>Geri Al</b>.</p>
+    <p class="note">Asist gibi: Excel → faturaları seç → <b>Fatura Ve Stok Aktarım Başlat</b>. Kırmızı = daha önce kayıtlı, yeşil = aktarıma uygun.</p>
   </div>
   <a class="backup-btn" id="purchaseTemplateBtn" href="/web-api/admin/purchase-invoice-template">⬇ Excel Şablonu İndir</a>
 </div>
@@ -1565,12 +1565,12 @@ Bulunamayan → Diğer.
       <div class="purchase-warehouse-box" id="purchaseExcelWarehouseBox">
         <div class="purchase-warehouse-head">
           <b>Stok deposu</b>
-          <small id="purchaseWarehouseHint">Sadece <b>Sadece Stok Aktar</b> için gerekli — bir karta tıkla</small>
+          <small id="purchaseWarehouseHint">Fatura + stok aktarımı için gerekli — bir karta tıkla</small>
         </div>
         <div id="purchaseExcelWarehouseChips" class="purchase-warehouse-chips"></div>
         <input type="hidden" id="purchaseExcelWarehouse" value=""/>
       </div>
-      <label>Varsayılan kategori (yeni ürünler)
+      <label>Varsayılan kategori (yeni / tanımsız kartlar)
         <select id="purchaseExcelCategory">
           <option value="">Satır satır seç…</option>
         </select>
@@ -1587,11 +1587,12 @@ Bulunamayan → Diğer.
         <input id="purchaseExcelInvoiceNo" type="text" placeholder="Boş bırakın → IST-SANAL-STOK-… otomatik"/>
         <small>Gerçek fatura numarası yoksa sistem sanal no verir; gerçek faturalarla karışmaz.</small>
       </label>
-      <div class="dynamics-info-box"><b>İki seçenek</b><span><b>Sadece maliyet</b> → alış fiyatını yazar (stok dokunulmaz). <b>Sadece stok</b> → miktarı depoya ekler ve <b>hareketli ortalama</b> maliyeti günceller. Stok için <b>fatura no zorunlu</b>; aynı fatura + aynı ürün ikinci kez işlenmez. Günlük mal girişini Stok Merkezi’nden de yapabilirsiniz.</span></div>
+      <div class="dynamics-info-box"><b>Asist aktarım</b><span>Önizlemede faturalar listelenir. Yeşil faturaları işaretleyip <b>Fatura Ve Stok Aktarım Başlat</b> ile kart + maliyet + stok birlikte işlenir. İsterseniz sadece maliyet / sadece stok da kullanabilirsiniz.</span></div>
       <div class="dynamics-import-actions" style="flex-wrap:wrap">
         <button id="purchasePreviewBtn" class="secondary-btn" type="button">Excel / CSV Önizle</button>
-        <button id="purchaseCostBtn" class="primary" type="button" disabled>Sadece Maliyet Aktar</button>
-        <button id="purchaseStockBtn" class="primary" type="button" disabled style="background:#0f766e">Sadece Stok Aktar</button>
+        <button id="purchaseBothBtn" class="primary" type="button" disabled style="background:#5b21b6;flex:1 1 100%">Fatura Ve Stok Aktarım Başlat</button>
+        <button id="purchaseCostBtn" class="secondary-btn" type="button" disabled>Sadece Maliyet</button>
+        <button id="purchaseStockBtn" class="secondary-btn" type="button" disabled>Sadece Stok</button>
       </div>
       <div id="purchaseExcelStatus" class="form-status"></div>
     </div>
@@ -1600,19 +1601,58 @@ Bulunamayan → Diğer.
       <div id="purchaseExcelSummary" class="dynamics-summary">
         <article><b>0</b><span>Toplam Satır</span></article>
         <article class="good"><b>0</b><span>Eşleşen ürün</span></article>
-        <article class="warn"><b>0</b><span>Yeni eklenecek</span></article>
+        <article class="warn"><b>0</b><span>Tanımsız kart</span></article>
         <article class="bad"><b>0</b><span>Hatalı</span></article>
       </div>
-      <p class="note" style="margin-top:12px">Arçelik: Madde kodu + Maliyet. İstikbal CSV: <b>Malzeme1 = ürün kodu</b> (kart koduna yazılır). Aynı kod ikinci yüklemede yeni kart açmaz. Otomatik <b>Mobilya</b> + <b>KDV %10</b>. Fatura no yoksa sanal no verilir.</p>
+      <p class="note" style="margin-top:12px">Arçelik: Madde kodu + Maliyet + Fatura No. İstikbal: <b>Malzeme1 = ürün kodu</b>, Mobilya, KDV %10. Kırmızı fatura = Asiste kayıt var.</p>
+      <div class="asist-legend" style="margin-top:10px">
+        <span class="asist-pill exists">Asiste kayıt var</span>
+        <span class="asist-pill ready">Aktarıma uygun</span>
+        <span class="asist-pill undef">Tanımsız stok kartı</span>
+      </div>
     </div>
   </div>
-  <div class="panel table-wrap dynamics-preview-wrap">
-    <table>
-      <thead><tr><th>DURUM</th><th>ÜRÜN</th><th>KATEGORİ</th><th>MİKTAR</th><th>BİRİM FİYAT</th><th>MEVCUT ALIŞ</th><th>FATURA</th></tr></thead>
-      <tbody id="purchasePreviewTable"></tbody>
-    </table>
-    <div id="purchasePreviewEmpty" class="empty">CSV veya Excel seçip “Excel / CSV Önizle”ye basın. İstikbal stok.csv (Malzeme1 + Birim Fiyat) doğrudan yüklenir.</div>
+
+  <div id="purchaseAsistBoard" class="asist-board hidden">
+    <div class="asist-grid">
+      <div class="panel asist-panel">
+        <div class="panel-head"><div><small class="v4-kicker">FATURALAR</small><h3>Fatura listesi</h3></div>
+          <button type="button" class="mini-btn" id="purchaseSelectReadyBtn">Uygunları seç</button>
+        </div>
+        <div class="asist-table-wrap">
+          <table class="asist-table">
+            <thead><tr><th></th><th>Durum</th><th>Fatura No</th><th>Tarih</th><th>Kalem</th><th>Tutar</th></tr></thead>
+            <tbody id="purchaseInvoicePickTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel asist-panel">
+        <div class="panel-head"><div><small class="v4-kicker">FATURA SATIRLARI</small><h3 id="purchaseSelectedInvoiceTitle">Seçili fatura</h3></div></div>
+        <div class="asist-table-wrap">
+          <table class="asist-table">
+            <thead><tr><th>Durum</th><th>Madde kodu</th><th>Ürün</th><th>Miktar</th><th>Birim fiyat</th><th>KDV</th></tr></thead>
+            <tbody id="purchaseInvoiceLinesTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="panel asist-panel" style="margin-top:12px">
+      <div class="panel-head"><div><small class="v4-kicker">EXCEL SATIRLARI</small><h3>Tanımsız / tüm satırlar</h3></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="mini-btn" id="purchaseShowUndefinedBtn">Sadece tanımsız</button>
+          <button type="button" class="mini-btn" id="purchaseShowAllRowsBtn">Tümü</button>
+        </div>
+      </div>
+      <div class="asist-table-wrap asist-excel-wrap">
+        <table class="asist-table">
+          <thead><tr><th>Durum</th><th>Madde kodu</th><th>Ürün</th><th>Miktar</th><th>Birim fiyat</th><th>KDV</th><th>Fatura</th><th>Kategori</th></tr></thead>
+          <tbody id="purchasePreviewTable"></tbody>
+        </table>
+      </div>
+      <div id="purchasePreviewEmpty" class="empty hidden">CSV veya Excel seçip “Excel / CSV Önizle”ye basın.</div>
+    </div>
   </div>
+  <div id="purchasePreviewEmptyIdle" class="panel empty">CSV veya Excel seçip “Excel / CSV Önizle”ye basın. İstikbal stok.csv (Malzeme1 + Birim Fiyat) doğrudan yüklenir.</div>
 </div>
 
 <div id="purchaseManualPanel" class="hidden">
@@ -3002,5 +3042,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v251"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v252"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

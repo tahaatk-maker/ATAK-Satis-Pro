@@ -426,6 +426,27 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .purchase-warehouse-chip .purchase-wh-tag{font-size:10px;font-weight:800;letter-spacing:.02em;color:#0f766e;text-transform:uppercase}
 .purchase-warehouse-empty{font-size:12px;color:#b45309;padding:6px 0}
 .purchase-warehouse-box.need-stock{border-color:#0f766e;background:#f0fdfa}
+.asist-legend{display:flex;flex-wrap:wrap;gap:8px}
+.asist-pill{display:inline-flex;align-items:center;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800}
+.asist-pill.exists{background:#fecaca;color:#7f1d1d}
+.asist-pill.ready{background:#bbf7d0;color:#14532d}
+.asist-pill.undef{background:#fecaca;color:#7f1d1d}
+.asist-board{margin-top:4px}
+.asist-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:12px}
+.asist-panel .panel-head{margin-bottom:8px}
+.asist-panel h3{margin:2px 0 0;font-size:15px}
+.asist-table-wrap{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.asist-excel-wrap{max-height:360px}
+.asist-table{width:100%;border-collapse:collapse;font-size:12px}
+.asist-table th,.asist-table td{padding:7px 8px;border-bottom:1px solid #eef2f7;text-align:left;white-space:nowrap}
+.asist-table th{position:sticky;top:0;background:#f8fafc;z-index:1;font-size:11px}
+.asist-table tr.asist-exists{background:#fecaca}
+.asist-table tr.asist-ready{background:#dcfce7}
+.asist-table tr.asist-undef{background:#fecaca}
+.asist-table tr.asist-active{outline:2px solid #5b21b6;outline-offset:-2px}
+.asist-table tr{cursor:pointer}
+.asist-table input[type=checkbox]{width:16px;height:16px}
+@media(max-width:1000px){.asist-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.dynamics-bulk-category{grid-template-columns:1fr}.purchase-warehouse-chip{min-width:calc(50% - 4px);flex:1 1 calc(50% - 4px)}}
 
 /* V6.2.5.9 Dynamics hızlı kategori ekleme */
