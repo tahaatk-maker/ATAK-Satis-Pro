@@ -148,7 +148,13 @@ for D in /root/atak-v10 /root/atakhome-platform; do
   if [ ! -f "$D/public/admin.html" ]; then echo "SKIP_NOT_ERP $D"; continue; fi
   cp -f "$APP/public/admin.html" "$D/public/admin.html"
   cp -f "$APP/public/assets/admin.js" "$D/public/assets/admin.js"
+  cp -f "$APP/public/assets/admin.css" "$D/public/assets/admin.css"
   cp -f "$APP/server.js" "$D/server.js"
+  mkdir -p "$D/lib" "$D/public/assets"
+  cp -f "$APP/lib/stock-cost.js" "$D/lib/stock-cost.js"
+  cp -f "$APP/public/personel.html" "$D/public/personel.html"
+  cp -f "$APP/public/assets/personel.js" "$D/public/assets/personel.js"
+  cp -f "$APP/public/assets/personel.css" "$D/public/assets/personel.css"
   echo "PANEL_PATCH $D"
 done
 pm2 restart atak --update-env
