@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v245" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v245" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v245" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v245" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v246" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v246" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v246" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v246" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -1332,10 +1332,26 @@ body.inv-full #pageTitle{font-size:18px}
 </section>
 <section class="tab" id="sync"><div class="panel notice"><h2>Veri kaynağı bekleniyor</h2><p>Beko/Rapid tarafına salt okunur erişim talebi gönderildi. Yanıt gelene kadar çalışan site ve ürün yönetimi etkilenmez.</p></div><div class="panel"><h2>CSV yedek aktarımı</h2><form id="importForm"><input accept=".csv,text/csv" id="csvFile" required="" type="file"/><button type="submit">CSV’yi içe aktar</button></form><a class="secondary" href="/web-api/admin/export-csv">Ürünleri CSV indir</a></div></section>
 <section class="tab" id="users">
+<div class="panel staff-mail-panel" id="staffEmailPanel">
+  <div class="panel-head">
+    <div>
+      <small class="eyebrow">PERSONEL E-POSTA</small>
+      <h2>Kendinize ve elemanlara mail adresi</h2>
+      <p class="note">Adresler <b>@atakhome.com.tr</b> olur (ör. tahaatk@atakhome.com.tr). Panel buraya yazar. Gerçek gelen kutusu için aynı adresi Hostinger → E-posta’dan da açın. Hotmail/Gmail zaten yazılıysa dokunulmaz.</p>
+    </div>
+  </div>
+  <div class="staff-mail-bar">
+    <label>Şirket uzantısı<input id="staffMailDomain" value="atakhome.com.tr" placeholder="atakhome.com.tr"/></label>
+    <button class="primary" id="staffMailFillBtn" type="button">E-postası olmayana otomatik yaz</button>
+    <button class="secondary-btn" id="staffMailSaveBtn" type="button">Tablodakileri kaydet</button>
+  </div>
+  <p class="note" id="staffMailStatus">Kullanıcılar yüklenince adres önerilir.</p>
+  <div class="turnover-table" id="staffMailTable"></div>
+</div>
 <div class="split">
 <form class="panel form-stack" id="userForm"><h2>Kullanıcı kartı</h2><p class="note">Finans &amp; Cari menüsündeki her ekran ayrı yetkidir. Satış Personeli rolünde <b>Personel Satış Raporu</b> ve <b>Yönetici Onayları</b> kapalıdır — isterseniz aşağıdaki listeden açın.</p><input id="userId" type="hidden"/><label>Ad Soyad<input id="userName" required=""/></label>
 <label>Kullanıcı adı<input id="userUsername" required=""/></label>
-<label>E-posta (şifre unuttum)<input id="userEmail" type="email" placeholder="ornek@mail.com" autocomplete="email"/><small class="field-hint">Personel “şifremi unuttum” için zorunlu</small></label>
+<label>E-posta<input id="userEmail" type="email" placeholder="ad@atakhome.com.tr" autocomplete="email"/><small class="field-hint">Şirket maili: ad@atakhome.com.tr — şifre unuttum bu adrese gider</small></label>
 <label>Rol<select id="userRole"></select></label>
 <label>Çalıştığı mağaza / bayi
   <select id="userStore"><option value="">Mağaza seçilmedi</option></select>
@@ -2982,5 +2998,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v245"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v246"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

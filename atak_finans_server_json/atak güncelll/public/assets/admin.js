@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v245 */
+/* ATAK_ADMIN_BUILD=fix-v246 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -211,7 +211,7 @@ function goTab(id,{remember=true}={}){
   if(remember)sessionStorage.setItem('atakAdminTab',id);
   q('#productsNavGroup')?.classList.toggle('active-group',productTabs.has(id));q('#financeNavGroup')?.classList.toggle('active-group',id==='financeDashboard');
   if(productTabs.has(id))setProductsMenu(true);
-  if(id==='users')setTimeout(()=>load().then(()=>renderUsers()).catch(e=>toast(e.message)),20);
+  if(id==='users')setTimeout(()=>load().then(()=>{renderUsers();return loadStaffEmails()}).catch(e=>toast(e.message)),20);
   if(id==='foundation')setTimeout(()=>loadFoundation().catch(e=>toast(e.message)),20);
   if(id==='stockCenter')setTimeout(()=>loadStockCenter().catch(e=>toast(e.message)),20);
   if(id==='products')setTimeout(()=>refreshProductsStockWarehouseOptions().catch(()=>{}),20);
@@ -1291,7 +1291,59 @@ function renderUsers(){
   qa('[data-user-activate]').forEach(b=>b.onclick=()=>activateUser(b.dataset.userActivate));
   qa('[data-user-disable]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDisable));
   qa('[data-user-del]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDel));
+  loadStaffEmails().catch(()=>{});
 }
+function renderStaffEmails(d){
+  if(!q('#staffMailTable'))return;
+  if(q('#staffMailDomain'))q('#staffMailDomain').value=d.domain||'atakhome.com.tr';
+  const st=q('#staffMailStatus');
+  const miss=Number(d.missing||0);
+  if(st)st.textContent=miss
+    ?`${miss} kişide e-posta yok. “Otomatik yaz” ile @${d.domain||'atakhome.com.tr'} verilir.`
+    :`Aktif kullanıcılarda e-posta var. Hotmail/Gmail kayıtlıysa aynı kalır.`;
+  const rows=d.rows||[];
+  q('#staffMailTable').innerHTML=rows.length
+    ?`<table><thead><tr><th>Ad</th><th>Kullanıcı</th><th>Kayıtlı</th><th>Şirket adresi</th></tr></thead><tbody>${rows.map(r=>`<tr>
+      <td><b>${ckEsc(r.name)}</b></td>
+      <td>${ckEsc(r.username||'-')}</td>
+      <td>${r.email?ckEsc(r.email):'<small class="warn-text">yok</small>'}</td>
+      <td><input data-staff-mail-id="${ckEsc(r.id)}" value="${ckEsc(r.suggested)}" autocomplete="off"/></td>
+    </tr>`).join('')}</tbody></table>`
+    :'<p class="note">Aktif kullanıcı yok. Önce soldan kullanıcı ekleyin.</p>';
+}
+async function loadStaffEmails(){
+  if(!q('#staffMailTable'))return;
+  try{
+    renderStaffEmails(await api('/web-api/admin/staff-emails'));
+  }catch(e){
+    if(q('#staffMailStatus'))q('#staffMailStatus').textContent=e.message||'E-posta listesi alınamadı';
+  }
+}
+function staffMailItemsFromTable(){
+  return qa('[data-staff-mail-id]').map(inp=>({id:inp.getAttribute('data-staff-mail-id'),email:String(inp.value||'').trim()})).filter(x=>x.id&&x.email);
+}
+q('#staffMailFillBtn')?.addEventListener('click',async()=>{
+  try{
+    const r=await api('/web-api/admin/staff-emails',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({domain:q('#staffMailDomain')?.value||'atakhome.com.tr',fillMissing:true})
+    });
+    renderStaffEmails(r);
+    await load();
+    toast(`${r.updated||0} kişiye şirket e-postası yazıldı`);
+  }catch(e){toast(e.message||'E-posta yazılamadı')}
+});
+q('#staffMailSaveBtn')?.addEventListener('click',async()=>{
+  try{
+    const r=await api('/web-api/admin/staff-emails',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({domain:q('#staffMailDomain')?.value||'atakhome.com.tr',items:staffMailItemsFromTable()})
+    });
+    renderStaffEmails(r);
+    await load();
+    toast(`${r.updated||0} e-posta kaydedildi`);
+  }catch(e){toast(e.message||'Kaydedilemedi')}
+});
 q('#userForm').onsubmit=async e=>{
   e.preventDefault();
   const payload={
