@@ -4,6 +4,8 @@
  * Bu modül: UBL taslağı, tip tespiti, kuyruk durumu ve bağlantı hazırlık kontrolü sağlar.
  */
 
+const {formatInvoicePaymentNote}=require('./lib/invoice-payment-note');
+
 function escXml(v){
   return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 }
@@ -56,6 +58,8 @@ function buildUblInvoiceDraft({sale,customer,cfg,docType}){
   }).join('\n');
   const total=money2(sale.total||0);
   const profile=docType==='earsiv'?'EARSIVFATURA':'TEMELFATURA';
+  const paymentNote=formatInvoicePaymentNote(sale);
+  const noteXml=paymentNote?`  <cbc:Note>${escXml(paymentNote)}</cbc:Note>\n`:'';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!-- QNB Solist / eSolutions UBL-TR taslağı · henüz imzalanmamış/gönderilmemiş -->
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
@@ -68,7 +72,7 @@ function buildUblInvoiceDraft({sale,customer,cfg,docType}){
   <cbc:UUID>${escXml(uuid)}</cbc:UUID>
   <cbc:IssueDate>${escXml(issueDate)}</cbc:IssueDate>
   <cbc:InvoiceTypeCode>SATIS</cbc:InvoiceTypeCode>
-  <cbc:DocumentCurrencyCode>TRY</cbc:DocumentCurrencyCode>
+${noteXml}  <cbc:DocumentCurrencyCode>TRY</cbc:DocumentCurrencyCode>
   <cac:AccountingSupplierParty>
     <cac:Party>
       <cac:PartyName><cbc:Name>${escXml(cfg.companyTitle||'Atak Pazarlama')}</cbc:Name></cac:PartyName>
@@ -245,7 +249,18 @@ async function sendOrQueueInvoice({record,sale,customer,cfg}){
   const checks=readinessChecks(cfg);
   const ready=checks.filter(c=>['Firma VKN','Firma ünvanı','WSDL / servis URL','Kullanıcı','Şifre'].includes(c.name)).every(c=>c.ok);
   const docType=detectDocumentType(customer,cfg);
-  const ubl=buildUblInvoiceDraft({sale:{...sale,...record},customer,cfg,docType});
+  const ubl=buildUblInvoiceDraft({
+    sale:{
+      ...sale,
+      ...record,
+      payments:Array.isArray(sale?.payments)&&sale.payments.length?sale.payments:record?.payments,
+      promissory:sale?.promissory||record?.promissory,
+      paymentNote:record?.paymentNote||sale?.paymentNote
+    },
+    customer,
+    cfg,
+    docType
+  });
   if(!ready||!cfg.enabled){
     return {
       ok:true,

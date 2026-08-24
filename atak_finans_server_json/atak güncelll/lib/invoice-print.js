@@ -1,5 +1,7 @@
 'use strict';
 
+const {formatInvoicePaymentNote}=require('./invoice-payment-note');
+
 function esc(v){
   return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -35,6 +37,13 @@ function buildInvoicePrintHtml({company={},customer={},record={},sale={},setting
   const sumNet=lines.reduce((a,x)=>a+x.net,0);
   const sumVat=lines.reduce((a,x)=>a+x.vat,0);
   const payable=Number(record.total||sale.total||sumGross)||sumGross;
+  const paymentNote=formatInvoicePaymentNote({
+    ...record,
+    ...sale,
+    payments:Array.isArray(sale.payments)&&sale.payments.length?sale.payments:record.payments,
+    promissory:sale.promissory||record.promissory,
+    paymentNote:record.paymentNote||sale.paymentNote
+  });
   const sellerName=company.companyTitle||settings.siteName||'ATAK EV GEREÇLERİ PAZ. TİC. LTD. ŞTİ.';
   const buyerName=customer.companyName||customer.name||record.customer?.name||'—';
   const buyer=record.customer&&typeof record.customer==='object'?{...customer,...record.customer}:customer;
@@ -76,6 +85,8 @@ td{border-bottom:1px solid #e6edf5;padding:8px;vertical-align:top}
 .totals{margin-top:12px;margin-left:auto;width:320px;border:1px solid #d5e0ee}
 .totals div{display:flex;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #eef2f7}
 .totals div:last-child{border:0;background:#0b2a4a;color:#fff;font-weight:800}
+.pay-note{margin-top:14px;padding:10px 12px;border:1px solid #f0d48a;background:#fff8e8;border-radius:8px;font-size:12px;color:#13233f}
+.pay-note b{display:block;font-size:10px;letter-spacing:.12em;color:#5b6d86;margin-bottom:4px}
 .foot{margin-top:18px;font-size:11px;color:#5b6d86;border-top:1px solid #d5e0ee;padding-top:10px}
 .actions{position:sticky;top:0;background:#0b2a4a;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:2}
 .actions button,.actions a{background:#dda20c;color:#1a1300;border:0;border-radius:8px;padding:8px 14px;font-weight:800;cursor:pointer;text-decoration:none}
@@ -125,6 +136,7 @@ td{border-bottom:1px solid #e6edf5;padding:8px;vertical-align:top}
     <div><span>Hesaplanan KDV</span><span>${money(sumVat)}</span></div>
     <div><span>Ödenecek tutar</span><span>${money(payable)}</span></div>
   </div>
+  ${paymentNote?`<div class="pay-note"><b>FATURA NOTU</b>${esc(paymentNote)}</div>`:''}
   <div class="foot">
     ${earsiv
       ? 'Bu belgenin aslı elektronik ortamda e-Arşiv Fatura olarak saklanır. 433 sıra no.lu VUK Genel Tebliği kapsamında düzenlenmiştir. Mali mühür / imza QNB bağlantısı tamamlanınca eklenir.'
