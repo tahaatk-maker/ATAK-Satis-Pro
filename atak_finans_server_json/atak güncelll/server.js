@@ -78,7 +78,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 const customerExcelUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 function excelTooBigMessage(){
-  return 'Dosya 50 MB’dan küçük olmalı. 4 MB İstikbal CSV/Excel yüklenir — sayfayı yenileyip tekrar deneyin.';
+  return 'Dosya 50 MB’dan küçük olmalı. CSV veya Excel’i Alış Faturaları ekranından yükleyin.';
 }
 function customerExcelFile(req,res,next){
   customerExcelUpload.single('file')(req,res,err=>{

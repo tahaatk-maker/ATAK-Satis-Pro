@@ -38,7 +38,7 @@ function uploadTooLargeMessage(){
     ||q('#csvFile')?.files?.[0]
     ||null;
   const mb=f&&f.size?` Seçilen dosya ${(f.size/1024/1024).toFixed(1).replace('.',',')} MB.`:'';
-  return `Dosya sunucuya sığmadı.${mb} CSV/Excel 50 MB’a kadar yüklenir (4 MB İstikbal stok.csv olur). Ctrl+Shift+R ile yenileyip tekrar deneyin.`;
+  return `Dosya sunucuya sığmadı.${mb} Limit 50 MB. Ctrl+Shift+R ile yenileyip Alış Faturaları’ndan tekrar yükleyin.`;
 }
 async function api(url,opt={}){
   const r=await fetch(url,{credentials:'same-origin',...opt});
