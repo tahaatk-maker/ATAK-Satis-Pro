@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v236 */
+/* ATAK_PERSONEL_BUILD=fix-v243 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -65,7 +65,8 @@ const PERM_ALIASES={
   screen_finance:['finance_view','finance_manage'],
   screen_invoice_center:['invoices_manage'],
   screen_uninvoiced:['invoices_manage'],
-  screen_sales_tracking:['sales_manage','orders_manage']
+  screen_sales_tracking:['sales_manage','orders_manage'],
+  stock_view:['stock_manage','screen_stock_in']
 };
 function has(permission){
   const p=currentUser?.permissions||[];
@@ -84,6 +85,8 @@ function canInvoiceCenter(){
     ||canScreen('screen_sales_center')||has('orders_manage');
 }
 function canDeductStock(){return has('sale_deduct_stock')||has('stock_manage')||has('*')}
+function canStockView(){return has('stock_manage')||has('stock_view')||has('screen_stock_in')||has('*')}
+function canStockIn(){return has('stock_manage')||has('screen_stock_in')||has('*')}
 function applyStaffSalePermissions(){
   $$('[data-need-perm]').forEach(el=>{
     const need=el.getAttribute('data-need-perm');
@@ -137,7 +140,7 @@ async function loadSession(){
     }
     if(canScreen('screen_finance')||canFinance())$('#financeCard').classList.remove('hidden');
     if(canScreen('screen_customer_payments')||canFinance())$('#paymentsCard').classList.remove('hidden');
-    if(has('stock_manage')||has('stock_view'))$('#stockCard').classList.remove('hidden');
+    if(canStockView())$('#stockCard').classList.remove('hidden');
     applyStaffSalePermissions();
     const closed=[];
     if(!canScreen('screen_staff_sales_report'))closed.push('Personel Satış Raporu');
@@ -2493,22 +2496,99 @@ $('#salesQuickCustomerForm')?.addEventListener('submit',async e=>{
   }catch(err){st.textContent=err.message}
 });
 
-$('#stockCard').onclick=async()=>{
-  hidePanels();
-  $('#stockPanel').classList.remove('hidden');
+let staffStockData=null;
+function fillStaffReceiptProducts(){
+  const term=($('#staffReceiptSearch')?.value||'').toLocaleLowerCase('tr-TR');
+  const sel=$('#staffReceiptProduct');
+  if(!sel||!staffStockData)return;
+  const keep=sel.value;
+  const rows=(staffStockData.products||[]).filter(x=>x.active!==false).filter(x=>{
+    if(!term)return true;
+    return `${x.code||''} ${x.name||''} ${x.itemCode||''}`.toLocaleLowerCase('tr-TR').includes(term);
+  }).slice(0,400);
+  sel.innerHTML=rows.map(x=>`<option value="${x.code}">${x.code} — ${x.name||''}</option>`).join('')||'<option value="">Ürün yok</option>';
+  if(keep && [...sel.options].some(o=>o.value===keep))sel.value=keep;
+  updateStaffReceiptHint();
+}
+function updateStaffReceiptHint(){
+  const hint=$('#staffReceiptHint');
+  if(!hint||!staffStockData)return;
+  const code=$('#staffReceiptProduct')?.value;
+  const addQty=Number($('#staffReceiptQty')?.value||0);
+  const addCost=Number($('#staffReceiptCost')?.value||0);
+  const p=(staffStockData.products||[]).find(x=>String(x.code)===String(code));
+  const oldQty=(staffStockData.stocks||[]).filter(s=>String(s.productCode).toLocaleUpperCase('tr-TR')===String(code||'').toLocaleUpperCase('tr-TR')).reduce((a,s)=>a+Number(s.quantity||0),0);
+  const oldCost=Number(p?.purchasePrice||0);
+  if(!p){hint.textContent='Ürün seçin.';return}
+  if(!(addQty>0)||!(addCost>0)){
+    hint.textContent=oldQty?`Elde ${oldQty} adet · ortalama ${oldCost.toLocaleString('tr-TR')} TL`:'Stoğu 0. İlk giriş maliyeti yazılır.';
+    return;
+  }
+  const neu=oldQty<=0?addCost:Math.round((oldQty*oldCost+addQty*addCost)/(oldQty+addQty)*100)/100;
+  hint.textContent=`Elde ${oldQty} adet, ortalama ${oldCost.toLocaleString('tr-TR')} TL → yeni ortalama ${neu.toLocaleString('tr-TR')} TL`;
+}
+async function loadStaffStockPanel(){
   const st=$('#stockStatus');
   try{
-    const stockData=await api('/web-api/admin/stock-center');
-    $('#stockRows').innerHTML=(stockData.stocks||[]).slice(0,300).map(x=>`
+    staffStockData=await api('/web-api/admin/stock-center');
+    $('#stockRows').innerHTML=(staffStockData.stocks||[]).slice(0,300).map(x=>`
       <tr>
         <td><b>${x.productCode||''}</b><small>${x.productName||''}</small></td>
         <td>${x.warehouseName||''}</td>
         <td>${Number(x.quantity||0)}</td>
         <td>${Number(x.available||0)}</td>
       </tr>`).join('')||'<tr><td colspan="4">Stok kaydı bulunamadı.</td></tr>';
+    const canIn=canStockIn()&&staffStockData.canReceive!==false;
+    $('#staffReceiptForm')?.classList.toggle('hidden',!canIn);
+    if(canIn){
+      const wh=(staffStockData.warehouses||[]).filter(w=>w.active!==false);
+      $('#staffReceiptWarehouse').innerHTML=wh.map(w=>`<option value="${w.id}">${w.name}</option>`).join('');
+      fillStaffReceiptProducts();
+    }
+    const receipts=staffStockData.receipts||[];
+    $('#staffReceiptRows').innerHTML=receipts.flatMap(r=>(r.items||[]).map(i=>`
+      <tr>
+        <td>${r.date||''}</td>
+        <td><b>${r.invoiceNo||''}</b></td>
+        <td><b>${i.productCode||''}</b><small>${i.productName||''}</small></td>
+        <td>+${i.quantity||0}</td>
+        <td>${Number(i.unitCost||0).toLocaleString('tr-TR')}</td>
+        <td>${r.createdBy||''}</td>
+      </tr>`)).join('')||'<tr><td colspan="6">Henüz fatura ile giriş yok.</td></tr>';
     st.textContent='';
   }catch(e){st.textContent=e.message}
+}
+$('#stockCard').onclick=async()=>{
+  hidePanels();
+  $('#stockPanel').classList.remove('hidden');
+  await loadStaffStockPanel();
 };
+$('#staffReceiptSearch')?.addEventListener('input',fillStaffReceiptProducts);
+['#staffReceiptProduct','#staffReceiptQty','#staffReceiptCost'].forEach(id=>$(id)?.addEventListener('input',updateStaffReceiptHint));
+$('#staffReceiptForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const st=$('#stockStatus');
+  st.textContent='Kaydediliyor…';
+  try{
+    await api('/web-api/admin/stock-receipt',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        invoiceNo:$('#staffReceiptInvoice').value,
+        warehouseId:$('#staffReceiptWarehouse').value,
+        productCode:$('#staffReceiptProduct').value,
+        quantity:$('#staffReceiptQty').value,
+        unitCost:$('#staffReceiptCost').value,
+        note:$('#staffReceiptNote').value
+      })
+    });
+    const inv=$('#staffReceiptInvoice').value;
+    e.target.reset();
+    if($('#staffReceiptInvoice'))$('#staffReceiptInvoice').value=inv;
+    if($('#staffReceiptQty'))$('#staffReceiptQty').value=1;
+    await loadStaffStockPanel();
+    st.textContent='Stok girişi kaydedildi.';
+  }catch(err){st.textContent=err.message}
+});
 
 $('#trainingCard').onclick=async()=>{
   hidePanels();

@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v240 */
+/* ATAK_ADMIN_BUILD=fix-v243 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1050,7 +1050,8 @@ const PERM_ALIASES={
   screen_invoice_center:['invoices_manage'],
   screen_uninvoiced:['invoices_manage'],
   screen_sales_tracking:['sales_manage','orders_manage'],
-  screen_profit:['reports_view','finance_manage']
+  screen_profit:['reports_view','finance_manage'],
+  stock_view:['stock_manage','screen_stock_in']
 };
 function can(permission,user=window.__currentAdminUser){
   const p=user?.permissions||[];
@@ -1433,13 +1434,36 @@ function renderStockCenter(){
   const critical=stockData.stocks.filter(x=>Number(x.available||0)<=2).length;
   q('#stockSummary').innerHTML=`<article><b>${total}</b><span>Toplam Fiziksel Stok</span></article><article><b>${reserved}</b><span>Rezerve Stok</span></article><article><b>${activeWarehouses.length}</b><span>Aktif Depo</span></article><article><b>${critical}</b><span>Kritik Stok Satırı</span></article>`;
   const whOpts=activeWarehouses.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-  ['#stockWarehouse','#transferFrom','#transferTo','#importWarehouse'].forEach(id=>{if(q(id))q(id).innerHTML=whOpts});
+  ['#stockWarehouse','#transferFrom','#transferTo','#importWarehouse','#receiptWarehouse'].forEach(id=>{if(q(id))q(id).innerHTML=whOpts});
   const productOpts=stockData.products.filter(x=>x.active).map(x=>`<option value="${x.code}">${x.code} — ${x.name}</option>`).join('');
-  ['#stockProduct','#transferProduct'].forEach(id=>{if(q(id))q(id).innerHTML=productOpts});
+  ['#stockProduct','#transferProduct','#receiptProduct'].forEach(id=>{if(q(id))q(id).innerHTML=productOpts});
   renderFoundationWarehouses();
   renderStockTable();
+  renderReceiptHint();
+  const receipts=stockData.receipts||[];
+  if(q('#receiptCount'))q('#receiptCount').textContent=`${receipts.length} kayıt`;
+  if(q('#receiptTable')){
+    q('#receiptTable').innerHTML=receipts.length?`<table><thead><tr><th>Tarih</th><th>Fatura</th><th>Ürün</th><th>Adet</th><th>Birim maliyet</th><th>Yeni ortalama</th><th>Depo</th><th>Kim</th></tr></thead><tbody>${receipts.flatMap(r=>(r.items||[]).map(i=>`<tr><td>${r.date||''}</td><td><b>${r.invoiceNo||''}</b></td><td><b>${i.productCode||''}</b><small>${i.productName||''}</small></td><td>+${i.quantity||0}</td><td>${Number(i.unitCost||0).toLocaleString('tr-TR')}</td><td>${Number(i.newPurchasePrice||0).toLocaleString('tr-TR')}</td><td>${r.warehouseName||''}</td><td>${r.createdBy||''}</td></tr>`)).join('')}</tbody></table>`:'<p>Henüz fatura ile stok girişi yok.</p>';
+  }
   q('#movementCount').textContent=`${stockData.movements.length} hareket`;
   q('#movementTable').innerHTML=stockData.movements.length?`<table><thead><tr><th>Tarih</th><th>Ürün</th><th>Depo</th><th>İşlem</th><th>Değişim</th><th>Sonuç</th></tr></thead><tbody>${stockData.movements.map(x=>`<tr><td>${new Date(x.createdAt).toLocaleString('tr-TR')}</td><td>${x.productCode}</td><td>${stockData.warehouses.find(w=>w.id===x.warehouseId)?.name||x.warehouseId}</td><td>${x.type}</td><td class="${x.quantity>=0?'stock-plus':'stock-minus'}">${x.quantity>=0?'+':''}${x.quantity}</td><td>${x.after}</td></tr>`).join('')}</tbody></table>`:'<p>Henüz stok hareketi yok.</p>';
+}
+function renderReceiptHint(){
+  const hint=q('#receiptAvgHint');
+  if(!hint||!stockData)return;
+  const code=q('#receiptProduct')?.value;
+  const addQty=Number(q('#receiptQty')?.value||0);
+  const addCost=Number(q('#receiptUnitCost')?.value||0);
+  const p=(stockData.products||[]).find(x=>String(x.code)===String(code));
+  const oldQty=(stockData.stocks||[]).filter(s=>String(s.productCode).toLocaleUpperCase('tr-TR')===String(code||'').toLocaleUpperCase('tr-TR')).reduce((a,s)=>a+Number(s.quantity||0),0);
+  const oldCost=Number(p?.purchasePrice||0);
+  if(!p){hint.textContent='Ürün seçin. Yeni alış, eldeki ortalama maliyeti günceller.';return}
+  if(!(addQty>0)||!(addCost>0)){
+    hint.textContent=oldQty?`Elde ${oldQty} adet · ortalama maliyet ${oldCost.toLocaleString('tr-TR')} TL`:'Bu ürünün stoğu 0. İlk giriş maliyeti yazılır.';
+    return;
+  }
+  const neu=oldQty<=0?addCost:Math.round((oldQty*oldCost+addQty*addCost)/(oldQty+addQty)*100)/100;
+  hint.textContent=`Elde ${oldQty} adet, ortalama ${oldCost.toLocaleString('tr-TR')} TL. ${addQty} adet × ${addCost.toLocaleString('tr-TR')} TL ile yeni ortalama: ${neu.toLocaleString('tr-TR')} TL`;
 }
 function renderStockTable(){
   const term=(q('#stockSearch')?.value||'').toLocaleLowerCase('tr-TR');
@@ -1447,13 +1471,42 @@ function renderStockTable(){
   q('#stockTable').innerHTML=rows.length?`<table><thead><tr><th>Ürün</th><th>Depo</th><th>Fiziksel</th><th>Rezerve</th><th>Satılabilir</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.productCode}</b><small>${x.productName}</small></td><td>${x.warehouseName}</td><td>${x.quantity}</td><td>${x.reserved||0}</td><td><b>${x.available}</b></td></tr>`).join('')}</tbody></table>`:'<p>Stok kaydı bulunamadı.</p>';
 }
 q('#stockSearch')?.addEventListener('input',renderStockTable);
+['#receiptProduct','#receiptQty','#receiptUnitCost'].forEach(id=>q(id)?.addEventListener('input',renderReceiptHint));
+q('#receiptProduct')?.addEventListener('change',renderReceiptHint);
+q('#stockReceiptForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  try{
+    await api('/web-api/admin/stock-receipt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      invoiceNo:q('#receiptInvoiceNo').value,
+      productCode:q('#receiptProduct').value,
+      warehouseId:q('#receiptWarehouse').value,
+      quantity:q('#receiptQty').value,
+      unitCost:q('#receiptUnitCost').value,
+      note:q('#receiptNote').value
+    })});
+    const inv=q('#receiptInvoiceNo').value;
+    e.target.reset();
+    if(q('#receiptInvoiceNo'))q('#receiptInvoiceNo').value=inv;
+    if(q('#receiptQty'))q('#receiptQty').value=1;
+    await loadStockCenter();
+    toast('Stok girişi kaydedildi');
+  }catch(err){toast(err.message)}
+});
 q('#warehouseForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
   await api('/web-api/admin/warehouse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:q('#warehouseId').value,name:q('#warehouseName').value,code:q('#warehouseCode').value,storeId:q('#warehouseStore').value,active:q('#warehouseActive').checked})});
   e.target.reset();q('#warehouseId').value='';q('#warehouseActive').checked=true;
   await loadStockCenter();renderFoundationWarehouses();toast('Depo kaydedildi');
 });
-q('#stockAdjustForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/stock-adjust',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productCode:q('#stockProduct').value,warehouseId:q('#stockWarehouse').value,quantity:q('#stockQuantity').value,note:q('#stockNote').value})});e.target.reset();await loadStockCenter();toast('Stok güncellendi')});
+q('#stockAdjustForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  try{
+    await api('/web-api/admin/stock-adjust',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productCode:q('#stockProduct').value,warehouseId:q('#stockWarehouse').value,quantity:q('#stockQuantity').value,note:q('#stockNote').value,unitCost:q('#stockOpeningCost')?.value||0})});
+    e.target.reset();
+    await loadStockCenter();
+    toast('Sayım kaydedildi');
+  }catch(err){toast(err.message)}
+});
 q('#stockTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/web-api/admin/stock-transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productCode:q('#transferProduct').value,fromWarehouseId:q('#transferFrom').value,toWarehouseId:q('#transferTo').value,quantity:q('#transferQuantity').value,note:q('#transferNote').value})});e.target.reset();q('#transferQuantity').value=1;await loadStockCenter();toast('Transfer tamamlandı')});
 q('#stockImportForm')?.addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData();fd.append('file',q('#stockImportFile').files[0]);fd.append('warehouseId',q('#importWarehouse').value);const r=await api('/web-api/admin/stock-import',{method:'POST',body:fd});e.target.reset();await loadStockCenter();toast(`${r.imported} stok satırı aktarıldı`)});
 q('#stockZeroAllBtn')?.addEventListener('click',async()=>{

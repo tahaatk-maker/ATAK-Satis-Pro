@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v236">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v243">
 <link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v236">
 <link rel="stylesheet" href="/assets/sip-call.css?v=fix-v236">
 </head>
@@ -112,7 +112,7 @@
 <button id="stockCard" class="module-card hidden tile-stock" type="button">
 <span class="mod-ico">▣</span>
 <b>STOK / DEPO</b>
-<small>Ürün ve depo stokları</small>
+<small>Stok girişi ve depo bakiyesi</small>
 </button>
 
 <button id="announceCard" class="module-card tile-news" type="button">
@@ -666,13 +666,39 @@
 <div>
 <small class="eyebrow">STOK</small>
 <h2>Stok &amp; Depo</h2>
+<p>Mal gelince soldan fatura no ile giriş yapın. Aynı faturayı aynı ürüne ikinci kez işleyemezsiniz.</p>
 </div>
 </div>
 <div id="stockStatus" class="status">Yükleniyor...</div>
-<div class="table-wrap">
+<form id="staffReceiptForm" class="stock-in-card hidden">
+  <small class="eyebrow">MAL GELDİ</small>
+  <h2>Stok girişi</h2>
+  <p class="note">Adet eklenir. Fatura numarası zorunlu — maliyetler karışmasın diye aynı fatura + aynı ürün tekrar işlenmez.</p>
+  <div class="stock-in-grid">
+    <label class="field">Fatura no *<input id="staffReceiptInvoice" required placeholder="Fatura numarası" autocomplete="off"></label>
+    <label class="field">Depo *<select id="staffReceiptWarehouse" required></select></label>
+    <label class="field">Ürün ara<input id="staffReceiptSearch" placeholder="Kod veya ad yazın"></label>
+    <label class="field">Ürün *<select id="staffReceiptProduct" required></select></label>
+    <label class="field">Gelen adet *<input id="staffReceiptQty" type="number" min="1" value="1" required></label>
+    <label class="field">Birim alış maliyeti *<input id="staffReceiptCost" type="number" min="0.01" step="0.01" required placeholder="KDV dahil"></label>
+  </div>
+  <label class="field">Not<input id="staffReceiptNote" placeholder="Opsiyonel"></label>
+  <p class="status" id="staffReceiptHint"></p>
+  <button class="primary-btn" type="submit">Stoka Ekle</button>
+</form>
+<div class="table-wrap" style="margin-top:16px">
 <table>
 <thead><tr><th>Ürün</th><th>Depo</th><th>Stok</th><th>Kullanılabilir</th></tr></thead>
 <tbody id="stockRows"></tbody>
+</table>
+</div>
+<div class="panel-head" style="margin-top:18px">
+<div><small class="eyebrow">GİRİŞLER</small><h2>Son fatura ile girişler</h2></div>
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Tarih</th><th>Fatura</th><th>Ürün</th><th>Adet</th><th>Maliyet</th><th>Kim</th></tr></thead>
+<tbody id="staffReceiptRows"></tbody>
 </table>
 </div>
 </section>
@@ -778,6 +804,6 @@
   </div>
 </div>
 <script src="/assets/sip-call.js?v=fix-v236"></script>
-<script src="/assets/personel.js?v=fix-v236"></script>
+<script src="/assets/personel.js?v=fix-v243"></script>
 </body>
 </html>

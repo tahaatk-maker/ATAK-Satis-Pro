@@ -30,6 +30,7 @@ const personName = require('./lib/person-name');
 const customerCode = require('./lib/customer-code');
 const customerDedupe = require('./lib/customer-dedupe');
 const customerSearch = require('./lib/customer-search');
+const stockCost = require('./lib/stock-cost');
 
 const app = express();
 const ROOT = __dirname;
@@ -314,6 +315,7 @@ function ensureStore(store) {
   }
   store.invoiceAppResponses = Array.isArray(store.invoiceAppResponses) ? store.invoiceAppResponses : [];
   store.purchaseInvoices = Array.isArray(store.purchaseInvoices) ? store.purchaseInvoices : [];
+  store.stockReceipts = Array.isArray(store.stockReceipts) ? store.stockReceipts : [];
   store.suppliers = Array.isArray(store.suppliers) ? store.suppliers : [];
   if(!store.suppliers.length){
     store.suppliers.push(
@@ -687,6 +689,7 @@ const PERMISSION_CATALOG=[
   {id:'products_manage',name:'Ürün yönet',group:'Ürün & Stok'},
   {id:'stock_view',name:'Stok görüntüle',group:'Ürün & Stok'},
   {id:'stock_manage',name:'Stok yönet',group:'Ürün & Stok'},
+  {id:'screen_stock_in',name:'Stok girişi (fatura no ile)',group:'Ürün & Stok'},
   {id:'customers_manage',name:'Müşteri kartı düzenle',group:'Finans işlemleri'},
   {id:'finance_view',name:'Finans verisi görüntüle',group:'Finans işlemleri'},
   {id:'finance_manage',name:'Finans yönet (tahsilat/masraf)',group:'Finans işlemleri'},
@@ -705,7 +708,7 @@ const ROLE_PRESETS={
   admin:{name:'Yönetici',permissions:[
     'dashboard_view','products_manage','marketing_manage','finance_manage','sync_manage','users_manage',
     'orders_manage','sale_docs','sale_offer','sale_invoice_qnb','sale_deduct_stock','customers_manage','invoices_manage',
-    ...STAFF_DEFAULT_SCREENS,'screen_staff_sales_report','screen_manager_approvals','screen_profit','screen_reports','stock_manage','foundation_manage','settings_manage','reports_view'
+    ...STAFF_DEFAULT_SCREENS,'screen_staff_sales_report','screen_manager_approvals','screen_profit','screen_reports','stock_manage','screen_stock_in','foundation_manage','settings_manage','reports_view'
   ]},
   super_admin:{name:'Süper Admin',permissions:['*']},
   sales:{name:'Satış Personeli',permissions:[
@@ -714,7 +717,7 @@ const ROLE_PRESETS={
     ...STAFF_DEFAULT_SCREENS
     // Personel Satış Raporu + Yönetici Onayları varsayılan KAPALI — istenirse kullanıcı kartından açılır
   ]},
-  warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','stock_view','orders_view','screen_sales_tracking']},
+  warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','stock_view','screen_stock_in','orders_view','screen_sales_tracking']},
   accounting:{name:'Muhasebe',permissions:[
     'dashboard_view','finance_manage','finance_view','orders_view','invoices_manage','sale_invoice_qnb',
     'screen_finance','screen_uninvoiced','screen_customer_payments','screen_money_center','screen_customers','screen_invoice_center','screen_my_sales','screen_profit','screen_reports'
@@ -1995,8 +1998,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.241-atak-geteinvoices',
-    build:'fix-v241',
+    version:'6.3.243-stock-receipt',
+    build:'fix-v243',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -2529,7 +2532,7 @@ function defaultTrainingCatalog(){
       description:'Dönem seçimi, Hesap Bakiyeleri ve Müşteri Cari sekmeleri, Excel indirme.',
       url:'/assets/egitim/finance-reports.mp4',status:'ready',duration:'~18 sn',sort:80}),
     row({id:'stock-center',category:'stok',title:'Stok Merkezi',screen:'stockCenter',screenLabel:'Stok Merkezi',
-      description:'Stok Düzeltme, Depolar Arası Transfer ve Excel ile toplu stok aktarımı.',
+      description:'Fatura no ile stok girişi (adet eklenir), sayım (adet düzeltilir) ve depolar arası transfer.',
       url:'/assets/egitim/stock-center.mp4',status:'ready',duration:'~19 sn',sort:90}),
     row({id:'purchase-invoices',category:'stok',title:'Alış Faturaları',screen:'purchaseInvoices',screenLabel:'Alış Faturaları',
       description:'Manuel tek fatura: tedarikçi seçimi, fatura kalemi ve birim fiyat girişi.',
@@ -3094,15 +3097,30 @@ app.get('/web-api/admin/sales-catalog',requireAdminOrStaff('orders_manage'),(req
   res.json({ok:true,products,categories,dealerSettings,customers,customerTotal:allCustomers.length,accounts,warehouses,stores});
 });
 
-app.get('/web-api/admin/stock-center',requireAdminOrStaff('stock_manage'),(req,res)=>{
+app.get('/web-api/admin/stock-center',requireAdminOrStaffAny('stock_manage','stock_view','screen_stock_in'),(req,res)=>{
   const s=readStore();
-  const products=(s.products||[]).map(p=>({code:p.code,name:p.name,itemCode:p.itemCode||'',searchName:p.searchName||'',brand:p.brand,category:p.category,image:p.image,active:p.active!==false}));
+  const isAdmin=req.session?.admin===true;
+  const canReceive=isAdmin||actorHasPermission(req,'stock_manage')||actorHasPermission(req,'screen_stock_in');
+  const canManage=isAdmin||actorHasPermission(req,'stock_manage');
+  const products=(s.products||[]).map(p=>{
+    const row={code:p.code,name:p.name,itemCode:p.itemCode||'',searchName:p.searchName||'',brand:p.brand,category:p.category,image:p.image,active:p.active!==false};
+    if(canReceive)row.purchasePrice=Number(p.purchasePrice||0);
+    return row;
+  });
   const stocks=s.productStocks.map(x=>{
     const product=products.find(p=>String(p.code).toLocaleUpperCase('tr-TR')===String(x.productCode).toLocaleUpperCase('tr-TR'));
     const warehouse=s.warehouses.find(w=>w.id===x.warehouseId);
     return{...x,productName:product?.name||x.productCode,warehouseName:warehouse?.name||'Depo',available:Math.max(0,Number(x.quantity||0)-Number(x.reserved||0))};
   });
-  res.json({warehouses:s.warehouses,products,stocks,movements:s.stockMovements.slice(0,500)});
+  const receipts=canReceive?(s.stockReceipts||[]).filter(r=>!r.reverted).slice(0,80).map(r=>{
+    const warehouse=s.warehouses.find(w=>w.id===r.warehouseId);
+    return{
+      id:r.id,date:r.date,invoiceNo:r.invoiceNo,warehouseId:r.warehouseId,
+      warehouseName:warehouse?.name||'Depo',note:r.note||'',createdBy:r.createdBy||'',createdAt:r.createdAt,
+      items:(r.items||[]).map(i=>({productCode:i.productCode,productName:i.productName,quantity:i.quantity,unitCost:i.unitCost,newPurchasePrice:i.newPurchasePrice}))
+    };
+  }):[];
+  res.json({warehouses:s.warehouses,products,stocks,movements:s.stockMovements.slice(0,500),receipts,canReceive,canManage});
 });
 app.post('/web-api/admin/warehouse',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},name=String(x.name||'').trim();
@@ -3115,11 +3133,55 @@ app.post('/web-api/admin/warehouse',requireAdmin,(req,res)=>{
 app.post('/web-api/admin/stock-adjust',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},productCode=String(x.productCode||'').trim(),warehouseId=String(x.warehouseId||'');
   if(!productCode||!warehouseId)return res.status(400).json({error:'Ürün ve depo zorunludur'});
+  const openingCost=normalizeNumber(x.unitCost||x.openingCost||0);
+  if(openingCost>0 && stockCost.productQtyTotal(s,productCode)>0){
+    return res.status(400).json({error:'Sayımda maliyet girilmez. Maliyet, stok girişinde fatura numarası ile yazılır.'});
+  }
   const target=Math.max(0,Math.round(normalizeNumber(x.quantity)));
   const current=Number(currentStock(s,productCode,warehouseId)?.quantity||0);
   const delta=target-current;
-  const result=addStockMovement(s,{productCode,warehouseId,type:'adjustment',quantity:delta,reference:String(x.reference||'Manuel düzeltme'),note:String(x.note||''),user:currentActor(req)?.name||'Admin'});
-  audit(s,'Stok düzeltildi',productCode,{warehouseId,before:current,after:target});writeStore(s);res.json({ok:true,...result});
+  const result=addStockMovement(s,{productCode,warehouseId,type:'adjustment',quantity:delta,reference:String(x.reference||'Sayım'),note:String(x.note||''),user:currentActor(req)?.name||'Admin'});
+  if(openingCost>0){
+    const product=stockCost.findProductInStore(s,productCode);
+    if(product){
+      product.purchasePrice=openingCost;
+      product.purchasePriceSource='opening-count';
+      product.purchasePriceUpdatedAt=new Date().toISOString();
+      product.updatedAt=new Date().toISOString();
+    }
+  }
+  audit(s,'Stok sayımı',productCode,{warehouseId,before:current,after:target,openingCost:openingCost||undefined});writeStore(s);res.json({ok:true,...result});
+});
+app.post('/web-api/admin/stock-receipt',requireAdminOrStaffAny('stock_manage','screen_stock_in'),(req,res)=>{
+  try{
+    const s=readStore(),x=req.body||{};
+    const warehouseId=String(x.warehouseId||'').trim();
+    if(!(s.warehouses||[]).some(w=>String(w.id)===warehouseId&&w.active!==false)){
+      return res.status(400).json({error:'Geçerli bir depo seçiniz'});
+    }
+    const items=Array.isArray(x.items)&&x.items.length?x.items:[{
+      productCode:x.productCode,quantity:x.quantity,unitCost:x.unitCost
+    }];
+    const prepared=stockCost.prepareStockReceipt(s,{invoiceNo:x.invoiceNo,warehouseId,items});
+    stockCost.applyPreparedCosts(s,prepared);
+    const actor=currentActor(req)?.name||'Personel';
+    for(const line of prepared.items){
+      addStockMovement(s,{
+        productCode:line.productCode,warehouseId,type:'purchase',quantity:line.quantity,
+        reference:prepared.invoiceNo,note:String(x.note||'Stok girişi'),user:actor
+      });
+    }
+    const receipt=stockCost.recordStockReceipt(s,prepared,{note:String(x.note||'').trim(),actor});
+    audit(s,'Stok girişi',prepared.invoiceNo,{
+      warehouseId,
+      products:prepared.items.map(i=>i.productCode),
+      qty:prepared.items.reduce((a,i)=>a+i.quantity,0)
+    });
+    writeStore(s);
+    res.json({ok:true,receipt,items:prepared.items});
+  }catch(e){
+    res.status(400).json({error:e.message||'Stok girişi kaydedilemedi'});
+  }
 });
 app.post('/web-api/admin/stock-transfer',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},productCode=String(x.productCode||'').trim(),from=String(x.fromWarehouseId||''),to=String(x.toWarehouseId||''),qty=Math.max(1,Math.round(normalizeNumber(x.quantity)));
@@ -6348,7 +6410,7 @@ app.get('/web-api/admin/profit-report',requireAdmin,(req,res)=>{
     rows:rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,100),
     inventory:inventoryValuation(s),
     dealers:(s.dealerSettings||[]).map(d=>({id:d.id,name:d.name})),
-    note:'Kâr KDV hariç hesaplanır. Maliyet, ürün kartındaki alış fiyatından satış anında sabitlenir.'
+    note:'Kâr KDV hariç hesaplanır. Maliyet hareketli ortalamadır: satış anında ürün kartındaki alış fiyatı sabitlenir. Yeni alış, geçmiş satış kârını değiştirmez.'
   });
 });
 
@@ -8355,8 +8417,19 @@ function applyPurchaseInvoiceToStore(s,{
   let matched=0,unmatched=0,created=0,priceUpdated=0,stockUpdated=0,total=0;
   const furniture=isIstikbalSupplier(supplierName);
   const chosenCategoryId=String(categoryId||'').trim();
+  const rawItems=Array.isArray(items)?items:[];
+  const seenStockCodes=new Set();
 
-  for(const raw of (Array.isArray(items)?items:[])){
+  if(addStock){
+    if(!stockCost.normalizeInvoiceNo(invoiceNo)){
+      throw new Error('Stok eklemek için fatura numarası zorunludur. Aynı faturayı ikinci kez işlememek için gereklidir.');
+    }
+    const codes=rawItems.map(r=>String(r.productCode||r.itemCode||r.searchName||'').trim()).filter(Boolean);
+    const dups=stockCost.duplicateProducts(s,invoiceNo,codes);
+    if(dups.length)throw new Error(stockCost.duplicateError(dups));
+  }
+
+  for(const raw of rawItems){
     const productCode=String(raw.productCode||raw.searchName||'').trim();
     const productName=String(raw.productName||'').trim();
     const itemCode=String(raw.itemCode||'').trim();
@@ -8400,6 +8473,13 @@ function applyPurchaseInvoiceToStore(s,{
     };
     if(!product){unmatched++;cleanItems.push(line);continue}
     if(!createdNow)matched++;
+    if(addStock){
+      const resolved=stockCost.normalizeProductCode(product.code);
+      if(seenStockCodes.has(resolved)||stockCost.duplicateProducts(s,invoiceNo,[product.code]).length){
+        throw new Error(stockCost.duplicateError([resolved]));
+      }
+      seenStockCodes.add(resolved);
+    }
     // İstikbal eşleşenlerde marka + malzeme adı düzelt; kategori seçildiyse onu kullan
     if(furniture){
       product.brand='İstikbal';
@@ -8417,8 +8497,17 @@ function applyPurchaseInvoiceToStore(s,{
     } else if(createdNow===false&&chosenCategoryId&&!product.category){
       product.category=resolvePurchaseCategoryId(s,chosenCategoryId,supplierName,'');
     }
-    // Sadece maliyet (veya both) modunda alış fiyatı yazılır; stok modunda mevcut maliyete dokunulmaz.
-    if(updatePurchasePrice&&unitCost>0){
+    // Stok eklenirken hareketli ortalama; sadece maliyet aktarımında son alış yazılır.
+    if(addStock&&unitCost>0){
+      const oldQty=stockCost.productQtyTotal(s,product.code);
+      product.purchasePrice=stockCost.weightedAverage(oldQty,prevCost,qty,unitCost);
+      product.purchasePriceSource='weighted-average';
+      product.purchasePriceUpdatedAt=new Date().toISOString();
+      product.updatedAt=new Date().toISOString();
+      product.importBatchId=importBatchId;
+      if(itemCode&&!product.itemCode)product.itemCode=itemCode;
+      priceUpdated++;
+    }else if(updatePurchasePrice&&unitCost>0){
       product.purchasePrice=unitCost;
       product.purchasePriceSource='purchase-invoice';
       product.purchasePriceUpdatedAt=new Date().toISOString();

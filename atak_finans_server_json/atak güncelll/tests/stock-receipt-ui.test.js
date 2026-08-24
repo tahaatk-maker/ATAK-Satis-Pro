@@ -1,0 +1,27 @@
+'use strict';
+const assert=require('assert');
+const fs=require('fs');
+const path=require('path');
+const root=path.join(__dirname,'..');
+const server=fs.readFileSync(path.join(root,'server.js'),'utf8');
+const adminHtml=fs.readFileSync(path.join(root,'public','admin.html'),'utf8');
+const personelHtml=fs.readFileSync(path.join(root,'public','personel.html'),'utf8');
+const adminJs=fs.readFileSync(path.join(root,'public','assets','admin.js'),'utf8');
+const personelJs=fs.readFileSync(path.join(root,'public','assets','personel.js'),'utf8');
+
+assert.match(server,/require\('\.\/lib\/stock-cost'\)/);
+assert.match(server,/store\.stockReceipts/);
+assert.match(server,/id:'screen_stock_in'/);
+assert.match(server,/app\.post\('\/web-api\/admin\/stock-receipt'/);
+assert.match(server,/requireAdminOrStaffAny\('stock_manage','screen_stock_in'\)/);
+assert.match(server,/weightedAverage/);
+assert.match(adminHtml,/id="stockReceiptForm"/);
+assert.match(adminHtml,/id="receiptInvoiceNo"/);
+assert.match(adminHtml,/id="stockAdjustForm"/);
+assert.match(adminHtml,/SAYIM/);
+assert.match(personelHtml,/id="staffReceiptForm"/);
+assert.match(personelHtml,/id="staffReceiptInvoice"/);
+assert.match(adminJs,/\/web-api\/admin\/stock-receipt/);
+assert.match(personelJs,/function canStockIn/);
+assert.match(personelJs,/screen_stock_in/);
+console.log('stock-receipt-ui.test.js ok');

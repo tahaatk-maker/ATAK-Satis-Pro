@@ -3,10 +3,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v240" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-cockpit.css?v=fix-v240" rel="stylesheet"/>
-<link href="/web-admin-assets/admin-calm.css?v=fix-v240" rel="stylesheet"/>
-<link href="/web-admin-assets/sip-call.css?v=fix-v240" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v243" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-cockpit.css?v=fix-v243" rel="stylesheet"/>
+<link href="/web-admin-assets/admin-calm.css?v=fix-v243" rel="stylesheet"/>
+<link href="/web-admin-assets/sip-call.css?v=fix-v243" rel="stylesheet"/>
 <script>(function(){try{var s=localStorage.getItem('atak-skin');document.documentElement.setAttribute('data-skin',s==='classic'?'classic':'calm')}catch(e){document.documentElement.setAttribute('data-skin','calm')}})();</script>
 <script>(function(){try{var mobile=window.matchMedia('(max-width:950px)').matches;var s=mobile?'1':(localStorage.getItem('atak-ui-scale-v4')||'0.85');document.documentElement.setAttribute('data-ui-scale',s);document.documentElement.style.zoom=s;if(window.visualViewport){/* keep */} }catch(e){document.documentElement.style.zoom='1'}})();</script>
 <style>
@@ -646,7 +646,7 @@ body.inv-full #pageTitle{font-size:18px}
   <button class="ck-act customer" data-go="customersPage" type="button"><span class="ck-act-ico">+</span><b>YENİ MÜŞTERİ</b><small>Müşteri kartı aç</small></button>
   <button class="ck-act collect" data-go="customerPayments" type="button"><span class="ck-act-ico">◎</span><b>TAHSİLAT AL</b><small>Cari borcu düş</small></button>
   <button class="ck-act invoice" data-go="invoiceCenter" type="button"><span class="ck-act-ico">▤</span><b>FATURALAR</b><small>Atak fatura merkezi</small></button>
-  <button class="ck-act stock" data-go="stockCenter" type="button"><span class="ck-act-ico">▣</span><b>STOK</b><small>Sayım ve transfer</small></button>
+  <button class="ck-act stock" data-go="stockCenter" type="button"><span class="ck-act-ico">▣</span><b>STOK</b><small>Giriş, sayım, transfer</small></button>
 </div>
 
 <div class="stats v4-metric-grid" id="stats"></div>
@@ -1565,7 +1565,7 @@ Bulunamayan → Diğer.
       </div>
       <button id="purchaseApplyCategoryBtn" class="secondary-btn" type="button" style="margin-top:4px">Seçileni tüm yenilere uygula</button>
       <label class="check-row"><input id="purchaseExcelIncVat" type="checkbox" checked/> Fiyatlarda KDV dahil</label>
-      <div class="dynamics-info-box"><b>İki seçenek</b><span><b>Sadece maliyet</b> → alış fiyatını yazar (ürün yoksa ekler, stok dokunulmaz). <b>Sadece stok</b> → miktarı depoya ekler (ürün yoksa ekler, mevcut maliyete dokunmaz). Yeni ürünlerin kategorisini <b>tabloda satır satır</b> seç (veya üstten tümüne uygula). Beğenmezsen aşağıdan <b>Geri Al</b>.</span></div>
+      <div class="dynamics-info-box"><b>İki seçenek</b><span><b>Sadece maliyet</b> → alış fiyatını yazar (stok dokunulmaz). <b>Sadece stok</b> → miktarı depoya ekler ve <b>hareketli ortalama</b> maliyeti günceller. Stok için <b>fatura no zorunlu</b>; aynı fatura + aynı ürün ikinci kez işlenmez. Günlük mal girişini Stok Merkezi’nden de yapabilirsiniz.</span></div>
       <div class="dynamics-import-actions" style="flex-wrap:wrap">
         <button id="purchasePreviewBtn" class="secondary-btn" type="button">Excel'i Önizle</button>
         <button id="purchaseCostBtn" class="primary" type="button" disabled>Sadece Maliyet Aktar</button>
@@ -1804,21 +1804,37 @@ Bulunamayan → Diğer.
 
 <section class="tab" id="stockCenter">
 <div class="foundation-head panel">
-<div><small class="eyebrow">V3.1 STOK</small><h2>Stok Merkezi</h2><p class="note">Stok düzelt, transfer et, CSV aktar. Depo tanımları <b>Mağaza Operasyon Merkezi → Depo</b> sekmesindedir.</p></div>
+<div><small class="eyebrow">V3.1 STOK</small><h2>Stok Merkezi</h2><p class="note"><b>Stok girişi</b> mal gelince adet ekler (fatura no zorunlu). <b>Sayım</b> depodaki adedi yeni sayıya çeker — birbirine karışmaz. Maliyet hareketli ortalamadır.</p></div>
 <div class="stock-head-actions">
   <button class="secondary-btn" type="button" data-go="foundation" id="stockGoWarehouseBtn">Depo Ayarları →</button>
   <button class="danger-btn" type="button" id="stockZeroAllBtn">Tüm Stokları Sıfırla</button>
 </div>
 </div>
 <div class="foundation-summary" id="stockSummary"></div>
-<div class="stock-grid stock-grid-2">
-<form class="panel form-stack" id="stockAdjustForm">
-<h2>Stok Düzeltme</h2>
+<div class="stock-grid">
+<form class="panel form-stack stock-card-in" id="stockReceiptForm">
+<small class="eyebrow">MAL GELDİ</small>
+<h2>Stok Girişi</h2>
+<p class="note">Adet <b>eklenir</b>. Fatura numarası zorunlu — aynı fatura + aynı ürün ikinci kez işlenmez, maliyetler karışmasın diye.</p>
+<label>Fatura no *<input id="receiptInvoiceNo" required="" placeholder="Örn. ARC2026000123" autocomplete="off"/></label>
+<label>Ürün<select id="receiptProduct" required=""></select></label>
+<label>Depo<select id="receiptWarehouse" required=""></select></label>
+<label>Gelen adet (eklenir)<input id="receiptQty" min="1" required="" type="number" value="1"/></label>
+<label>Birim alış maliyeti *<input id="receiptUnitCost" min="0.01" required="" step="0.01" type="number" placeholder="KDV dahil"/></label>
+<label>Not<input id="receiptNote" placeholder="Opsiyonel"/></label>
+<p class="note" id="receiptAvgHint">Eldeki ortalama maliyet, girişi yazınca güncellenir.</p>
+<button type="submit">Stoka Ekle</button>
+</form>
+<form class="panel form-stack stock-card-count" id="stockAdjustForm">
+<small class="eyebrow">SAYIM</small>
+<h2>Sayım</h2>
+<p class="note">Depodaki adedi <b>yeni sayıya çeker</b> (eklemez). Maliyet buradan girilmez — yalnızca stoğu 0 olan üründe açılış maliyeti yazılabilir.</p>
 <label>Ürün<select id="stockProduct" required=""></select></label>
 <label>Depo<select id="stockWarehouse" required=""></select></label>
-<label>Yeni stok adedi<input id="stockQuantity" min="0" required="" type="number"/></label>
-<label>Açıklama<input id="stockNote" placeholder="Sayım, ilk giriş vb."/></label>
-<button type="submit">Stoğu Güncelle</button>
+<label>Sayılan adet<input id="stockQuantity" min="0" required="" type="number"/></label>
+<label>Açılış maliyeti (yalnızca stok 0 ise)<input id="stockOpeningCost" min="0" step="0.01" type="number" placeholder="Boş bırakılabilir"/></label>
+<label>Açıklama<input id="stockNote" placeholder="Sayım tarihi, raf vb."/></label>
+<button type="submit">Sayımı Kaydet</button>
 </form>
 <form class="panel form-stack" id="stockTransferForm">
 <h2>Depolar Arası Transfer</h2>
@@ -1830,8 +1846,12 @@ Bulunamayan → Diğer.
 <button type="submit">Transfer Et</button>
 </form>
 </div>
+<div class="panel">
+<div class="panel-head"><h2>Son fatura ile girişler</h2><span id="receiptCount"></span></div>
+<div class="turnover-table" id="receiptTable"></div>
+</div>
 <div class="panel stock-import-panel">
-<div><h2>Excel / CSV ile Stok Aktar</h2><p class="note">Tüm Ürünler’den indirdiğiniz Excel’de “Ürün Kodu” ve “Adet” sütunlarını doldurup yükleyin.</p></div>
+<div><h2>Excel / CSV ile Sayım Aktar</h2><p class="note">Tüm Ürünler’den indirdiğiniz Excel’de “Ürün Kodu” ve “Adet” sütunlarını doldurup yükleyin. Bu işlem sayımıdır (adet yazar, fatura ile giriş değildir).</p></div>
 <form id="stockImportForm"><select id="importWarehouse" required=""></select><input accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" id="stockImportFile" required="" type="file"/><button type="submit">Excel / CSV Aktar</button></form>
 </div>
 <div class="panel">
@@ -2374,7 +2394,7 @@ Bulunamayan → Diğer.
 </section>
 <section class="tab" id="profitCenter">
 <div class="foundation-head panel">
-  <div><small class="eyebrow">KÂR & MALİYET</small><h2>Kârlılık Raporu</h2><p class="note">Kâr <b>KDV hariç</b> hesaplanır. Maliyet, ürün kartındaki <b>alış fiyatından satış anında</b> sabitlenir. Alış fiyatını <b>Alış Faturaları</b> (Excel/manuel) ile doldurun.</p></div>
+  <div><small class="eyebrow">KÂR & MALİYET</small><h2>Kârlılık Raporu</h2><p class="note">Kâr <b>KDV hariç</b>. Maliyet <b>hareketli ortalama</b>dır: satış anında ürün kartındaki alış fiyatı sabitlenir. Yeni alış geçmiş satış kârını değiştirmez. Mal girişi Stok Merkezi’nde fatura no ile yapılır.</p></div>
   <button class="backup-btn" id="profitExportBtn" type="button">⬇ Excel / CSV İndir</button>
 </div>
 
@@ -2949,5 +2969,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v240"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v243"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
