@@ -2698,26 +2698,26 @@ Bulunamayan → Diğer.
   <div class="panel-head">
     <div>
       <h2>E-posta (SMTP)</h2>
-      <p class="note">“Şifremi unuttum” mailleri buradan gider. Gmail <b>normal şifre çalışmaz</b> — Google Hesap → Güvenlik → <b>Uygulama şifreleri</b> (16 hane). Port <b>587</b> önerilir (Hostinger 465’i sık kapar).</p>
+      <p class="note">Şifre unuttum mailleri <b>bir kutudan</b> gider (gönderen). Hostinger: sunucu <b>smtp.hostinger.com</b>, port <b>465</b>, SSL açık. Kullanıcı = tam adres, şifre = o kutunun Hostinger şifresi (Gmail uygulama şifresi değil).</p>
     </div>
   </div>
   <label class="check"><input id="mailEnabled" type="checkbox"/> SMTP açık (şifre sıfırlama mailleri gönderilsin)</label>
   <div class="two-col">
-    <label>SMTP sunucu<input id="mailHost" placeholder="smtp.gmail.com" value="smtp.gmail.com"/></label>
-    <label>Port<input id="mailPort" type="number" value="587"/></label>
+    <label>SMTP sunucu<input id="mailHost" placeholder="smtp.hostinger.com" value="smtp.hostinger.com"/></label>
+    <label>Port<input id="mailPort" type="number" value="465"/></label>
   </div>
-  <label class="check"><input id="mailSecure" type="checkbox"/> SSL / secure (yalnızca port 465)</label>
+  <label class="check"><input id="mailSecure" type="checkbox" checked/> SSL / secure (port 465 için açık)</label>
   <div class="two-col">
-    <label>SMTP kullanıcı (Gmail)<input id="mailUser" type="email" placeholder="sirket@gmail.com" autocomplete="off"/></label>
-    <label>Uygulama şifresi<input id="mailPass" type="password" placeholder="••••••••" autocomplete="new-password"/></label>
+    <label>SMTP kullanıcı<input id="mailUser" type="email" placeholder="taha.atak@atakhome.com.tr" autocomplete="off"/></label>
+    <label>Kutu şifresi<input id="mailPass" type="password" placeholder="••••••••" autocomplete="new-password"/></label>
   </div>
-  <label>Gönderen (From)<input id="mailFrom" placeholder="ATAK &lt;sirket@gmail.com&gt;"/></label>
+  <label>Gönderen (From)<input id="mailFrom" placeholder="ATAK &lt;taha.atak@atakhome.com.tr&gt;"/></label>
   <div class="button-row" style="display:flex;gap:8px;flex-wrap:wrap">
     <button class="primary" type="submit">E-posta Ayarlarını Kaydet</button>
     <button class="secondary-btn" id="mailTestBtn" type="button">Test Maili Gönder</button>
   </div>
   <div class="form-status" id="mailSettingsStatus"></div>
-  <p class="note" style="margin-top:10px">1) SMTP kullanıcı + uygulama şifresini kaydedin, <b>Test Maili Gönder</b> deyin.<br/>2) Her personele e-posta yazın (Kullanıcılar &amp; Yetkiler).<br/>3) Personel veya yönetim girişinde “Şifremi unuttum” → maildeki <b>panel.atakhome.com.tr</b> linki ile yeni şifre.</p>
+  <p class="note" style="margin-top:10px">1) Gönderen kutu: <b>taha.atak@atakhome.com.tr</b> + Hostinger şifresi. Kaydet → Test Maili Gönder.<br/>2) Kullanıcılar’da herkese kendi kutusu: emir.atak@ / emine.yakisir@ / halil.atak@ / taha.atak@.<br/>3) Şifremi unuttum: mail Taha’nın kutusundan gider, personelin kendi kutusuna düşer.</p>
 </form>
 
 <form class="panel form-stack settings-panel hidden" id="smsSettingsForm" data-settings-panel="sms">
