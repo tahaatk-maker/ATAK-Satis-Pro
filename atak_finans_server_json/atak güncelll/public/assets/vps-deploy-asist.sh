@@ -119,11 +119,64 @@ if [ -n "${PM_SCRIPT:-}" ] && [ -f "$PM_SCRIPT" ]; then
   esac
 fi
 
-log "3) sert restart (web/commerce dokunulmaz)"
-# Eski süreç bazen restart ile eski kodu tutuyor — delete + start
+log "3) hangi ERP kokunde dolu store var?"
+pick_best_store_dir(){
+  python3 - <<'PY'
+import json, os
+roots=["/root/atakhome-platform","/root/atak-v10"]
+best=("", -1, -1)
+for root in roots:
+  path=os.path.join(root,"data","store.json")
+  if not os.path.isfile(path):
+    continue
+  try:
+    sz=os.path.getsize(path)
+    with open(path,"r",encoding="utf-8") as f:
+      s=json.load(f)
+    n=len(s.get("products") or [])
+  except Exception:
+    n,sz=0,0
+  print(f"STORE {root} products={n} size={sz}")
+  score=(n, sz)
+  if score>(best[1], best[2]):
+    best=(root, n, sz)
+# yedeklerden de bak
+import glob
+best_bak=("", -1, "")
+for root in roots:
+  for p in glob.glob(root+"/data/backups/store-*.json")+glob.glob(root+"/data/store.json.bak*"):
+    try:
+      sz=os.path.getsize(p)
+      if sz<200000: continue
+      with open(p,"r",encoding="utf-8") as f:
+        s=json.load(f)
+      n=len(s.get("products") or [])
+    except Exception:
+      continue
+    if n>best_bak[1]:
+      best_bak=(root, n, p)
+if best_bak[1]>0:
+  print(f"BEST_BAK root={best_bak[0]} products={best_bak[1]} file={best_bak[2]}")
+# start dir: dolu store varsa o, yoksa en iyi yedegin rootu, yoksa platform
+start=best[0] if best[1]>100 else (best_bak[0] if best_bak[1]>100 else "")
+if not start:
+  start="/root/atakhome-platform" if os.path.isdir("/root/atakhome-platform") else "/root/atak-v10"
+print("START_DIR="+start)
+print("START_PRODUCTS="+str(best[1] if best[0]==start else -1))
+print("BEST_BAK_FILE="+best_bak[2])
+print("BEST_BAK_N="+str(best_bak[1]))
+PY
+}
+eval "$(pick_best_store_dir | tee -a "$OUT" | grep -E '^(START_DIR|BEST_BAK_FILE|BEST_BAK_N|START_PRODUCTS)=')"
+# PM cwd bos store ise platform'a gec
+if [ -n "${START_DIR:-}" ] && [ -f "$START_DIR/server.js" ]; then
+  APP="$START_DIR"
+fi
+log "APP(start)=$APP BEST_BAK_N=${BEST_BAK_N:-0}"
+
+log "3b) sert restart (web/commerce dokunulmaz)"
 pm2 stop atak >/dev/null 2>&1 || true
 sleep 1
-# 3100 hâlâ doluysa orphan öldür (sadece node, dikkatli)
 if command -v fuser >/dev/null 2>&1; then
   fuser -k 3100/tcp >/dev/null 2>&1 || true
 elif command -v lsof >/dev/null 2>&1; then
@@ -137,6 +190,18 @@ sleep 1
 START_DIR="$APP"
 [ -f "$START_DIR/server.js" ] || die "start dir server.js yok: $START_DIR"
 grep -q "$EXPECT_V" "$START_DIR/server.js" || die "start dir version yanlis"
+
+# Bos store + dolu yedek varsa restore ET, sonra baslat
+DATA_DIR="$START_DIR/data"
+mkdir -p "$DATA_DIR"
+LIVE_N=$(python3 -c "import json,os,sys;p=sys.argv[1];
+print(len(json.load(open(p)).get('products')or[]) if os.path.isfile(p) else 0)" "$DATA_DIR/store.json" 2>/dev/null || echo 0)
+if [ "${LIVE_N:-0}" -lt 100 ] && [ "${BEST_BAK_N:-0}" -gt 100 ] && [ -f "${BEST_BAK_FILE:-}" ]; then
+  cp -a "$DATA_DIR/store.json" "$DATA_DIR/store.json.bak-empty-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+  cp -a "$BEST_BAK_FILE" "$DATA_DIR/store.json"
+  log "   PRESTART RESTORE $BEST_BAK_FILE ($BEST_BAK_N urun) -> $DATA_DIR/store.json"
+fi
+
 cd "$START_DIR"
 pm2 start server.js --name atak --update-env || die "pm2 start atak fail"
 pm2 save >/dev/null 2>&1 || true
@@ -155,25 +220,34 @@ echo "$H1" | grep -q "$EXPECT_V" || die "health version yok — disk: $(grep -o 
 echo "$H1" | grep -q "$EXPECT_B" || die "health build yok"
 echo "$H1" | grep -q '"storeOk":false' && die "storeOk=false"
 
-# Ürün kartları boşsa otomatik yedekten geri yükle (deploy sonrası productCount=0 felaketi)
-DATA_DIR="$START_DIR/data"
+# Ürün kartları boşsa her iki ERP kökünde yedek ara
 if echo "$H1" | grep -q '"productCount":0'; then
-  log "UYARI: productCount=0 — yedekten geri yukleme deneniyor"
-  BEST=""
-  BEST_N=0
+  log "UYARI: productCount=0 — yedekten geri yukleme deneniyor (tum kokler)"
+  BEST=""; BEST_N=0
   for CAND in \
-    $(ls -1t "$DATA_DIR"/store.json.bak-asist-* 2>/dev/null | head -5) \
-    $(ls -1t "$DATA_DIR"/backups/store-*.json 2>/dev/null | head -8)
+    $(ls -1t /root/atakhome-platform/data/backups/store-*.json 2>/dev/null | head -15) \
+    $(ls -1t /root/atak-v10/data/backups/store-*.json 2>/dev/null | head -10) \
+    $(ls -1t /root/atakhome-platform/data/store.json.bak* 2>/dev/null | head -8) \
+    $(ls -1t /root/atak-v10/data/store.json.bak* 2>/dev/null | head -8)
   do
     [ -f "$CAND" ] || continue
     N=$(python3 -c "import json,sys; s=json.load(open(sys.argv[1])); print(len(s.get('products') or []))" "$CAND" 2>/dev/null || echo 0)
-    log "   aday $CAND products=$N"
+    SZ=$(stat -c%s "$CAND" 2>/dev/null || echo 0)
+    log "   aday $CAND products=$N size=$SZ"
     if [ "${N:-0}" -gt "$BEST_N" ]; then BEST="$CAND"; BEST_N="$N"; fi
   done
+  # products=0 ama dosya buyukse (yanlis parse?) size ile de dene
+  if [ "$BEST_N" -lt 100 ]; then
+    for CAND in $(ls -1S /root/atakhome-platform/data/backups/store-*.json 2>/dev/null | head -5); do
+      SZ=$(stat -c%s "$CAND" 2>/dev/null || echo 0)
+      log "   size-aday $CAND size=$SZ"
+      if [ "${SZ:-0}" -gt 1000000 ]; then BEST="$CAND"; BEST_N=9999; break; fi
+    done
+  fi
   if [ -n "$BEST" ] && [ "$BEST_N" -gt 100 ]; then
     cp -a "$DATA_DIR/store.json" "$DATA_DIR/store.json.bak-empty-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
     cp -a "$BEST" "$DATA_DIR/store.json"
-    log "   RESTORE $BEST ($BEST_N urun)"
+    log "   RESTORE $BEST ($BEST_N) -> $DATA_DIR/store.json"
     pm2 restart atak --update-env >/dev/null 2>&1 || true
     sleep 4
     H1=$(curl -sS -m 8 http://127.0.0.1:3100/health 2>/dev/null || true)
@@ -190,4 +264,5 @@ HTML=$(curl -sS -m 12 https://panel.atakhome.com.tr/web-admin || true)
 echo "$HTML" | grep -q 'purchaseBothBtn\|Fatura Ve Stok Aktarım' || die "panel HTML Asist butonu yok — Ctrl+Shift+R deneyin"
 log "=== BASARILI: Asist alis paneli yayinda ($EXPECT_V) ==="
 log "Panel: https://panel.atakhome.com.tr/web-admin → Alış Faturaları"
+log "cwd=$START_DIR"
 log "Log: $OUT"
