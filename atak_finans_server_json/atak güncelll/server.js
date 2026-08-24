@@ -31,6 +31,8 @@ const customerCode = require('./lib/customer-code');
 const customerDedupe = require('./lib/customer-dedupe');
 const customerSearch = require('./lib/customer-search');
 const stockCost = require('./lib/stock-cost');
+const appMail = require('./lib/mail');
+const passwordReset = require('./lib/password-reset');
 
 const app = express();
 const ROOT = __dirname;
@@ -221,7 +223,7 @@ function ensureStore(store) {
   store.users = Array.isArray(store.users) ? store.users : [];
   store.passwordResets = Array.isArray(store.passwordResets) ? store.passwordResets : [];
   store.settings.smtp = (store.settings.smtp && typeof store.settings.smtp==='object') ? store.settings.smtp : {
-    enabled:false,host:'smtp.gmail.com',port:465,secure:true,user:'',pass:'',from:''
+    enabled:false,host:'smtp.gmail.com',port:587,secure:false,user:'',pass:'',from:''
   };
   store.settings.sms = (store.settings.sms && typeof store.settings.sms==='object') ? store.settings.sms : {
     enabled:false,
@@ -1176,29 +1178,10 @@ function peopleForPayroll(s){
 }
 
 function smtpConfig(s){
-  const fromStore=(s?.settings?.smtp&&typeof s.settings.smtp==='object')?s.settings.smtp:{};
-  const host=String(process.env.SMTP_HOST||fromStore.host||'').trim();
-  const user=String(process.env.SMTP_USER||fromStore.user||'').trim();
-  const pass=String(process.env.SMTP_PASS||fromStore.pass||'').trim();
-  const from=String(process.env.SMTP_FROM||fromStore.from||user||'').trim();
-  const port=Number(process.env.SMTP_PORT||fromStore.port||465)||465;
-  const secure=String(process.env.SMTP_SECURE??fromStore.secure??(port===465)).trim()!=='false';
-  const enabled=(String(process.env.SMTP_ENABLED||'')==='1')||fromStore.enabled===true||Boolean(host&&user&&pass);
-  return{enabled:Boolean(enabled&&host&&user&&pass&&from),host,port,secure,user,pass,from};
+  return appMail.smtpConfig(s?.settings?.smtp, process.env);
 }
 async function sendAppMail(s,{to,subject,text,html}){
-  const cfg=smtpConfig(s);
-  if(!cfg.enabled)throw new Error('E-posta (SMTP) ayarı yok. Ayarlar → E-posta bölümünden Gmail SMTP girin.');
-  let nodemailer;
-  try{nodemailer=require('nodemailer')}catch(_){
-    throw new Error('nodemailer yüklü değil — VPS’te npm install çalıştırın');
-  }
-  const transporter=nodemailer.createTransport({
-    host:cfg.host,port:cfg.port,secure:cfg.secure,
-    auth:{user:cfg.user,pass:cfg.pass}
-  });
-  await transporter.sendMail({from:cfg.from,to,subject,text,html:html||text});
-  return true;
+  return appMail.sendAppMail(smtpConfig(s),{to,subject,text,html});
 }
 
 function smsProviderPresets(){
@@ -1998,8 +1981,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.244-profit-cost',
-    build:'fix-v244',
+    version:'6.3.245-mail-reset',
+    build:'fix-v245',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -2191,10 +2174,10 @@ app.delete('/web-api/admin/user/:id',requirePermission('users_manage'),(req,res)
 app.get('/web-api/admin/mail-settings',requirePermission('settings_manage'),(req,res)=>{
   const s=readStore(),cfg=smtpConfig(s),raw=s.settings.smtp||{};
   res.json({settings:{
-    enabled:raw.enabled===true,
+    enabled:cfg.enabled,
     host:raw.host||'smtp.gmail.com',
-    port:Number(raw.port||465)||465,
-    secure:raw.secure!==false,
+    port:Number(raw.port||587)||587,
+    secure:raw.secure===true||Number(raw.port||0)===465,
     user:raw.user||'',
     pass:raw.pass?'••••••••':'',
     from:raw.from||'',
@@ -2205,14 +2188,19 @@ app.post('/web-api/admin/mail-settings',requirePermission('settings_manage'),(re
   const s=readStore(),x=req.body||{},cur=s.settings.smtp||{};
   const passIn=String(x.pass||'');
   const keepPass=passIn===''||passIn==='••••••••';
+  const user=String(x.user||'').trim();
+  const pass=keepPass?String(cur.pass||''):passIn.replace(/\s+/g,'');
+  const from=String(x.from||user||'').trim();
+  const port=Number(x.port||587)||587;
+  const hasCreds=Boolean(user&&pass);
   s.settings.smtp={
-    enabled:x.enabled===true,
+    enabled:x.enabled===false?false:(x.enabled===true||hasCreds),
     host:String(x.host||'smtp.gmail.com').trim()||'smtp.gmail.com',
-    port:Number(x.port||465)||465,
-    secure:x.secure!==false,
-    user:String(x.user||'').trim(),
-    pass:keepPass?String(cur.pass||''):passIn,
-    from:String(x.from||x.user||'').trim()
+    port,
+    secure:x.secure===true||port===465,
+    user,
+    pass,
+    from
   };
   audit(s,'SMTP ayarları kaydedildi',s.settings.smtp.user||'-',{enabled:s.settings.smtp.enabled,host:s.settings.smtp.host});
   writeStore(s);
@@ -2734,69 +2722,57 @@ app.delete('/web-api/admin/training/:id',requirePermission('settings_manage'),(r
   res.json({ok:true});
 });
 
-// Personel: şifremi unuttum
-app.post('/foundation-api/forgot-password',async(req,res)=>{
+// Personel + yönetim: şifremi unuttum
+async function handleForgotPassword(req,res){
   const s=readStore();
   const key=String(req.body?.username||req.body?.email||'').trim().toLocaleLowerCase('tr-TR');
   const failKey=`forgot:${clientIp(req)}:${key||'-'}`;
   if(loginRateLimited(failKey))return res.status(429).json({error:'Çok fazla deneme. 15 dk sonra tekrar deneyin.'});
-  // Her zaman aynı cevap (kullanıcı sızıntısı yok)
-  const okMsg={ok:true,message:'Eşleşen hesap ve e-posta varsa sıfırlama linki gönderildi. Gelen kutusu / spam kontrol edin.'};
+  const okMsg={ok:true,message:'Eşleşen hesap ve e-posta varsa sıfırlama linki gönderildi. Gelen kutusu / spam klasörünü kontrol edin.'};
   if(!key)return res.json(okMsg);
-  const user=(s.users||[]).find(u=>u.active!==false&&(
-    String(u.username||'').toLocaleLowerCase('tr-TR')===key ||
-    String(u.email||'').toLocaleLowerCase('tr-TR')===key
-  ));
-  if(!user||!String(user.email||'').trim()){
-    // soft fail sayacı — brute force azalt
-    try{/* mark fail */}catch(_){}
-    return res.json(okMsg);
-  }
+  const user=passwordReset.findResetUser(s,key);
+  const email=passwordReset.resetEmailOf(user);
+  if(!user||!email)return res.json(okMsg);
   if(!smtpConfig(s).enabled){
-    return res.status(400).json({error:'Şu an e-posta gönderimi kapalı. Yönetici Ayarlar → E-posta’dan SMTP açmalı.'});
+    return res.status(400).json({error:'E-posta gönderimi kapalı. Yönetici: Ayarlar → E-posta’ya Gmail ve uygulama şifresi kaydedin, SMTP açık işaretleyin.'});
   }
-  const token=crypto.randomBytes(32).toString('hex');
-  const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
-  const expiresAt=new Date(Date.now()+60*60*1000).toISOString();
-  s.passwordResets=(s.passwordResets||[]).filter(r=>r.userId!==user.id&&new Date(r.expiresAt).getTime()>Date.now());
-  s.passwordResets.push({id:crypto.randomUUID(),userId:user.id,tokenHash,expiresAt,createdAt:new Date().toISOString(),used:false});
+  const issued=passwordReset.issueResetToken(s,user);
   writeStore(s);
-  const link=`${publicBaseUrl(req)}/personel?reset=${token}`;
+  const origin=appMail.panelOrigin(req,process.env);
+  const link=appMail.resetUrl(origin,issued.token,issued.portal);
+  const alt=appMail.resetUrl(origin,issued.token,issued.portal==='admin'?'staff':'admin');
   try{
     await sendAppMail(s,{
-      to:user.email,
-      subject:'ATAK Personel · Şifre sıfırlama',
-      text:`Merhaba ${user.name},\n\nŞifrenizi sıfırlamak için 1 saat geçerli link:\n${link}\n\nBu talebi siz yapmadıysanız yok sayın.\n`,
-      html:`<p>Merhaba <b>${String(user.name||'').replace(/[<>&]/g,m=>({ '<':'&lt;','>':'&gt;','&':'&amp;' }[m]))}</b>,</p>
-        <p>Personel şifrenizi sıfırlamak için aşağıdaki butona tıklayın (1 saat geçerli):</p>
+      to:email,
+      subject:'ATAK · Şifre sıfırlama',
+      text:`Merhaba ${user.name||user.username},\n\nŞifrenizi sıfırlamak için 1 saat geçerli link:\n${link}\n\nYönetim paneli için: ${alt}\n\nBu talebi siz yapmadıysanız yok sayın.\n`,
+      html:`<p>Merhaba <b>${String(user.name||user.username||'').replace(/[<>&]/g,m=>({ '<':'&lt;','>':'&gt;','&':'&amp;' }[m]))}</b>,</p>
+        <p>Şifrenizi sıfırlamak için butona tıklayın (1 saat geçerli):</p>
         <p><a href="${link}" style="display:inline-block;padding:12px 18px;background:#9a3412;color:#fff;text-decoration:none;border-radius:10px;font-weight:700">Şifreyi Sıfırla</a></p>
-        <p style="color:#666;font-size:12px">Link: ${link}</p>`
+        <p style="color:#666;font-size:12px">Link çalışmazsa bunu tarayıcıya yapıştırın:<br>${link}</p>`
     });
-    audit(s,'Şifre sıfırlama maili gönderildi',user.username,{email:user.email});
+    audit(s,'Şifre sıfırlama maili gönderildi',user.username,{email,portal:issued.portal});
     writeStore(s);
   }catch(e){
     return res.status(400).json({error:e.message||'Mail gönderilemedi'});
   }
   res.json(okMsg);
-});
-app.post('/foundation-api/reset-password',(req,res)=>{
-  const s=readStore();
-  const token=String(req.body?.token||'').trim();
-  const password=String(req.body?.password||'');
-  if(!token||password.length<6)return res.status(400).json({error:'Yeni şifre en az 6 karakter olmalı'});
-  const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
-  const row=(s.passwordResets||[]).find(r=>!r.used&&r.tokenHash===tokenHash);
-  if(!row)return res.status(400).json({error:'Link geçersiz veya kullanılmış'});
-  if(new Date(row.expiresAt).getTime()<Date.now())return res.status(400).json({error:'Linkin süresi dolmuş. Tekrar “Şifremi unuttum” deyin.'});
-  const user=(s.users||[]).find(u=>String(u.id)===String(row.userId));
-  if(!user||user.active===false)return res.status(400).json({error:'Kullanıcı bulunamadı'});
-  user.passwordHash=hashPassword(password);
-  user.updatedAt=new Date().toISOString();
-  row.used=true;row.usedAt=new Date().toISOString();
-  audit(s,'Şifre sıfırlandı (mail linki)',user.username,{});
-  writeStore(s);
-  res.json({ok:true,message:'Şifre güncellendi. Giriş yapabilirsiniz.'});
-});
+}
+function handleResetPassword(req,res){
+  try{
+    const s=readStore();
+    const user=passwordReset.consumeResetToken(s,req.body?.token,req.body?.password,hashPassword);
+    audit(s,'Şifre sıfırlandı (mail linki)',user.username,{});
+    writeStore(s);
+    res.json({ok:true,message:'Şifre güncellendi. Giriş yapabilirsiniz.'});
+  }catch(e){
+    res.status(400).json({error:e.message||'Şifre güncellenemedi'});
+  }
+}
+app.post('/foundation-api/forgot-password',handleForgotPassword);
+app.post('/web-api/forgot-password',handleForgotPassword);
+app.post('/foundation-api/reset-password',handleResetPassword);
+app.post('/web-api/reset-password',handleResetPassword);
 
 // ===== ATAK HOME PLATFORM V3.0 FOUNDATION =====
 app.get('/foundation-api/public',(req,res)=>{

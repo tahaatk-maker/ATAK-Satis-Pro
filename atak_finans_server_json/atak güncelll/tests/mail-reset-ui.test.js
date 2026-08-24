@@ -1,0 +1,23 @@
+'use strict';
+const assert=require('assert');
+const fs=require('fs');
+const path=require('path');
+const root=path.join(__dirname,'..');
+const server=fs.readFileSync(path.join(root,'server.js'),'utf8');
+const adminHtml=fs.readFileSync(path.join(root,'public','admin.html'),'utf8');
+const adminJs=fs.readFileSync(path.join(root,'public','assets','admin.js'),'utf8');
+const personelHtml=fs.readFileSync(path.join(root,'public','personel.html'),'utf8');
+const vitrin=fs.readFileSync(path.join(root,'public','assets','vps-deploy-vitrin.sh'),'utf8');
+
+assert.match(server,/require\('\.\/lib\/mail'\)/);
+assert.match(server,/require\('\.\/lib\/password-reset'\)/);
+assert.match(server,/app\.post\('\/web-api\/forgot-password'/);
+assert.match(server,/app\.post\('\/web-api\/reset-password'/);
+assert.match(adminHtml,/id="forgotForm"/);
+assert.match(adminHtml,/id="resetForm"/);
+assert.match(adminHtml,/id="forgotOpenBtn"/);
+assert.match(adminJs,/\/web-api\/forgot-password/);
+assert.match(adminJs,/resetTokenFromUrl/);
+assert.match(personelHtml,/id="forgotForm"/);
+assert.match(vitrin,/personel\$is_args\$args/);
+console.log('mail-reset-ui.test.js ok');
