@@ -105,10 +105,9 @@ function panelOrigin(req, env=process.env){
   return PANEL_ORIGIN;
 }
 
-function resetUrl(origin, token, portal){
+function resetUrl(origin, token, _portal){
   const base=String(origin||PANEL_ORIGIN).replace(/\/$/,'');
-  const path=portal==='admin'?'/web-admin':'/personel';
-  return `${base}${path}?reset=${encodeURIComponent(token)}`;
+  return `${base}/sifre-sifirla?reset=${encodeURIComponent(token)}`;
 }
 
 module.exports={

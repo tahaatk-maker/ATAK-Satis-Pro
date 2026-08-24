@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v247 */
+/* ATAK_ADMIN_BUILD=fix-v248 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -68,7 +68,14 @@ async function api(url,opt={}){
 }
 let pendingMfaChallengeId='';
 function resetTokenFromUrl(){
-  try{return new URLSearchParams(location.search).get('reset')||''}catch(_){return ''}
+  try{
+    const q=new URLSearchParams(location.search).get('reset');
+    if(q)return q;
+    const h=String(location.hash||'').replace(/^#/,'');
+    if(h.indexOf('reset=')===0)return decodeURIComponent(h.slice(6));
+    if(/^[a-f0-9]{64}$/i.test(h))return h;
+    return '';
+  }catch(_){return ''}
 }
 function showAdminLoginPanel(which){
   q('#loginView')?.classList.remove('hidden');
@@ -7514,6 +7521,7 @@ q('#custPayForm')?.addEventListener('submit',async e=>{
 loadPermissionDefinitions();loadCurrentAdminPermissions();
 if(resetTokenFromUrl()){
   showAdminLoginPanel('reset');
+  fetch('/web-api/logout',{method:'POST',credentials:'same-origin'}).catch(()=>{});
 }else{
   check().catch(()=>{});
 }

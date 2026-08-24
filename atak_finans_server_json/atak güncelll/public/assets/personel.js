@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v245 */
+/* ATAK_PERSONEL_BUILD=fix-v248 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -124,6 +124,10 @@ function showHome(){
 }
 
 async function loadSession(){
+  if(resetTokenFromUrl()){
+    showLogin();
+    return;
+  }
   try{
     const d=await api('/foundation-api/me');
     if(!d.authenticated)return showLogin();
@@ -159,7 +163,7 @@ async function loadSession(){
 function showLogin(){
   $('#app').classList.add('hidden');
   $('#login').classList.remove('hidden');
-  showLoginPanel('login');
+  showLoginPanel(resetTokenFromUrl()?'reset':'login');
 }
 function showLoginPanel(which){
   $('#loginForm')?.classList.toggle('hidden',which!=='login');
@@ -172,7 +176,14 @@ function showLoginPanel(which){
   if(which==='reset')$('#resetError').textContent='';
 }
 function resetTokenFromUrl(){
-  try{return new URLSearchParams(location.search).get('reset')||''}catch(_){return ''}
+  try{
+    const q=new URLSearchParams(location.search).get('reset');
+    if(q)return q;
+    const h=String(location.hash||'').replace(/^#/,'');
+    if(h.indexOf('reset=')===0)return decodeURIComponent(h.slice(6));
+    if(/^[a-f0-9]{64}$/i.test(h))return h;
+    return '';
+  }catch(_){return ''}
 }
 
 $('#loginForm').onsubmit=async e=>{
@@ -256,8 +267,11 @@ $('#resetForm')?.addEventListener('submit',async e=>{
   }
 });
 if(resetTokenFromUrl()){
+  fetch('/foundation-api/logout',{method:'POST',credentials:'same-origin'}).catch(()=>{});
   showLogin();
   showLoginPanel('reset');
+}else{
+  loadSession();
 }
 $('#logout').onclick=async()=>{
   await api('/foundation-api/logout',{method:'POST'}).catch(()=>{});
@@ -2843,4 +2857,3 @@ $('#payForm')?.addEventListener('submit',async e=>{
   }catch(err){st.textContent=err.message}
 });
 
-loadSession();
