@@ -578,7 +578,9 @@ function normalizeNumber(value){
   let raw=String(value).trim()
     .replace(/[\u200b\u200c\u200d\ufeff]/g,'')
     .replace(/\s/g,'')
-    .replace(/[₺]/g,'')
+    .replace(/[₺€£¥]/g,'')
+    .replace(/\uFFFD/g,'') // bozuk ₺ (CSV'de ? veya �)
+    .replace(/^[^\d\-(]+/,'') // baştaki para birimi / çöp
     .replace(/(TRY|TL|USD|EUR|\$)/gi,'');
   if(!raw) return 0;
   // Muhasebe negatif: (1.234,56)
@@ -603,6 +605,18 @@ function normalizeNumber(value){
   }
   const n=Number(raw.replace(',','.'));
   return (Number.isFinite(n)?n:0)*(neg?-1:1);
+}
+/** SAP/İstikbal stok miktarı: 2,000 → 2 (ondalık), US binlik 2,000 ile karışmasın diye kısa sol taraf */
+function normalizeSapQty(value){
+  if(value===null||value===undefined||value==='')return 0;
+  if(typeof value==='number')return Number.isFinite(value)?value:0;
+  const raw=String(value).trim().replace(/\s/g,'');
+  // 2,000 / 12,500 → SAP ondalık (TR)
+  if(/^\d{1,6},\d{3}$/.test(raw)&&!raw.includes('.')){
+    const n=Number(raw.replace(',','.'));
+    return Number.isFinite(n)?n:0;
+  }
+  return normalizeNumber(value);
 }
 function slug(input){ return String(input||'').toLocaleLowerCase('tr-TR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
 function calculateSalePrice(p){ const base=Number(p.bekoPrice||0),v=Number(p.priceValue||0); if(p.priceMode==='percent_down')return Math.max(0,Math.round(base*(1-v/100))); if(p.priceMode==='percent_up')return Math.max(0,Math.round(base*(1+v/100))); if(p.priceMode==='fixed_down')return Math.max(0,Math.round(base-v)); if(p.priceMode==='fixed_up')return Math.max(0,Math.round(base+v)); if(p.priceMode==='manual')return Math.max(0,Math.round(v||p.salePrice||base)); return Math.max(0,Math.round(base)); }
@@ -2000,8 +2014,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.255-hizli-onizle',
-    build:'fix-v255',
+    version:'6.3.256-pp-stok',
+    build:'fix-v256',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -8221,12 +8235,12 @@ function purchaseSheetRows(ws){
   let headerIdx=0;
   for(let i=0;i<Math.min(aoaRaw.length,20);i++){
     const line=(aoaRaw[i]||[]).map(c=>String(c??'')).join(' | ');
-    if(/Madde\s*kodu|Maliyet\s*tutar|Arama\s*ad|Ürün\s*numar|Cost\s*amount|Malzeme1|Birim\s*Fiyat|Malzeme\s*Uzun/i.test(line)){headerIdx=i;break}
+  if(/Madde\s*kodu|Maliyet\s*tutar|Arama\s*ad|Ürün\s*numar|Cost\s*amount|Malzeme1|Birim\s*Fiyat|Malzeme\s*Uzun|\bPP\b|Stok\s*Miktar/i.test(line)){headerIdx=i;break}
   }
   const headers=(aoaRaw[headerIdx]||[]).map(h=>String(h??'').trim());
   let costIdx=headers.findIndex(h=>{
     const k=purchaseHeaderKey(h);
-    return k.includes('maliyettutar')||k.includes('costamount')||k==='maliyet'||k==='birimmaliyet'||k==='birimfiyat';
+    return k.includes('maliyettutar')||k.includes('costamount')||k==='maliyet'||k==='birimmaliyet'||k==='birimfiyat'||k==='pp';
   });
   if(costIdx<0&&headers.length>=13)costIdx=12;
   const rows=[];
@@ -8256,7 +8270,7 @@ function parsePurchaseWorkbook(buffer,fileName=''){
   const name=String(fileName||'').toLocaleLowerCase('tr-TR');
   const isZip=Buffer.isBuffer(buffer)&&buffer.length>3&&buffer[0]===0x50&&buffer[1]===0x4b; // PK = xlsx
   // .xlsx asla CSV sanılmasın
-  const looksCsv=!isZip&&(name.endsWith('.csv')||((name.endsWith('.txt')||!/\.xlsx?$/.test(name))&&/Maliyet tutar|Madde kodu|Arama ad|Ürün numar|Fatura|Malzeme1|Birim Fiyat|Malzeme Uzun/i.test(asText.slice(0,1200))&&(/;|,|\t/).test(asText.slice(0,300))));
+  const looksCsv=!isZip&&(name.endsWith('.csv')||((name.endsWith('.txt')||!/\.xlsx?$/.test(name))&&/Maliyet tutar|Madde kodu|Arama ad|Ürün numar|Fatura|Malzeme1|Birim Fiyat|Malzeme Uzun|\bPP\b|Stok Miktar/i.test(asText.slice(0,1200))&&(/;|,|\t/).test(asText.slice(0,300))));
   if(looksCsv){
     rows=parsePurchaseCsvBuffer(buffer);
   }else{
@@ -8276,9 +8290,9 @@ function parsePurchaseWorkbook(buffer,fileName=''){
   const codeAliases=['Ürün Kodu','Urun Kodu','Madde Kodu','Madde kodu','Ürün numarası','Urun numarasi','Malzeme Kodu','Malzeme1','Malzeme 1','Malzeme No','Malzeme','Stok Kodu','Kod','Barkod','Item Code','Material'];
   const searchAliases=['Arama Adı','Arama Adi','Arama adı','Search name'];
   const nameAliases=['Ürün Adı','Urun Adi','Ürün adı','Malzeme Adı','Malzeme Uzun Metni E','Malzeme Uzun Metni','Malzeme Uzun Metin','Uzun Metin','Malzeme Tanımı','Açıklama','Aciklama','Ürün','Product Name','Tanım'];
-  const qtyAliases=['Miktar','Quantity','Qty','Miktarı'];
-  // Maliyet / birim fiyat — İstikbal "Birim Fiyat" dahil
-  const unitAliases=['Maliyet tutarı','Maliyet tutari','Maliyet Tutarı','Cost amount','Maliyet tutar','Birim maliyet','Birim Maliyet','Birim Fiyat','Birim Fiyatı','Alış Fiyatı','Alis Fiyati','Net Birim Fiyat','Birim Tutar','Unit Price','Maliyet','Fiyat'];
+  const qtyAliases=['Miktar','Quantity','Qty','Miktarı','Stok Miktarı','Stok Miktari','Stok Adedi','Stok'];
+  // Maliyet / birim fiyat — İstikbal "Birim Fiyat" + depo stok "PP"
+  const unitAliases=['Maliyet tutarı','Maliyet tutari','Maliyet Tutarı','Cost amount','Maliyet tutar','Birim maliyet','Birim Maliyet','Birim Fiyat','Birim Fiyatı','Alış Fiyatı','Alis Fiyati','Net Birim Fiyat','Birim Tutar','Unit Price','Maliyet','Fiyat','PP','Pp'];
   const totalAliases=['Satır Tutarı','Satir Tutari','Line Total','Net Tutar','Malzeme Tutarı','Toplam Tutar'];
   const invAliases=['Fatura No','Fatura Numarası','Fatura Numarasi','Belge No','Invoice No','Arçelik Fatura Numarası','Arcelik Fatura Numarasi'];
   const dateAliases=['Fatura Tarihi','Tarih','Belge Tarihi','Invoice Date','Date','Fiili tarih','Fiili Tarih'];
@@ -8299,17 +8313,18 @@ function parsePurchaseWorkbook(buffer,fileName=''){
     ).trim();
     // Benzersiz kod: Madde/Malzeme kodu
     const productCode=String(itemCode||searchName||purchasePickFromMap(fmap,codeAliases)||productName||'').trim();
-    let quantity=normalizeNumber(purchasePickFromMap(fmap,qtyAliases)||purchasePickContainsFromMap(fmap,['miktar','qty'])||0);
+    const qtyRaw=purchasePickFromMap(fmap,qtyAliases)||purchasePickContainsFromMap(fmap,['stokmiktar','miktar','qty'])||0;
+    let quantity=normalizeSapQty(qtyRaw);
     let costRaw=r.__costRaw;
     if(costRaw===''||costRaw==null)costRaw=purchasePickFromMap(fmap,unitAliases);
     if(costRaw===''||costRaw==null){
       for(const [hk,v] of fmap){
         if(v===null||v===undefined||String(v).trim()==='')continue;
-        if(hk.includes('maliyettutar')||hk.includes('costamount')||hk==='maliyet'||hk==='birimmaliyet'||hk==='birimfiyat'||hk==='fiyat'){costRaw=v;break}
+        if(hk.includes('maliyettutar')||hk.includes('costamount')||hk==='maliyet'||hk==='birimmaliyet'||hk==='birimfiyat'||hk==='fiyat'||hk==='pp'){costRaw=v;break}
       }
     }
     if(costRaw===''||costRaw==null){
-      costRaw=purchasePickContainsFromMap(fmap,['birimfiyat','alisfiyat','unitprice','fiyat'])||'';
+      costRaw=purchasePickContainsFromMap(fmap,['birimfiyat','alisfiyat','unitprice','fiyat','pp'])||'';
     }
     let unitCost=normalizeNumber(costRaw||0);
     const lineTotalRaw=normalizeNumber(purchasePickFromMap(fmap,totalAliases)||0);

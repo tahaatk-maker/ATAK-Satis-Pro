@@ -2,7 +2,7 @@
 
 const {parse}=require('csv-parse/sync');
 
-const HEADER_RE=/Madde\s*kodu|Maliyet\s*tutar|Arama\s*ad|Ürün\s*numar|Malzeme1|Birim\s*Fiyat|Malzeme\s*Uzun|Ürün\s*Kodu|Stok\s*Kodu|Cost\s*amount/i;
+const HEADER_RE=/Madde\s*kodu|Maliyet\s*tutar|Arama\s*ad|Ürün\s*numar|Malzeme1|Birim\s*Fiyat|Malzeme\s*Uzun|Ürün\s*Kodu|Stok\s*Kodu|Cost\s*amount|\bPP\b|Stok\s*Miktar/i;
 
 function purchaseHeaderKey(h){
   return String(h||'').toLocaleLowerCase('tr-TR')
@@ -13,6 +13,15 @@ function purchaseHeaderKey(h){
 
 function looksLikeHeaderLine(line){
   return HEADER_RE.test(String(line||''));
+}
+
+function scoreHeaderText(t){
+  const head=String(t||'').slice(0,2500);
+  let s=0;
+  if(looksLikeHeaderLine(head))s+=5;
+  if(/Malzeme1|Birim Fiyat|Stok Miktar|\bPP\b|Madde kodu/i.test(head))s+=3;
+  if(/�/.test(head))s-=4; // bozuk UTF-8
+  return s;
 }
 
 function bufferText(buffer){
@@ -27,10 +36,14 @@ function bufferText(buffer){
     return swapped.toString('utf16le').replace(/^\uFEFF/,'');
   }
   const utf8=String(buf.toString('utf8')||'').replace(/^\uFEFF/,'');
-  if(looksLikeHeaderLine(utf8.slice(0,2000))||/Miktar|Fatura|Malzeme/i.test(utf8.slice(0,800)))return utf8;
-  const latin=String(buf.toString('latin1')||'').replace(/^\uFEFF/,'');
-  if(looksLikeHeaderLine(latin.slice(0,2000))||/Madde|Maliyet|Arama|Fatura|Malzeme/i.test(latin.slice(0,800)))return latin;
-  return utf8;
+  let cp1254='';
+  try{cp1254=String(buf.toString('latin1')||'').replace(/^\uFEFF/,'')}catch(_){cp1254=''}
+  // Hostinger/İstikbal CSV çoğu zaman Windows-1254; Türkçe başlıklar UTF-8'de bozulur
+  const cands=[
+    {t:utf8,s:scoreHeaderText(utf8)},
+    {t:cp1254,s:scoreHeaderText(cp1254)+(/Üretim|Miktarı|Malzeme/i.test(cp1254.slice(0,300))?2:0)}
+  ].sort((a,b)=>b.s-a.s);
+  return cands[0].t||utf8;
 }
 
 function detectDelim(line){
@@ -52,6 +65,33 @@ function headerIndex(lines){
 
 function fillIstikbalAliases(row,headers,cols){
   if(!row||headers.length<3)return row;
+  const keys=headers.map(purchaseHeaderKey);
+  const hasPp=keys.some(k=>k==='pp');
+  const hasStok=keys.some(k=>k.includes('stokmiktar')||k==='miktar');
+  const malzemeIdx=keys.findIndex(k=>k==='malzeme1'||k==='malzeme');
+  const ppIdx=keys.findIndex(k=>k==='pp');
+  const qtyIdx=keys.findIndex(k=>k.includes('stokmiktar')||k==='miktar');
+
+  // İstikbal depo stok: ;Malzeme1;Üretim yeri;Stok Miktarı;PP
+  // Burada Malzeme1 = ürün ADI (kod değil), PP = birim fiyat (₺)
+  if(hasPp&&malzemeIdx>=0){
+    const name=String(cols[malzemeIdx]??row['Malzeme1']??'').trim();
+    const price=String(cols[ppIdx]??row.PP??row.pp??'').trim();
+    const qty=qtyIdx>=0?String(cols[qtyIdx]??'').trim():'';
+    if(name){
+      // Kod yoksa adın tamamını kod gibi kullan (aynı ad = aynı kart)
+      if(!row['Madde kodu'])row['Malzeme1']=name;
+      row['Malzeme Uzun Metni E']=row['Malzeme Uzun Metni E']||name;
+      row['Ürün adı']=row['Ürün adı']||name;
+    }
+    if(price&&!row['Birim Fiyat']&&!row['Maliyet tutarı']){
+      row['Birim Fiyat']=price;
+      row.__costRaw=price;
+    }
+    if(qty&&!row['Miktar'])row['Miktar']=qty;
+    return row;
+  }
+
   const h0=purchaseHeaderKey(headers[0]);
   if((h0.startsWith('malzeme')||/malzeme1/i.test(headers[0]||''))&&!row['Madde kodu']&&!row['Malzeme1']){
     row['Malzeme1']=cols[0]||'';

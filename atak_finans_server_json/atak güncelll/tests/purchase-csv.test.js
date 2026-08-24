@@ -42,4 +42,17 @@ assert.notEqual(virt,virt2,'her çağrıda farklı sonek');
 const costNo=csv.virtualInvoiceNo({supplier:'İstikbal',date:'2026-08-24',mode:'cost',now:new Date('2026-08-24T15:30:45')});
 assert.match(costNo,/^IST-SANAL-FIYAT-/);
 
+// İstikbal depo stok CSV: Malzeme1=ad, Stok Miktarı, PP=fiyat
+const depo=[
+  ';Malzeme1;Üretim yeri;Stok Miktarı;PP',
+  ';Borneo sandalye 8230 2 li;4041;2,000;₺15.545,00',
+  ';borneo sandalye 8231;4041;1,000;₺6.198,00'
+].join('\n');
+const depoRows=csv.parseCsvBuffer(Buffer.from(depo,'utf8'));
+assert.ok(depoRows.length>=2,'depo stok satır');
+assert.equal(depoRows[0]['Malzeme1'],'Borneo sandalye 8230 2 li');
+assert.ok(String(depoRows[0]['Birim Fiyat']||'').includes('15.545'),'PP → Birim Fiyat');
+assert.equal(String(depoRows[0]['Miktar']||''),'2,000');
+assert.ok(depoRows[0]['Malzeme Uzun Metni E'],'ad uzun metin');
+
 console.log('OK purchase-csv tests passed');
