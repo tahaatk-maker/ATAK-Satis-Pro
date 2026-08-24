@@ -2000,8 +2000,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.253-hizli-onizle',
-    build:'fix-v253',
+    version:'6.3.254-kategori-tahmin',
+    build:'fix-v254',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
