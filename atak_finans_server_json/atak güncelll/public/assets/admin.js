@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v252 */
+/* ATAK_ADMIN_BUILD=fix-v253 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -5693,6 +5693,11 @@ let purchaseExcelFilter='all'; // all | undefined
 function purchaseSelectedInvoiceKeys(){
   return (purchasePreviewData?.invoices||[]).filter(inv=>inv.selected!==false&&inv.status!=='exists').map(inv=>inv.key);
 }
+function purchaseInvoiceKeyOfRow(r){
+  const no=String(r?.invoiceNo||'').trim();
+  if(!no)return '_NONE_';
+  return no.toLocaleUpperCase('tr-TR').replace(/[^0-9A-ZÇĞİÖŞÜ]/g,'')||'_NONE_';
+}
 function renderPurchaseInvoiceLines(inv){
   const box=q('#purchaseInvoiceLinesTable');
   const title=q('#purchaseSelectedInvoiceTitle');
@@ -5700,7 +5705,10 @@ function renderPurchaseInvoiceLines(inv){
   if(!box)return;
   if(!inv){box.innerHTML='<tr><td colspan="6" class="muted">Soldan fatura seçin</td></tr>';return}
   const label={matched:'Eşleşti',will_create:'Tanımsız',unmatched:'Tanımsız',invalid:'Hatalı'};
-  box.innerHTML=(inv.lines||[]).slice(0,400).map(r=>{
+  const lines=(purchasePreviewData?.preview||[])
+    .filter(r=>purchaseInvoiceKeyOfRow(r)===String(inv.key||'_NONE_'))
+    .slice(0,200);
+  box.innerHTML=lines.map(r=>{
     const st=r.status==='unmatched'?'will_create':r.status;
     const cls=st==='will_create'?'asist-undef':(st==='matched'?'asist-ready':'');
     return `<tr class="${cls}">
@@ -5711,7 +5719,7 @@ function renderPurchaseInvoiceLines(inv){
       <td><b>${money(r.unitCost)}</b></td>
       <td>%${Number(r.vatRate||20)}</td>
     </tr>`;
-  }).join('')||'<tr><td colspan="6" class="muted">Satır yok</td></tr>';
+  }).join('')||`<tr><td colspan="6" class="muted">${Number(inv.lineCount||0)} kalem · önizlemede ilk ${(purchasePreviewData?.preview||[]).length} satır</td></tr>`;
 }
 function renderPurchaseInvoicePick(){
   const box=q('#purchaseInvoicePickTable');if(!box)return;
@@ -5759,7 +5767,7 @@ function renderPurchaseExcelRows(){
   let rows=d.preview||[];
   if(purchaseExcelFilter==='undefined')rows=rows.filter(r=>r.status==='will_create'||r.status==='unmatched');
   const label={matched:'Eşleşti',will_create:'Tanımsız',unmatched:'Tanımsız',invalid:'Hatalı'};
-  const limit=Math.min(rows.length,600);
+  const limit=Math.min(rows.length,350);
   q('#purchasePreviewTable').innerHTML=rows.slice(0,limit).map(r=>{
     const st=r.status==='unmatched'?'will_create':r.status;
     const key=purchaseRowKey(r);
@@ -5812,13 +5820,17 @@ function renderPurchasePreview(d){
   q('#purchaseCostBtn')&&(q('#purchaseCostBtn').disabled=!withCost);
   q('#purchaseStockBtn')&&(q('#purchaseStockBtn').disabled=!stockRows);
   q('#purchaseBothBtn')&&(q('#purchaseBothBtn').disabled=!canGo);
+  try{q('#purchaseAsistBoard')?.scrollIntoView({behavior:'smooth',block:'start'})}catch(_){}
 }
 q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
   const status=q('#purchaseExcelStatus');
+  const btn=q('#purchasePreviewBtn');
   const file=q('#purchaseExcelFile')?.files?.[0];
   if(!file){toast('Önce CSV veya Excel seçin');return}
   try{
-    status.textContent='CSV / Excel okunuyor…';status.className='form-status';
+    if(btn)btn.disabled=true;
+    const mb=(file.size/1024/1024).toFixed(1).replace('.',',');
+    status.textContent=`Önizleniyor… ${file.name} (${mb} MB) — kayıtlar geliyor`;status.className='form-status';
     const fd=new FormData();fd.append('file',file);
     fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'');
     const d=await api('/web-api/admin/purchase-invoice-preview',{method:'POST',body:fd});
@@ -5832,13 +5844,22 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
       q('#purchaseExcelInvoiceNo').value=d.suggestedInvoiceNo;
       q('#purchaseExcelInvoiceNo').placeholder=d.suggestedInvoiceNo;
     }
-    status.textContent=`${d.total} satır · ${invCount} fatura (${ready} uygun) · ${withCost} maliyetli · ${will} tanımsız kart`;
+    status.textContent=`Önizleme hazır · ${d.total} satır · ${invCount} fatura (${ready} uygun) · ${will} tanımsız · ${d.matched||0} eşleşen`;
     if(d.furniture)status.textContent+=` · Mobilya · KDV %10`;
-    if(!d.hasInvoiceNo)status.textContent+=` · sanal fatura: ${d.suggestedInvoiceNo||q('#purchaseExcelInvoiceNo')?.value||'otomatik'}`;
-    if(d.truncated)status.textContent+=` · listede kısmi, aktarımın tamamı ${d.total} satır`;
+    if(d.ms!=null)status.textContent+=` · ${d.ms} ms`;
+    if(!d.hasInvoiceNo)status.textContent+=` · sanal: ${d.suggestedInvoiceNo||q('#purchaseExcelInvoiceNo')?.value||'otomatik'}`;
+    if(d.truncated)status.textContent+=` · tabloda ilk ${(d.preview||[]).length}, aktarımın tamamı ${d.total}`;
+    status.textContent+=` · şimdi “Fatura Ve Stok Aktarım Başlat”`;
     status.className='form-status success';
+    toast(`${d.total} kayıt önizlendi`);
   }catch(e){
-    status.textContent=e.message;status.className='form-status error';
+    const msg=String(e.message||'');
+    status.textContent=/uzun sürdü|502|504|524/i.test(msg)
+      ?'Önizleme zaman aşımı — dosya büyük olabilir. Sayfayı yenileyip tekrar Önizle; hâlâ olursa CSV olarak kaydedip deneyin.'
+      :msg;
+    status.className='form-status error';
+  }finally{
+    if(btn)btn.disabled=false;
   }
 });
 q('#purchaseSelectReadyBtn')?.addEventListener('click',()=>{
@@ -5915,26 +5936,51 @@ async function runPurchaseImport(mode){
   }
   const label=mode==='stock'?'Sadece stok':mode==='cost'?'Sadece maliyet':'Fatura ve stok';
   const invLabel=selectedKeys.length?`${selectedKeys.length} fatura`:'tüm satırlar';
-  if(!confirm(`${label} aktarılsın mı?\n${invLabel} · ${matched} eşleşen · ${will} tanımsız kart${mode!=='stock'?` · ${withCost} maliyetli`:''}\nSonra Geri Al ile silebilirsin.`))return;
+  const totalHint=Number(purchasePreviewData?.total||matched+will||0);
+  if(!confirm(`${label} aktarılsın mı?\n${invLabel} · ${matched} eşleşen · ${will} tanımsız kart${mode!=='stock'?` · ${withCost} maliyetli`:''}${totalHint>250?`\nAkıllı aktarım: ${totalHint} satır parçalar halinde`:''}\nSonra Geri Al ile silebilirsin.`))return;
   try{
     status.textContent='Aktarılıyor…';status.className='form-status';
-    const fd=new FormData();
-    fd.append('file',file);
-    fd.append('mode',mode);
-    fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'Arçelik A.Ş.');
-    fd.append('warehouseId',q('#purchaseExcelWarehouse')?.value||'');
-    fd.append('categoryId',categoryId);
-    fd.append('categoryMap',JSON.stringify(categoryMap));
-    fd.append('pricesIncludeVat',q('#purchaseExcelIncVat')?.checked?'1':'0');
-    fd.append('invoiceNo',q('#purchaseExcelInvoiceNo')?.value||'');
-    if(selectedKeys.length)fd.append('selectedInvoiceNos',JSON.stringify(selectedKeys));
-    const d=await api('/web-api/admin/purchase-invoice-import',{method:'POST',body:fd});
-    const invCount=Number(d.invoiceCount||1);
+    const invoiceNoFixed=String(q('#purchaseExcelInvoiceNo')?.value||purchasePreviewData?.suggestedInvoiceNo||'').trim();
+    const useChunks=totalHint>200;
+    const CHUNK=220;
+    let offset=0;
+    let agg={invoiceCount:0,stockUpdated:0,priceUpdated:0,created:0,total:0,itemCount:0,virtualInvoice:false,invoiceNos:[]};
+    let last=null;
+    do{
+      const fd=new FormData();
+      fd.append('file',file);
+      fd.append('mode',mode);
+      fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'Arçelik A.Ş.');
+      fd.append('warehouseId',q('#purchaseExcelWarehouse')?.value||'');
+      fd.append('categoryId',categoryId);
+      fd.append('categoryMap',JSON.stringify(categoryMap));
+      fd.append('pricesIncludeVat',q('#purchaseExcelIncVat')?.checked?'1':'0');
+      fd.append('invoiceNo',invoiceNoFixed);
+      if(selectedKeys.length)fd.append('selectedInvoiceNos',JSON.stringify(selectedKeys));
+      if(useChunks){
+        fd.append('chunkOffset',String(offset));
+        fd.append('chunkLimit',String(CHUNK));
+      }
+      if(useChunks)status.textContent=`Aktarılıyor… ${Math.min(offset+CHUNK,totalHint)} / ${totalHint}`;
+      last=await api('/web-api/admin/purchase-invoice-import',{method:'POST',body:fd});
+      const inv=last.invoice||{};
+      agg.invoiceCount+=Number(last.invoiceCount||0);
+      agg.stockUpdated+=Number(inv.stockUpdated||0);
+      agg.priceUpdated+=Number(inv.priceUpdated||0);
+      agg.created+=Number(inv.created||0);
+      agg.total+=Number(inv.total||0);
+      agg.itemCount+=Number(inv.itemCount||0);
+      if(inv.virtualInvoice)agg.virtualInvoice=true;
+      if(inv.invoiceNo)agg.invoiceNos.push(inv.invoiceNo);
+      if(!useChunks||!last.chunk||last.chunk.done)break;
+      offset=Number(last.chunk.nextOffset||offset+CHUNK);
+      if(!(offset>0)||offset>=Number(last.chunk.total||totalHint))break;
+    }while(true);
     status.textContent=mode==='both'
-      ?`Fatura+stok tamam · ${invCount} fatura · ${d.invoice.stockUpdated||0} stok · ${d.invoice.priceUpdated||0} maliyet · ${d.invoice.created||0} yeni kart · ${money(d.invoice.total)}`
+      ?`Fatura+stok tamam · ${agg.itemCount} kalem · ${agg.stockUpdated} stok · ${agg.priceUpdated} maliyet · ${agg.created} yeni kart · ${money(agg.total)}`
       :(mode==='stock'
-        ?`Stok tamam · ${invCount} fatura · ${d.invoice.stockUpdated||0} stok · ${d.invoice.created||0} yeni`
-        :`Maliyet tamam · ${invCount} fatura · ${d.invoice.priceUpdated||0} alış · ${d.invoice.created||0} yeni · ${money(d.invoice.total)}`);
+        ?`Stok tamam · ${agg.itemCount} kalem · ${agg.stockUpdated} stok · ${agg.created} yeni`
+        :`Maliyet tamam · ${agg.itemCount} kalem · ${agg.priceUpdated} alış · ${agg.created} yeni · ${money(agg.total)}`);
     status.className='form-status success';
     toast(label+' aktarıldı');
     if(mode==='stock'||mode==='both'){
@@ -5949,7 +5995,11 @@ async function runPurchaseImport(mode){
     q('#purchaseBothBtn')&&(q('#purchaseBothBtn').disabled=true);
     await loadPurchaseInvoices();
   }catch(e){
-    status.textContent=e.message;status.className='form-status error';
+    const msg=String(e.message||'');
+    status.textContent=/uzun sürdü|502|504|524/i.test(msg)
+      ?'Aktarım parçası zaman aşımına uğradı. Tekrar “Fatura Ve Stok Aktarım Başlat” — aynı kodlar ikinci kez kart açmaz, kaldığı yerden devam eder.'
+      :msg;
+    status.className='form-status error';
   }
 }
 q('#purchaseCostBtn')?.addEventListener('click',()=>runPurchaseImport('cost'));
