@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v253 */
+/* ATAK_ADMIN_BUILD=fix-v254 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -5573,9 +5573,11 @@ async function purchaseCreateCategory(){
       try{renderCategoryOptions?.()}catch{}
       purchaseRefreshCategorySelects(cat.id);
       if(q('#purchaseExcelCategory'))q('#purchaseExcelCategory').value=cat.id;
+      // Yeni kategori ürün düzenleme listesinde de görünsün
+      try{await load?.()}catch{}
     }
     if(input)input.value='';
-    toast(`Kategori eklendi: ${cat?.name||name}`);
+    toast(`Kategori eklendi: ${cat?.name||name} — ürünlerde seçilebilir`);
   }catch(e){
     toast('Kategori eklenemedi: '+e.message);
   }finally{
@@ -5592,7 +5594,12 @@ function purchaseApplyDefaultCategoryToRows(){
     const row=(purchasePreviewData?.preview||[]).find(r=>purchaseRowKey(r)===key);
     if(row)row.categoryId=def;
   });
-  toast(n?`${n} yeni ürüne kategori uygulandı`:'Uygulanacak yeni ürün yok');
+  (purchasePreviewData?.preview||[]).forEach(r=>{
+    if(r.status==='will_create'||r.status==='unmatched'){
+      r.categoryId=def;n++;
+    }
+  });
+  toast(n?`${n} ürüne kategori uygulandı`:'Uygulanacak yeni ürün yok');
 }
 function purchaseIsIstikbal(){
   return /istikbal|doğtaş|dogtas/i.test(String(q('#purchaseExcelSupplier')?.value||''));
@@ -5762,6 +5769,9 @@ function renderPurchaseInvoicePick(){
 }
 function renderPurchaseExcelRows(){
   const d=purchasePreviewData;if(!d)return;
+  if(Array.isArray(d.categories)&&d.categories.length){
+    purchaseFillCategories(d.categories);
+  }
   const furniture=Boolean(d.furniture||purchaseIsIstikbal());
   const defCat=String(q('#purchaseExcelCategory')?.value||d.autoCategoryId||'').trim();
   let rows=d.preview||[];
@@ -5771,13 +5781,14 @@ function renderPurchaseExcelRows(){
   q('#purchasePreviewTable').innerHTML=rows.slice(0,limit).map(r=>{
     const st=r.status==='unmatched'?'will_create':r.status;
     const key=purchaseRowKey(r);
-    const selected=String(r.categoryId||defCat||'').trim();
+    const selected=String(r.categoryId||r.suggestedCategoryId||defCat||'').trim();
     if(st==='will_create'&&selected)r.categoryId=selected;
+    const sugHint=r.suggestedCategoryName
+      ?`<small class="muted">Tahmin: ${purchaseEsc(r.suggestedCategoryName)}${r.suggestConfidence?` · %${Math.round(Number(r.suggestConfidence)*100)}`:''}</small>`
+      :'';
     const catCell=st==='will_create'
-      ?(furniture
-        ?`<span class="muted">${purchaseEsc(r.categoryName||d.autoCategoryName||'Mobilya')}</span>`
-        :`<select class="purchase-row-cat" data-purchase-row-cat="${purchaseEsc(key)}">${purchaseCategoryOptionsHtml(selected)}</select>`)
-      :purchaseEsc(r.categoryName||'—');
+      ?`<div class="purchase-cat-cell"><select class="purchase-row-cat" data-purchase-row-cat="${purchaseEsc(key)}">${purchaseCategoryOptionsHtml(selected)}</select>${sugHint}</div>`
+      :`${purchaseEsc(r.categoryName||'—')}${furniture?' · KDV %10':''}`;
     const cls=st==='will_create'?'asist-undef':(st==='matched'?'':'');
     return `<tr class="${cls}">
       <td>${purchaseEsc(label[st]||st)}</td>

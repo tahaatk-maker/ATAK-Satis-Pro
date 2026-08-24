@@ -413,6 +413,8 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .dynamics-preview-row.existing{opacity:.72}
 .dynamics-preview-row.invalid{opacity:.6}
 .purchase-row-cat{min-width:148px;max-width:240px;width:100%;min-height:34px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 8px;font-size:12px}
+.purchase-cat-cell{display:grid;gap:3px;min-width:160px}
+.purchase-cat-cell small{font-size:10px;line-height:1.3}
 .purchase-warehouse-box{display:grid;gap:8px;padding:11px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}
 .purchase-warehouse-head{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;justify-content:space-between}
 .purchase-warehouse-head b{font-size:13px}
