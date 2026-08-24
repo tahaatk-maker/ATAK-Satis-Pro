@@ -1291,7 +1291,7 @@ function renderUsers(){
   qa('[data-user-activate]').forEach(b=>b.onclick=()=>activateUser(b.dataset.userActivate));
   qa('[data-user-disable]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDisable));
   qa('[data-user-del]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDel));
-  loadStaffEmails().catch(()=>{});
+  if(q('#users')?.classList.contains('active'))loadStaffEmails().catch(()=>{});
 }
 function renderStaffEmails(d){
   if(!q('#staffMailTable'))return;
