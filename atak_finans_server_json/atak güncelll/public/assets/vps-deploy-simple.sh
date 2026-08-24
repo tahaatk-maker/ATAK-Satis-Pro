@@ -6,9 +6,9 @@ log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
 log "=== ATAK DEPLOY ==="
-BRANCH="cursor/satis-merkezi-iskonto-prim-bd99"
-EXPECT_V="6.3.152-personel-logo"
-EXPECT_B="fix-v152"
+BRANCH="cursor/fatura-ayri-sekme-474e"
+EXPECT_V="6.3.236-atak-geteinvoices"
+EXPECT_B="fix-v236"
 APP="${APP_DIR:-/root/atak-v10}"
 [ -d /root/atakhome-platform ] && [ ! -f "$APP/server.js" ] && APP=/root/atakhome-platform
 
@@ -108,15 +108,38 @@ process.stdout.write(String(cleared));
   log "   $STORE -> $CLEAR_N alis sifirlandi"
 done
 
-log "6) npm + pm2 + MFA kapali"
+log "5c) store.json yedek / kurtarma"
+recover_store(){
+  local dest="$1/data/store.json"
+  mkdir -p "$1/data"
+  local dest_sz=0
+  [ -f "$dest" ] && dest_sz=$(stat -c%s "$dest" 2>/dev/null || echo 0)
+  if [ "${dest_sz:-0}" -ge 200 ]; then
+    log "   store=ok $dest bytes=$dest_sz"
+    return 0
+  fi
+  local best="" bestsz=0 f sz
+  shopt -s nullglob
+  for f in /root/atak-v10/data/store.json /root/atakhome-platform/data/store.json /root/atak-v10/data/store.json.bak-* /root/atakhome-platform/data/store.json.bak-* /root/atak-v10/data/backups/store-*.json /root/atakhome-platform/data/backups/store-*.json "$1/data/backups/store-"*.json "$1/data/store.json.bak-"*; do
+    [ -f "$f" ] || continue
+    sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
+    [ "${sz:-0}" -ge 200 ] || continue
+    if [ "$sz" -gt "$bestsz" ]; then best="$f"; bestsz="$sz"; fi
+  done
+  shopt -u nullglob
+  [ -n "$best" ] || return 1
+  cp -a "$best" "$dest"
+  log "   store=recovered from=$best bytes=$bestsz"
+}
+recover_store "$APP" || die "store.json eksik: $APP/data/store.json ve yedek yok"
+
+log "6) npm + pm2 + MFA kapali + personel acik"
 cd "$APP"
 touch .env
-if grep -q '^ATAK_MFA_ENABLED=' .env; then
-  sed -i 's/^ATAK_MFA_ENABLED=.*/ATAK_MFA_ENABLED=0/' .env
-else
-  echo 'ATAK_MFA_ENABLED=0' >> .env
-fi
-log "   ATAK_MFA_ENABLED=0 (.env)"
+sed -i -E '/^[[:space:]]*(export[[:space:]]+)?ATAK_MFA_ENABLED[[:space:]]*=/d' .env
+sed -i -E '/^[[:space:]]*(export[[:space:]]+)?ATAK_OWNER_ONLY[[:space:]]*=/d' .env
+printf 'ATAK_MFA_ENABLED=0\nATAK_OWNER_ONLY=0\n' >> .env
+log "   ATAK_MFA_ENABLED=0 ATAK_OWNER_ONLY=0 (.env)"
 if [ ! -d node_modules ]; then
   log "   npm install"
   npm install --omit=dev --no-audit --no-fund || die "npm install fail"
@@ -133,7 +156,7 @@ for P in 3100 3000; do
   fi
 done
 sleep 1
-pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env || die "pm2 start fail"
+ATAK_OWNER_ONLY=0 pm2 start "$APP/server.js" --name atak --cwd "$APP" --update-env || die "pm2 start fail"
 pm2 save || true
 sleep 5
 
@@ -143,6 +166,8 @@ log "LOCAL=$H1"
 echo "$H1" | grep -q "$EXPECT_V" || die "health version yok: $H1"
 echo "$H1" | grep -q "$EXPECT_B" || die "health build yok: $H1"
 echo "$H1" | grep -q '"mfa":false' || log "UYARI: mfa true — .env kontrol"
+echo "$H1" | grep -q '"ownerOnly":true' && die "personel kilidi hala acik (ownerOnly=true)"
+echo "$H1" | grep -q '"storeOk":false' && die "store.json eksik (storeOk=false)"
 log "=== BASARILI $EXPECT_V / $EXPECT_B (MFA kapali) ==="
 echo OK > /tmp/atak-deploy-OK
 log "Log dosyasi: $OUT"

@@ -2,14 +2,15 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Atak Pazarlama · Personel</title>
 <link rel="icon" href="/assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/personel.css?v=fix-v152">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v152">
+<link rel="stylesheet" href="/assets/personel.css?v=fix-v243">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v236">
+<link rel="stylesheet" href="/assets/sip-call.css?v=fix-v236">
 </head>
 <body>
 
@@ -69,6 +70,7 @@
 <small id="roleName"></small>
 </div>
 <button id="homeBtn" type="button">Ana Sayfa</button>
+<button id="invoiceHeaderBtn" class="hidden" type="button">Faturalar</button>
 <button id="logout" type="button">Çıkış</button>
 </header>
 
@@ -89,6 +91,12 @@
 <small>Müşteri → ürün → ödeme</small>
 </button>
 
+<button id="invoiceCard" class="module-card hidden tile-invoice" type="button">
+<span class="mod-ico">📄</span>
+<b>FATURALAR</b>
+<small>Kesilmeyenler, kuyruk, Rapid360</small>
+</button>
+
 <button id="paymentsCard" class="module-card hidden tile-collect" type="button">
 <span class="mod-ico">◎</span>
 <b>TAHSİLAT</b>
@@ -104,7 +112,7 @@
 <button id="stockCard" class="module-card hidden tile-stock" type="button">
 <span class="mod-ico">▣</span>
 <b>STOK / DEPO</b>
-<small>Ürün ve depo stokları</small>
+<small>Stok girişi ve depo bakiyesi</small>
 </button>
 
 <button id="announceCard" class="module-card tile-news" type="button">
@@ -283,6 +291,7 @@
     <p class="soft-hint" id="payDetailHint">Soldan müşteri seçin.</p>
     <div id="payDetailBody" class="hidden">
       <div class="info-box" id="payCustomerBox"></div>
+      <div id="payCommsBox" class="customer-comms-panel"></div>
       <div class="section-title hidden" id="payHavaleWrap">Bekleyen Havale
         <div class="table-wrap" style="margin-top:8px">
           <table><thead><tr><th>Satış</th><th>Banka</th><th>Kalan</th></tr></thead><tbody id="payHavale"></tbody></table>
@@ -327,6 +336,7 @@
 <h2>Satış Merkezi</h2>
 <p id="salesScopeHint">Müşteri → ürün → ödeme. Bayi seçimi Beko / İstikbal ayrımı için önemli.</p>
 </div>
+<button id="rapid360SalesXmlBtn" class="ghost-btn" type="button">Rapid Aktar</button>
 <button id="salesResetBtn" class="ghost-btn" type="button">Yeni Fiş</button>
 </div>
 
@@ -337,10 +347,11 @@
 </nav>
 <div class="pos-banner" id="salesBanner">ADIM 1/3 — Önce müşteri seçin</div>
 <div id="salesStatus" class="status"></div>
+<div id="rapidOpenSalesHint" class="hidden" style="margin:8px 0;padding:10px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4"></div>
 
 <div id="salesStep1" class="pos-step-panel">
   <div class="toolbar sales-customer-search-bar">
-    <input id="customerSearchSale" placeholder="Ad, telefon, VKN veya TCKN yazın — otomatik arar" autocomplete="off">
+    <input id="customerSearchSale" placeholder="Ad, müşteri kodu, telefon, VKN veya TCKN — otomatik arar" autocomplete="off">
     <button id="customerSearchSaleBtn" class="primary-btn" type="button">🔍 Ara</button>
     <button id="salesNewCustomerBtn" class="ghost-btn" type="button">+ Yeni Müşteri</button>
   </div>
@@ -396,6 +407,7 @@
       <label class="field">Bayi<select id="salesDealer"></select></label>
       <label class="field">İskonto %<input id="salesDiscountPct" type="number" min="0" max="100" step="0.01" value="0" inputmode="decimal"></label>
     </div>
+    <p class="hint" id="salesBranchLockHint"></p>
     <div class="sc-grid-2" style="margin-top:8px">
       <label class="field">İskonto ₺<input id="salesDiscountAmount" type="number" min="0" step="0.01" value="0" readonly></label>
       <label class="field">Tarih<input id="salesDate" type="date"></label>
@@ -525,8 +537,8 @@
     <label class="field">Fatura durumu
       <select id="salesInvoiceStatus">
         <option value="not_required" selected>Fatura gerekmiyor</option>
-        <option value="pending">Daha sonra kes (e-Fatura Merkezi’ne düşer)</option>
-        <option value="queue_qnb" data-need-perm="sale_invoice_qnb">QNB Solist ile kes (e-Fatura / e-Arşiv)</option>
+        <option value="pending">Daha sonra kes (Faturalar’a düşer)</option>
+        <option value="queue_qnb" data-need-perm="sale_invoice_qnb">e-Fatura kuyruğuna al</option>
         <option value="issued" data-need-perm="sale_invoice_qnb">Manuel faturalandı</option>
       </select>
     </label>
@@ -565,10 +577,11 @@
         <button class="pos-action-btn preview" id="salesSaveInlineBtn" type="button">ÖNİZLE VE SATIŞI YAP</button>
         <button class="pos-action-btn secondary" id="salesWizardOfferBtn" type="button" data-need-perm="sale_offer">TEKLİF YAZDIR / GÖNDER</button>
       </div>
-      <div class="pos-finish-card invoice" data-need-perm="sale_invoice_qnb">
-        <h4>Fatura Kes</h4>
-        <p>QNB Solist e-Fatura / e-Arşiv kuyruğuna al.</p>
-        <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button">FATURA KES (QNB)</button>
+      <div class="pos-finish-card invoice">
+        <h4>e-Fatura</h4>
+        <p>Kesilmeyen faturalar ve belge. Kuyruk Atak Faturalar sekmesindedir.</p>
+        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">FATURALAR EKRANINI AÇ</button>
+        <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button" data-need-perm="sale_invoice_qnb">FATURA KES</button>
       </div>
     </div>
     <div class="pos-nav">
@@ -609,29 +622,37 @@
       <button id="salesQuickCustomerClose" class="ghost-btn" type="button">Kapat</button>
     </div>
     <form id="salesQuickCustomerForm" class="form-grid">
-      <label class="field">Ad Soyad (Şahıs / Senet) *<input id="qcName" required placeholder="Senet borçlusu"></label>
-      <label class="field">Telefon *<input id="qcPhone" required></label>
-      <label class="field">İl *<input id="qcCity" required></label>
+      <label class="field">Müşteri no<input id="qcCode" placeholder="Boşsa otomatik A000001" autocomplete="off"></label>
+      <label class="field">TC<input id="qcTckn" placeholder="11 haneli TC" inputmode="numeric"></label>
+      <label class="field">Ad *<input id="qcFirstName" required placeholder="Adı" autocomplete="given-name"></label>
+      <label class="field">Soyad *<input id="qcLastName" required placeholder="Soyadı" autocomplete="family-name"></label>
+      <label class="field">Mail<input id="qcEmail" type="email" placeholder="ornek@mail.com"></label>
+      <label class="field">Doğum tarihi<input id="qcBirthDate" type="date"></label>
+      <label class="field" id="qcPhoneWrap">Telefon *<input id="qcPhone" required placeholder="05xx xxx xx xx"></label>
       <label class="field">İlçe *<input id="qcDistrict" required></label>
-      <label class="field wide">Açık adres *<textarea id="qcAddress" rows="2" required></textarea></label>
+      <label class="field">İl *<input id="qcCity" required></label>
+      <label class="field wide">Ev adres *<textarea id="qcAddress" rows="2" required></textarea></label>
       <div class="field wide" id="qcIndividualSec" style="display:grid;gap:8px">
-        <small style="font-weight:800;color:#0b2a4a">Bireysel bilgiler</small>
-        <small class="muted">Senet ve sözleşme bu bilgilere yazılır. TCKN zorunlu değildir.</small>
-        <label class="field" style="margin:0">TCKN<input id="qcTckn" placeholder="11 haneli TCKN" inputmode="numeric"></label>
+        <small style="font-weight:800;color:#0b2a4a">Fatura tipi</small>
+        <small class="muted">Senet şahıs adına kalır. Kurumsal fatura için aşağıdaki alanları doldurun.</small>
         <div style="display:flex;gap:14px;flex-wrap:wrap">
           <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="individual" checked/> Bireysel fatura</label>
           <label style="display:flex;gap:6px;align-items:center;font-weight:700"><input type="radio" name="qcInvoiceTypeRadio" value="corporate"/> Kurumsal fatura</label>
         </div>
       </div>
-      <label class="field hidden wide" id="qcTaxNoWrap">VKN *
+      <label class="field hidden wide" id="qcCompanyWrap">Kurumsal ünvan *<input id="qcCompanyName" placeholder="Otomatik dolar"></label>
+      <label class="field hidden wide" id="qcCompanyAddressWrap">Kurumsal adres<textarea id="qcCompanyAddress" rows="2" placeholder="Firma açık adresi"></textarea></label>
+      <label class="field hidden" id="qcCompanyDistrictWrap">İlçe<input id="qcCompanyDistrict" placeholder="Firma ilçe"></label>
+      <label class="field hidden" id="qcCompanyCityWrap">İl<input id="qcCompanyCity" placeholder="Firma il"></label>
+      <label class="field hidden wide" id="qcTaxNoWrap">Vergi no *
         <span class="vkn-lookup-row">
           <input id="qcTaxNo" placeholder="10 haneli VKN" inputmode="numeric" maxlength="11">
           <button class="ghost-btn" type="button" id="qcVknLookupBtn">Getir</button>
         </span>
         <small class="muted" id="qcVknStatus">10 hane yazınca ünvan otomatik dolar</small>
       </label>
-      <label class="field hidden" id="qcCompanyWrap">Firma ünvanı *<input id="qcCompanyName" placeholder="Otomatik dolar"></label>
       <label class="field hidden" id="qcTaxOfficeWrap">Vergi dairesi *<input id="qcTaxOffice" placeholder="Varsa otomatik dolar"></label>
+      <label class="field hidden" id="qcWorkPhoneWrap">İş telefonu *<input id="qcWorkPhone" placeholder="05xx xxx xx xx"></label>
       <input type="hidden" id="qcInvoiceType" value="individual"/>
       <button class="primary-btn wide" type="submit">Kaydet ve Seç</button>
       <div id="qcStatus" class="status"></div>
@@ -645,13 +666,39 @@
 <div>
 <small class="eyebrow">STOK</small>
 <h2>Stok &amp; Depo</h2>
+<p>Mal gelince soldan fatura no ile giriş yapın. Aynı faturayı aynı ürüne ikinci kez işleyemezsiniz.</p>
 </div>
 </div>
 <div id="stockStatus" class="status">Yükleniyor...</div>
-<div class="table-wrap">
+<form id="staffReceiptForm" class="stock-in-card hidden">
+  <small class="eyebrow">MAL GELDİ</small>
+  <h2>Stok girişi</h2>
+  <p class="note">Adet eklenir. Fatura numarası zorunlu — maliyetler karışmasın diye aynı fatura + aynı ürün tekrar işlenmez.</p>
+  <div class="stock-in-grid">
+    <label class="field">Fatura no *<input id="staffReceiptInvoice" required placeholder="Fatura numarası" autocomplete="off"></label>
+    <label class="field">Depo *<select id="staffReceiptWarehouse" required></select></label>
+    <label class="field">Ürün ara<input id="staffReceiptSearch" placeholder="Kod veya ad yazın"></label>
+    <label class="field">Ürün *<select id="staffReceiptProduct" required></select></label>
+    <label class="field">Gelen adet *<input id="staffReceiptQty" type="number" min="1" value="1" required></label>
+    <label class="field">Birim alış maliyeti *<input id="staffReceiptCost" type="number" min="0.01" step="0.01" required placeholder="KDV dahil"></label>
+  </div>
+  <label class="field">Not<input id="staffReceiptNote" placeholder="Opsiyonel"></label>
+  <p class="status" id="staffReceiptHint"></p>
+  <button class="primary-btn" type="submit">Stoka Ekle</button>
+</form>
+<div class="table-wrap" style="margin-top:16px">
 <table>
 <thead><tr><th>Ürün</th><th>Depo</th><th>Stok</th><th>Kullanılabilir</th></tr></thead>
 <tbody id="stockRows"></tbody>
+</table>
+</div>
+<div class="panel-head" style="margin-top:18px">
+<div><small class="eyebrow">GİRİŞLER</small><h2>Son fatura ile girişler</h2></div>
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Tarih</th><th>Fatura</th><th>Ürün</th><th>Adet</th><th>Maliyet</th><th>Kim</th></tr></thead>
+<tbody id="staffReceiptRows"></tbody>
 </table>
 </div>
 </section>
@@ -694,6 +741,69 @@
     <div id="salesKefilPickerList" class="sales-kefil-picker-list"></div>
   </div>
 </div>
-<script src="/assets/personel.js?v=fix-v152"></script>
+<div id="rapid360SalesXmlModal" class="modal hidden">
+  <div class="modal-card" style="width:min(720px,96vw)">
+    <div class="panel-head">
+      <div>
+        <small class="eyebrow">RAPID360</small>
+        <h2>Rapid Aktar</h2>
+        <p class="muted">Bağlıysa Satışları oku yeter. Robot sunucuda çalışır — kendi tarayıcınızda Rapid360 açmayın. Olmazsa XML yükle.</p>
+      </div>
+      <button class="ghost-btn" id="rapid360SalesXmlClose" type="button">Kapat</button>
+    </div>
+    <div id="rapid360OktaStatus" class="muted">Bağlantı kontrol ediliyor…</div>
+    <div id="rapid360OktaBox" class="hidden" style="margin:10px 0;padding:12px;border:1px solid #c7d2fe;border-radius:10px;background:#eef2ff"></div>
+    <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+      <label class="field">Başlangıç<input id="rapid360SalesStart" type="date"></label>
+      <label class="field">Bitiş<input id="rapid360SalesEnd" type="date"></label>
+    </div>
+    <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+      <label class="field">Mağaza
+        <select id="rapid360SalesStoreFilter">
+          <option value="340334" selected>340334 ATAK</option>
+        </select>
+      </label>
+      <label class="field">Şirket<input id="rapid360SalesCompanyFilter" value="2521" readonly></label>
+    </div>
+    <label class="field">Satış bayisi<select id="rapid360SalesXmlDealer"><option value="atak-beko">Atak Beko</option><option value="atak-istikbal">Atak İstikbal</option></select></label>
+    <div class="toolbar" style="margin-top:10px;gap:8px">
+      <button class="primary-btn" id="rapid360SalesPullBtn" type="button">Satışları oku</button>
+      <button class="ghost-btn" id="rapid360SalesXmlImportBtn" type="button" disabled>Seçilenleri aktar</button>
+    </div>
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer;font-weight:700">XML dosyasından yedek</summary>
+      <p class="muted" style="margin:8px 0">Canlı çekim olmazsa Rapid’te XML indirip buraya seçin.</p>
+      <div id="rapid360SalesXmlDrop" style="margin-top:8px;padding:14px;border:2px dashed #94a3b8;border-radius:10px;background:#f8fafc">
+        <label class="field">XML dosyası<input id="rapid360SalesXmlFile" type="file" accept=".xml,.xlsx,.xls,text/xml,application/xml"></label>
+      </div>
+      <label class="field" style="margin-top:8px">veya XML yapıştırın<textarea id="rapid360SalesXmlPaste" rows="3" placeholder="&lt;Satislar&gt; … XML buraya"></textarea></label>
+      <div class="toolbar" style="margin-top:8px;gap:8px">
+        <button class="ghost-btn" id="rapid360SalesXmlPreviewBtn" type="button">XML oku</button>
+        <button class="ghost-btn" id="rapid360OktaConnectBtn" type="button">Yalnız Rapid360 aç</button>
+      </div>
+    </details>
+    <div id="rapid360SalesXmlStatus" class="status"></div>
+    <div id="rapid360NewProductsBox" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+      <b>Tüm Ürünler’de yok — kategori seçilip eklenecek</b>
+      <p class="muted" style="margin:6px 0 8px">Satıştaki bu ürünler katalogda yok. Kategorisini seçin; aktarınca Tüm Ürünler’e eklenir.</p>
+      <label class="field">Varsayılan kategori<select id="rapid360NewProductCategory"><option value="">Satır satır seç…</option></select></label>
+      <button type="button" class="ghost-btn" id="rapid360ApplyCategoryBtn" style="margin-top:6px">Tüm yenilere uygula</button>
+      <div class="table-wrap" style="margin-top:8px;max-height:180px;overflow:auto">
+        <table><thead><tr><th>Ürün</th><th>Kategori</th></tr></thead><tbody id="rapid360NewProductsTable"></tbody></table>
+      </div>
+    </div>
+    <div id="rapid360ImportedBox" class="hidden" style="margin-top:10px;padding:10px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4">
+      <b>Satışa düştü — Satışı Yap ile tamamlayın</b>
+      <p class="muted" style="margin:6px 0 0">Kasa ve stok henüz değişmedi. İçeri girip fiyat / ödeme / müşteri bilgisini düzeltebilirsiniz.</p>
+      <div id="rapid360ImportedList" style="margin-top:8px"></div>
+    </div>
+    <div id="rapid360SalesSelectHint" class="muted" style="margin-top:8px"></div>
+    <div class="table-wrap" style="margin-top:10px;max-height:280px;overflow:auto">
+      <table><thead><tr><th><input type="checkbox" id="rapid360SalesSelectAll"></th><th>Sipariş</th><th>Müşteri</th><th>Tutar</th><th>Durum</th></tr></thead><tbody id="rapid360SalesXmlTable"></tbody></table>
+    </div>
+  </div>
+</div>
+<script src="/assets/sip-call.js?v=fix-v236"></script>
+<script src="/assets/personel.js?v=fix-v243"></script>
 </body>
 </html>

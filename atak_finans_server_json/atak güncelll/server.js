@@ -13,28 +13,72 @@ const path = require('path');
 const { runBekoSync } = require('./lib/beko-sync');
 const qnbSolist = require('./qnb-solist-adapter');
 const customerExcel = require('./customer-excel-import');
+const invoicePrint = require('./lib/invoice-print');
+const branchLock = require('./lib/branch-lock');
+const customerComms = require('./lib/customer-comms');
+const salaryProrate = require('./lib/salary-prorate');
+const autoBackupLib = require('./lib/auto-backup');
+const rapid360 = require('./lib/rapid360-einvoice');
+const atakGetE = require('./lib/atak-geteinvoices');
+const rapidSalesXml = require('./lib/rapid360-sales-xml');
+const rapidSalesFetch = require('./lib/rapid360-sales-fetch');
+const rapidSalesCatalog = require('./lib/rapid360-sales-catalog');
+const rapidSalesBridge = require('./lib/rapid360-sales-bridge');
+const rapidRobot = require('./lib/rapid360-robot');
+const d365Auth = require('./lib/rapid360-d365-auth');
+const personName = require('./lib/person-name');
+const customerCode = require('./lib/customer-code');
+const customerDedupe = require('./lib/customer-dedupe');
+const customerSearch = require('./lib/customer-search');
+const stockCost = require('./lib/stock-cost');
 
 const app = express();
 const ROOT = __dirname;
 function loadEnvFile(){
   const p=path.join(ROOT,'.env');
   if(!fs.existsSync(p))return;
-  for(const line of fs.readFileSync(p,'utf8').split(/\n/)){
-    const t=String(line||'').trim();
+  // ATAK_OWNER_ONLY / MFA: .env son değer kazanır (PM2 dump'taki 1'i ezmek için)
+  const forceKeys=new Set(['ATAK_OWNER_ONLY','ATAK_MFA_ENABLED']);
+  for(const rawLine of fs.readFileSync(p,'utf8').replace(/^\uFEFF/,'').split(/\n/)){
+    let t=String(rawLine||'').trim();
     if(!t||t.startsWith('#'))continue;
-    const i=t.indexOf('='); if(i<1)continue;
-    const key=t.slice(0,i).trim();
-    if(!/^[A-Z0-9_]+$/.test(key) || process.env[key]!=null)continue;
-    let val=t.slice(i+1).trim();
+    t=t.replace(/^export\s+/,'');
+    const m=t.match(/^([A-Z0-9_]+)\s*=\s*(.*)$/);
+    if(!m)continue;
+    const key=m[1];
+    let val=String(m[2]||'').trim();
     if((val.startsWith('"')&&val.endsWith('"'))||(val.startsWith("'")&&val.endsWith("'")))val=val.slice(1,-1);
+    if(process.env[key]!=null && !forceKeys.has(key))continue;
     process.env[key]=val;
   }
 }
 loadEnvFile();
 const PORT = Number(process.env.PORT || 3100);
-const STORE_PATH = path.join(ROOT, 'data', 'store.json');
+const STORE_FILE = 'store.json';
+const STORE_PATH = path.join(ROOT, 'data', STORE_FILE);
+const BACKUP_DIR = path.join(ROOT, 'data', 'backups');
+const autoBackup = autoBackupLib.create({
+  storePath: STORE_PATH,
+  backupDir: BACKUP_DIR
+});
+const STORE_SEARCH_DIRS = Array.from(new Set([
+  path.join(ROOT, 'data'),
+  BACKUP_DIR,
+  '/root/atak-v10/data',
+  '/root/atak-v10/data/backups',
+  '/root/atakhome-platform/data',
+  '/root/atakhome-platform/data/backups',
+]));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const dynamicsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const customerExcelUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+function customerExcelFile(req,res,next){
+  customerExcelUpload.single('file')(req,res,err=>{
+    if(!err)return next();
+    const tooBig=err.code==='LIMIT_FILE_SIZE';
+    return res.status(400).json({error:tooBig?'Excel 50 MB’dan küçük olmalı. Dosyayı xlsx/csv olarak kaydedip tekrar deneyin.':'Excel yüklenemedi: '+(err.message||'dosya hatası')});
+  });
+}
 const trainingUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 80 * 1024 * 1024 } });
 const COMMERCE_SYNC_URL = process.env.COMMERCE_SYNC_URL || 'http://127.0.0.1:3200/api/sync/beko';
 /** Resmi satıcı bilgileri — senet + satış sözleşmesinde sabit */
@@ -45,8 +89,8 @@ const ATAK_COMPANY = {
   taxNo: '0940148218',
   address: 'Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul'
 };
-/** Varsayılan: sadece sahip erişir. Personeli açmak için .env içinde ATAK_OWNER_ONLY=0 */
-function ownerOnlyEnabled(){ return String(process.env.ATAK_OWNER_ONLY ?? '1').trim() !== '0'; }
+/** Varsayılan: personel girişi açık. Sadece yönetici için ATAK_OWNER_ONLY=1 */
+function ownerOnlyEnabled(){ return String(process.env.ATAK_OWNER_ONLY ?? '0').trim() === '1'; }
 function ownerUsernames(){
   return String(process.env.ATAK_OWNER_USERNAMES || 'admin,taha')
     .split(/[,;\s]+/).map(x=>x.trim().toLocaleLowerCase('tr-TR')).filter(Boolean);
@@ -92,7 +136,24 @@ function loginRateLimited(key=''){
   loginFailMap.set(k,row);
   return row.n>10;
 }
+function loginBlocked(key=''){
+  const k=String(key||'unknown');
+  const row=loginFailMap.get(k);
+  if(!row)return false;
+  if(Date.now()-row.t>15*60*1000){ loginFailMap.delete(k); return false; }
+  return row.n>10;
+}
 function clearLoginFails(key=''){ loginFailMap.delete(String(key||'unknown')); }
+const dmsOkMap=new Map();
+function dmsTooMany(ip=''){
+  const k=String(ip||'unknown');
+  const now=Date.now();
+  let row=dmsOkMap.get(k);
+  if(!row||now-row.t>60*1000)row={n:0,t:now};
+  row.n+=1;
+  dmsOkMap.set(k,row);
+  return row.n>120;
+}
 
 /** KDV: beyaz eşya %20; X30 TR / yazar kasa %10; İstikbal mobilya %10 */
 function resolveVatRate(p={}){
@@ -113,6 +174,35 @@ function resolveVatRate(p={}){
   return 20;
 }
 
+function brandNameKey(name){
+  return String(name||'').trim().toLocaleLowerCase('tr-TR');
+}
+function collapseDuplicateBrands(list){
+  const rows=Array.isArray(list)?list:[];
+  const keep=[];
+  const seen=new Map();
+  rows.forEach((b,i)=>{
+    const name=String(b&&b.name||'').trim()||'Marka';
+    const key=brandNameKey(name);
+    const row={
+      id:String(b&&b.id||slug(name)||crypto.randomUUID()),
+      name,
+      active:!b||b.active!==false,
+      sort:Number(b&&b.sort!=null?b.sort:i)||0,
+      logo:String(b&&b.logo||'')
+    };
+    if(key==='istikbal')row.id='istikbal';
+    if(seen.has(key)){
+      const prev=seen.get(key);
+      if(!prev.logo&&row.logo)prev.logo=row.logo;
+      if(row.id==='istikbal')prev.id='istikbal';
+      return;
+    }
+    seen.set(key,row);
+    keep.push(row);
+  });
+  return keep;
+}
 function ensureStore(store) {
   store.settings ||= { siteName:'Atak Home', tagline:'Eviniz için her şey', whatsapp:'905433585060', phone:'02122232871', email:'tarabyabeko@gmail.com', address:ATAK_COMPANY.address };
   // Resmi şirket bilgileri (senet + sözleşme)
@@ -151,13 +241,15 @@ function ensureStore(store) {
     fieldMessage:'message',
     extraJson:'',
     bodyTemplate:'',
-    overdueTemplate:'Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71'
+    overdueTemplate:'Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71',
+    missedTemplate:'Sayin {ad}, sizi aradik ancak ulasamadik. Atak Pazarlama: {telefon}'
   };
   // Eski Corvass-only kayıtları genel altyapıya taşı
   if(store.settings.sms && !store.settings.sms.provider){
     store.settings.sms.provider=/corvass/i.test(String(store.settings.sms.endpoint||''))?'corvass':'generic';
   }
   store.smsLogs = Array.isArray(store.smsLogs) ? store.smsLogs : [];
+  customerComms.ensure(store);
   store.trainingVideos = Array.isArray(store.trainingVideos) ? store.trainingVideos : [];
   store.brands = Array.isArray(store.brands) ? store.brands : [];
   store.sales = Array.isArray(store.sales) ? store.sales : [];
@@ -172,6 +264,7 @@ function ensureStore(store) {
   store.productStocks = Array.isArray(store.productStocks) ? store.productStocks : [];
   store.financeAccounts = Array.isArray(store.financeAccounts) ? store.financeAccounts : [];
   store.customers = Array.isArray(store.customers) ? store.customers : [];
+  if(!Number.isFinite(Number(store.customerCodeSeq)) || Number(store.customerCodeSeq) < 0) store.customerCodeSeq = 0;
   store.financeTransactions = Array.isArray(store.financeTransactions) ? store.financeTransactions : [];
   store.receivables = Array.isArray(store.receivables) ? store.receivables : [];
   store.promissoryNotes = Array.isArray(store.promissoryNotes) ? store.promissoryNotes : [];
@@ -179,7 +272,7 @@ function ensureStore(store) {
   // Senet/sözleşmede "Atak Home" yasak — her zaman resmi ünvan
   store.promissorySettings.creditorName = ATAK_COMPANY.legalName;
   if(!Number.isFinite(Number(store.promissorySettings.nextSenetNo))||Number(store.promissorySettings.nextSenetNo)<1)store.promissorySettings.nextSenetNo=1;
-  store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:ATAK_COMPANY.taxNo,companyTitle:ATAK_COMPANY.legalName,senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:'',efaturaSeries:'ATK',earsivSeries:'ATA',efaturaNext:1,earsivNext:1};
+  store.invoiceIntegration ||= {provider:'qnb-solist',environment:'test',enabled:false,companyVkn:ATAK_COMPANY.taxNo,companyTitle:ATAK_COMPANY.legalName,companyTaxOffice:ATAK_COMPANY.taxOffice,companyAddress:ATAK_COMPANY.address,companyCity:'İstanbul',companyDistrict:'Sarıyer',companyPhone:'',companyEmail:'',mersisNo:'',senderAlias:'',webServiceUrl:'',username:'',password:'',draftMode:true,autoDetectType:true,gbAlias:'',pkAlias:'',efaturaSeries:'ATK',earsivSeries:'ATA',efaturaNext:1,earsivNext:1};
   if(store.invoiceIntegration && !store.invoiceIntegration.provider)store.invoiceIntegration.provider='qnb-solist';
   if(!String(store.invoiceIntegration.companyVkn||'').trim())store.invoiceIntegration.companyVkn=ATAK_COMPANY.taxNo;
   if(!String(store.invoiceIntegration.companyTitle||'').trim())store.invoiceIntegration.companyTitle=ATAK_COMPANY.legalName;
@@ -188,6 +281,24 @@ function ensureStore(store) {
   if(!String(store.invoiceIntegration.earsivSeries||'').trim())store.invoiceIntegration.earsivSeries='ATA';
   if(!Number.isFinite(Number(store.invoiceIntegration.efaturaNext))||Number(store.invoiceIntegration.efaturaNext)<1)store.invoiceIntegration.efaturaNext=1;
   if(!Number.isFinite(Number(store.invoiceIntegration.earsivNext))||Number(store.invoiceIntegration.earsivNext)<1)store.invoiceIntegration.earsivNext=1;
+  store.invoiceIntegration.rapid360 = store.invoiceIntegration.rapid360 && typeof store.invoiceIntegration.rapid360==='object' ? store.invoiceIntegration.rapid360 : {};
+  {
+    const rz=store.invoiceIntegration.rapid360;
+    const wasChairman=rapid360.isChairmanMuleConsume(rz);
+    if(wasChairman){
+      store.invoiceIntegration.rapid360=rapid360.sanitizeConsumeConfig(rz);
+      store.__disableChairmanConsume=true;
+    }
+    if(!String(store.invoiceIntegration.rapid360.systemId||'').trim())store.invoiceIntegration.rapid360.systemId='1';
+    if(store.invoiceIntegration.rapid360.addReturns==null)store.invoiceIntegration.rapid360.addReturns=true;
+    if(!String(store.invoiceIntegration.rapid360.salesStore||'').trim())store.invoiceIntegration.rapid360.salesStore='340334';
+    if(!String(store.invoiceIntegration.rapid360.salesCompany||'').trim())store.invoiceIntegration.rapid360.salesCompany='2521';
+  }
+  {
+    const seeded=atakGetE.ensureConfig(store.invoiceIntegration.atakDms, store.invoiceIntegration.rapid360);
+    store.invoiceIntegration.atakDms=seeded.cfg;
+    if(seeded.generated)store.__atakDmsSeeded=true;
+  }
 
   store.dealerSettings ||= [
     {id:'atak-beko',name:'Atak Beko',marginDividePct:25,commissionPct:0.50,cashMaxDiscountPct:10,cardMaxDiscountPct:5,active:true},
@@ -197,8 +308,14 @@ function ensureStore(store) {
   store.cancellationRequests = Array.isArray(store.cancellationRequests) ? store.cancellationRequests : [];
   store.invoiceQueue = Array.isArray(store.invoiceQueue) ? store.invoiceQueue : [];
   store.invoiceInbox = Array.isArray(store.invoiceInbox) ? store.invoiceInbox : [];
+  {
+    const dropAll=!!store.__disableChairmanConsume;
+    const purged=rapid360.purgeForeignInbox(store,{dropAllRapid360:dropAll});
+    if(purged.removed>0)store.__purgeChairmanInbox=purged.removed;
+  }
   store.invoiceAppResponses = Array.isArray(store.invoiceAppResponses) ? store.invoiceAppResponses : [];
   store.purchaseInvoices = Array.isArray(store.purchaseInvoices) ? store.purchaseInvoices : [];
+  store.stockReceipts = Array.isArray(store.stockReceipts) ? store.stockReceipts : [];
   store.suppliers = Array.isArray(store.suppliers) ? store.suppliers : [];
   if(!store.suppliers.length){
     store.suppliers.push(
@@ -234,7 +351,7 @@ function ensureStore(store) {
     store.brands.push({id:'istikbal',name:'İstikbal',active:true,sort:(store.brands||[]).length,logo:''});
   }
   store.categories = store.categories.map((c,i)=>({ id:c.id||slug(c.name)||crypto.randomUUID(), name:c.name||'Kategori', active:c.active!==false, sort:Number(c.sort??i), description:c.description||'' }));
-  store.brands = store.brands.map((b,i)=>({ id:b.id||slug(b.name)||crypto.randomUUID(), name:b.name||'Marka', active:b.active!==false, sort:Number(b.sort??i), logo:b.logo||'' }));
+  store.brands = collapseDuplicateBrands(store.brands);
   // İstikbal ürünleri yanlışlıkla "Diğer"de kaldıysa → Mobilya
   const mobilyaCat=(store.categories||[]).find(c=>c.id==='mobilya'||String(c.name||'').toLocaleLowerCase('tr-TR')==='mobilya');
   const mobilyaId=mobilyaCat?.id||'mobilya';
@@ -298,13 +415,70 @@ function ensureStore(store) {
     if(!u)continue;
     if(!u.storeId && st.storeId)u.storeId=st.storeId;
     if(!(Number(u.salaryMonthly||0)>0) && Number(st.salaryMonthly||0)>0)u.salaryMonthly=st.salaryMonthly;
+    if(!u.hireDate && st.hireDate)u.hireDate=salaryProrate.normalizeHireDate(st.hireDate);
     st.userId=u.id;
     if(u.storeId)st.storeId=u.storeId;
     if(Number(u.salaryMonthly||0)>0)st.salaryMonthly=u.salaryMonthly;
+    if(u.hireDate)st.hireDate=salaryProrate.normalizeHireDate(u.hireDate);
   }
   return store;
 }
+function storeFileSize(p){
+  try{
+    const st=fs.statSync(p);
+    return st.isFile()?st.size:0;
+  }catch{ return 0; }
+}
+function listStoreCandidates(){
+  const out=[];
+  for(const dir of STORE_SEARCH_DIRS){
+    if(!fs.existsSync(dir))continue;
+    let names=[];
+    try{ names=fs.readdirSync(dir); }catch{ continue; }
+    for(const name of names){
+      if(name===STORE_FILE || name.startsWith(STORE_FILE+'.bak-') || /^store-\d{8}-\d{6}-/.test(name)) out.push(path.join(dir,name));
+    }
+  }
+  return out;
+}
+function bestExistingStorePath(){
+  let best='';
+  let bestSize=-1;
+  let bestMtime=0;
+  for(const p of listStoreCandidates()){
+    try{
+      const st=fs.statSync(p);
+      if(!st.isFile() || st.size<200)continue;
+      if(st.size>bestSize || (st.size===bestSize && st.mtimeMs>bestMtime)){
+        best=p; bestSize=st.size; bestMtime=st.mtimeMs;
+      }
+    }catch{}
+  }
+  return best;
+}
+function recoverStoreFile(){
+  if(storeFileSize(STORE_PATH)>=200)return true;
+  const src=bestExistingStorePath();
+  if(!src)return false;
+  fs.mkdirSync(path.dirname(STORE_PATH),{recursive:true});
+  if(path.resolve(src)!==path.resolve(STORE_PATH)){
+    fs.copyFileSync(src,STORE_PATH);
+    console.warn('[store] recovered from',src,'->',STORE_PATH);
+  }
+  return storeFileSize(STORE_PATH)>=200;
+}
+let storeMem=null;
+let storeMemMtime=-1;
+function storeFileMtime(){
+  try{return fs.statSync(STORE_PATH).mtimeMs}catch(_){return -1}
+}
 function readStore(){
+  if(storeFileSize(STORE_PATH)<200) recoverStoreFile();
+  if(storeFileSize(STORE_PATH)<200){
+    throw new Error('store.json eksik: '+STORE_PATH+' (yedek kopya da bulunamadi)');
+  }
+  const mtime=storeFileMtime();
+  if(storeMem&&storeMemMtime===mtime)return storeMem;
   const s=ensureStore(JSON.parse(fs.readFileSync(STORE_PATH,'utf8')));
   if(s.__istikbalCategoryFixed){
     const n=s.__istikbalCategoryFixed;
@@ -326,15 +500,56 @@ function readStore(){
       console.log(`[mobilya] ${n} ürün alış maliyeti sıfırlandı`);
     }catch(e){console.error('[mobilya] alış sıfırlama kaydı yazılamadı',e.message)}
   }
+  if(s.__atakDmsSeeded){
+    delete s.__atakDmsSeeded;
+    try{
+      const t=`${STORE_PATH}.tmp`;
+      fs.writeFileSync(t,JSON.stringify(s,null,2),'utf8');
+      fs.renameSync(t,STORE_PATH);
+      console.log('[atak-dms] geteinvoices anahtarları üretildi');
+    }catch(e){console.error('[atak-dms] anahtar kaydı yazılamadı',e.message)}
+  }
+  if(s.__disableChairmanConsume){
+    delete s.__disableChairmanConsume;
+    try{
+      const t=`${STORE_PATH}.tmp`;
+      fs.writeFileSync(t,JSON.stringify(s,null,2),'utf8');
+      fs.renameSync(t,STORE_PATH);
+      console.log('[rapid360] başkan Rapid360 tüketimi kapatıldı');
+    }catch(e){console.error('[rapid360] başkan hesabı kaydı yazılamadı',e.message)}
+  }
+  if(s.__purgeChairmanInbox!=null){
+    const n=s.__purgeChairmanInbox;
+    delete s.__purgeChairmanInbox;
+    try{
+      const t=`${STORE_PATH}.tmp`;
+      fs.writeFileSync(t,JSON.stringify(s,null,2),'utf8');
+      fs.renameSync(t,STORE_PATH);
+      console.log(`[rapid360] yabancı gelen fatura silindi: ${n}`);
+    }catch(e){console.error('[rapid360] gelen kutu temizliği yazılamadı',e.message)}
+  }
+  storeMem=s;
+  storeMemMtime=storeFileMtime();
   return s;
 }
 function writeStore(store){
+  if(store){
+    delete store.__custSearch;
+    delete store.__balMap;
+  }
   const clean={...ensureStore(store)};
   delete clean.__istikbalCategoryFixed;
   delete clean.__mobilyaPurchaseCleared;
+  delete clean.__atakDmsSeeded;
+  delete clean.__disableChairmanConsume;
+  delete clean.__purgeChairmanInbox;
+  delete clean.__custSearch;
+  delete clean.__balMap;
   const t=`${STORE_PATH}.tmp`;
-  fs.writeFileSync(t,JSON.stringify(clean,null,2),'utf8');
+  fs.writeFileSync(t,JSON.stringify(clean),'utf8');
   fs.renameSync(t,STORE_PATH);
+  storeMem=store||clean;
+  storeMemMtime=storeFileMtime();
 }
 function normalizeNumber(value){
   if(value===null||value===undefined||value==='') return 0;
@@ -464,7 +679,7 @@ const PERMISSION_CATALOG=[
   {id:'screen_manager_approvals',name:'Yönetici Onayları',group:'Finans & Cari'},
   {id:'screen_profit',name:'Kâr & Maliyet',group:'Finans & Cari'},
   {id:'screen_reports',name:'Raporlar',group:'Finans & Cari'},
-  {id:'screen_invoice_center',name:'e-Fatura Merkezi',group:'Finans & Cari'},
+  {id:'screen_invoice_center',name:'Faturalar',group:'Finans & Cari'},
   {id:'orders_manage',name:'Satış kaydı yap (POS API)',group:'Satış işlemleri'},
   {id:'sale_docs',name:'Sözleşme / Senet bas',group:'Satış işlemleri'},
   {id:'sale_offer',name:'Teklif WhatsApp / PDF',group:'Satış işlemleri'},
@@ -474,6 +689,7 @@ const PERMISSION_CATALOG=[
   {id:'products_manage',name:'Ürün yönet',group:'Ürün & Stok'},
   {id:'stock_view',name:'Stok görüntüle',group:'Ürün & Stok'},
   {id:'stock_manage',name:'Stok yönet',group:'Ürün & Stok'},
+  {id:'screen_stock_in',name:'Stok girişi (fatura no ile)',group:'Ürün & Stok'},
   {id:'customers_manage',name:'Müşteri kartı düzenle',group:'Finans işlemleri'},
   {id:'finance_view',name:'Finans verisi görüntüle',group:'Finans işlemleri'},
   {id:'finance_manage',name:'Finans yönet (tahsilat/masraf)',group:'Finans işlemleri'},
@@ -492,7 +708,7 @@ const ROLE_PRESETS={
   admin:{name:'Yönetici',permissions:[
     'dashboard_view','products_manage','marketing_manage','finance_manage','sync_manage','users_manage',
     'orders_manage','sale_docs','sale_offer','sale_invoice_qnb','sale_deduct_stock','customers_manage','invoices_manage',
-    ...STAFF_DEFAULT_SCREENS,'screen_staff_sales_report','screen_manager_approvals','screen_profit','screen_reports','stock_manage','foundation_manage','settings_manage','reports_view'
+    ...STAFF_DEFAULT_SCREENS,'screen_staff_sales_report','screen_manager_approvals','screen_profit','screen_reports','stock_manage','screen_stock_in','foundation_manage','settings_manage','reports_view'
   ]},
   super_admin:{name:'Süper Admin',permissions:['*']},
   sales:{name:'Satış Personeli',permissions:[
@@ -501,7 +717,7 @@ const ROLE_PRESETS={
     ...STAFF_DEFAULT_SCREENS
     // Personel Satış Raporu + Yönetici Onayları varsayılan KAPALI — istenirse kullanıcı kartından açılır
   ]},
-  warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','stock_view','orders_view','screen_sales_tracking']},
+  warehouse:{name:'Depo',permissions:['dashboard_view','products_view','stock_manage','stock_view','screen_stock_in','orders_view','screen_sales_tracking']},
   accounting:{name:'Muhasebe',permissions:[
     'dashboard_view','finance_manage','finance_view','orders_view','invoices_manage','sale_invoice_qnb',
     'screen_finance','screen_uninvoiced','screen_customer_payments','screen_money_center','screen_customers','screen_invoice_center','screen_my_sales','screen_profit','screen_reports'
@@ -519,6 +735,38 @@ function sanitizePermissions(list,role){
 }
 function staffCanInvoice(req){
   return actorHasPermission(req,'sale_invoice_qnb')||actorHasPermission(req,'finance_manage')||actorHasPermission(req,'invoices_manage');
+}
+const INVOICE_CENTER_VIEW_PERMS=[
+  'screen_invoice_center','invoices_manage','sale_invoice_qnb','screen_uninvoiced','finance_manage',
+  'orders_manage','screen_sales_center'
+];
+function staffRoleGetsInvoiceScreen(role){
+  return ['sales','accounting','admin','owner','super_admin'].includes(String(role||'').toLowerCase());
+}
+function staffListGetsInvoiceScreen(permissions,role){
+  const p=Array.isArray(permissions)?permissions:[];
+  if(p.includes('*')||p.includes('screen_invoice_center'))return false;
+  if(staffRoleGetsInvoiceScreen(role))return true;
+  return p.includes('orders_manage')||p.includes('screen_sales_center')||p.includes('screen_uninvoiced')
+    ||p.includes('finance_manage')||p.includes('invoices_manage')||p.includes('sale_invoice_qnb')||p.includes('finance_view');
+}
+function grantInvoiceScreenOnList(permissions,role){
+  const p=Array.isArray(permissions)?permissions.slice():[];
+  if(p.includes('*')||p.includes('screen_invoice_center'))return p;
+  if(staffListGetsInvoiceScreen(p,role))p.push('screen_invoice_center');
+  return p;
+}
+function grantStaffInvoiceScreenInPlace(user){
+  if(!user)return user;
+  user.permissions=grantInvoiceScreenOnList(user.permissions,user.role);
+  return user;
+}
+function staffCanViewInvoiceCenter(req){
+  return INVOICE_CENTER_VIEW_PERMS.some(p=>actorHasPermission(req,p));
+}
+function staffSeesAllInvoices(req){
+  if(!isStaffPortalReq(req))return true;
+  return actorIsManager(req)||actorHasPermission(req,'invoices_manage')||actorHasPermission(req,'finance_manage');
 }
 function staffCanDeductStock(req){
   return actorHasPermission(req,'sale_deduct_stock')||actorHasPermission(req,'stock_manage');
@@ -669,6 +917,7 @@ function buildSalesCiro(salesRows){
   const brand={beko:0,istikbal:0,other:0,total:0,count:0};
   const byPerson=new Map();
   for(const t of salesRows||[]){
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const amount=saleAmount(t);
     const key=dealerBrandKey(t);
     brand[key]=(brand[key]||0)+amount;
@@ -722,7 +971,7 @@ function isStaffPortalReq(req){
 function buildMonthSalesPrim(salesRows=[],pendingMap=new Map()){
   const round=n=>Math.round(Number(n||0)*100)/100;
   let gross=0,grossCount=0,cancelled=0,cancelledCount=0,returned=0,returnedCount=0,net=0,netCount=0,prim=0,primLost=0;
-  const rows=(salesRows||[]).map(t=>{
+  const rows=(salesRows||[]).filter(t=>!rapidSalesCatalog.isOpenRapidSale(t)).map(t=>{
     const amount=saleAmount(t);
     const commission=Number(t.commissionAmount||0);
     const isCancelled=Boolean(t.cancelled);
@@ -782,7 +1031,9 @@ function publicUser(user,store){
     role:user.role,roleName:ROLE_PRESETS[user.role]?.name||user.role,
     permissions:user.permissions||[],active:user.active!==false,
     storeId:user.storeId||'',storeName:branch?.name||'',
+    brand:branchLock.personBrand({id:user.id,role:user.role,storeId:user.storeId},store?.stores||[]),
     salaryMonthly:Math.round(Number(user.salaryMonthly||0)*100)/100,
+    hireDate:salaryProrate.normalizeHireDate(user.hireDate),
     createdAt:user.createdAt||'',updatedAt:user.updatedAt||''
   };
 }
@@ -842,6 +1093,7 @@ function promoteStaffToUsers(s){
     if(u){
       if(!u.storeId && st.storeId)u.storeId=st.storeId;
       if(!(Number(u.salaryMonthly||0)>0) && Number(st.salaryMonthly||0)>0)u.salaryMonthly=st.salaryMonthly;
+      if(!u.hireDate && st.hireDate)u.hireDate=salaryProrate.normalizeHireDate(st.hireDate);
       if(!u.passwordHash && st.passwordHash)u.passwordHash=st.passwordHash;
       if(u.active===undefined)u.active=st.active!==false;
       st.userId=u.id;
@@ -861,6 +1113,7 @@ function promoteStaffToUsers(s){
       passwordHash:st.passwordHash||'',
       storeId:String(st.storeId||''),
       salaryMonthly:Math.round(Number(st.salaryMonthly||0)*100)/100,
+      hireDate:salaryProrate.normalizeHireDate(st.hireDate),
       createdAt:st.createdAt||new Date().toISOString(),
       updatedAt:new Date().toISOString(),
       promotedFromStaff:true
@@ -882,6 +1135,7 @@ function syncStaffFromUser(s,user){
     role:String(user.role||'staff'),
     active:user.active!==false,
     salaryMonthly:Math.round(Number(user.salaryMonthly||0)*100)/100,
+    hireDate:salaryProrate.normalizeHireDate(user.hireDate),
     updatedAt:new Date().toISOString()
   };
   if(row){
@@ -901,8 +1155,9 @@ function peopleForPayroll(s){
     const branch=(s.stores||[]).find(st=>String(st.id)===String(u.storeId||''));
     out.push({
       id:u.id,name:u.name,username:u.username,storeId:u.storeId||'',
-      storeName:branch?.name||'',active:true,
-      salaryMonthly:Math.round(Number(u.salaryMonthly||0)*100)/100
+      storeName:branch?.name||'',active:true,role:u.role||'',
+      salaryMonthly:Math.round(Number(u.salaryMonthly||0)*100)/100,
+      hireDate:salaryProrate.normalizeHireDate(u.hireDate)
     });
   }
   for(const st of (s.staff||[]).filter(x=>x.active!==false)){
@@ -912,8 +1167,9 @@ function peopleForPayroll(s){
     const branch=(s.stores||[]).find(v=>String(v.id)===String(st.storeId||''));
     out.push({
       id:st.id,name:st.name,username:st.username,storeId:st.storeId||'',
-      storeName:branch?.name||'',active:true,
-      salaryMonthly:Math.round(Number(st.salaryMonthly||0)*100)/100
+      storeName:branch?.name||'',active:true,role:st.role||'',
+      salaryMonthly:Math.round(Number(st.salaryMonthly||0)*100)/100,
+      hireDate:salaryProrate.normalizeHireDate(st.hireDate)
     });
   }
   return out;
@@ -989,6 +1245,9 @@ function smsProviderPresets(){
 function smsDefaultOverdueTemplate(){
   return 'Sayin {ad}, Atak Pazarlama: vadesi gecmis {geciken} odemeniz bulunuyor. Bilgi: 0212 223 28 71';
 }
+function smsDefaultMissedTemplate(){
+  return 'Sayin {ad}, sizi aradik ancak ulasamadik. Atak Pazarlama: {telefon}';
+}
 function smsConfig(s){
   const fromStore=(s?.settings?.sms&&typeof s.settings.sms==='object')?s.settings.sms:{};
   const presets=smsProviderPresets();
@@ -1026,11 +1285,12 @@ function smsConfig(s){
   }
   const bodyTemplate=String(fromStore.bodyTemplate!=null?fromStore.bodyTemplate:(preset.bodyTemplate||''));
   const overdueTemplate=String(fromStore.overdueTemplate||smsDefaultOverdueTemplate());
+  const missedTemplate=String(fromStore.missedTemplate||smsDefaultMissedTemplate());
   const enabled=(String(process.env.SMS_ENABLED||'')==='1')||fromStore.enabled===true;
   return{
     enabled:Boolean(enabled&&endpoint&&username&&password&&originator),
     provider,endpoint,method,contentType:ct,username,password,originator,
-    phoneFormat,successRule,fields,extra,bodyTemplate,overdueTemplate,
+    phoneFormat,successRule,fields,extra,bodyTemplate,overdueTemplate,missedTemplate,
     label:preset.label
   };
 }
@@ -1224,12 +1484,30 @@ async function sendProviderSms(s,{to,message}){
 }
 function pushSmsLog(s,row){
   s.smsLogs=Array.isArray(s.smsLogs)?s.smsLogs:[];
-  s.smsLogs.unshift({
+  const rec={
     id:crypto.randomUUID(),
     at:new Date().toISOString(),
     ...row
-  });
+  };
+  s.smsLogs.unshift(rec);
   s.smsLogs=s.smsLogs.slice(0,500);
+  return rec;
+}
+function actorForReq(req){
+  return currentSessionUser(req)||currentActor(req);
+}
+function mirrorSmsToCustomer(s,customer,log,actor){
+  if(!customer||!log)return;
+  customerComms.recordSms(s,customer,{
+    result:log.ok===false?'failed':'sent',
+    phone:log.phone||customer.phone||'',
+    message:log.message||'',
+    note:log.error||'',
+    actor:actor||{name:log.actor},
+    smsLogId:log.id,
+    provider:log.provider||'',
+    ok:log.ok!==false
+  });
 }
 function publicBaseUrl(req){
   const env=String(process.env.PUBLIC_BASE_URL||'').trim().replace(/\/$/,'');
@@ -1424,7 +1702,7 @@ function staffSession(req){return req.session?.staffUser||null}
 function cleanMoney(v){return Math.max(0,Math.round(normalizeNumber(v)*100)/100)}
 function publicStaff(x,store){
   const branch=(store.stores||[]).find(s=>s.id===x.storeId);
-  return{id:x.id,name:x.name,username:x.username,role:x.role||'staff',storeId:x.storeId,storeName:branch?.name||'Mağaza',active:x.active!==false,salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100};
+  return{id:x.id,name:x.name,username:x.username,role:x.role||'staff',storeId:x.storeId,storeName:branch?.name||'Mağaza',active:x.active!==false,salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100,hireDate:salaryProrate.normalizeHireDate(x.hireDate)};
 }
 function todayISO(){return new Date().toISOString().slice(0,10)}
 /** Satışı yapan personelden mağazayı bul — ciro artık elle girilmiyor, satıştan türetiliyor */
@@ -1459,6 +1737,7 @@ function buildAutoTurnovers(s,{days=30}={}){
   const map=new Map();
   for(const t of (s.financeTransactions||[])){
     if(t.kind!=='sale'||t.cancelled)continue;
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const date=txDateKey(t);
     if(!date||date<fromKey||date>today)continue;
     const who=resolveSaleStore(s,t);
@@ -1492,6 +1771,7 @@ function foundationSummary(s,date=todayISO()){
   const soldStores=new Set();
   for(const t of (s.financeTransactions||[])){
     if(t.kind!=='sale'||t.cancelled)continue;
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     if(txDateKey(t)!==date)continue;
     const amount=saleAmount(t);
     total+=amount;count+=1;
@@ -1605,8 +1885,21 @@ function accountBalance(s,accountId){
   },0);
   return Math.round((opening+movement)*100)/100;
 }
+function customerBalanceMap(s){
+  const txs=s.financeTransactions||[];
+  if(s.__balMap&&s.__balMap.n===txs.length)return s.__balMap.map;
+  const map=new Map();
+  for(const t of txs){
+    const id=String(t.customerId||'');
+    if(!id)continue;
+    map.set(id,(map.get(id)||0)+Number(t.customerDelta||0));
+  }
+  for(const [k,v] of map)map.set(k,Math.round(v*100)/100);
+  s.__balMap={n:txs.length,map};
+  return map;
+}
 function customerBalance(s,customerId){
-  return Math.round(s.financeTransactions.filter(x=>x.customerId===customerId).reduce((sum,t)=>sum+Number(t.customerDelta||0),0)*100)/100;
+  return customerBalanceMap(s).get(String(customerId))||0;
 }
 function financeSnapshot(s){
   const accounts=s.financeAccounts.filter(x=>x.active!==false).map(x=>({...x,balance:accountBalance(s,x.id)}));
@@ -1627,7 +1920,19 @@ function financeTx(s,data){
   s.financeTransactions.unshift(row); return row;
 }
 
-app.set('trust proxy',1); app.use(helmet({contentSecurityPolicy:false})); app.use(compression()); app.use(express.json({limit:'2mb'})); app.use(express.urlencoded({extended:true}));
+app.set('trust proxy',1); app.use(helmet({contentSecurityPolicy:false})); app.use(compression()); app.use(express.json({limit:'8mb'})); app.use(express.urlencoded({extended:true}));
+app.use((req,res,next)=>{
+  if(!/^\/web-api\/rapid360-bridge\//.test(req.path)) return next();
+  const allow=rapidSalesBridge.corsOrigin(req.headers.origin);
+  if(allow){
+    res.setHeader('Access-Control-Allow-Origin',allow);
+    res.setHeader('Vary','Origin');
+    res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers','Content-Type');
+  }
+  if(req.method==='OPTIONS') return res.status(204).end();
+  next();
+});
 app.use(session({
   name:'atakhome.sid',
   secret:process.env.SESSION_SECRET||'CHANGE-ME-SET-IN-ENV',
@@ -1636,7 +1941,7 @@ app.use(session({
   cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:12*60*60*1000}
 }));
 app.use((req,res,next)=>{
-  if(req.path==='/health')return next();
+  if(req.path==='/health'||atakGetE.PUBLIC_PATHS.includes(req.path))return next();
   if(!ipAllowed(req)){
     const wantsHtml=String(req.headers.accept||'').includes('text/html');
     if(wantsHtml)return res.status(403).type('html').send('<!doctype html><meta charset="utf-8"><title>Erişim Engeli</title><body style="font-family:Arial;padding:40px"><h1>Erişim engellendi</h1><p>Bu panel yalnızca yetkili IP üzerinden açılır.</p></body>');
@@ -1682,18 +1987,94 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
     }
   }
 }));
-app.get('/health',(req,res)=>res.json({
-  ok:true,
-  service:'atakhome-erp-v2',
-  version:'6.3.152-personel-logo',
-  build:'fix-v152',
-  ownerOnly:ownerOnlyEnabled(),
-  mfa:mfaEnabled(),
-  mfaTrustHours:Math.round(mfaTrustMs()/3600000),
-  company:ATAK_COMPANY.legalName,
-  time:new Date().toISOString()
-}));
-app.get('/web-api/public',(req,res)=>{ const s=readStore(); res.json({settings:s.settings,categories:s.categories.filter(c=>c.active).sort((a,b)=>a.sort-b.sort),products:s.products.filter(p=>p.active).map(p=>({...p,salePrice:calculateSalePrice(p)})),campaigns:s.campaigns.filter(isCampaignLive).sort((a,b)=>a.sort-b.sort),banners:s.banners.filter(b=>b.active).sort((a,b)=>a.sort-b.sort)}); });
+app.get('/health',(req,res)=>{
+  let productCount=-1,brandCount=-1,categoryCount=-1;
+  try{
+    const s=readStore();
+    productCount=(s.products||[]).length;
+    brandCount=(s.brands||[]).length;
+    categoryCount=(s.categories||[]).length;
+  }catch(_){}
+  res.json({
+    ok:true,
+    service:'atakhome-erp-v2',
+    version:'6.3.244-profit-cost',
+    build:'fix-v244',
+    ownerOnly:ownerOnlyEnabled(),
+    storeOk:storeFileSize(STORE_PATH)>=200,
+    productCount,
+    brandCount,
+    categoryCount,
+    backup:autoBackup.status(),
+    mfa:mfaEnabled(),
+    mfaTrustHours:Math.round(mfaTrustMs()/3600000),
+    company:ATAK_COMPANY.legalName,
+    time:new Date().toISOString()
+  });
+});
+function handleAtakGetEInvoices(req,res){
+  const ip=clientIp(req);
+  const failKey=`dms:${ip}`;
+  if(loginBlocked(failKey)){
+    const fail=atakGetE.failBody('Unauthorized',429);
+    return res.status(429).json(fail.body);
+  }
+  if(dmsTooMany(ip)){
+    const fail=atakGetE.failBody('Unauthorized',429);
+    return res.status(429).json(fail.body);
+  }
+  try{
+    const s=readStore();
+    const cfg=atakGetE.ensureConfig((s.invoiceIntegration||{}).atakDms,(s.invoiceIntegration||{}).rapid360).cfg;
+    const ipGate=atakGetE.ipAllowedForDms(cfg,ip);
+    if(!ipGate.ok){
+      loginRateLimited(failKey);
+      const fail=atakGetE.failBody('Unauthorized',403);
+      return res.status(403).json(fail.body);
+    }
+    const auth=atakGetE.authenticate(cfg,req.query||{});
+    if(!auth.ok){
+      loginRateLimited(failKey);
+      const fail=atakGetE.failBody('Unauthorized',auth.status);
+      return res.status(fail.status).json(fail.body);
+    }
+    clearLoginFails(failKey);
+    return res.json(atakGetE.buildResponse(s,auth.cfg,req.query||{}));
+  }catch(e){
+    const fail=atakGetE.failBody('Unauthorized',500);
+    return res.status(fail.status).json(fail.body);
+  }
+}
+app.get(atakGetE.PATH,handleAtakGetEInvoices);
+app.get(atakGetE.PATH_ALIAS,handleAtakGetEInvoices);
+function publicProduct(p){
+  const sale=calculateSalePrice(p);
+  return {
+    id:p.id,code:p.code,name:p.name,brand:p.brand,category:p.category,
+    image:p.image||'',images:Array.isArray(p.images)?p.images.slice(0,8):[],
+    description:String(p.description||'').slice(0,800),
+    salePrice:sale,cashPrice:p.cashPrice||sale,cardPrice:p.cardPrice||sale,
+    listPrice:p.listPrice||p.oldPrice||0,oldPrice:p.oldPrice||0,
+    stock:p.stock,featured:!!p.featured,tags:p.tags||[],campaignId:p.campaignId||''
+  };
+}
+app.get('/web-api/public',(req,res)=>{ const s=readStore(); res.json({settings:{
+  siteName:s.settings.siteName,tagline:s.settings.tagline,whatsapp:s.settings.whatsapp,
+  phone:s.settings.phone,email:s.settings.email,address:s.settings.address
+},categories:s.categories.filter(c=>c.active).sort((a,b)=>a.sort-b.sort),products:s.products.filter(p=>p.active).map(publicProduct),campaigns:s.campaigns.filter(isCampaignLive).sort((a,b)=>a.sort-b.sort),banners:s.banners.filter(b=>b.active).sort((a,b)=>a.sort-b.sort)}); });
+app.post('/web-api/admin/site-settings',requireAdmin,(req,res)=>{
+  const s=readStore(),x=req.body||{};
+  s.settings=s.settings||{};
+  if(x.siteName!=null)s.settings.siteName=String(x.siteName).trim()||s.settings.siteName;
+  if(x.tagline!=null)s.settings.tagline=String(x.tagline).trim();
+  if(x.phone!=null)s.settings.phone=String(x.phone).replace(/\s/g,'');
+  if(x.whatsapp!=null)s.settings.whatsapp=String(x.whatsapp).replace(/\D/g,'');
+  if(x.email!=null)s.settings.email=String(x.email).trim();
+  if(x.address!=null)s.settings.address=String(x.address).trim();
+  audit(s,'Web sitesi ayarları güncellendi','Web Sitesi');
+  writeStore(s);
+  res.json({ok:true,settings:s.settings});
+});
 app.post('/web-api/login',async(req,res)=>{
   try{
     const username=String(req.body.username||'').trim().toLocaleLowerCase('tr-TR'),password=String(req.body.password||'');
@@ -1736,16 +2117,29 @@ app.get('/web-api/me',(req,res)=>{
   }
   res.json({authenticated:authed,user:currentSessionUser(req),ownerOnly:ownerOnlyEnabled()});
 });
+function publicAdminStore(s){
+  return {
+    ...s,
+    customers:[],
+    customerCount:(s.customers||[]).filter(c=>c.active!==false&&!c.deletedAt).length,
+    financeTransactions:[],
+    promissoryNotes:[],
+    customerComms:[],
+    smsLogs:[],
+    invoiceQueue:[],
+    auditLogs:(s.auditLogs||[]).slice(0,20),
+    staff:(s.staff||[]).map(x=>publicStaff(x,s)),
+    users:[],
+    stores:s.stores||[],
+    security:{ownerOnly:ownerOnlyEnabled(),ownerUsernames:ownerUsernames()}
+  };
+}
 app.get('/web-api/admin/store',requireAdmin,(req,res)=>{
   const s=readStore();
   if(promoteStaffToUsers(s)>0)writeStore(s);
-  res.json({
-    ...s,
-    staff:(s.staff||[]).map(x=>publicStaff(x,s)),
-    users:hasPermission(req,'users_manage')?(s.users||[]).map(u=>publicUser(u,s)):[],
-    stores:s.stores||[],
-    security:{ownerOnly:ownerOnlyEnabled(),ownerUsernames:ownerUsernames()}
-  });
+  const out=publicAdminStore(s);
+  out.users=hasPermission(req,'users_manage')?(s.users||[]).map(u=>publicUser(u,s)):[];
+  res.json(out);
 });
 
 
@@ -1768,6 +2162,11 @@ app.post('/web-api/admin/user',requirePermission('users_manage'),(req,res)=>{
   else{if(!String(x.password||'').trim())return res.status(400).json({error:'Yeni kullanıcı için şifre zorunludur'});user={id:crypto.randomUUID(),name,username,email,role,permissions,active:x.active!==false,passwordHash:hashPassword(x.password),createdAt:now,updatedAt:now};s.users.push(user)}
   if(x.storeId!=null)user.storeId=String(x.storeId||'');
   if(x.salaryMonthly!=null && x.salaryMonthly!=='')user.salaryMonthly=Math.round(Number(x.salaryMonthly||0)*100)/100;
+  if(x.hireDate!=null){
+    const hd=salaryProrate.normalizeHireDate(x.hireDate);
+    if(String(x.hireDate||'').trim() && !hd)return res.status(400).json({error:'İşe başlama tarihi geçersiz (YYYY-AA-GG)'});
+    user.hireDate=hd;
+  }
   syncStaffFromUser(s,user);
   audit(s,x.id?'Kullanıcı güncellendi':'Kullanıcı eklendi',username,{role,permissions,email,storeId:user.storeId||''});writeStore(s);res.json({ok:true,user:publicUser(user,s)});
 });
@@ -1857,6 +2256,7 @@ app.get('/web-api/admin/sms-settings',requirePermission('settings_manage'),(req,
       extraJson:raw.extraJson||'',
       bodyTemplate:raw.bodyTemplate||'',
       overdueTemplate:raw.overdueTemplate||cfg.overdueTemplate,
+      missedTemplate:raw.missedTemplate||cfg.missedTemplate,
       configured:cfg.enabled,
       providerLabel:cfg.label||''
     },
@@ -1869,6 +2269,7 @@ app.post('/web-api/admin/sms-settings',requirePermission('settings_manage'),(req
   const passIn=String(x.password||'');
   const keepPass=passIn===''||passIn==='••••••••';
   const tpl=String(x.overdueTemplate||cur.overdueTemplate||'').trim();
+  const missedTpl=String(x.missedTemplate||cur.missedTemplate||'').trim();
   const provider=String(x.provider||cur.provider||'generic').trim().toLowerCase();
   const presets=smsProviderPresets();
   const safeProvider=presets[provider]?provider:'generic';
@@ -1896,7 +2297,8 @@ app.post('/web-api/admin/sms-settings',requirePermission('settings_manage'),(req
     fieldMessage:String(x.fieldMessage||cur.fieldMessage||'').trim(),
     extraJson,
     bodyTemplate:String(x.bodyTemplate!=null?x.bodyTemplate:(cur.bodyTemplate||'')),
-    overdueTemplate:tpl||smsDefaultOverdueTemplate()
+    overdueTemplate:tpl||smsDefaultOverdueTemplate(),
+    missedTemplate:missedTpl||smsDefaultMissedTemplate()
   };
   audit(s,'SMS ayarları kaydedildi',s.settings.sms.provider||'-',{enabled:s.settings.sms.enabled,originator:s.settings.sms.originator,endpoint:s.settings.sms.endpoint});
   writeStore(s);
@@ -1931,7 +2333,7 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
     const type=String(req.body?.type||'custom').trim().toLowerCase();
     const phoneOverride=String(req.body?.phone||'').trim();
     const prep=prepareCustomerSms(s,customer,{
-      type:type==='overdue'?'overdue':'custom',
+      type:type==='overdue'?'overdue':(type==='missed'?'missed':'custom'),
       message:String(req.body?.message||''),
       phone:phoneOverride
     });
@@ -1945,9 +2347,9 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
       });
     }
     const r=await sendProviderSms(s,{to:prep.phone,message:prep.message});
-    const actor=currentSessionUser(req)||currentActor(req);
-    pushSmsLog(s,{
-      type:prep.type==='overdue'?'overdue':'custom',
+    const actor=actorForReq(req);
+    const log=pushSmsLog(s,{
+      type:prep.type==='overdue'?'overdue':(prep.type==='missed'?'missed':'custom'),
       customerId:customer.id,
       customerName:customer.name||'',
       phone:r.to,
@@ -1957,14 +2359,16 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
       provider:r.provider,
       actor:actor?.name||actor?.username||'Kullanıcı'
     });
-    audit(s,prep.type==='overdue'?'Gecikme SMS gönderildi':'Özel SMS gönderildi',customer.name||customer.id,{phone:r.to,code:r.code,provider:r.provider});
+    mirrorSmsToCustomer(s,customer,log,actor);
+    audit(s,prep.type==='overdue'?'Gecikme SMS gönderildi':(prep.type==='missed'?'Ulaşılamadı SMS gönderildi':'Özel SMS gönderildi'),customer.name||customer.id,{phone:r.to,code:r.code,provider:r.provider});
     writeStore(s);
     res.json({ok:true,to:r.to,type:prep.type,message:prep.message,code:r.code,provider:r.provider,overdueAmount:prep.snap.overdueAmount,balance:prep.snap.balance});
   }catch(e){
     try{
       const s=readStore();
       const customer=(s.customers||[]).find(c=>String(c.id)===String(req.params.id));
-      pushSmsLog(s,{
+      const actor=actorForReq(req);
+      const log=pushSmsLog(s,{
         type:String(req.body?.type||'custom'),
         customerId:req.params.id,
         customerName:customer?.name||'',
@@ -1972,8 +2376,9 @@ app.post('/web-api/admin/customer/:id/sms',requireAdminOrStaffAny('finance_manag
         message:String(req.body?.message||''),
         ok:false,
         error:e.message||'hata',
-        actor:(currentSessionUser(req)||currentActor(req))?.name||'Kullanıcı'
+        actor:actor?.name||'Kullanıcı'
       });
+      if(customer)mirrorSmsToCustomer(s,customer,log,actor);
       writeStore(s);
     }catch(_){}
     res.status(400).json({error:e.message||'SMS gönderilemedi'});
@@ -1998,6 +2403,12 @@ function prepareCustomerSms(s,customer,{type='custom',message='',phone=''}={}){
       telefon:String(s.settings?.phone||'0212 223 28 71')
     });
     if(message&&String(message).trim())text=String(message).trim();
+  }else if(type==='missed'){
+    text=renderSmsTemplate(cfg.missedTemplate,{
+      ad:customer.name||'Musteri',
+      firma:ATAK_COMPANY.shortName||'Atak Pazarlama',
+      telefon:String(s.settings?.phone||'0212 223 28 71')
+    });
   }else{
     text=String(message||'').trim();
     if(!text)return{ok:false,error:'Özel SMS metni zorunlu',customer,snap,phone:to};
@@ -2048,7 +2459,7 @@ app.post('/web-api/admin/sms-bulk',requireAdminOrStaffAny('finance_manage','cust
       try{
         const r=await sendProviderSms(s,{to:prep.phone,message:prep.message});
         sent++;
-        pushSmsLog(s,{
+        const log=pushSmsLog(s,{
           type:type==='overdue'?'overdue_bulk':'custom_bulk',
           customerId:customer.id,
           customerName:customer.name||'',
@@ -2059,10 +2470,11 @@ app.post('/web-api/admin/sms-bulk',requireAdminOrStaffAny('finance_manage','cust
           provider:r.provider,
           actor:actorName
         });
+        mirrorSmsToCustomer(s,customer,log,actor);
         results.push({customerId:id,customerName:customer.name||'',phone:r.to,ok:true,code:r.code});
       }catch(err){
         failed++;
-        pushSmsLog(s,{
+        const log=pushSmsLog(s,{
           type:type==='overdue'?'overdue_bulk':'custom_bulk',
           customerId:customer.id,
           customerName:customer.name||'',
@@ -2072,6 +2484,7 @@ app.post('/web-api/admin/sms-bulk',requireAdminOrStaffAny('finance_manage','cust
           error:err.message||'hata',
           actor:actorName
         });
+        mirrorSmsToCustomer(s,customer,log,actor);
         results.push({customerId:id,customerName:customer.name||'',phone:prep.phone,ok:false,error:err.message||'hata'});
       }
     }
@@ -2119,7 +2532,7 @@ function defaultTrainingCatalog(){
       description:'Dönem seçimi, Hesap Bakiyeleri ve Müşteri Cari sekmeleri, Excel indirme.',
       url:'/assets/egitim/finance-reports.mp4',status:'ready',duration:'~18 sn',sort:80}),
     row({id:'stock-center',category:'stok',title:'Stok Merkezi',screen:'stockCenter',screenLabel:'Stok Merkezi',
-      description:'Stok Düzeltme, Depolar Arası Transfer ve Excel ile toplu stok aktarımı.',
+      description:'Fatura no ile stok girişi (adet eklenir), sayım (adet düzeltilir) ve depolar arası transfer.',
       url:'/assets/egitim/stock-center.mp4',status:'ready',duration:'~19 sn',sort:90}),
     row({id:'purchase-invoices',category:'stok',title:'Alış Faturaları',screen:'purchaseInvoices',screenLabel:'Alış Faturaları',
       description:'Manuel tek fatura: tedarikçi seçimi, fatura kalemi ve birim fiyat girişi.',
@@ -2127,8 +2540,8 @@ function defaultTrainingCatalog(){
     row({id:'products',category:'stok',title:'Ürün kartları ve fiyatlar',screen:'products',screenLabel:'Tüm Ürünler',
       description:'Ürün arama, ürün kartı ve alış / liste / nakit / kart fiyatlarının düzenlenmesi.',
       url:'/assets/egitim/products.mp4',status:'ready',duration:'~43 sn',sort:110}),
-    row({id:'invoice-center',category:'efatura',title:'e-Fatura Merkezi',screen:'invoiceCenter',screenLabel:'e-Fatura Merkezi',
-      description:'QNB bağlantısı, Giden Kutusu klasörleri ve kesilmeyen faturalar.',
+    row({id:'invoice-center',category:'efatura',title:'Faturalar',screen:'invoiceCenter',screenLabel:'Faturalar',
+      description:'Atak fatura kuyruğu, Rapid360 gelen kutusu ve geteinvoices.',
       url:'/assets/egitim/invoice-center.mp4',status:'ready',duration:'~21 sn',sort:120}),
     row({id:'approvals',category:'yonetim',title:'Yönetici Onayları',screen:'managerApprovals',screenLabel:'Yönetici Onayları',
       description:'Personel iptal ve düzenleme taleplerinin onay veya ret akışı.',
@@ -2453,6 +2866,12 @@ app.post('/foundation-api/login',async(req,res)=>{
         permissions=[...new Set([...permissions, ...STAFF_DEFAULT_SCREENS])];
       }
     }
+    permissions=grantInvoiceScreenOnList(permissions,role);
+    if(rawPerms.length && staffListGetsInvoiceScreen(rawPerms,role) && Array.isArray(user.permissions) && !user.permissions.includes('*') && !user.permissions.includes('screen_invoice_center')){
+      user.permissions=[...user.permissions,'screen_invoice_center'];
+      user.updatedAt=new Date().toISOString();
+      writeStore(s);
+    }
     const staffUser={
       id:user.id,
       name:user.name,
@@ -2462,6 +2881,7 @@ app.post('/foundation-api/login',async(req,res)=>{
       permissions,
       storeId:user.storeId||branch?.id||'',
       storeName:branch?.name||'Mağaza',
+      brand:branchLock.lockBrandForActor(s,user),
       active:user.active!==false
     };
     return await issueMfaOrFinish(req,res,{
@@ -2488,7 +2908,18 @@ app.get('/foundation-api/me',(req,res)=>{
     delete req.session.staffUser;
     return res.json({authenticated:false,user:null,ownerOnly:true});
   }
-  res.json({authenticated:Boolean(staffSession(req)),user:staffSession(req),ownerOnly:ownerOnlyEnabled()});
+  const u=staffSession(req);
+  if(u)grantStaffInvoiceScreenInPlace(u);
+  let user=u;
+  if(u){
+    const s=readStore();
+    user={...u,brand:branchLock.lockBrandForActor(s,u)};
+    if(!user.storeName){
+      const branch=(s.stores||[]).find(st=>String(st.id)===String(u.storeId||''));
+      if(branch)user.storeName=branch.name||'';
+    }
+  }
+  res.json({authenticated:Boolean(u),user,ownerOnly:ownerOnlyEnabled()});
 });
 app.get('/foundation-api/dashboard',requireStaff,(req,res)=>{
   const s=readStore(),u=staffSession(req),date=todayISO();
@@ -2545,6 +2976,11 @@ app.post('/web-api/admin/staff-member',requireAdmin,(req,res)=>{
   if(!row&&!String(x.password||'').trim())return res.status(400).json({error:'Yeni personel için şifre zorunludur'});
   const data={name,username,storeId:String(x.storeId),role:String(x.role||'staff'),active:x.active!==false,updatedAt:new Date().toISOString()};
   if(x.salaryMonthly!=null && x.salaryMonthly!=='')data.salaryMonthly=Math.round(Number(x.salaryMonthly||0)*100)/100;
+  if(x.hireDate!=null){
+    const hd=salaryProrate.normalizeHireDate(x.hireDate);
+    if(String(x.hireDate||'').trim() && !hd)return res.status(400).json({error:'İşe başlama tarihi geçersiz (YYYY-AA-GG)'});
+    data.hireDate=hd;
+  }
   if(row){Object.assign(row,data);if(String(x.password||'').trim())row.passwordHash=hashPassword(x.password)}
   else{row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),passwordHash:hashPassword(x.password),salaryMonthly:Math.round(Number(x.salaryMonthly||0)*100)/100,...data};s.staff.push(row)}
   promoteStaffToUsers(s);
@@ -2553,6 +2989,7 @@ app.post('/web-api/admin/staff-member',requireAdmin,(req,res)=>{
     linked.name=row.name;linked.username=row.username;linked.storeId=row.storeId;linked.active=row.active!==false;
     if(row.passwordHash)linked.passwordHash=row.passwordHash;
     if(row.salaryMonthly!=null)linked.salaryMonthly=row.salaryMonthly;
+    if(row.hireDate!=null)linked.hireDate=row.hireDate;
     linked.updatedAt=row.updatedAt;
     row.userId=linked.id;
   }
@@ -2570,11 +3007,32 @@ app.delete('/web-api/admin/announcement/:id',requireAdmin,(req,res)=>{
   const s=readStore();s.announcements=s.announcements.filter(x=>x.id!==req.params.id);s.announcementReads=s.announcementReads.filter(x=>x.announcementId!==req.params.id);writeStore(s);res.json({ok:true});
 });
 app.get('/web-api/admin/backup',requireAdmin,(req,res)=>{
+  if(storeFileSize(STORE_PATH)<200)return res.status(404).json({error:'store.json yok'});
   const raw=fs.readFileSync(STORE_PATH);
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
   res.setHeader('Content-Type','application/json');
-  res.setHeader('Content-Disposition',`attachment; filename="atakhome-foundation-backup-${stamp}.json"`);
+  res.setHeader('Content-Disposition',`attachment; filename="atakhome-yedek-canli-${stamp}.json"`);
   res.send(raw);
+});
+app.get('/web-api/admin/backups',requireAdmin,(req,res)=>{
+  res.json({ok:true,...autoBackup.status(),items:autoBackup.list()});
+});
+app.post('/web-api/admin/backups',requireAdmin,(req,res)=>{
+  const row=autoBackup.take({reason:'manual',force:true});
+  if(!row.ok)return res.status(400).json({error:row.error||'Yedek alınamadı'});
+  try{
+    const s=readStore();
+    audit(s,'Elle yedek alındı',row.file,{size:row.size});
+    writeStore(s);
+  }catch(_){}
+  res.json({ok:true,...row,items:autoBackup.list(),status:autoBackup.status()});
+});
+app.get('/web-api/admin/backups/:file',requireAdmin,(req,res)=>{
+  const full=autoBackup.filePath(req.params.file);
+  if(!full)return res.status(404).json({error:'Yedek bulunamadı'});
+  res.setHeader('Content-Type','application/json');
+  res.setHeader('Content-Disposition',`attachment; filename="${path.basename(full)}"`);
+  res.sendFile(full);
 });
 
 
@@ -2629,20 +3087,40 @@ app.get('/web-api/admin/sales-catalog',requireAdminOrStaff('orders_manage'),(req
     guarantor:normalizeGuarantor(c.guarantor)
   })).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr')):[];
   const accounts=(s.financeAccounts||[]).filter(a=>a.active!==false).map(a=>({
-    id:a.id,name:a.name,type:a.type,storeId:a.storeId||'',active:true
+    id:a.id,name:a.name,type:a.type,storeId:a.storeId||'',active:true,brand:branchLock.accountBrand(a,s.stores||[])
   }));
-  res.json({ok:true,products,categories,dealerSettings:s.dealerSettings||[],customers,customerTotal:allCustomers.length,accounts});
+  const warehouses=(s.warehouses||[]).filter(w=>w.active!==false).map(w=>({
+    id:w.id,name:w.name,code:w.code||'',storeId:w.storeId||'',active:true,brand:branchLock.warehouseBrand(w,s.stores||[])
+  }));
+  const dealerSettings=(s.dealerSettings||[]).map(d=>({...d,brand:branchLock.dealerBrand(d)}));
+  const stores=(s.stores||[]).map(st=>({id:st.id,name:st.name,code:st.code||'',active:st.active!==false,brand:branchLock.storeBrand(st)}));
+  res.json({ok:true,products,categories,dealerSettings,customers,customerTotal:allCustomers.length,accounts,warehouses,stores});
 });
 
-app.get('/web-api/admin/stock-center',requireAdminOrStaff('stock_manage'),(req,res)=>{
+app.get('/web-api/admin/stock-center',requireAdminOrStaffAny('stock_manage','stock_view','screen_stock_in'),(req,res)=>{
   const s=readStore();
-  const products=(s.products||[]).map(p=>({code:p.code,name:p.name,itemCode:p.itemCode||'',searchName:p.searchName||'',brand:p.brand,category:p.category,image:p.image,active:p.active!==false}));
+  const isAdmin=req.session?.admin===true;
+  const canReceive=isAdmin||actorHasPermission(req,'stock_manage')||actorHasPermission(req,'screen_stock_in');
+  const canManage=isAdmin||actorHasPermission(req,'stock_manage');
+  const products=(s.products||[]).map(p=>{
+    const row={code:p.code,name:p.name,itemCode:p.itemCode||'',searchName:p.searchName||'',brand:p.brand,category:p.category,image:p.image,active:p.active!==false};
+    if(canReceive)row.purchasePrice=Number(p.purchasePrice||0);
+    return row;
+  });
   const stocks=s.productStocks.map(x=>{
     const product=products.find(p=>String(p.code).toLocaleUpperCase('tr-TR')===String(x.productCode).toLocaleUpperCase('tr-TR'));
     const warehouse=s.warehouses.find(w=>w.id===x.warehouseId);
     return{...x,productName:product?.name||x.productCode,warehouseName:warehouse?.name||'Depo',available:Math.max(0,Number(x.quantity||0)-Number(x.reserved||0))};
   });
-  res.json({warehouses:s.warehouses,products,stocks,movements:s.stockMovements.slice(0,500)});
+  const receipts=canReceive?(s.stockReceipts||[]).filter(r=>!r.reverted).slice(0,80).map(r=>{
+    const warehouse=s.warehouses.find(w=>w.id===r.warehouseId);
+    return{
+      id:r.id,date:r.date,invoiceNo:r.invoiceNo,warehouseId:r.warehouseId,
+      warehouseName:warehouse?.name||'Depo',note:r.note||'',createdBy:r.createdBy||'',createdAt:r.createdAt,
+      items:(r.items||[]).map(i=>({productCode:i.productCode,productName:i.productName,quantity:i.quantity,unitCost:i.unitCost,newPurchasePrice:i.newPurchasePrice}))
+    };
+  }):[];
+  res.json({warehouses:s.warehouses,products,stocks,movements:s.stockMovements.slice(0,500),receipts,canReceive,canManage});
 });
 app.post('/web-api/admin/warehouse',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},name=String(x.name||'').trim();
@@ -2655,11 +3133,55 @@ app.post('/web-api/admin/warehouse',requireAdmin,(req,res)=>{
 app.post('/web-api/admin/stock-adjust',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},productCode=String(x.productCode||'').trim(),warehouseId=String(x.warehouseId||'');
   if(!productCode||!warehouseId)return res.status(400).json({error:'Ürün ve depo zorunludur'});
+  const openingCost=normalizeNumber(x.unitCost||x.openingCost||0);
+  if(openingCost>0 && stockCost.productQtyTotal(s,productCode)>0){
+    return res.status(400).json({error:'Sayımda maliyet girilmez. Maliyet, stok girişinde fatura numarası ile yazılır.'});
+  }
   const target=Math.max(0,Math.round(normalizeNumber(x.quantity)));
   const current=Number(currentStock(s,productCode,warehouseId)?.quantity||0);
   const delta=target-current;
-  const result=addStockMovement(s,{productCode,warehouseId,type:'adjustment',quantity:delta,reference:String(x.reference||'Manuel düzeltme'),note:String(x.note||''),user:currentActor(req)?.name||'Admin'});
-  audit(s,'Stok düzeltildi',productCode,{warehouseId,before:current,after:target});writeStore(s);res.json({ok:true,...result});
+  const result=addStockMovement(s,{productCode,warehouseId,type:'adjustment',quantity:delta,reference:String(x.reference||'Sayım'),note:String(x.note||''),user:currentActor(req)?.name||'Admin'});
+  if(openingCost>0){
+    const product=stockCost.findProductInStore(s,productCode);
+    if(product){
+      product.purchasePrice=openingCost;
+      product.purchasePriceSource='opening-count';
+      product.purchasePriceUpdatedAt=new Date().toISOString();
+      product.updatedAt=new Date().toISOString();
+    }
+  }
+  audit(s,'Stok sayımı',productCode,{warehouseId,before:current,after:target,openingCost:openingCost||undefined});writeStore(s);res.json({ok:true,...result});
+});
+app.post('/web-api/admin/stock-receipt',requireAdminOrStaffAny('stock_manage','screen_stock_in'),(req,res)=>{
+  try{
+    const s=readStore(),x=req.body||{};
+    const warehouseId=String(x.warehouseId||'').trim();
+    if(!(s.warehouses||[]).some(w=>String(w.id)===warehouseId&&w.active!==false)){
+      return res.status(400).json({error:'Geçerli bir depo seçiniz'});
+    }
+    const items=Array.isArray(x.items)&&x.items.length?x.items:[{
+      productCode:x.productCode,quantity:x.quantity,unitCost:x.unitCost
+    }];
+    const prepared=stockCost.prepareStockReceipt(s,{invoiceNo:x.invoiceNo,warehouseId,items});
+    stockCost.applyPreparedCosts(s,prepared);
+    const actor=currentActor(req)?.name||'Personel';
+    for(const line of prepared.items){
+      addStockMovement(s,{
+        productCode:line.productCode,warehouseId,type:'purchase',quantity:line.quantity,
+        reference:prepared.invoiceNo,note:String(x.note||'Stok girişi'),user:actor
+      });
+    }
+    const receipt=stockCost.recordStockReceipt(s,prepared,{note:String(x.note||'').trim(),actor});
+    audit(s,'Stok girişi',prepared.invoiceNo,{
+      warehouseId,
+      products:prepared.items.map(i=>i.productCode),
+      qty:prepared.items.reduce((a,i)=>a+i.quantity,0)
+    });
+    writeStore(s);
+    res.json({ok:true,receipt,items:prepared.items});
+  }catch(e){
+    res.status(400).json({error:e.message||'Stok girişi kaydedilemedi'});
+  }
 });
 app.post('/web-api/admin/stock-transfer',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},productCode=String(x.productCode||'').trim(),from=String(x.fromWarehouseId||''),to=String(x.toWarehouseId||''),qty=Math.max(1,Math.round(normalizeNumber(x.quantity)));
@@ -2715,20 +3237,17 @@ function parseStockImportRows(buffer,originalName=''){
   const rows=[];
   const pushFromMatrix=(matrix)=>{
     if(!Array.isArray(matrix)||matrix.length<2)return;
-    const header=matrix[0].map(x=>String(x??'').trim().toLocaleLowerCase('tr-TR'));
-    const codeIndex=header.findIndex(x=>/ürün.?kodu|urun.?kodu|^kod$|product.?code|item.?code/.test(x));
-    // Adet sütunu tercih; "Mevcut Stok" hariç
-    let qtyIndex=header.findIndex(x=>/^adet$|girilecek.?adet|yeni.?stok|quantity|qty/.test(x));
-    if(qtyIndex<0)qtyIndex=header.findIndex(x=>/^(stok|stock)$/.test(x));
-    if(codeIndex<0||qtyIndex<0)return;
+    const cols=stockCost.countImportColumns(matrix[0]);
+    if(cols.codeIndex<0||cols.qtyIndex<0)return;
     for(const line of matrix.slice(1)){
-      const cols=Array.isArray(line)?line:[];
-      const code=String(cols[codeIndex]??'').trim();
+      const cells=Array.isArray(line)?line:[];
+      const code=String(cells[cols.codeIndex]??'').trim();
       if(!code||/^kategori$/i.test(code))continue;
-      const raw=cols[qtyIndex];
+      const raw=cells[cols.qtyIndex];
       if(raw===''||raw==null)continue;
       const qty=Math.max(0,Math.round(normalizeNumber(raw)));
-      rows.push({code,qty});
+      const unitCost=cols.costIndex>=0?Math.max(0,normalizeNumber(cells[cols.costIndex])):0;
+      rows.push({code,qty,unitCost});
     }
   };
   if(isExcel){
@@ -2759,16 +3278,25 @@ app.post('/web-api/admin/stock-import',requireAdmin,dynamicsUpload.single('file'
     if(!warehouseId)return res.status(400).json({error:'Depo seçilmelidir'});
     const parsed=parseStockImportRows(req.file.buffer,req.file.originalname||'');
     if(!parsed.length)return res.status(400).json({error:'Dosyada Ürün Kodu + Adet dolu satır bulunamadı. Adet sütununu doldurun.'});
-    const s=readStore();let imported=0,skipped=0,updatedCatalog=0;
-    for(const {code,qty} of parsed){
+    const s=readStore();let imported=0,skipped=0,updatedCatalog=0,costsUpdated=0;
+    const now=new Date().toISOString();
+    for(const {code,qty,unitCost} of parsed){
       const product=s.products.find(p=>String(p.code||'').toLocaleLowerCase('tr-TR')===code.toLocaleLowerCase('tr-TR'));
       if(!product){skipped++;continue}
       const current=Number(currentStock(s,code,warehouseId)?.quantity||0);
       addStockMovement(s,{productCode:code,warehouseId,type:'import',quantity:qty-current,reference:'Excel/CSV Stok Aktarımı',note:'Toplu stok aktarımı',user:currentActor(req)?.name||'Admin'});
-      if(Number(product.stock||0)!==qty){product.stock=qty;product.updatedAt=new Date().toISOString();updatedCatalog++}
+      if(Number(product.stock||0)!==qty){product.stock=qty;product.updatedAt=now;updatedCatalog++}
+      const cost=Number(unitCost||0);
+      if(cost>0){
+        product.purchasePrice=cost;
+        product.purchasePriceSource='count-import';
+        product.purchasePriceUpdatedAt=now;
+        product.updatedAt=now;
+        costsUpdated++;
+      }
       imported++;
     }
-    audit(s,'Excel/CSV stok aktarımı',warehouseId,{imported,skipped,updatedCatalog});writeStore(s);res.json({ok:true,imported,skipped,updatedCatalog});
+    audit(s,'Excel/CSV stok aktarımı',warehouseId,{imported,skipped,updatedCatalog,costsUpdated});writeStore(s);res.json({ok:true,imported,skipped,updatedCatalog,costsUpdated});
   }catch(error){res.status(500).json({error:error.message||'Stok aktarımı başarısız'})}
 });
 
@@ -2800,22 +3328,22 @@ app.get('/web-api/admin/products-stock-excel',requireAdmin,(req,res)=>{
       'Barkod':p.barcode||'',
       'Ürün Adı':p.name||'',
       'Marka':p.brand||'',
-      'Alış Fiyatı':Number(p.purchasePrice||0),
       'Mevcut Stok':Number(p.stock||0),
-      'Adet':'' // kullanıcı doldurur → stok girişi
+      'Adet':'', // sayılan adet — kullanıcı doldurur
+      'Birim Maliyet':Number(p.purchasePrice||0)||'' // alış fiyatı; 0 ise boş, kullanıcı doldurur
     });
-    const colWidths=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:12},{wch:12},{wch:10}];
+    const colWidths=[{wch:18},{wch:16},{wch:16},{wch:36},{wch:14},{wch:12},{wch:10},{wch:14}];
     const wb=XLSX.utils.book_new();
     const talimat=XLSX.utils.aoa_to_sheet([
-      ['ATAK Stok Giriş Excel'],
+      ['ATAK Sayım Excel — adet + birim maliyet'],
       [''],
-      ['1) İstediğiniz kategoriyi seçip "Excel İndir" ile indirin (veya tümünü).'],
-      ['2) "Adet" sütununa gireceğiniz stok adedini yazın. Boş satırlar atlanır.'],
-      ['3) "Alış Fiyatı" bilgilendirme içindir; stok yüklerken zorunlu değildir.'],
-      ['4) "Mevcut Stok" bilgilendirme içindir; değiştirmeyin.'],
-      ['5) Ürün Kodu sütununu değiştirmeyin.'],
-      ['6) Tüm Ürünler → Excel\'den stok yükle ile depoyu seçip bu dosyayı yükleyin.'],
-      ['7) Adet = o depodaki yeni stok adedi (mutlak değer).']
+      ['1) Tüm Ürünler’den "Excel İndir" ile indirin (kategori süzebilirsiniz).'],
+      ['2) "Adet" = saydığınız stok. Boş satırlar atlanır. Adet o depodaki YENİ stok adedidir.'],
+      ['3) "Birim Maliyet" = birim alış fiyatı (KDV dahil). İlk sayımda doldurun; kâr buradan hesaplanır.'],
+      ['4) "Mevcut Stok" bilgilendirme içindir; değiştirmeyin. Ürün Kodu sütununu değiştirmeyin.'],
+      ['5) Depo seçip "Excel\'den stok yükle" veya Stok Merkezi’nden bu dosyayı yükleyin.'],
+      ['6) Sonraki mal girişleri bu Excel ile değil: Stok Merkezi → Stok Girişi (fatura no + birim alış).'],
+      ['7) Yeni alış, eldeki stokla hareketli ortalama yapar. Eski satışların kârı değişmez.']
     ]);
     XLSX.utils.book_append_sheet(wb,talimat,'Talimat');
     const allRows=list.map(toRow);
@@ -2896,7 +3424,8 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
   const staffPortal=isStaffPortalReq(req);
   const salespersonId=String(req.query.salespersonId||'');
   const dealerFilter=String(req.query.dealerId||'');
-  const accounts=s.financeAccounts.map(x=>({...x,balance:accountBalance(s,x.id)}));
+  const allAccounts=s.financeAccounts.map(x=>({...x,balance:accountBalance(s,x.id),brand:branchLock.accountBrand(x,s.stores||[])}));
+  const accounts=branchLock.filterAccountsForActor(s,actor,allAccounts,{staffPortal});
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
 
   let sales=(s.financeTransactions||[]).filter(t=>t.kind==='sale'&&!t.cancelled);
@@ -2939,8 +3468,8 @@ app.get('/web-api/admin/finance-center',requireAdminOrStaffAny('finance_manage',
 
   const transactions=txs.slice(0,1000).map(x=>({
     ...x,
-    accountName:accounts.find(a=>a.id===x.accountId)?.name||'',
-    counterAccountName:accounts.find(a=>a.id===x.counterAccountId)?.name||'',
+    accountName:allAccounts.find(a=>a.id===x.accountId)?.name||'',
+    counterAccountName:allAccounts.find(a=>a.id===x.counterAccountId)?.name||'',
     customerName:customerMap.get(String(x.customerId||''))?.name||''
   }));
 
@@ -3035,12 +3564,18 @@ app.delete('/web-api/admin/finance-account/:id',requireAdmin,(req,res)=>{
 });
 function customerSnapshot(c={}){
   return {
-    name:c.name||'',phone:c.phone||'',email:c.email||'',taxNo:c.taxNo||'',tckn:c.tckn||'',
+    name:c.name||'',firstName:c.firstName||'',lastName:c.lastName||'',phone:c.phone||'',email:c.email||'',taxNo:c.taxNo||'',tckn:c.tckn||'',
+    birthDate:c.birthDate||'',
     city:c.city||'',district:c.district||'',address:c.address||'',
     deliverySameAsBilling:c.deliverySameAsBilling!==false,deliveryCity:c.deliveryCity||'',
     deliveryDistrict:c.deliveryDistrict||'',deliveryAddress:c.deliveryAddress||'',
     invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
-    companyName:c.companyName||'',taxOffice:c.taxOffice||'',note:c.note||'',
+    companyName:c.companyName||'',companyAddress:c.companyAddress||'',
+    companyCity:c.companyCity||'',companyDistrict:c.companyDistrict||'',
+    workPhone:c.workPhone||'',
+    taxOffice:c.taxOffice||'',note:c.note||'',
+    customerCode:c.customerCode||c.rapidCustAccount||'',
+    rapidCustAccount:c.rapidCustAccount||'',
     guarantor:normalizeGuarantor(c.guarantor),
     active:c.active!==false
   };
@@ -3090,53 +3625,67 @@ function resolveCustomerInvoiceParty(customer={},prefer=''){
     companyName:useCorp?String(customer.companyName||'').trim():'',
     phone:customer.phone||'',
     email:customer.email||'',
-    address:customer.address||'',
-    city:customer.city||'',
-    district:customer.district||''
+    address:useCorp?(customer.companyAddress||customer.address||''):(customer.address||''),
+    city:useCorp?(customer.companyCity||customer.city||''):(customer.city||''),
+    district:useCorp?(customer.companyDistrict||customer.district||''):(customer.district||'')
   };
 }
 function parseCustomerPayload(x={}){
-  const name=String(x.name||'').trim();
-  const phone=String(x.phone||'').trim();
-  const city=String(x.city||'').trim();
-  const district=String(x.district||'').trim();
-  const address=String(x.address||'').trim();
+  const explicitSplit=Object.prototype.hasOwnProperty.call(x,'firstName')||Object.prototype.hasOwnProperty.call(x,'lastName')||Object.prototype.hasOwnProperty.call(x,'ad')||Object.prototype.hasOwnProperty.call(x,'soyad');
+  const parts=personName.normalizePersonName(x);
+  let firstName=parts.firstName,lastName=parts.lastName,name=parts.name;
+  if(explicitSplit){
+    if(!firstName)throw new Error('Ad zorunludur');
+    if(!lastName)throw new Error('Soyad zorunludur');
+    name=personName.joinPersonName(firstName,lastName);
+  }
+  if(!name)throw new Error('Ad ve soyad zorunludur');
+  const workPhone=String(x.workPhone||x.isTelefon||x.isTelefonu||'').trim();
+  const phone=String(x.phone||workPhone||'').trim();
+  const city=String(x.city||x.il||'').trim();
+  const district=String(x.district||x.ilce||'').trim();
+  const address=String(x.address||x.evAdres||x.evAdresi||'').trim();
   const invoiceType=String(x.invoiceType||'individual')==='corporate'?'corporate':'individual';
   const deliverySame=x.deliverySameAsBilling!==false&&x.deliverySameAsBilling!=='false';
   const deliveryCity=String(x.deliveryCity||'').trim();
   const deliveryDistrict=String(x.deliveryDistrict||'').trim();
   const deliveryAddress=String(x.deliveryAddress||'').trim();
-  const companyName=String(x.companyName||'').trim();
-  const taxOffice=String(x.taxOffice||'').trim();
+  const companyName=String(x.companyName||x.kurumsalUnvan||'').trim();
+  const taxOffice=String(x.taxOffice||x.vergiDairesi||'').trim();
+  const companyAddress=String(x.companyAddress||x.kurumsalAdres||'').trim();
+  const companyCity=String(x.companyCity||x.kurumsalIl||'').trim();
+  const companyDistrict=String(x.companyDistrict||x.kurumsalIlce||'').trim();
+  const birthDate=customerExcel.normalizeBirthDate(x.birthDate||x.dogumTarihi||'');
   // taxNo = kurumsal VKN; tckn = şahıs (ikisi birden saklanır)
-  const taxNo=String(x.taxNo||x.corporateTaxNo||'').trim();
-  const tckn=String(x.tckn||x.individualTaxNo||'').trim();
-  if(!name)throw new Error('Şahıs / müşteri adı zorunludur');
-  if(!phone)throw new Error('Telefon zorunludur');
-  if(!city||!district||!address)throw new Error('Fatura adresi (il, ilçe, açık adres) zorunludur');
+  const taxNo=String(x.taxNo||x.corporateTaxNo||x.vergiNo||'').trim();
+  const tckn=String(x.tckn||x.individualTaxNo||x.tc||'').trim();
+  if(!phone)throw new Error(invoiceType==='corporate'?'İş telefonu zorunludur':'Telefon zorunludur');
+  if(!city||!district||!address)throw new Error('Ev adresi (il, ilçe, ev adres) zorunludur');
   if(!deliverySame&&(!deliveryCity||!deliveryDistrict||!deliveryAddress)){
     throw new Error('Teslimat adresi fatura adresinden farklıysa il, ilçe ve açık adres zorunludur');
   }
-  if(invoiceType==='corporate'){
-    if(!companyName)throw new Error('Kurumsal fatura için firma ünvanı zorunludur');
-    if(!taxOffice)throw new Error('Kurumsal fatura için vergi dairesi zorunludur');
-    if(!taxNo||taxNo.replace(/\D/g,'').length<10)throw new Error('Kurumsal fatura için geçerli VKN (10 hane) zorunludur');
+  if(invoiceType==='corporate'&&!companyName&&!taxNo){
+    throw new Error('Kurumsal fatura için kurumsal ünvan veya vergi no girin');
   }
-  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TCKN girildiyse 11 hane olmalıdır');
+  if(tckn&&tckn.replace(/\D/g,'').length!==11)throw new Error('TC girildiyse 11 hane olmalıdır');
   const out={
-    name,phone,
-    email:String(x.email||'').trim(),
-    taxNo:invoiceType==='corporate'?taxNo:'',
+    name,firstName,lastName,phone,
+    email:String(x.email||x.mail||'').trim(),
+    birthDate,
+    taxNo:taxNo||'',
     tckn:tckn||'',
     city,district,address,
     deliverySameAsBilling:deliverySame,
     deliveryCity:deliverySame?city:deliveryCity,
     deliveryDistrict:deliverySame?district:deliveryDistrict,
     deliveryAddress:deliverySame?address:deliveryAddress,
-    invoiceType,
-    companyName:invoiceType==='corporate'?companyName:'',
-    taxOffice:invoiceType==='corporate'?taxOffice:'',
+    invoiceType:companyName||taxNo?'corporate':invoiceType,
+    companyName,
+    companyAddress,companyCity,companyDistrict,
+    workPhone:workPhone||phone,
+    taxOffice:taxOffice||'',
     note:String(x.note||'').trim(),
+    customerCode:customerCode.normalizeCustomerCode(x.customerCode||x.code||x.musteriKodu||x.musteriNo||''),
     active:x.active!==false&&x.active!=='false',
     updatedAt:new Date().toISOString()
   };
@@ -3146,60 +3695,62 @@ function parseCustomerPayload(x={}){
 function applyCustomerData(row,data){Object.assign(row,data);return row}
 function customerSearchHandler(req,res){
   const s=readStore();
-  const q=String(req.query.q||req.query.query||'').trim().toLocaleLowerCase('tr-TR');
+  const q=String(req.query.q||req.query.query||'').trim();
   const limit=Math.min(200,Math.max(1,Number(req.query.limit)||40));
   const id=String(req.query.id||'').trim();
   const listAll=['1','true','yes'].includes(String(req.query.list||'').toLowerCase());
-  const all=(s.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
-  let rows=all;
-  if(id){
-    rows=rows.filter(c=>String(c.id)===id);
-  }else if(q.length>=1){
-    // 1+ karakter: satış ekranında "a" / "atak" ile bulunsun
-    const digits=q.replace(/\D+/g,'');
-    rows=rows.filter(c=>{
-      const hay=`${c.name||''} ${c.phone||''} ${c.taxNo||''} ${c.tckn||''} ${c.companyName||''} ${c.email||''} ${c.city||''} ${c.district||''}`.toLocaleLowerCase('tr-TR');
-      if(hay.includes(q))return true;
-      if(digits.length>=3){
-        const phoneDigits=String(c.phone||'').replace(/\D+/g,'');
-        const taxDigits=`${c.taxNo||''}${c.tckn||''}`.replace(/\D+/g,'');
-        if(phoneDigits.includes(digits)||taxDigits.includes(digits))return true;
-      }
-      return false;
-    });
-  }else if(!listAll){
-    // Boş aramada tüm listeyi yollama — 10k+ kayıt için güvenli
-    return res.json({ok:true,total:all.length,rows:[],needQuery:true});
-  }
-  const total=rows.length;
-  rows=rows
-    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'tr'))
-    .slice(0,limit)
-    .map(c=>({
-      id:c.id,name:c.name||'',phone:c.phone||'',email:c.email||'',
-      taxNo:c.taxNo||'',tckn:c.tckn||'',city:c.city||'',district:c.district||'',
-      address:c.address||'',companyName:c.companyName||'',taxOffice:c.taxOffice||'',
+  const found=customerSearch.searchIndex(s,{q,id,limit,listAll});
+  if(found.needQuery)return res.json({ok:true,total:found.total,rows:[],needQuery:true,limit});
+  const bal=customerBalanceMap(s);
+  const rows=found.entries.map(entry=>{
+    const c=entry.c;
+    return {
+      id:c.id,name:c.name||'',firstName:c.firstName||'',lastName:c.lastName||'',phone:c.phone||'',email:c.email||'',
+      taxNo:c.taxNo||'',tckn:c.tckn||'',birthDate:c.birthDate||'',city:c.city||'',district:c.district||'',
+      address:c.address||'',companyName:c.companyName||'',companyAddress:c.companyAddress||'',
+      companyCity:c.companyCity||'',companyDistrict:c.companyDistrict||'',workPhone:c.workPhone||'',
+      taxOffice:c.taxOffice||'',
       invoiceType:c.invoiceType==='corporate'?'corporate':'individual',
       hasCorporate:customerHasCorporateBilling(c),note:c.note||'',
+      customerCode:c.customerCode||c.rapidCustAccount||'',
+      rapidCustAccount:c.rapidCustAccount||'',
       guarantor:normalizeGuarantor(c.guarantor),
-      balance:customerBalance(s,c.id),
+      balance:bal.get(String(c.id))||0,
       active:c.active!==false
-    }));
-  res.json({ok:true,total,rows,needQuery:false,limit});
+    };
+  });
+  res.json({ok:true,total:found.total,rows,needQuery:false,limit});
 }
 app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),customerSearchHandler);
 // Alias — bazı proxy/yönlendirmelerde /customers/search takılırsa
 app.get('/web-api/admin/customer-search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),customerSearchHandler);
+app.get('/web-api/admin/customer-code-next',requireAdminOrStaffAny('customers_manage','orders_manage','screen_sales_center'),(req,res)=>{
+  res.json({ok:true,customerCode:customerCode.peekNext(readStore())});
+});
 app.post('/web-api/admin/customer',requireAdminOrStaff('customers_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{};
   let data;
   try{data=parseCustomerPayload(x)}catch(e){return res.status(400).json({error:e.message})}
-  let row=s.customers.find(v=>v.id===x.id);
+  const collapsed=customerDedupe.collapseDuplicateCustomersByName(s);
+  let row=s.customers.find(v=>v.id===x.id&&v.active!==false&&!v.deletedAt);
+  if(!row&&!x.id){
+    row=customerDedupe.findByPersonName(s.customers,data);
+  }
+  try{
+    data.customerCode=customerCode.resolveForSave(s,data.customerCode,{existing:row||null});
+  }catch(e){return res.status(400).json({error:e.message})}
+  if(!x.id&&row){
+    customerDedupe.fillEmptyFields(row,data);
+    row.updatedAt=new Date().toISOString();
+    audit(s,'Müşteri mevcut kayda bağlandı',`${row.customerCode||''} ${row.name}`.trim(),{merged:collapsed.merged||0});
+    writeStore(s);
+    return res.json({ok:true,reused:true,row:{...row,balance:customerBalance(s,row.id)}});
+  }
   // Yeni müşteri: doğrudan kaydet
   if(!row){
     row={id:crypto.randomUUID(),createdAt:new Date().toISOString(),...data};
     s.customers.push(row);
-    audit(s,'Müşteri kaydedildi',row.name);writeStore(s);
+    audit(s,'Müşteri kaydedildi',`${row.customerCode||''} ${row.name}`.trim());writeStore(s);
     return res.json({ok:true,row:{...row,balance:customerBalance(s,row.id)}});
   }
   // Düzenleme: yönetici değilse onay kuyruğuna
@@ -3268,6 +3819,7 @@ function customerExcelPreviewPayload(req){
       phone:p.phone||r.phone||'',
       rawPhone:r.source?.telefonRaw||'',
       invoiceType:p.invoiceType||'individual',
+      companyName:p.companyName||'',
       taxNo:p.taxNo||'',
       tckn:p.tckn||'',
       taxOffice:p.taxOffice||'',
@@ -3281,7 +3833,9 @@ function customerExcelPreviewPayload(req){
   const by=st=>classified.rows.filter(r=>r.status===st);
   const preview=[
     ...by('ready').slice(0,50),
+    ...by('update').slice(0,20),
     ...by('existing').slice(0,10),
+    ...by('skip_dupfile').slice(0,8),
     ...by('skip_short').slice(0,12),
     ...by('skip_nophone').slice(0,8),
     ...by('skip_noname').slice(0,5)
@@ -3297,34 +3851,83 @@ function customerExcelPreviewPayload(req){
   Object.entries(classified.header?.cols||{}).forEach(([k,idx])=>{
     mapping[colLabels[k]||k]=classified.header.headers[idx]||k;
   });
+  pruneExcelImportJobs();
+  const jobId=crypto.randomUUID();
+  excelImportJobs.set(jobId,{
+    createdAt:Date.now(),
+    rows:(classified.rows||[]).filter(r=>r.payload&&(r.status==='ready'||r.status==='update')),
+    counts:classified.counts
+  });
   return {
     ok:true,
+    jobId,
     sheet:parsed.sheet||'',
-    headerRow:(classified.header?.index||0)+1,
+    headerRow:Number(classified.header?.index)+1,
     mapping,
     counts:classified.counts,
     preview,
     truncated:classified.counts.ready>50,
-    note:'Sadece 10+ haneli telefon / GSM aktarılır. Telefonsuz ve 7 haneli sabit hatlar atlanır. Kayıtlı telefon / VKN / TCKN ezilmez.'
+    note:'Aynı kartta şahıs + kurumsal durur. Sadece 10+ haneli telefon aktarılır. Telefonsuz ve 7 haneli hatlar atlanır.'
   };
 }
-app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers_manage'),dynamicsUpload.single('file'),(req,res)=>{
+const excelImportJobs=new Map();
+function pruneExcelImportJobs(){
+  const now=Date.now();
+  for(const [id,job] of excelImportJobs){
+    if(now-job.createdAt>45*60*1000)excelImportJobs.delete(id);
+  }
+}
+function loadExcelImportJob(req){
+  pruneExcelImportJobs();
+  const jobId=String(req.body?.jobId||req.query?.jobId||'').trim();
+  if(jobId&&excelImportJobs.has(jobId))return {jobId,job:excelImportJobs.get(jobId),fresh:false};
+  if(!req.file)throw new Error('Önce Excel seçip Önizle’ye basın.');
+  const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer,req.file.originalname||'');
+  if(!parsed.ok)throw new Error(parsed.error||'Excel okunamadı');
+  const s=readStore();
+  const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
+  const id=crypto.randomUUID();
+  const job={createdAt:Date.now(),rows:(classified.rows||[]).filter(r=>r.payload&&(r.status==='ready'||r.status==='update')),counts:classified.counts};
+  excelImportJobs.set(id,job);
+  return {jobId:id,job,fresh:true};
+}
+app.post('/web-api/admin/customers-excel-preview',requireAdminOrStaff('customers_manage'),customerExcelFile,(req,res)=>{
   try{res.json(customerExcelPreviewPayload(req))}
   catch(e){res.status(400).json({error:e.message||'Excel okunamadı'})}
 });
-app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_manage'),dynamicsUpload.single('file'),(req,res)=>{
+app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_manage'),customerExcelFile,(req,res)=>{
   try{
-    if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
-    const parsed=customerExcel.parseWorkbook(XLSX,req.file.buffer,req.file.originalname||'');
-    if(!parsed.ok)return res.status(400).json({error:parsed.error||'Excel okunamadı'});
+    const {jobId,job,fresh}=loadExcelImportJob(req);
+    let offset=Math.max(0,Number(req.body?.offset||req.query?.offset||0)||0);
+    if(fresh)offset=0;
+    const limit=Math.min(500,Math.max(50,Number(req.body?.limit||400)||400));
+    const slice=(job.rows||[]).slice(offset,offset+limit);
     const s=readStore();
-    const classified=customerExcel.classifyParsed(parsed,s.customers||[]);
-    let imported=0,invalid=0;
+    if(offset===0&&(s.customers||[]).length<2500)customerDedupe.collapseDuplicateCustomersByName(s);
+    let imported=0,updated=0,invalid=0;
     const errors=[];
-    for(const row of classified.rows){
-      if(row.status!=='ready'||!row.payload)continue;
+    for(const row of slice){
+      if(!row||!row.payload)continue;
       let data;
-      try{data=parseCustomerPayload(row.payload)}
+      try{
+        data=parseCustomerPayload(row.payload);
+        const existing=row.existingId?(s.customers||[]).find(c=>String(c.id)===String(row.existingId)):null;
+        if(existing){
+          try{data.customerCode=customerCode.resolveForSave(s,data.customerCode,{existing})}
+          catch(_){data.customerCode=existing.customerCode||data.customerCode}
+          customerDedupe.fillEmptyFields(existing,data);
+          if(customerDedupe.isBlankField(existing.companyName)&&data.companyName)existing.companyName=data.companyName;
+          const taxD=String(existing.taxNo||'').replace(/\D/g,'');
+          const phoneD=String(existing.phone||'').replace(/\D/g,'');
+          if(/^5\d{9}$/.test(taxD)&&phoneD.endsWith(taxD))existing.taxNo=data.taxNo||'';
+          if(data.invoiceType==='corporate')existing.invoiceType='corporate';
+          existing.updatedAt=new Date().toISOString();
+          updated++;
+          continue;
+        }
+        try{data.customerCode=customerCode.allocate(s,data.customerCode)}
+        catch(_){data.customerCode=customerCode.allocate(s,'')}
+      }
       catch(e){
         invalid++;
         if(errors.length<12)errors.push(`${row.payload.name}: ${e.message}`);
@@ -3333,20 +3936,37 @@ app.post('/web-api/admin/customers-excel-import',requireAdminOrStaff('customers_
       s.customers.push({id:crypto.randomUUID(),createdAt:new Date().toISOString(),...data});
       imported++;
     }
-    audit(s,'Asistek müşteri Excel aktarıldı',`${imported} yeni`,{
-      imported,existing:classified.counts.existing,noPhone:classified.counts.noPhone,shortPhone:classified.counts.shortPhone,invalid
-    });
+    const nextOffset=offset+slice.length;
+    const done=nextOffset>=(job.rows||[]).length;
+    job.imported=(job.imported||0)+imported;
+    job.updated=(job.updated||0)+updated;
+    job.invalid=(job.invalid||0)+invalid;
+    if(done){
+      audit(s,'Asistek müşteri Excel aktarıldı',`${job.imported||0} yeni`,{
+        imported:job.imported||0,existing:job.counts?.existing,noPhone:job.counts?.noPhone,shortPhone:job.counts?.shortPhone,invalid:job.invalid||0
+      });
+      excelImportJobs.delete(jobId);
+    }
     writeStore(s);
     res.json({
       ok:true,
-      imported,
-      existing:classified.counts.existing,
-      noPhone:classified.counts.noPhone,
-      shortPhone:classified.counts.shortPhone,
-      noName:classified.counts.noName,
-      invalid,
-      corporate:classified.counts.corporate,
-      individual:classified.counts.individual,
+      jobId,
+      done,
+      offset,
+      nextOffset,
+      chunkImported:imported,
+      imported:job.imported||imported,
+      updated:job.updated||0,
+      totalReady:(job.rows||[]).length,
+      remaining:Math.max(0,(job.rows||[]).length-nextOffset),
+      existing:job.counts?.existing||0,
+      noPhone:job.counts?.noPhone||0,
+      shortPhone:job.counts?.shortPhone||0,
+      noName:job.counts?.noName||0,
+      invalid:job.invalid||0,
+      corporate:job.counts?.corporate||0,
+      individual:job.counts?.individual||0,
+      both:job.counts?.both||0,
       errors
     });
   }catch(e){
@@ -3443,27 +4063,38 @@ function buildMoneyCenter(s,{month=''}={}){
   const people=[];
   for(const st of peopleForPayroll(s)){
     const salary=round(Number(st.salaryMonthly||0));
+    const hireDate=salaryProrate.normalizeHireDate(st.hireDate);
+    const pr=salaryProrate.prorateMonthlySalary({salaryMonthly:salary,hireDate,month:m});
+    const salaryEarned=round(pr.salaryEarned);
     const paid=paidByStaff.get(String(st.id))||{salary:0,commission:0,payroll:0,advance:0,total:0,count:0};
     const prim=primByStaff.get(String(st.id))||[...primByStaff.values()].find(p=>String(p.staffName||'').toLocaleLowerCase('tr-TR')===String(st.name||'').toLocaleLowerCase('tr-TR'))||{commission:0,sales:0,saleCount:0};
     const monthCommission=round(prim.commission||0);
-    const grossEarned=round(salary+monthCommission);
+    const grossEarned=round(salaryEarned+monthCommission);
     const advances=round(paid.advance||0);
     const paidTotal=round(paid.total||0);
     // Avans + yapılan ödemeler hak edişten düşülür
     const netDue=round(Math.max(0,grossEarned-advances-paidTotal));
-    // Geriye uyum alanları
-    const salaryDue=round(Math.max(0,salary-paid.salary));
+    // Geriye uyum alanları — maaş kalanı kısmi hak edişe göre
+    const salaryDue=round(Math.max(0,salaryEarned-paid.salary));
     const commissionDue=round(Math.max(0,monthCommission-paid.commission));
     let status='unset';
     if(grossEarned<=0.009 && advances<=0.009)status='unset';
     else if(netDue<=0.009)status='paid';
     else if(paidTotal>0.009||advances>0.009)status='partial';
     else status='due';
-    const formula=`Maaş ${salary.toLocaleString('tr-TR')} + Prim ${monthCommission.toLocaleString('tr-TR')} − Avans ${advances.toLocaleString('tr-TR')} − Ödenen ${paidTotal.toLocaleString('tr-TR')} = ${netDue.toLocaleString('tr-TR')}`;
+    const formula=`${salaryProrate.formulaSalaryPart(pr)} + Prim ${monthCommission.toLocaleString('tr-TR')} − Avans ${advances.toLocaleString('tr-TR')} − Ödenen ${paidTotal.toLocaleString('tr-TR')} = ${netDue.toLocaleString('tr-TR')}`;
     people.push({
       id:st.id,name:st.name,username:st.username,storeId:st.storeId,
       storeName:(s.stores||[]).find(v=>v.id===st.storeId)?.name||'',
       salaryMonthly:salary,
+      salaryEarned,
+      hireDate:pr.hireDate,
+      hireDay:pr.hireDay,
+      daysWorked:pr.daysWorked,
+      daysInMonth:pr.daysInMonth,
+      prorated:pr.prorated,
+      rangeLabel:pr.rangeLabel,
+      ratioLabel:pr.ratioLabel,
       monthCommission,
       monthSales:round(prim.sales||0),
       saleCount:Number(prim.saleCount||0),
@@ -3513,7 +4144,9 @@ function buildMoneyCenter(s,{month=''}={}){
 
 app.get('/web-api/admin/money-center',requireAdminOrStaffAny('finance_manage','finance_view','screen_finance','screen_money_center'),(req,res)=>{
   const s=readStore();
-  res.json(buildMoneyCenter(s,{month:String(req.query.month||'')}));
+  const data=buildMoneyCenter(s,{month:String(req.query.month||'')});
+  data.accounts=branchLock.filterAccountsForActor(s,currentActor(req),data.accounts||[],{staffPortal:isStaffPortalReq(req)});
+  res.json(data);
 });
 
 app.post('/web-api/admin/staff-salary',requireAdminOrStaffAny('finance_manage','users_manage','screen_money_center'),(req,res)=>{
@@ -3523,9 +4156,24 @@ app.post('/web-api/admin/staff-salary',requireAdminOrStaffAny('finance_manage','
   const staff=(s.staff||[]).find(v=>String(v.id)===id || (user && String(v.username||'').toLocaleLowerCase('tr-TR')===String(user.username||'').toLocaleLowerCase('tr-TR')));
   if(!user && !staff)return res.status(404).json({error:'Personel bulunamadı'});
   const salary=Math.round(Number(x.salaryMonthly||0)*100)/100;
-  if(user){user.salaryMonthly=salary;user.updatedAt=new Date().toISOString();syncStaffFromUser(s,user)}
-  if(staff){staff.salaryMonthly=salary;staff.updatedAt=new Date().toISOString()}
-  audit(s,'Personel maaşı güncellendi',(user||staff).name,{salaryMonthly:salary});
+  let hireDate;
+  if(x.hireDate!=null){
+    const hd=salaryProrate.normalizeHireDate(x.hireDate);
+    if(String(x.hireDate||'').trim() && !hd)return res.status(400).json({error:'İşe başlama tarihi geçersiz (YYYY-AA-GG)'});
+    hireDate=hd;
+  }
+  if(user){
+    user.salaryMonthly=salary;
+    if(hireDate!==undefined)user.hireDate=hireDate;
+    user.updatedAt=new Date().toISOString();
+    syncStaffFromUser(s,user);
+  }
+  if(staff){
+    staff.salaryMonthly=salary;
+    if(hireDate!==undefined)staff.hireDate=hireDate;
+    staff.updatedAt=new Date().toISOString();
+  }
+  audit(s,'Personel maaşı güncellendi',(user||staff).name,{salaryMonthly:salary,hireDate:hireDate!==undefined?hireDate:((user||staff).hireDate||'')});
   writeStore(s);
   res.json({ok:true,row:user?publicUser(user,s):publicStaff(staff,s)});
 });
@@ -3536,7 +4184,7 @@ app.post('/web-api/admin/money-expense',requireAdminOrStaffAny('finance_manage',
   const accountId=String(x.accountId||'');
   if(!amount)return res.status(400).json({error:'Tutar zorunlu'});
   if(!accountId||!s.financeAccounts.some(a=>a.id===accountId&&a.active!==false))return res.status(400).json({error:'Kasa/banka seçin'});
-  if(accountBalance(s,accountId)+0.009<amount)return res.status(400).json({error:'Hesap bakiyesi yetersiz'});
+  // Kasa 0 olsa da masraf yazılır — hesap eksi bakiyeye düşer
   const category=String(x.category||'Diğer').trim()||'Diğer';
   const row=financeTx(s,{
     date:x.date||todayISO(),kind:'expense',accountId,amount:-amount,
@@ -3558,7 +4206,7 @@ app.post('/web-api/admin/salary-pay',requireAdminOrStaffAny('finance_manage','sc
   const accountId=String(x.accountId||'');
   if(!amount)return res.status(400).json({error:'Ödeme tutarı zorunlu'});
   if(!accountId||!s.financeAccounts.some(a=>a.id===accountId&&a.active!==false))return res.status(400).json({error:'Kasa/banka seçin'});
-  if(accountBalance(s,accountId)+0.009<amount)return res.status(400).json({error:'Hesap bakiyesi yetersiz'});
+  // Avans/maaş: kasada nakit olmasa da seçilen hesaba eksi tutar yazılır (borç)
   const rawType=String(x.payType||'salary').toLowerCase();
   const payType=['commission','advance','payroll'].includes(rawType)?rawType:'salary';
   const month=moneyMonthKey(x.month);
@@ -3761,7 +4409,9 @@ function buildCustomerPaymentsBoard(s,{filter='open',q=''}={}){
 
 app.get('/web-api/admin/customer-payments-board',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
   const s=readStore();
-  res.json(buildCustomerPaymentsBoard(s,{filter:String(req.query.filter||'open'),q:String(req.query.q||'')}));
+  const board=buildCustomerPaymentsBoard(s,{filter:String(req.query.filter||'open'),q:String(req.query.q||'')});
+  board.accounts=branchLock.filterAccountsForActor(s,currentActor(req),board.accounts||[],{staffPortal:isStaffPortalReq(req)});
+  res.json(board);
 });
 
 app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
@@ -3782,7 +4432,8 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
         accountName:s.financeAccounts.find(a=>a.id===x.accountId)?.name||'',
         receiptUrl:`/web-api/admin/receipt/${x.id}`,
         displayAmount,
-        itemSummary:items.map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', ')
+        itemSummary:items.map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', '),
+        needsCompletion:rapidSalesCatalog.isOpenRapidSale(x)
       };
     });
   const pendingEdit=(s.cancellationRequests||[]).find(r=>r.status==='pending'&&r.targetType==='customer_edit'&&String(r.targetId)===String(customer.id))||null;
@@ -3794,14 +4445,53 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
     pendingDelete,
     canManage:isSystemManager(req),
     accounts:s.financeAccounts.filter(x=>x.active!==false).map(x=>({...x,balance:accountBalance(s,x.id)})),
-    products:(s.products||[]).filter(x=>x.active!==false).map(x=>({code:x.code,name:x.name,price:Number(x.cashPrice||x.salePrice||x.price||0),cardPrice:Number(x.cardPrice||x.cashPrice||x.salePrice||0),brand:x.brand||''})),
-    warehouses:(s.warehouses||[]).filter(x=>x.active!==false),
+    products:[],
+    warehouses:[],
     promissoryNotes:(s.promissoryNotes||[])
       .filter(n=>n.customerId===customer.id)
       .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))
       .map(n=>enrichPromissoryNote(s,n)),
-    orphanNotesCount:(s.promissoryNotes||[]).filter(n=>n.customerId===customer.id&&!['paid','cancelled'].includes(String(n.status||'open'))&&!n.saleId&&!n.saleReference).length
+    orphanNotesCount:(s.promissoryNotes||[]).filter(n=>n.customerId===customer.id&&!['paid','cancelled'].includes(String(n.status||'open'))&&!n.saleId&&!n.saleReference).length,
+    comms:customerComms.listForCustomer(s,customer.id)
   });
+});
+
+app.post('/web-api/admin/customer/:id/comm',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+  const s=readStore(),customer=(s.customers||[]).find(c=>String(c.id)===String(req.params.id));
+  if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
+  const actor=actorForReq(req);
+  const kind=String(req.body?.kind||'call').toLowerCase()==='sms'?'sms':'call';
+  const phone=String(req.body?.phone||customer.phone||'').trim();
+  const note=String(req.body?.note||'').trim();
+  const message=String(req.body?.message||'').trim();
+  let rec;
+  if(kind==='sms'){
+    if(!message && !note)return res.status(400).json({error:'SMS kaydı için mesaj veya not yazın'});
+    rec=customerComms.recordSms(s,customer,{
+      result:String(req.body?.result||'')==='failed'?'failed':'sent',
+      phone,message:message||note,note,actor,manual:true,
+      ok:String(req.body?.result||'')!=='failed'
+    });
+    audit(s,'Müşteri SMS kaydı',customer.name||customer.id,{manual:true,result:rec.result});
+  }else{
+    const result=String(req.body?.result||'started');
+    if(!customerComms.CALL_RESULTS.includes(result))return res.status(400).json({error:'Geçersiz arama sonucu'});
+    rec=customerComms.recordCall(s,customer,{result,phone,note,actor});
+    audit(s,'Müşteri arama kaydı',customer.name||customer.id,{result:rec.result,phone:rec.phone});
+  }
+  writeStore(s);
+  res.json({ok:true,row:rec,comms:customerComms.listForCustomer(s,customer.id)});
+});
+
+app.delete('/web-api/admin/customer/:id/comm/:commId',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','customers_manage'),(req,res)=>{
+  const s=readStore(),customer=(s.customers||[]).find(c=>String(c.id)===String(req.params.id));
+  if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
+  const commId=String(req.params.commId||'');
+  if(!commId)return res.status(400).json({error:'Kayıt id yok'});
+  const out=customerComms.remove(s,customer.id,commId);
+  audit(s,'Müşteri iletişim kaydı silindi',customer.name||customer.id,{commId,actor:(actorForReq(req)||{}).name||''});
+  writeStore(s);
+  res.json({ok:true,removed:out.id,comms:customerComms.listForCustomer(s,customer.id)});
 });
 
 app.post('/web-api/admin/customer/:id/delete-request',requireAdminOrStaff('customers_manage'),(req,res)=>{
@@ -3863,7 +4553,7 @@ app.get('/web-api/admin/uninvoiced-sales',requireAdminOrStaffAny('screen_uninvoi
   const actor=currentActor(req);
   const canAll=actorIsManager(req)||!isStaffPortalReq(req);
   let rows=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale' && !t.cancelled && saleNeedsInvoice(t.invoiceStatus));
+    .filter(t=>t.kind==='sale' && !t.cancelled && !rapidSalesCatalog.isOpenRapidSale(t) && saleNeedsInvoice(t.invoiceStatus));
   if(!canAll)rows=rows.filter(t=>txBelongsToActor(t,actor));
   rows=rows.map(t=>({
       id:t.id,
@@ -3925,8 +4615,13 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   const dealer=(s.dealerSettings||[]).find(d=>String(d.id)===String(x.dealerId)&&d.active!==false);
   if(!dealer)return res.status(400).json({error:'Geçerli satış bayisi seçilmelidir'});
   const people=salesPeople(s,req);
-  const salesperson=people.find(p=>String(p.id)===String(x.salespersonId)) || people.find(p=>String(p.name).toLocaleLowerCase('tr-TR')===String(x.salespersonName||'').toLocaleLowerCase('tr-TR')) || (actor?{id:actor.id,name:actor.name}:null);
+  const salesperson=people.find(p=>String(p.id)===String(x.salespersonId)) || people.find(p=>String(p.name).toLocaleLowerCase('tr-TR')===String(x.salespersonName||'').toLocaleLowerCase('tr-TR')) || (actor?{id:actor.id,name:actor.name,storeId:actor.storeId||'',role:actor.role||''}:null);
   if(!salesperson)return res.status(400).json({error:'Satış personeli seçilmelidir'});
+  const userRow=(s.users||[]).find(u=>String(u.id)===String(salesperson.id))
+    ||(s.users||[]).find(u=>String(u.username||'').toLocaleLowerCase('tr-TR')===String(salesperson.username||'').toLocaleLowerCase('tr-TR'));
+  const staffRow=(s.staff||[]).find(st=>String(st.id)===String(salesperson.id));
+  salesperson.storeId=String(userRow?.storeId||staffRow?.storeId||salesperson.storeId||'');
+  salesperson.role=userRow?.role||salesperson.role||'';
   const customer=s.customers.find(c=>c.id===x.customerId);
   if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
   const items=Array.isArray(x.items)?x.items.filter(i=>String(i.productCode||'').trim()&&Number(i.quantity)>0):[];
@@ -3988,6 +4683,20 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
       }
     }
   }
+  try{
+    branchLock.assertSaleBranchLock({
+      stores:s.stores||[],
+      accounts:s.financeAccounts||[],
+      dealers:s.dealerSettings||[],
+      warehouses:s.warehouses||[],
+      salesperson,
+      dealer,
+      payments:normalizedPayments,
+      warehouseId:String(x.warehouseId||'')
+    });
+  }catch(err){
+    return res.status(400).json({error:err.message||'Şube kilidi'});
+  }
   if(promissoryAmount>0){
     if(!promissoryIn.firstDueDate)return res.status(400).json({error:'Senet için ilk vade tarihi zorunludur'});
     const first=new Date(String(promissoryIn.firstDueDate)+'T12:00:00');
@@ -4022,14 +4731,37 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
       if(available<item.quantity)return res.status(400).json({error:`${item.productCode} için seçilen depoda yalnızca ${Math.max(0,available)} adet satılabilir stok var`});
     }
   }
-  const ref=`SAT-${Date.now()}`;
+  const completeId=String(x.completeSaleId||x.rapidCompleteTxId||'').trim();
+  let existing=null;
+  if(completeId){
+    existing=(s.financeTransactions||[]).find(t=>String(t.id)===completeId&&t.kind==='sale'&&!t.cancelled);
+    if(!existing)return res.status(404).json({error:'Tamamlanacak satış bulunamadı'});
+    if(!rapidSalesCatalog.isOpenRapidSale(existing))return res.status(400).json({error:'Bu satış zaten tamamlanmış. Yeni satış açın.'});
+    if(isStaffPortalReq(req) && !actorCanSeeAllStaffSales(req) && !txBelongsToActor(existing,actor)){
+      return res.status(403).json({error:'Bu satış size ait değil'});
+    }
+  }
   const actorName=actor?.name||currentActor(req)?.name||'Admin';
   const actorId=actor?.id||currentActor(req)?.id||'';
-  const sale=financeTx(s,{
+  const ref=existing?(String(existing.reference||existing.rapidSalesId||'').trim()||`SAT-${Date.now()}`):`SAT-${Date.now()}`;
+  const sale=existing||financeTx(s,{
     date:x.date,kind:'sale',accountId:'',customerId:customer.id,amount:0,customerDelta:total,
     category:'Ürün Satışı',description:String(x.description||'Müşteri satışı'),reference:ref,
     createdBy:actorName,createdById:actorId
   });
+  if(existing){
+    if(!sale.rapidInvoiceNumber)sale.rapidInvoiceNumber=String(sale.invoiceNumber||'').trim();
+    sale.date=String(x.date||sale.date||todayISO()).slice(0,10);
+    sale.customerId=customer.id;
+    sale.amount=0;
+    sale.customerDelta=total;
+    sale.category='Ürün Satışı';
+    sale.description=String(x.description||sale.description||'Müşteri satışı');
+    sale.reference=ref;
+    sale.updatedAt=new Date().toISOString();
+    sale.completedBy=actorName;
+    sale.completedById=actorId;
+  }
   sale.items=cleanItems;
   sale.grossTotal=grossTotal;
   sale.discountPct=discountPct;
@@ -4043,8 +4775,8 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   sale.commissionAmount=commissionAmount;
   sale.salespersonId=salesperson.id;
   sale.salespersonName=salesperson.name;
-  sale.deliveryStatus=String(x.deliveryStatus||'order_received');
-  sale.deliveryNote=String(x.deliveryNote||'');
+  sale.deliveryStatus=String(x.deliveryStatus||existing?.deliveryStatus||'order_received');
+  sale.deliveryNote=String(x.deliveryNote||(existing?existing.deliveryNote:'')||'');
   sale.paymentMethod=paymentMethod;
   sale.payments=normalizedPayments.map(p=>isHavaleMethod(p.method)?{...p,pending:true,collectedAmount:0}:p)
     .concat(promissoryAmount>0?[{method:'Senet',amount:promissoryAmount,accountId:''}]:[]);
@@ -4149,7 +4881,11 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     if(g)sale.guarantor=g;
   }catch(err){return res.status(400).json({error:err.message||'Kefil bilgisi geçersiz'})}
 
-  audit(s,'Müşteriye satış yapıldı',customer.name,{total,grossTotal,discountPct,dealer:dealer.name,salesperson:salesperson.name,commissionAmount,paid,payments:sale.payments,promissoryAmount,ref,items:cleanItems.length,hasGuarantor:Boolean(sale.guarantor)});
+  sale.needsCompletion=false;
+  sale.rapidDraft=false;
+  sale.cashPosted=collections.length>0;
+  sale.completedAt=new Date().toISOString();
+  audit(s,existing?'Rapid satış tamamlandı':'Müşteriye satış yapıldı',customer.name,{total,grossTotal,discountPct,dealer:dealer.name,salesperson:salesperson.name,commissionAmount,paid,payments:sale.payments,promissoryAmount,ref,items:cleanItems.length,hasGuarantor:Boolean(sale.guarantor),completeSaleId:existing?existing.id:''});
   writeStore(s);
   res.json({
     ok:true,sale,collections,collection:collections[0]||null,promissory:promissoryResult,
@@ -4166,6 +4902,11 @@ app.post('/web-api/admin/customer-collection',requireAdminOrStaffAny('finance_ma
   if(!x.accountId)return res.status(400).json({error:'Kasa veya banka seçilmelidir'});
   const acc=s.financeAccounts.find(a=>a.id===x.accountId&&a.active!==false);
   if(!acc)return res.status(400).json({error:'Geçersiz kasa/banka'});
+  try{
+    branchLock.assertAccountBrandLock(s,currentActor(req),acc,{staffPortal:isStaffPortalReq(req)});
+  }catch(err){
+    return res.status(400).json({error:err.message||'Şube kilidi'});
+  }
   const method=String(x.paymentMethod||'Nakit').trim()||'Nakit';
   if((method==='Kredi Kartı'||isHavaleMethod(method))&&acc.type!=='bank'){
     return res.status(400).json({error:`${method} için hesap Türü Banka olmalı`});
@@ -4226,15 +4967,20 @@ function isSystemManager(req){
 }
 function salesPeople(s,req){
   const out=[],seen=new Set();
-  const add=(id,name,source,active=true,storeId='')=>{
+  const add=(id,name,source,active=true,storeId='',role='')=>{
     name=String(name||'').trim(); if(!active||!name)return;
     const key=name.toLocaleLowerCase('tr-TR'); if(seen.has(key))return; seen.add(key);
-    out.push({id:String(id||key),name,source,storeId:String(storeId||'')});
+    const sid=String(storeId||'');
+    const branch=(s.stores||[]).find(st=>String(st.id)===sid);
+    out.push({
+      id:String(id||key),name,source,storeId:sid,storeName:branch?.name||'',
+      brand:branchLock.personBrand({id,role,storeId:sid},s.stores||[])
+    });
   };
-  peopleForPayroll(s).forEach(x=>add(x.id,x.name,'user',true,x.storeId));
-  (s.staff||[]).forEach(x=>add(x.id,x.name,'staff',x.active!==false,x.storeId));
-  (s.users||[]).forEach(x=>add(x.id,x.name,'user',x.active!==false,x.storeId||''));
-  const current=currentActor(req); if(current)add(current.id,current.name,'session',true,current.storeId||'');
+  peopleForPayroll(s).forEach(x=>add(x.id,x.name,'user',true,x.storeId,x.role));
+  (s.staff||[]).forEach(x=>add(x.id,x.name,'staff',x.active!==false,x.storeId,x.role));
+  (s.users||[]).forEach(x=>add(x.id,x.name,'user',x.active!==false,x.storeId||'',x.role));
+  const current=currentActor(req); if(current)add(current.id,current.name,'session',true,current.storeId||'',current.role);
   return out.sort((a,b)=>a.name.localeCompare(b.name,'tr'));
 }
 function cancelCollectionInStore(s,collection,actor,reason=''){
@@ -4549,6 +5295,8 @@ app.post('/web-api/admin/customer/:id/note',requireAdmin,(req,res)=>{
 
 app.get('/web-api/admin/sales-tracking',requireAdminOrStaffAny('screen_sales_tracking','orders_manage','screen_sales_center'),(req,res)=>{
   const s=readStore();
+  const closedGhosts=rapidSalesCatalog.suppressReimportedCancelledRapidDrafts(s.financeTransactions||[]);
+  if(closedGhosts) writeStore(s);
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
   const actor=currentActor(req);
   const canAll=actorCanSeeAllStaffSales(req)||!isStaffPortalReq(req);
@@ -4562,11 +5310,752 @@ app.get('/web-api/admin/sales-tracking',requireAdminOrStaffAny('screen_sales_tra
         customerId:t.customerId||'',customerName:c.name||'',customerPhone:c.phone||'',customerNote:c.note||'',
         total:saleAmount(t),items:t.items||[],deliveryStatus:t.deliveryStatus||'order_received',
         deliveryNote:t.deliveryNote||'',invoiceStatus:t.invoiceStatus||'pending',deductStock:Boolean(t.deductStock),
-        warehouseId:t.warehouseId||'',createdAt:t.createdAt||''
+        warehouseId:t.warehouseId||'',createdAt:t.createdAt||'',
+        needsCompletion:rapidSalesCatalog.isOpenRapidSale(t),rapidDraft:Boolean(t.rapidDraft),
+        rapidSalesId:t.rapidSalesId||'',source:t.source||''
       }
     })
     .sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
   res.json({ok:true,rows});
+});
+
+const RAPID_PULL_TTL_MS=15*60*1000;
+const rapidSalesPullCache=new Map();
+function rememberRapidPull(parsed, meta){
+  const token=crypto.randomBytes(16).toString('hex');
+  rapidSalesPullCache.set(token,{parsed,meta:meta||{},at:Date.now()});
+  if(rapidSalesPullCache.size>40){
+    const now=Date.now();
+    for(const [k,v] of rapidSalesPullCache){
+      if(now-v.at>RAPID_PULL_TTL_MS) rapidSalesPullCache.delete(k);
+    }
+  }
+  return token;
+}
+function takeRapidPull(token){
+  const row=rapidSalesPullCache.get(String(token||''));
+  if(!row) return null;
+  if(Date.now()-row.at>RAPID_PULL_TTL_MS){
+    rapidSalesPullCache.delete(String(token||''));
+    return null;
+  }
+  return row;
+}
+function saveRapidOktaTokens(s, tokens){
+  if(!tokens || !(tokens.access_token || tokens.accessToken)) return false;
+  s.invoiceIntegration=s.invoiceIntegration||{};
+  s.invoiceIntegration.rapid360=d365Auth.persistTokens(s.invoiceIntegration.rapid360||{}, tokens);
+  return true;
+}
+async function startRapidOktaChallenge(req, s){
+  const body=req.body||{};
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  const okta=d365Auth.publicAuth(rapid);
+  return d365Auth.startWebOnlyLogin({
+    rapid,
+    loginHint:body.loginHint||body.username||okta.lastUser||okta.account||d365Auth.DEFAULT_ACCOUNT,
+    company:body.company,
+    store:body.store||body.magaza||'340334',
+    startDate:body.startDate,
+    endDate:body.endDate
+  });
+}
+function parseRapid360SalesUpload(file){
+  if(!file||!file.buffer)throw new Error('XML dosyası seçilmedi');
+  const name=String(file.originalname||'').toLowerCase();
+  const buf=file.buffer;
+  if(/\.(xlsx|xls)$/.test(name)||(buf[0]===0x50&&buf[1]===0x4b)){
+    const wb=XLSX.read(buf,{type:'buffer'});
+    const records=rapidSalesXml.recordsFromXlsxWorkbook(wb,XLSX);
+    return {sales:rapidSalesXml.extractSalesFromRecords(records),format:'xlsx',recordCount:records.length};
+  }
+  const text=rapidSalesXml.decodeBuffer(buf);
+  const out=rapidSalesXml.extractSales(text);
+  return out;
+}
+function emptyRapidSalesError(parsed, fileMode, extra){
+  const cancelled=Number(parsed && parsed.cancelledCount||0);
+  if(cancelled) return `${fileMode?'XML okundu':'Rapid360'}: ${cancelled} satış İPTAL işaretli, aktarılacak kayıt yok.`;
+  const magaza=String(extra&&extra.store||'340334').trim()||'340334';
+  const start=String(extra&&extra.startDate||'').slice(0,10);
+  const end=String(extra&&extra.endDate||'').slice(0,10);
+  const when=start?` ${start}${end&&end!==start?`–${end}`:''}`:'';
+  return fileMode
+    ? 'XML içinde satış siparişi bulunamadı. Rapid360 Detaylı satış bilgileri XML dosyasını seçin (SiparisNo öznitelik olarak gelir).'
+    : `Rapid360 yanıtında satış yok. Mağaza ${magaza} ATAK${when}. Tarihi genişletin veya XML yükleyin.`;
+}
+function rapidDealerIsFurniture(dealer){
+  return /istikbal/i.test(String(dealer&&(dealer.id||dealer.name)||''));
+}
+function rapidPublicCategories(s){
+  ensureDynamicsCoreCategories(s);
+  return (s.categories||[])
+    .filter(c=>c&&c.active!==false)
+    .map(c=>({id:c.id,name:c.name}))
+    .sort((a,b)=>{
+      if(String(a.name).toLocaleLowerCase('tr-TR')==='diğer')return 1;
+      if(String(b.name).toLocaleLowerCase('tr-TR')==='diğer')return -1;
+      return String(a.name).localeCompare(String(b.name),'tr');
+    });
+}
+function collectRapidMissingProducts(s, parsed, dealer){
+  const skip=new Set((parsed.sales||[]).filter(sale=>rapidSaleDuplicate(s,sale.salesId)).map(sale=>String(sale.salesId||'').trim()).filter(Boolean));
+  const furniture=rapidDealerIsFurniture(dealer);
+  return rapidSalesCatalog.collectMissingProducts(parsed, s.products, {
+    skipSalesIds:skip,
+    furniture,
+    suggestCategoryId:(hint)=>dynamicsSuggestedCategoryId(s, hint)
+  });
+}
+function createRapidMissingProducts(s, missing, {dealer, categoryMap, categoryId}={}){
+  const furniture=rapidDealerIsFurniture(dealer);
+  const map=rapidSalesCatalog.parseCategoryMap(categoryMap);
+  const fallback=String(categoryId||'').trim();
+  const valid=new Set((s.categories||[]).filter(c=>c&&c.active!==false).map(c=>String(c.id)));
+  const created=[];
+  for(const item of missing||[]){
+    if(rapidSalesCatalog.findCatalogProduct(s.products, item)) continue;
+    let cat=rapidSalesCatalog.lookupCategory(map, item, fallback || item.categoryId || item.suggestedCategoryId);
+    if(furniture && !cat){
+      cat=dynamicsSuggestedCategoryId(s, `mobilya ${item.name||''} ${item.itemCode||''}`);
+    }
+    if(!cat || !valid.has(String(cat))){
+      throw new Error(`${missing.length} yeni ürünün kategorisi eksik — tabloda her ürüne kategori seçin`);
+    }
+    const name=String(item.name||item.itemCode||item.key||'').trim();
+    const code=String(item.itemCode||name).trim();
+    const product=sanitizeProduct({
+      code,
+      name:name||code,
+      itemCode:String(item.itemCode||code).trim(),
+      searchName:name||code,
+      dynamicsProductId:String(item.itemCode||'').trim(),
+      brand:furniture?'İstikbal':dynamicsBrand(name, item.itemCode),
+      category:cat,
+      purchasePrice:0,
+      stock:0,
+      active:true,
+      tags:furniture?['rapid360','auto-created','istikbal']:['rapid360','auto-created']
+    });
+    s.products.unshift(product);
+    created.push(product.code);
+  }
+  return created;
+}
+function buildRapidSalesPreview(s, parsed, dealer){
+  ensureDynamicsCoreCategories(s);
+  const missingProducts=collectRapidMissingProducts(s, parsed, dealer);
+  const rows=(parsed.sales||[]).map(sale=>{
+    const customer=matchRapidCustomer(s,sale.custAccount,sale.custName,sale.tckn);
+    const duplicate=rapidSaleDuplicate(s,sale.salesId);
+    const cancelledInAtak=rapidSalesCatalog.isRapidSaleCancelledInAtak(s.financeTransactions||[],sale.salesId);
+    const items=mapRapidSaleItems(s,sale);
+    return{
+      salesId:sale.salesId,
+      date:sale.orderDate||sale.invoiceDate||'',
+      invoiceDate:sale.invoiceDate||'',
+      invoiceNumber:sale.invoiceNumber||'',
+      custAccount:sale.custAccount||'',
+      customerName:sale.custName||'',
+      customerStatus:customer?'existing':'new',
+      store:sale.store||'',
+      webOrder:!!sale.webOrder,
+      eInvoice:!!sale.eInvoice,
+      itemCount:items.length,
+      unmatchedItems:items.filter(i=>i.unmatched).length,
+      total:sale.total||0,
+      paymentMethod:(sale.payments||[]).map(p=>p.method).filter(Boolean).join(' + ')||'',
+      duplicate,
+      cancelledInAtak,
+      skip:!items.length||duplicate
+    };
+  });
+  return {
+    ok:true,
+    format:parsed.format||'xml',
+    count:rows.length,
+    cancelled:Number(parsed.cancelledCount||0),
+    importable:rows.filter(r=>!r.skip).length,
+    duplicate:rows.filter(r=>r.duplicate).length,
+    customersNew:rows.filter(r=>r.customerStatus==='new'&&!r.duplicate).length,
+    missingProductCount:missingProducts.length,
+    missingProducts,
+    categories:rapidPublicCategories(s),
+    needsProductCategories:missingProducts.length>0,
+    rows
+  };
+}
+function pickRapidDealer(s, dealerId){
+  return (s.dealerSettings||[]).find(d=>String(d.id)===String(dealerId||'atak-beko')&&d.active!==false)
+    ||(s.dealerSettings||[]).find(d=>d.active!==false);
+}
+function applyRapidSalesImport(s, parsed, {dealer, actorName, actorId, source, categoryMap, categoryId, salesIds}={}){
+  rapidSalesCatalog.suppressReimportedCancelledRapidDrafts(s.financeTransactions||[]);
+  const live=source==='rapid360-pull';
+  const label=live?'Rapid360 Aktar':'Rapid360 XML';
+  const wanted=rapidSalesCatalog.parseSalesIds(salesIds);
+  if(salesIds!=null && salesIds!=='' && !wanted.length){
+    throw new Error('Aktarılacak satış seçilmedi');
+  }
+  if(wanted.length){
+    parsed=rapidSalesCatalog.filterSalesByIds(parsed, wanted);
+    if(!(parsed.sales||[]).length) throw new Error('Seçilen satışlar bu listede yok');
+  }
+  let imported=0,skippedDuplicate=0,skippedEmpty=0,customersCreated=0,customersUpdated=0;
+  const importedSales=[];
+  const errors=[];
+  ensureDynamicsCoreCategories(s);
+  const missing=collectRapidMissingProducts(s, parsed, dealer);
+  const productsCreatedList=createRapidMissingProducts(s, missing, {dealer, categoryMap, categoryId});
+  const productsCreated=productsCreatedList.length;
+  for(const src of parsed.sales||[]){
+    const before=matchRapidCustomer(s,src.custAccount,src.custName,src.tckn);
+    const beforeName=before?String(before.name||''):'';
+    const {customer,created}=ensureRapidCustomer(s,src);
+    if(created)customersCreated++;
+    else if(beforeName && beforeName!==String(customer.name||''))customersUpdated++;
+    if(rapidSaleDuplicate(s,src.salesId)){skippedDuplicate++;continue}
+    const items=mapRapidSaleItems(s,src);
+    if(!items.length){skippedEmpty++;continue}
+    const total=Math.round((src.total||items.reduce((a,i)=>a+Number(i.total||0),0))*100)/100;
+    const ref=String(src.salesId||'').trim();
+    const date=src.orderDate||src.invoiceDate||todayISO();
+    const row=financeTx(s,{
+      date,kind:'sale',accountId:'',customerId:customer.id,amount:0,customerDelta:0,
+      category:'Ürün Satışı',description:`${label} · ${ref}`,reference:ref,
+      createdBy:actorName,createdById:actorId
+    });
+    const commissionPct=Number(dealer.commissionPct||0);
+    const commissionAmount=Math.round((total*commissionPct/100)*100)/100;
+    const impliedCost=Math.round((total/(1+Number(dealer.marginDividePct||0)/100))*100)/100;
+    const payLabel=(src.payments||[]).map(p=>p.method).filter(Boolean).join(' + ')||'Rapid360';
+    row.items=items.map(({unmatched,...rest})=>rest);
+    row.grossTotal=total;
+    row.discountPct=0;
+    row.discountAmount=0;
+    row.total=total;
+    row.dealerId=dealer.id;
+    row.dealerName=dealer.name;
+    row.marginDividePct=Number(dealer.marginDividePct||0);
+    row.impliedCost=impliedCost;
+    row.commissionPct=commissionPct;
+    row.commissionAmount=commissionAmount;
+    const sp=matchRapidSalesperson(s,src.salespersonName);
+    row.salespersonId=sp?.id||actorId;
+    row.salespersonName=src.salespersonName||sp?.name||actorName||'Rapid360';
+    row.deliveryNote=live?'Rapid360 canlı aktarım':(src.webOrder?'Rapid360 web siparişi':'Rapid360 XML aktarım');
+    row.paymentMethod=payLabel;
+    row.payments=(src.payments||[]).filter(p=>Number(p.amount)>0).map(p=>({method:p.method,amount:cleanMoney(p.amount),accountId:'',imported:true,rawMethod:p.rawMethod||'',dueDate:p.dueDate||'',installments:p.installments||0}));
+    row.warehouseId='';
+    row.deductStock=false;
+    row.reserveStock=false;
+    row.stockMode='none';
+    row.billingParty='individual';
+    row.rapidSalesId=ref;
+    row.rapidCustAccount=src.custAccount||'';
+    row.rapidStore=src.store||'';
+    row.source=source||'rapid360-xml';
+    rapidSalesCatalog.markImportedSaleDraft(row, src);
+    importedSales.push({id:row.id,rapidSalesId:ref,customerId:customer.id,customerName:customer.name||'',total,date});
+    imported++;
+  }
+  return {imported,skippedDuplicate,skippedEmpty,customersCreated,customersUpdated,productsCreated,errors,importedSales};
+}
+function rapidSaleDuplicate(s,salesId){
+  return rapidSalesCatalog.isRapidSaleAlreadyImported(s.financeTransactions||[],salesId);
+}
+function matchRapidSalesperson(s,name){
+  const n=String(name||'').trim().toLocaleLowerCase('tr-TR');
+  if(!n)return null;
+  const staff=(s.staff||[]).find(x=>x.active!==false&&String(x.name||'').trim().toLocaleLowerCase('tr-TR')===n);
+  if(staff)return {id:staff.userId||staff.id,name:staff.name};
+  const user=(s.users||[]).find(x=>x.active!==false&&String(x.name||'').trim().toLocaleLowerCase('tr-TR')===n);
+  if(user)return {id:user.id,name:user.name};
+  return null;
+}
+function matchRapidCustomer(s,account,name,tckn){
+  const acc=String(account||'').trim().toLocaleLowerCase('tr-TR');
+  const nm=String(name||'').trim().toLocaleLowerCase('tr-TR');
+  const tc=String(tckn||'').replace(/\D/g,'');
+  const list=(s.customers||[]).filter(c=>c.active!==false&&!c.deletedAt);
+  if(tc.length===11){
+    const hit=list.find(c=>String(c.tckn||'').replace(/\D/g,'')===tc);
+    if(hit)return hit;
+  }
+  if(acc){
+    const hit=list.find(c=>String(c.rapidCustAccount||c.customerCode||'').trim().toLocaleLowerCase('tr-TR')===acc);
+    if(hit)return hit;
+  }
+  if(nm && /\s/.test(String(name||'').trim())){
+    const hit=list.find(c=>String(c.name||'').trim().toLocaleLowerCase('tr-TR')===nm);
+    if(hit)return hit;
+  }
+  return null;
+}
+function fillRapidCustomer(row,sale){
+  const parts=personName.normalizePersonName({
+    firstName:sale.firstName||row.firstName,
+    lastName:sale.lastName||row.lastName,
+    name:rapidSalesXml.betterPersonName(row.name,sale.custName)
+  });
+  if(parts.name)row.name=parts.name;
+  row.firstName=parts.firstName||row.firstName||'';
+  row.lastName=parts.lastName||row.lastName||'';
+  if(sale.custAccount&&!row.rapidCustAccount)row.rapidCustAccount=sale.custAccount;
+  if(sale.custAccount&&!row.customerCode)row.customerCode=sale.custAccount;
+  if(sale.tckn&&!row.tckn)row.tckn=String(sale.tckn).replace(/\D/g,'');
+  if(sale.email&&!row.email)row.email=String(sale.email).trim();
+  const phone=customerExcel.extractBestPhone([sale.phone])||customerExcel.normalizePhone(sale.phone||'');
+  if(phone&&!row.phone)row.phone=phone;
+  if(sale.address&&(!row.address||row.address==='Rapid360 satış aktarımı'))row.address=String(sale.address).trim();
+  if(sale.city&&(!row.city||row.city==='İstanbul'))row.city=String(sale.city).trim();
+  if(sale.district&&(!row.district||row.district==='Sarıyer'))row.district=String(sale.district).trim();
+  if(sale.companyName&&!row.companyName)row.companyName=String(sale.companyName).trim();
+  if(sale.taxOffice&&!row.taxOffice)row.taxOffice=String(sale.taxOffice).trim();
+  const tax=String(sale.taxNo||'').replace(/\D/g,'');
+  if(tax.length===10&&!row.taxNo){
+    row.taxNo=tax;
+    if(!row.invoiceType||row.invoiceType==='individual')row.invoiceType=row.companyName?'corporate':'individual';
+  }
+  if(row.deliverySameAsBilling!==false){
+    row.deliveryCity=row.city;
+    row.deliveryDistrict=row.district;
+    row.deliveryAddress=row.address;
+  }
+  row.updatedAt=new Date().toISOString();
+  return row;
+}
+function ensureRapidCustomer(s,sale){
+  const existing=matchRapidCustomer(s,sale.custAccount,sale.custName,sale.tckn);
+  if(existing){
+    fillRapidCustomer(existing,sale);
+    return {customer:existing,created:false};
+  }
+  const city=String(sale.city||'İstanbul').trim()||'İstanbul';
+  const district=String(sale.district||'Sarıyer').trim()||'Sarıyer';
+  const address=String(sale.address||'Rapid360 satış aktarımı').trim()||'Rapid360 satış aktarımı';
+  const tax=String(sale.taxNo||'').replace(/\D/g,'');
+  const companyName=String(sale.companyName||'').trim();
+  const phone=customerExcel.extractBestPhone([sale.phone])||customerExcel.normalizePhone(sale.phone||'')||'';
+  const parts=personName.normalizePersonName({firstName:sale.firstName,lastName:sale.lastName,name:sale.custName||companyName||sale.custAccount||'Rapid360 müşteri'});
+  const row={
+    id:crypto.randomUUID(),
+    name:parts.name||String(sale.custName||companyName||sale.custAccount||'Rapid360 müşteri').trim(),
+    firstName:parts.firstName||'',
+    lastName:parts.lastName||'',
+    phone,
+    email:String(sale.email||'').trim(),
+    taxNo:tax.length===10?tax:'',
+    tckn:String(sale.tckn||'').replace(/\D/g,''),
+    city,district,address,
+    deliverySameAsBilling:true,deliveryCity:city,deliveryDistrict:district,deliveryAddress:address,
+    invoiceType:tax.length===10&&companyName?'corporate':'individual',
+    companyName:tax.length===10?companyName:'',
+    taxOffice:String(sale.taxOffice||'').trim(),
+    rapidCustAccount:String(sale.custAccount||'').trim(),
+    customerCode:sale.custAccount?customerCode.normalizeCustomerCode(sale.custAccount):customerCode.allocate(s,''),
+    note:sale.custAccount?`Rapid360 müşteri hesabı: ${sale.custAccount}`:'Rapid360 XML aktarım',
+    source:'rapid360-xml',
+    active:true,
+    createdAt:new Date().toISOString(),
+    updatedAt:new Date().toISOString()
+  };
+  s.customers.push(row);
+  return {customer:row,created:true};
+}
+function mapRapidSaleItems(s,sale){
+  return (sale.lines||[]).map((line,i)=>{
+    const product=dynamicsExistingProduct(s,{itemCode:line.itemCode,searchName:line.name,dynamicsProductId:line.itemCode});
+    const qty=Math.max(1,Math.round(Number(line.quantity)||1));
+    const unitPrice=cleanMoney(line.unitPrice||line.total);
+    const total=cleanMoney(line.total||qty*unitPrice);
+    const unitCost=normalizeNumber(product?.purchasePrice||0);
+    const vatRate=Number(product?.vatRate!=null?product.vatRate:20)||20;
+    const productCode=String(product?.code||line.itemCode||`R360-${sale.salesId||'x'}-${i+1}`).trim();
+    const materialCode=String(product?.searchName||product?.code||line.name||productCode).trim();
+    return{
+      productCode,itemCode:String(line.itemCode||product?.itemCode||'').trim(),materialCode,
+      productName:materialCode,brand:String(product?.brand||'').trim(),
+      quantity:qty,unitPrice,total,vatRate,unitCost,
+      costTotal:Math.round(qty*unitCost*100)/100,
+      costMissing:unitCost<=0,
+      unmatched:!product
+    };
+  }).filter(i=>i.productCode);
+}
+function rapidSalesPerm(req,res,next){
+  return requireAdminOrStaffAny('orders_manage','screen_sales_center','screen_sales_tracking')(req,res,next);
+}
+app.post('/web-api/admin/rapid360-sales-preview',rapidSalesPerm,dynamicsUpload.single('file'),(req,res)=>{
+  try{
+    const parsed=parseRapid360SalesUpload(req.file);
+    if(!parsed.sales.length) return res.status(400).json({error:emptyRapidSalesError(parsed,true)});
+    const s=readStore();
+    const dealer=pickRapidDealer(s,req.body?.dealerId);
+    const preview=buildRapidSalesPreview(s,parsed,dealer);
+    writeStore(s);
+    res.json(preview);
+  }catch(e){
+    res.status(400).json({error:e.message||'XML okunamadı'});
+  }
+});
+app.post('/web-api/admin/rapid360-sales-import',rapidSalesPerm,dynamicsUpload.single('file'),(req,res)=>{
+  try{
+    const parsed=parseRapid360SalesUpload(req.file);
+    if(!parsed.sales.length) return res.status(400).json({error:emptyRapidSalesError(parsed,true)});
+    const s=readStore();
+    const dealer=pickRapidDealer(s,req.body?.dealerId);
+    if(!dealer)return res.status(400).json({error:'Satış bayisi bulunamadı (Atak Beko).'});
+    const actor=currentActor(req);
+    const stats=applyRapidSalesImport(s,parsed,{
+      dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-xml',
+      categoryMap:req.body?.categoryMap,categoryId:req.body?.categoryId,salesIds:req.body?.salesIds
+    });
+    audit(s,'Rapid360 XML satış aktarıldı',`${stats.imported} satış`,stats);
+    writeStore(s);
+    res.json({ok:true,...stats});
+  }catch(e){
+    res.status(400).json({error:e.message||'Aktarım başarısız'});
+  }
+});
+app.post('/web-api/admin/rapid360-sales-pull',rapidSalesPerm,async(req,res)=>{
+  try{
+    const body=req.body||{};
+    const magaza=rapidSalesFetch.DEFAULT_STORE;
+    const company=String(body.company||'').trim()||rapidSalesFetch.DEFAULT_COMPANY;
+    const s=readStore();
+    const out=await rapidSalesFetch.fetchRapid360Sales({
+      store:s,
+      startDate:body.startDate,
+      endDate:body.endDate,
+      magaza,
+      company
+    });
+    if(out.tokens) saveRapidOktaTokens(s,out.tokens);
+    if(!out.ok && out.needsOkta){
+      if(out.tokens) writeStore(s);
+      return res.status(409).json({
+        needsOkta:true,
+        error:out.error||'Rapid360’ı açın, Okta’yı onaylayın, Satışları oku’ya basın.',
+        loginUrl:d365Auth.dynamicsReportUrl({company,store:magaza,startDate:body.startDate,endDate:body.endDate}),
+        store:magaza,company,tried:out.tried||[]
+      });
+    }
+    if(!out.ok) return res.status(400).json({error:out.error||'Rapid360 çekilemedi',tried:out.tried||[],store:magaza,company,via:out.via||''});
+    if(!out.parsed || !out.parsed.sales.length){
+      return res.status(400).json({error:emptyRapidSalesError(out.parsed||{},false,{store:magaza,startDate:body.startDate,endDate:body.endDate}),tried:out.tried||[],store:magaza,company});
+    }
+    const dealer=pickRapidDealer(s,body.dealerId);
+    const preview=buildRapidSalesPreview(s,out.parsed,dealer);
+    const pullToken=rememberRapidPull(out.parsed,{
+      dealerId:body.dealerId,
+      startDate:body.startDate,
+      endDate:body.endDate,
+      store:magaza,
+      company
+    });
+    const autoImport=body.autoImport===true||body.autoImport==='true'||body.autoImport==='1';
+    if(autoImport && preview.needsProductCategories){
+      if(out.tokens) writeStore(s);
+      else if((s.categories||[]).length) writeStore(s);
+      return res.json({
+        ...preview,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,autoImported:false,
+        needsProductCategories:true,tried:out.tried||[],store:magaza,company,via:out.via||''
+      });
+    }
+    if(!autoImport){
+      if(out.tokens) writeStore(s);
+      return res.json({...preview,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,tried:out.tried||[],store:magaza,company,via:out.via||''});
+    }
+    if(!dealer)return res.status(400).json({error:'Satış bayisi bulunamadı (Atak Beko).'});
+    const actor=currentActor(req);
+    const stats=applyRapidSalesImport(s,out.parsed,{
+      dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-pull',
+      categoryMap:body.categoryMap,categoryId:body.categoryId,salesIds:body.salesIds
+    });
+    audit(s,'Rapid360 canlı satış aktarıldı',`${stats.imported} satış`,stats);
+    writeStore(s);
+    res.json({...preview,...stats,pullToken,sourceUrl:out.sourceUrl||'',fetched:true,autoImported:true,tried:out.tried||[],store:magaza,company,via:out.via||''});
+  }catch(e){
+    res.status(400).json({error:e.message||'Rapid360 çekilemedi',tried:e.tried||[]});
+  }
+});
+app.post('/web-api/admin/rapid360-bridge-start',rapidSalesPerm,(req,res)=>{
+  const body=req.body||{};
+  const row=rapidSalesBridge.createBridge({
+    startDate:body.startDate,endDate:body.endDate,
+    store:rapidSalesFetch.DEFAULT_STORE,
+    company:String(body.company||'').trim()||rapidSalesFetch.DEFAULT_COMPANY,
+    dealerId:body.dealerId
+  });
+  const base=publicBaseUrl(req);
+  res.json({
+    ok:true,
+    bridgeId:row.id,
+    pushUrl:`${base}/web-api/rapid360-bridge/${row.id}`,
+    bookmarklet:rapidSalesBridge.bookmarklet({
+      bridgeId:row.id,baseUrl:base,startDate:row.meta.startDate,endDate:row.meta.endDate
+    }),
+    loginUrl:d365Auth.dynamicsReportUrl({company:row.meta.company,store:row.meta.store,startDate:row.meta.startDate,endDate:row.meta.endDate}),
+    message:'Telefonda Okta’yı onaylayın. Satışlar Atak’a gelsin. Gelmezse Rapid360 penceresinde yeşil düğmeye bir kez basın.'
+  });
+});
+app.get('/web-api/admin/rapid360-bridge-poll/:id',rapidSalesPerm,(req,res)=>{
+  const row=rapidSalesBridge.getBridge(req.params.id);
+  if(!row) return res.status(404).json({error:'Oturum yok. Satışları oku’ya tekrar basın.'});
+  if(row.error && !row.parsed) return res.json({pending:false,ok:false,error:row.error});
+  if(!row.parsed || !(row.parsed.sales||[]).length) return res.json({pending:true,ok:false});
+  const s=readStore();
+  const dealer=pickRapidDealer(s,row.meta.dealerId);
+  const preview=buildRapidSalesPreview(s,row.parsed,dealer);
+  const pullToken=rememberRapidPull(row.parsed,{
+    dealerId:row.meta.dealerId,startDate:row.meta.startDate,endDate:row.meta.endDate,
+    store:row.meta.store,company:row.meta.company
+  });
+  res.json({...preview,ok:true,pending:false,pullToken,fetched:true,via:'bridge',store:row.meta.store,company:row.meta.company});
+});
+app.post('/web-api/rapid360-bridge/:id',(req,res)=>{
+  const out=rapidSalesBridge.acceptPush(req.params.id,req.body||{});
+  if(!out.ok) return res.status(400).json({error:out.error||'Satış alınamadı'});
+  res.json({ok:true,count:out.count});
+});
+function rapidPreviewResponse(res,parsed,meta){
+  const s=readStore();
+  const dealer=pickRapidDealer(s,meta.dealerId);
+  const preview=buildRapidSalesPreview(s,parsed,dealer);
+  const pullToken=rememberRapidPull(parsed,meta);
+  res.json({...preview,ok:true,pending:false,pullToken,fetched:true,via:meta.via||'robot',store:meta.store,company:meta.company});
+}
+app.post('/web-api/admin/rapid360-robot-start',rapidSalesPerm,async(req,res)=>{
+  if(!rapidRobot.available())return res.status(501).json({error:'Sunucuda Rapid robotu kurulu değil. Hostinger deploy scriptini çalıştırın.'});
+  const launch=await rapidRobot.verifyLaunch();
+  if(!launch.ok)return res.status(501).json({error:'Robot çalışamıyor: '+launch.error});
+  const body=req.body||{};
+  const s=readStore();
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  const user=d365Auth.normalizeRapidAccount(rapid.oktaUser||'')||d365Auth.DEFAULT_ACCOUNT;
+  const password=String(rapid.oktaPassword||'').trim();
+  if(!password)return res.status(400).json({error:'Okta şifresi kayıtlı değil. Ayarlar → Rapid Aktar’dan kullanıcı + şifre kaydedin.'});
+  try{
+    const job=rapidRobot.startPull({
+      user,password,oktaLogin:d365Auth.oktaLoginName(user),
+      store:rapidSalesFetch.DEFAULT_STORE,
+      company:String(body.company||'').trim()||rapidSalesFetch.DEFAULT_COMPANY,
+      dealerId:String(body.dealerId||''),
+      startDate:body.startDate,endDate:body.endDate,
+      reportUrl:d365Auth.dynamicsReportUrl({company:body.company,store:rapidSalesFetch.DEFAULT_STORE,startDate:body.startDate,endDate:body.endDate}),
+      profileDir:path.join(ROOT,'data','rapid360-profile')
+    });
+    res.json({ok:true,jobId:job.id,message:'Robot Rapid360’a bağlanıyor…'});
+  }catch(e){
+    res.status(409).json({error:e.message||'Robot başlatılamadı'});
+  }
+});
+app.get('/web-api/admin/rapid360-robot-poll/:id',rapidSalesPerm,(req,res)=>{
+  const job=rapidRobot.getJob(req.params.id);
+  if(!job)return res.status(404).json({error:'Robot işi bulunamadı. Satışları oku’ya tekrar basın.'});
+  const view=rapidRobot.jobPublicView(job);
+  if(!job.done)return res.json({pending:true,ok:false,message:job.status,...view});
+  if(!job.ok)return res.status(400).json({error:job.error||'Robot hatası',...view});
+  let parsed=null;
+  const r=job.result||{};
+  if(r.probe){
+    return res.json({ok:true,pending:false,probe:r.probe,message:`Robot şu ekranı gördü: ${r.probe.kind} (${r.probe.url.slice(0,90)})`});
+  }
+  try{
+    if(r.json)parsed=rapidSalesXml.extractSalesFromJson(r.json);
+    else if(r.file)parsed=parseRapid360SalesUpload(r.file);
+  }catch(e){
+    return res.status(400).json({error:e.message||'Robot verisi okunamadı'});
+  }
+  if(!parsed||!(parsed.sales||[]).length)return res.status(400).json({error:emptyRapidSalesError(parsed||{},false,job.meta)});
+  const from=job.meta.startDate,to=job.meta.endDate;
+  parsed.sales=(parsed.sales||[]).filter(x=>{
+    if(!rapidSalesFetch.keepSaleStore(x,job.meta.store))return false;
+    const d=String(x.orderDate||x.invoiceDate||'').slice(0,10);
+    if(from&&d&&d<from)return false;
+    if(to&&d&&d>to)return false;
+    return true;
+  });
+  if(!parsed.sales.length)return res.status(400).json({error:emptyRapidSalesError(parsed,false,job.meta)});
+  rapidPreviewResponse(res,parsed,{...job.meta,via:'robot'});
+});
+app.post('/web-api/admin/rapid360-okta-start',rapidSalesPerm,async(req,res)=>{
+  try{
+    const s=readStore();
+    const started=await startRapidOktaChallenge(req,s);
+    res.json({needsOkta:true,...started,okta:d365Auth.publicAuth((s.invoiceIntegration||{}).rapid360)});
+  }catch(e){
+    res.status(400).json({error:e.message||'Okta Verify başlatılamadı'});
+  }
+});
+app.get('/web-api/admin/rapid360-okta-callback',(req,res)=>{
+  const url=d365Auth.dynamicsReportUrl({company:'2521'});
+  res.status(200).type('html').send(`<!doctype html><html lang="tr"><meta charset="utf-8"><title>Rapid360</title>
+  <p>Microsoft AADSTS50011 Atak’ta kullanılmaz. Rapid360 açılıyor…</p>
+  <p><a href="${url}">Rapid360’ı aç</a></p>
+  <script>location.replace(${JSON.stringify(url)})</script></html>`);
+});
+app.post('/web-api/admin/rapid360-okta-poll',rapidSalesPerm,async(req,res)=>{
+  try{
+    const result=await d365Auth.pollDeviceLogin({
+      sessionId:req.sessionID||'',
+      pollId:(req.body||{}).pollId
+    });
+    if(result.pending) return res.json({pending:true,ok:false});
+    if(!result.ok) return res.status(400).json({error:result.error||'Okta doğrulanamadı'});
+    const s=readStore();
+    saveRapidOktaTokens(s,result.tokens);
+    writeStore(s);
+    res.json({ok:true,connected:true,account:result.tokens.account||'',okta:d365Auth.publicAuth(s.invoiceIntegration.rapid360)});
+  }catch(e){
+    res.status(400).json({error:e.message||'Okta doğrulanamadı'});
+  }
+});
+app.get('/web-api/admin/rapid360-okta-status',rapidSalesPerm,(req,res)=>{
+  const s=readStore();
+  res.json({ok:true,okta:d365Auth.publicAuth((s.invoiceIntegration||{}).rapid360)});
+});
+app.get('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('settings_manage','invoices_manage','orders_manage'),(req,res)=>{
+  const s=readStore();
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  res.json({ok:true,oktaUser:d365Auth.normalizeRapidAccount(rapid.oktaUser||''),oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+});
+app.post('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('settings_manage','invoices_manage','orders_manage'),(req,res)=>{
+  const s=readStore();
+  s.invoiceIntegration=s.invoiceIntegration||{};
+  const rapid=s.invoiceIntegration.rapid360=s.invoiceIntegration.rapid360||{};
+  const body=req.body||{};
+  if(body.oktaUser!=null)rapid.oktaUser=d365Auth.normalizeRapidAccount(body.oktaUser);
+  if(body.oktaPassword!=null){
+    const v=String(body.oktaPassword);
+    if(v!=='********')rapid.oktaPassword=v;
+  }
+  audit(s,'Rapid Aktar Okta girişi güncellendi',rapid.oktaUser||'-',{passwordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+  writeStore(s);
+  res.json({ok:true,oktaUser:rapid.oktaUser||'',oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+});
+app.post('/web-api/admin/rapid360-robot-test',rapidSalesPerm,async(req,res)=>{
+  if(!rapidRobot.available())return res.status(501).json({error:'Sunucuda Rapid robotu kurulu değil. Hostinger deploy scriptini çalıştırın.'});
+  const launch=await rapidRobot.verifyLaunch();
+  if(!launch.ok)return res.status(501).json({error:'Robot çalışamıyor: '+launch.error});
+  const s=readStore();
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  const user=d365Auth.normalizeRapidAccount(rapid.oktaUser||'')||d365Auth.DEFAULT_ACCOUNT;
+  try{
+    const job=rapidRobot.startProbe({
+      user,password:String(rapid.oktaPassword||'').trim(),oktaLogin:d365Auth.oktaLoginName(user),
+      store:rapidSalesFetch.DEFAULT_STORE,company:rapidSalesFetch.DEFAULT_COMPANY,
+      reportUrl:d365Auth.dynamicsReportUrl({company:rapidSalesFetch.DEFAULT_COMPANY,store:rapidSalesFetch.DEFAULT_STORE}),
+      profileDir:path.join(ROOT,'data','rapid360-profile')
+    });
+    res.json({ok:true,jobId:job.id,message:'Robot test için Rapid360’ı açıyor…'});
+  }catch(e){
+    res.status(409).json({error:e.message||'Robot testi başlatılamadı'});
+  }
+});
+app.get('/web-api/admin/rapid360-robot-last',rapidSalesPerm,(req,res)=>{
+  const job=rapidRobot.getLastJob();
+  if(!job)return res.json({ok:true,job:null});
+  res.json({ok:true,job:{
+    id:job.id,status:job.status,error:job.error||'',done:job.done,okRun:job.ok,
+    at:new Date(job.at).toISOString(),shotAt:job.shotAt||'',lastUrl:job.lastUrl||'',
+    hasShot:Boolean(job.shot),
+    ...rapidRobot.jobPublicView(job)
+  }});
+});
+app.get('/web-api/admin/rapid360-robot-shot',rapidSalesPerm,(req,res)=>{
+  const job=rapidRobot.getLastJob();
+  if(!job||!job.shot)return res.status(404).json({error:'Robot ekran görüntüsü yok. Önce Satışları oku çalıştırın.'});
+  res.type('png').send(job.shot);
+});
+app.get('/web-api/admin/rapid360-robot-diag',rapidSalesPerm,async(req,res)=>{
+  const pwMeta=rapidRobot.resolvePlaywrightMeta();
+  const pwVersion=pwMeta?(pwMeta.version+(pwMeta.name==='playwright-core'?' (core)':'')):'';
+  let launch={ok:false,error:'kontrol edilemedi'};
+  try{launch=await rapidRobot.verifyLaunch()}catch(e){launch={ok:false,error:e.message||''}}
+  const s=readStore();
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  res.json({
+    ok:true,
+    node:process.version,
+    cwd:process.cwd(),
+    playwright:Boolean(pwMeta),
+    playwrightVersion:pwVersion,
+    playwrightPath:pwMeta?pwMeta.entry:'',
+    launchOk:launch.ok,
+    launchError:launch.error||'',
+    oktaUser:String(rapid.oktaUser||'').trim(),
+    oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())
+  });
+});
+app.get('/web-api/admin/rapid360-conn-status',rapidSalesPerm,async(req,res)=>{
+  const s=readStore();
+  const rapid=(s.invoiceIntegration||{}).rapid360||{};
+  let connected=false;
+  try{
+    const ensured=await d365Auth.ensureAccessToken(rapid,{});
+    if(ensured.ok){
+      connected=true;
+      if(ensured.refreshed&&ensured.tokens){saveRapidOktaTokens(s,ensured.tokens);writeStore(s);}
+    }
+  }catch(_){}
+  const consume=rapidSalesFetch.resolveSalesConsume(rapid,process.env);
+  const muleReady=Boolean(consume.url&&consume.clientId&&consume.clientSecret)||Boolean(consume.salesUrl);
+  let robot={ok:false,error:'kurulu değil'};
+  try{robot=await rapidRobot.verifyLaunch();}catch(_){}
+  res.json({
+    ok:true,connected,muleReady,canPull:connected||muleReady,
+    account:d365Auth.publicAuth(rapid).account||'',
+    robotReady:robot.ok,
+    robotError:robot.ok?'':String(robot.error||''),
+    oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())
+  });
+});
+app.post('/web-api/admin/rapid360-okta-disconnect',rapidSalesPerm,(req,res)=>{
+  const s=readStore();
+  s.invoiceIntegration=s.invoiceIntegration||{};
+  s.invoiceIntegration.rapid360=d365Auth.clearTokens(s.invoiceIntegration.rapid360||{});
+  writeStore(s);
+  res.json({ok:true,okta:d365Auth.publicAuth(s.invoiceIntegration.rapid360)});
+});
+app.post('/web-api/admin/rapid360-sales-pull-import',rapidSalesPerm,async(req,res)=>{
+  try{
+    const body=req.body||{};
+    const cached=takeRapidPull(body.pullToken);
+    let parsed=cached && cached.parsed;
+    if(!parsed){
+      const out=await rapidSalesFetch.fetchRapid360Sales({
+        store:readStore(),
+        startDate:body.startDate,
+        endDate:body.endDate,
+        magaza:rapidSalesFetch.DEFAULT_STORE,
+        company:body.company
+      });
+      if(out.tokens){
+        const cur=readStore();
+        saveRapidOktaTokens(cur,out.tokens);
+        writeStore(cur);
+      }
+      if(!out.ok && out.needsOkta) return res.status(409).json({needsOkta:true,error:out.error||'Okta Verify gerekli.',tried:out.tried||[]});
+      if(!out.ok) return res.status(400).json({error:out.error||'Rapid360 çekilemedi',tried:out.tried||[]});
+      parsed=out.parsed;
+    }
+    if(!parsed || !parsed.sales.length) return res.status(400).json({error:emptyRapidSalesError(parsed||{},false)});
+    const s=readStore();
+    const dealer=pickRapidDealer(s,body.dealerId||(cached&&cached.meta&&cached.meta.dealerId));
+    if(!dealer)return res.status(400).json({error:'Satış bayisi bulunamadı (Atak Beko).'});
+    const actor=currentActor(req);
+    const stats=applyRapidSalesImport(s,parsed,{
+      dealer,actorName:actor?.name||'Admin',actorId:actor?.id||'',source:'rapid360-pull',
+      categoryMap:body.categoryMap,categoryId:body.categoryId,salesIds:body.salesIds
+    });
+    audit(s,'Rapid360 canlı satış aktarıldı',`${stats.imported} satış`,stats);
+    writeStore(s);
+    res.json({ok:true,...stats,fetched:true});
+  }catch(e){
+    res.status(400).json({error:e.message||'Aktarım başarısız'});
+  }
 });
 app.post('/web-api/admin/sale/:id/delivery-status',requireAdminOrStaffAny('screen_sales_tracking','orders_manage','screen_sales_center'),(req,res)=>{
   const s=readStore(),sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
@@ -4596,14 +6085,32 @@ app.post('/web-api/admin/sale/:id/delivery-status',requireAdminOrStaffAny('scree
   audit(s,'Satış teslimat durumu güncellendi',sale.reference||sale.id,{status,note:sale.deliveryNote,prev});writeStore(s);
   res.json({ok:true,sale});
 });
+app.post('/web-api/admin/sale/:id/discard-rapid-draft',requireAdminOrStaffAny('screen_sales_tracking','orders_manage','screen_sales_center'),(req,res)=>{
+  const s=readStore(),sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
+  if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
+  if(sale.cancelled)return res.status(400).json({error:'Satış zaten iptal edilmiş'});
+  if(!rapidSalesCatalog.isOpenRapidSale(sale))return res.status(400).json({error:'Yalnız tamamlanmamış Rapid taslağı silinebilir'});
+  const actor=currentActor(req);
+  if(isStaffPortalReq(req) && !actorCanSeeAllStaffSales(req) && !txBelongsToActor(sale,actor)){
+    return res.status(403).json({error:'Bu satış için yetkiniz yok'});
+  }
+  const reason=String(req.body?.reason||'Rapid taslak silindi').trim()||'Rapid taslak silindi';
+  const result=cancelSaleInStore(s,sale,actor?.name||'Admin',reason);
+  audit(s,'Rapid taslak silindi',sale.reference||sale.rapidSalesId||sale.id,{reason});
+  writeStore(s);
+  res.json({ok:true,result,reference:sale.reference||sale.rapidSalesId||sale.id});
+});
 
 app.get('/web-api/admin/salespeople',requireAdminOrStaff('orders_manage'),(req,res)=>{
   const s=readStore();
   res.json({ok:true,rows:salesPeople(s,req),currentUser:currentSessionUser(req),canManage:isSystemManager(req)});
 });
-app.get('/web-api/admin/sale/:id',requireAdmin,(req,res)=>{
+app.get('/web-api/admin/sale/:id',requireAdminOrStaff('orders_manage'),(req,res)=>{
   const s=readStore(),sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
   if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
+  if(isStaffPortalReq(req) && !actorCanSeeAllStaffSales(req) && !txBelongsToActor(sale,currentActor(req))){
+    return res.status(403).json({error:'Bu satış size ait değil'});
+  }
   const customer=s.customers.find(c=>c.id===sale.customerId)||null;
   const collections=relatedSaleCollections(s,sale).map(c=>({
     id:c.id,date:c.date,amount:c.amount,accountId:c.accountId,
@@ -4612,6 +6119,8 @@ app.get('/web-api/admin/sale/:id',requireAdmin,(req,res)=>{
   const pending=(s.cancellationRequests||[]).filter(r=>r.status==='pending'&&String(r.targetId)===String(sale.id));
   res.json({
     ok:true,sale,customer,collections,
+    needsCompletion:rapidSalesCatalog.isOpenRapidSale(sale),
+    paymentSplits:rapidSalesCatalog.paymentsToSplits(sale.payments),
     accounts:s.financeAccounts.filter(a=>a.active!==false),
     products:(s.products||[]).filter(p=>p.active!==false).map(p=>({code:p.code,name:p.name,itemCode:p.itemCode||'',searchName:p.searchName||'',cashPrice:Number(p.cashPrice||p.salePrice||p.price||0)})),
     pending,canManage:isSystemManager(req)
@@ -4646,6 +6155,7 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
   const brand={beko:0,istikbal:0,other:0,bekoCount:0,istikbalCount:0,otherCount:0};
   let gross=0,grossCount=0,net=0,netCount=0,cancelled=0,cancelledCount=0,discount=0,commission=0,primLost=0;
   for(const t of all){
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const amount=saleAmount(t);
     const g=Number(t.grossTotal!=null && t.grossTotal!==''?t.grossTotal:amount)||0;
     const comm=Number(t.commissionAmount||0);
@@ -4677,7 +6187,7 @@ function buildSalesPrimBoard(s,req,{period='day',date='',month='',salespersonId=
 
   const pendingByTarget=new Map();
   (s.cancellationRequests||[]).filter(r=>r.status==='pending').forEach(r=>pendingByTarget.set(`${r.targetType}:${r.targetId}`,r));
-  const rows=all.filter(t=>!t.cancelled).map(t=>{
+  const rows=all.filter(t=>!t.cancelled&&!rapidSalesCatalog.isOpenRapidSale(t)).map(t=>{
     const c=customerMap.get(String(t.customerId));
     const pendCancel=pendingByTarget.get(`sale:${t.id}`);
     const pendEdit=pendingByTarget.get(`sale_edit:${t.id}`);
@@ -4906,7 +6416,7 @@ app.get('/web-api/admin/profit-report',requireAdmin,(req,res)=>{
     rows:rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,100),
     inventory:inventoryValuation(s),
     dealers:(s.dealerSettings||[]).map(d=>({id:d.id,name:d.name})),
-    note:'Kâr KDV hariç hesaplanır. Maliyet, ürün kartındaki alış fiyatından satış anında sabitlenir.'
+    note:'Kâr KDV hariç hesaplanır. Maliyet hareketli ortalamadır: satış anında ürün kartındaki alış fiyatı sabitlenir. Yeni alış, geçmiş satış kârını değiştirmez.'
   });
 });
 
@@ -5020,6 +6530,7 @@ app.get('/web-api/admin/dashboard-cockpit',requireAdmin,(req,res)=>{
 
   for(const t of (s.financeTransactions||[])){
     if(t.kind!=='sale'||t.cancelled)continue;
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const key=txDateKey(t);
     if(!key)continue;
     const amount=saleAmount(t);
@@ -5049,7 +6560,7 @@ app.get('/web-api/admin/dashboard-cockpit',requireAdmin,(req,res)=>{
 
   const fin=financeSnapshot(s);
   const pendingInvoices=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale'&&!t.cancelled&&saleNeedsInvoice(t.invoiceStatus)).length;
+    .filter(t=>t.kind==='sale'&&!t.cancelled&&!rapidSalesCatalog.isOpenRapidSale(t)&&saleNeedsInvoice(t.invoiceStatus)).length;
   const overdueNotes=(s.promissoryNotes||[])
     .filter(n=>n.status==='open'&&String(n.dueDate||'')<today).length;
   const lowStock=(s.productStocks||[])
@@ -5218,6 +6729,16 @@ app.post('/web-api/admin/cancellation-request',requireAdminOrStaffAny('finance_m
   if((s.cancellationRequests||[]).some(r=>r.status==='pending'&&['sale','sale_return','sale_edit','collection'].includes(r.targetType)&&String(r.targetId)===targetId))
     return res.status(409).json({error:'Bu işlem için bekleyen onay talebi var'});
 
+  if(targetType==='sale' && rapidSalesCatalog.isOpenRapidSale(target)){
+    const result=cancelSaleInStore(s,target,u?.name||'Personel',reason);
+    audit(s,'Rapid taslak silindi',target.reference||target.rapidSalesId||target.id,{reason,personel:u?.name||'Personel',direct:true});
+    writeStore(s);
+    return res.json({
+      ok:true,direct:true,pendingApproval:false,result,
+      message:'Rapid taslak silindi. Aynı satış bir daha Satış Takibi’ne düşmez.'
+    });
+  }
+
   if(targetType==='sale_edit'){
     let preview;
     try{
@@ -5288,6 +6809,7 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny
     if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
     try{
       const data=parseCustomerPayload({...(row.payload?.after||{}),id:customer.id});
+      data.customerCode=customerCode.resolveForSave(s,data.customerCode,{existing:customer});
       applyCustomerData(customer,data);
       row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
       audit(s,'Müşteri düzenleme onaylandı',customer.name,{reason:row.reason,personel:row.requestedByName});
@@ -5384,15 +6906,21 @@ function allocateInvoiceNumber(cfg,docType,existing=''){
   return{number,cfg,allocated:true,docType:earsiv?'earsiv':'efatura',series,seq};
 }
 
-app.get('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
+app.get('/web-api/admin/invoice-integration',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS,'settings_manage'),(req,res)=>{
   const s=readStore(),cfg=s.invoiceIntegration||{};
   const year=new Date().getFullYear();
   const efSeries=normalizeInvoiceSeries(cfg.efaturaSeries,'ATK');
   const eaSeries=normalizeInvoiceSeries(cfg.earsivSeries,'ATA');
+  const reveal=req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage');
   res.json({
     settings:{
       ...cfg,
       password:cfg.password?'********':'',
+      rapid360:{
+        ...rapid360.publicConfig(cfg.rapid360),
+        okta:d365Auth.publicAuth(cfg.rapid360)
+      },
+      atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal,baseUrl:publicBaseUrl(req)}),
       efaturaSeries:efSeries,
       earsivSeries:eaSeries,
       efaturaNext:nextInvoiceSeq(cfg.efaturaNext),
@@ -5403,15 +6931,23 @@ app.get('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
     queueCount:(s.invoiceQueue||[]).filter(x=>!['issued','cancelled'].includes(x.status)).length
   });
 });
-app.post('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
+app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_manage','invoices_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{},old=s.invoiceIntegration||{};
   const env=['test','live'].includes(String(x.environment))?String(x.environment):'test';
   const provider=['qnb-solist','qnb-esolutions','qnb-efinans'].includes(String(x.provider))?String(x.provider):'qnb-solist';
   s.invoiceIntegration={
+    ...old,
     provider,environment:env,
     enabled:x.enabled===true||String(x.enabled)==='true',
     companyVkn:String(x.companyVkn||'').trim(),
     companyTitle:String(x.companyTitle||'').trim(),
+    companyTaxOffice:String(x.companyTaxOffice!=null?x.companyTaxOffice:old.companyTaxOffice||ATAK_COMPANY.taxOffice).trim(),
+    companyAddress:String(x.companyAddress!=null?x.companyAddress:old.companyAddress||ATAK_COMPANY.address).trim(),
+    companyCity:String(x.companyCity!=null?x.companyCity:old.companyCity||'').trim(),
+    companyDistrict:String(x.companyDistrict!=null?x.companyDistrict:old.companyDistrict||'').trim(),
+    companyPhone:String(x.companyPhone!=null?x.companyPhone:old.companyPhone||'').trim(),
+    companyEmail:String(x.companyEmail!=null?x.companyEmail:old.companyEmail||'').trim(),
+    mersisNo:String(x.mersisNo!=null?x.mersisNo:old.mersisNo||'').trim(),
     senderAlias:String(x.senderAlias||'').trim(),
     gbAlias:String(x.gbAlias||x.senderAlias||'').trim(),
     pkAlias:String(x.pkAlias||'').trim(),
@@ -5423,27 +6959,109 @@ app.post('/web-api/admin/invoice-integration',requireAdmin,(req,res)=>{
     efaturaSeries:normalizeInvoiceSeries(x.efaturaSeries!=null?x.efaturaSeries:old.efaturaSeries,'ATK'),
     earsivSeries:normalizeInvoiceSeries(x.earsivSeries!=null?x.earsivSeries:old.earsivSeries,'ATA'),
     efaturaNext:nextInvoiceSeq(x.efaturaNext!=null?x.efaturaNext:old.efaturaNext),
-    earsivNext:nextInvoiceSeq(x.earsivNext!=null?x.earsivNext:old.earsivNext)
+    earsivNext:nextInvoiceSeq(x.earsivNext!=null?x.earsivNext:old.earsivNext),
+    rapid360:(()=>{
+      const prev=old.rapid360||{};
+      const incoming=x.rapid360&&typeof x.rapid360==='object'?x.rapid360:{};
+      const secretRaw=incoming.clientSecret!=null?incoming.clientSecret:x.rapid360Secret;
+      return{
+        ...prev,
+        url:String(incoming.url!=null?incoming.url:(x.rapid360Url!=null?x.rapid360Url:prev.url||'')).trim().split('?')[0],
+        clientId:String(incoming.clientId!=null?incoming.clientId:(x.rapid360ClientId!=null?x.rapid360ClientId:prev.clientId||'')).trim(),
+        clientSecret:String(secretRaw||'')==='********'?String(prev.clientSecret||''):String(secretRaw!=null?secretRaw:prev.clientSecret||''),
+        dealerId:String(incoming.dealerId!=null?incoming.dealerId:(x.rapid360DealerId!=null?x.rapid360DealerId:prev.dealerId||'')).trim(),
+        eInvoiceCode:String(incoming.eInvoiceCode!=null?incoming.eInvoiceCode:(x.rapid360Code!=null?x.rapid360Code:prev.eInvoiceCode||'')).trim(),
+        systemId:String(incoming.systemId!=null?incoming.systemId:(x.rapid360SystemId!=null?x.rapid360SystemId:prev.systemId||'1')).trim()||'1',
+        salesUrl:String(incoming.salesUrl!=null?incoming.salesUrl:(x.rapid360SalesUrl!=null?x.rapid360SalesUrl:prev.salesUrl||'')).trim().split('?')[0],
+        oktaUser:String(incoming.oktaUser!=null?incoming.oktaUser:(x.rapid360OktaUser!=null?x.rapid360OktaUser:prev.oktaUser||'')).trim(),
+        oktaPassword:(()=>{
+          const raw=incoming.oktaPassword!=null?incoming.oktaPassword:x.rapid360OktaPass;
+          if(raw==null)return String(prev.oktaPassword||'');
+          const v=String(raw);
+          return v==='********'?String(prev.oktaPassword||''):v;
+        })(),
+        salesStore:String(incoming.salesStore!=null?incoming.salesStore:(x.rapid360SalesStore!=null?x.rapid360SalesStore:prev.salesStore||'340334')).trim()||'340334',
+        salesCompany:String(incoming.salesCompany!=null?incoming.salesCompany:(x.rapid360SalesCompany!=null?x.rapid360SalesCompany:prev.salesCompany||'2521')).trim()||'2521',
+        dynamicsUrl:String(incoming.dynamicsUrl!=null?incoming.dynamicsUrl:(x.rapid360DynamicsUrl!=null?x.rapid360DynamicsUrl:prev.dynamicsUrl||'')).trim(),
+        aadTenant:String(incoming.aadTenant!=null?incoming.aadTenant:(x.rapid360AadTenant!=null?x.rapid360AadTenant:prev.aadTenant||'')).trim(),
+        oauthClientId:String(incoming.oauthClientId!=null?incoming.oauthClientId:(x.rapid360OauthClientId!=null?x.rapid360OauthClientId:prev.oauthClientId||'')).trim(),
+        odataEntity:String(incoming.odataEntity!=null?incoming.odataEntity:(x.rapid360OdataEntity!=null?x.rapid360OdataEntity:prev.odataEntity||'')).trim(),
+        d365Auth:(()=>{
+          const prevAuth=prev.d365Auth&&typeof prev.d365Auth==='object'?prev.d365Auth:{};
+          const dyn=String(incoming.dynamicsUrl!=null?incoming.dynamicsUrl:(x.rapid360DynamicsUrl!=null?x.rapid360DynamicsUrl:prevAuth.dynamicsUrl||prev.dynamicsUrl||'')).trim();
+          return{
+            ...prevAuth,
+            dynamicsUrl:dyn||prevAuth.dynamicsUrl||'',
+            tenant:String(incoming.aadTenant!=null?incoming.aadTenant:(x.rapid360AadTenant!=null?x.rapid360AadTenant:prevAuth.tenant||'')).trim()||prevAuth.tenant||'',
+            oauthClientId:String(incoming.oauthClientId!=null?incoming.oauthClientId:(x.rapid360OauthClientId!=null?x.rapid360OauthClientId:prevAuth.oauthClientId||'')).trim()||prevAuth.oauthClientId||'',
+            odataEntity:String(incoming.odataEntity!=null?incoming.odataEntity:(x.rapid360OdataEntity!=null?x.rapid360OdataEntity:prevAuth.odataEntity||'')).trim()||prevAuth.odataEntity||''
+          };
+        })(),
+        addReturns:(incoming.addReturns!=null?incoming.addReturns:x.rapid360AddReturns)!=null
+          ? (incoming.addReturns===true||incoming.addReturns==='true'||x.rapid360AddReturns===true||x.rapid360AddReturns==='true'||x.rapid360AddReturns==='on')
+          : prev.addReturns!==false
+      };
+    })(),
+    atakDms:(()=>{
+      const incoming=x.atakDms&&typeof x.atakDms==='object'?x.atakDms:{};
+      const rotate=x.atakDmsRotate===true||x.atakDmsRotate==='true'||incoming.rotate===true;
+      return atakGetE.mergeIncoming(old.atakDms,{
+        enabled:incoming.enabled!=null?incoming.enabled:x.atakDmsEnabled,
+        includeInbox:incoming.includeInbox!=null?incoming.includeInbox:x.atakDmsIncludeInbox,
+        dealerId:incoming.dealerId!=null?incoming.dealerId:x.atakDmsDealerId,
+        eInvoiceCode:incoming.eInvoiceCode!=null?incoming.eInvoiceCode:x.atakDmsCode,
+        systemId:incoming.systemId!=null?incoming.systemId:x.atakDmsSystemId,
+        clientId:incoming.clientId!=null?incoming.clientId:x.atakDmsClientId,
+        clientSecret:incoming.clientSecret!=null?incoming.clientSecret:x.atakDmsSecret,
+        allowedIps:incoming.allowedIps!=null?incoming.allowedIps:x.atakDmsAllowedIps
+      },{rotate});
+    })()
   };
+  if(rapid360.isChairmanMuleConsume(s.invoiceIntegration.rapid360)){
+    return res.status(400).json({error:'Başkanın Arçelik Rapid360 hesabı (DealerID 21134761) Atak gelen kutusuna kaydedilmez.'});
+  }
+  s.invoiceIntegration.rapid360=rapid360.sanitizeConsumeConfig(s.invoiceIntegration.rapid360);
   audit(s,'QNB Solist entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider,efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries});writeStore(s);res.json({ok:true,settings:{efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries,efaturaNext:s.invoiceIntegration.efaturaNext,earsivNext:s.invoiceIntegration.earsivNext}});
 });
-app.post('/web-api/admin/invoice-integration/test',requireAdmin,(req,res)=>{
-  const s=readStore(),c=s.invoiceIntegration||{};
-  const checks=qnbSolist.readinessChecks(c);
-  const ep=qnbSolist.defaultEndpoints(c.environment||'test');
-  res.json({ok:checks.every(x=>x.ok),mode:c.environment||'test',checks,endpoints:ep,note:'Dış servise belge göndermez. QNB Solist WSDL/kullanıcı gelince SOAP gönderim açılır.'});
+app.post('/web-api/admin/invoice-integration/atak-dms-rotate',requireAdminOrStaffAny('settings_manage','invoices_manage'),(req,res)=>{
+  const s=readStore(),old=s.invoiceIntegration||{};
+  s.invoiceIntegration={...old,atakDms:atakGetE.mergeIncoming(old.atakDms,{},{rotate:true})};
+  audit(s,'Atak geteinvoices anahtarları yenilendi','Fatura Entegrasyonu',{dealerId:s.invoiceIntegration.atakDms.dealerId});
+  writeStore(s);
+  const reveal=req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage');
+  res.json({ok:true,atakDms:atakGetE.publicConfig(s.invoiceIntegration.atakDms,{reveal,baseUrl:publicBaseUrl(req)})});
 });
-app.get('/web-api/admin/invoice-queue',requireAdmin,(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
-/** e-Fatura Merkezi özet: QNB kutusu klasör sayıları + kuyruk + gelen (placeholder) */
-app.get('/web-api/admin/invoice-center',requireAdmin,(req,res)=>{
+app.post('/web-api/admin/invoice-integration/test',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS,'settings_manage'),(req,res)=>{
+  const s=readStore(),c=s.invoiceIntegration||{};
+  const dms=atakGetE.publicConfig(c.atakDms,{reveal:false,baseUrl:publicBaseUrl(req)});
+  const rz=rapid360.publicConfig(c.rapid360);
+  const vkn=String(c.companyVkn||'').replace(/\D/g,'');
+  const checks=[
+    {name:'Firma VKN',ok:vkn.length>=10,detail:vkn||'Yazın'},
+    {name:'Firma ünvanı',ok:!!String(c.companyTitle||'').trim(),detail:c.companyTitle||'Yazın'},
+    {name:'e-Fatura seri',ok:!!String(c.efaturaSeries||c.earsivSeries||'').trim(),detail:`${c.efaturaSeries||'ATK'} / ${c.earsivSeries||'ATA'}`},
+    {name:'Arçelik Rapid360',ok:!rz.blocked,detail:rz.blocked?'Başkan hesabı kapalı':(rz.ready?`DealerID ${rz.dealerId}`:'Örnek link gelen kutuya çekilmez')},
+    {name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} · DealerID ${dms.dealerId}`:'Eksik'}
+  ];
+  res.json({ok:checks.every(x=>x.ok),mode:'atak',checks,atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Atak fatura merkezi. Başkanın Rapid360 linki gelen kutuya çekilmez.'});
+});
+app.get('/web-api/admin/invoice-queue',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
+/** Faturalar özet: kuyruk klasörleri + Rapid360 gelen + kesilmeyen satışlar */
+app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{
   const s=readStore();
   const cfg=s.invoiceIntegration||{};
-  const queue=(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-  const inbox=(s.invoiceInbox||[]).slice().sort((a,b)=>String(b.invoiceDate||b.createdAt||'').localeCompare(String(a.invoiceDate||a.createdAt||'')));
+  let queue=(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  if(!staffSeesAllInvoices(req)){
+    const actor=currentActor(req);
+    const salesById=new Map((s.financeTransactions||[]).filter(t=>t.kind==='sale').map(t=>[String(t.id),t]));
+    queue=queue.filter(r=>txBelongsToActor(salesById.get(String(r.saleId||''))||r,actor));
+  }
+  const inbox=(s.invoiceInbox||[]).filter(row=>!rapid360.isForeignInboxRow(row)).slice().sort((a,b)=>String(b.invoiceDate||b.createdAt||'').localeCompare(String(a.invoiceDate||a.createdAt||'')));
   const responses=(s.invoiceAppResponses||[]).slice();
   const customerMap=new Map((s.customers||[]).map(c=>[String(c.id),c]));
   const salesPending=(s.financeTransactions||[])
-    .filter(t=>t.kind==='sale'&&!t.cancelled&&saleNeedsInvoice(t.invoiceStatus))
+    .filter(t=>t.kind==='sale'&&!t.cancelled&&!rapidSalesCatalog.isOpenRapidSale(t)&&saleNeedsInvoice(t.invoiceStatus))
+    .filter(t=>staffSeesAllInvoices(req)||txBelongsToActor(t,currentActor(req)))
     .map(t=>({
       id:t.id,reference:t.reference||'',date:t.date||'',customerId:t.customerId||'',
       customerName:customerMap.get(String(t.customerId))?.name||'',total:Number(t.total||0),
@@ -5478,30 +7096,66 @@ app.get('/web-api/admin/invoice-center',requireAdmin,(req,res)=>{
   };
   res.json({
     ok:true,
-    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext)},
+    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext),rapid360:rapid360.publicConfig(cfg.rapid360),atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),baseUrl:publicBaseUrl(req)})},
     counts,queue,inbox,responses,salesPending,
-    note:'Gelen kutusu QNB portal senkronu bağlanınca dolar. Giden kutu yerel kuyruk + UBL taslağıdır.'
+    portal:isStaffPortalReq(req)?'staff':'admin',
+    canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),
+    canIssue:req.session?.admin===true||staffCanInvoice(req),
+    note:'Gelen kutuya başkanın Rapid360 linki çekilmez. Giden kutu Atak kuyruğudur. geteinvoices URL’sini Kurulum’dan e-fatura firmasına verin.'
   });
 });
-app.post('/web-api/admin/invoice-center/portal-query',requireAdmin,async(req,res)=>{
+app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),async(req,res)=>{
   const s=readStore(),cfg=s.invoiceIntegration||{};
+  const x=req.body||{};
+  const days=Math.min(90,Math.max(1,Math.round(Number(x.days)||14)));
+  const end=x.endDate?new Date(String(x.endDate)):new Date();
+  const start=x.startDate?new Date(String(x.startDate)):new Date(end.getTime()-(days-1)*86400000);
+  const rz=cfg.rapid360||{};
+  const pub=rapid360.publicConfig(rz);
+  if(pub.blocked||rapid360.isChairmanMuleConsume(rz)){
+    return res.status(400).json({ok:false,error:'Başkanın Arçelik Rapid360 faturaları Atak gelen kutusuna çekilmez. Bu ekranda yalnızca ATAKHOME faturaları durur.'});
+  }
+  const ready=pub.ready;
+  if(ready){
+    try{
+      const out=await rapid360.fetchGetEInvoices(rz,{startDate:start,endDate:end});
+      const merge=rapid360.mergeInbox(s,out.invoices);
+      rz.lastSyncAt=new Date().toISOString();
+      rz.lastCount=out.count;
+      rz.lastError='';
+      s.invoiceIntegration.rapid360=rz;
+      audit(s,'Rapid360 e-fatura çekildi','Gelen Kutusu',{added:merge.added,updated:merge.updated,count:out.count});
+      writeStore(s);
+      const msg=out.empty
+        ? `Rapid360 bağlandı, bu aralıkta fatura yok (${days} gün). Örnek JSON dönerseniz alan eşlemesini netleştiririz.`
+        : `Rapid360: ${out.count} fatura · ${merge.added} yeni · ${merge.updated} güncellendi`;
+      return res.json({ok:true,mode:'rapid360',synced:merge.added,updated:merge.updated,count:out.count,empty:out.empty,sampleKeys:out.sampleKeys,message:msg});
+    }catch(e){
+      rz.lastError=e.message||'Rapid360 hata';
+      s.invoiceIntegration.rapid360=rz;
+      writeStore(s);
+      return res.status(502).json({error:e.message||'Rapid360 servisine ulaşılamadı',mode:'rapid360'});
+    }
+  }
   const checks=qnbSolist.readinessChecks(cfg);
-  const ready=checks.filter(c=>['Firma VKN','WSDL / servis URL','Kullanıcı','Şifre'].includes(c.name)).every(c=>c.ok)&&cfg.enabled;
-  if(!ready){
+  const qnbReady=checks.filter(c=>['Firma VKN','WSDL / servis URL','Kullanıcı','Şifre'].includes(c.name)).every(c=>c.ok)&&cfg.enabled;
+  if(!qnbReady){
     return res.json({
       ok:true,mode:'local_only',synced:0,
-      message:'QNB portal sorgusu henüz açık değil. WSDL + kullanıcı + “etkin” gelince Gelen Kutusu portaldan dolacak. Şimdilik yerel kuyruk yenilendi.',
+      message:'Gelen kutu başkanın Rapid360 linkinden doldurulmaz. Firmaya verilen geteinvoices, Atak’ın kendi satış faturaları içindir.',
       checks
     });
   }
-  // SOAP: QNB gelen fatura listesi buraya bağlanır.
   res.json({
     ok:true,mode:'stub',synced:0,
     message:'Portal sorgu noktası hazır (SOAP stub). QNB Çözüm Merkezi WSDL metodunu bağlayınca canlı çekim başlar.',
     checks
   });
 });
-app.post('/web-api/admin/invoice-queue/:id/retry',requireAdmin,async(req,res)=>{
+app.post('/web-api/admin/invoice-queue/:id/retry',requireAdminOrStaffAny('invoices_manage','sale_invoice_qnb','orders_manage'),async(req,res)=>{
+  if(isStaffPortalReq(req) && !staffCanInvoice(req)){
+    return res.status(403).json({error:'Fatura kesme yetkiniz yok — yöneticiden sale_invoice_qnb açın'});
+  }
   const s=readStore(),r=(s.invoiceQueue||[]).find(x=>x.id===req.params.id);
   if(!r)return res.status(404).json({error:'Fatura kaydı bulunamadı'});
   const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(r.saleId)&&t.kind==='sale');
@@ -5521,6 +7175,42 @@ app.post('/web-api/admin/invoice-queue/:id/retry',requireAdmin,async(req,res)=>{
     r.status='error';r.error=e.message;r.updatedAt=new Date().toISOString();writeStore(s);
     res.status(500).json({error:e.message});
   }
+});
+function sendInvoicePrint(res, {record, sale, customer, cfg, settings}){
+  const html=invoicePrint.buildInvoicePrintHtml({
+    company:cfg||{},
+    customer:customer||record?.customer||{},
+    record:record||{},
+    sale:sale||{},
+    settings:settings||{}
+  });
+  res.type('html').send(html);
+}
+app.get('/web-api/admin/invoice-queue/:id/print',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS,'orders_manage'),(req,res)=>{
+  const s=readStore();
+  const record=(s.invoiceQueue||[]).find(x=>String(x.id)===String(req.params.id));
+  if(!record)return res.status(404).send('Fatura kaydı bulunamadı');
+  const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(record.saleId)&&t.kind==='sale')||{};
+  if(!staffSeesAllInvoices(req) && !txBelongsToActor(sale,currentActor(req))){
+    return res.status(403).send('Bu faturayı görme yetkiniz yok');
+  }
+  const customer=(s.customers||[]).find(c=>String(c.id)===String(record.customerId||sale.customerId))||record.customer||{};
+  sendInvoicePrint(res,{record,sale,customer,cfg:s.invoiceIntegration||{},settings:s.settings||{}});
+});
+app.get('/web-api/admin/sale/:id/invoice-print',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{
+  const s=readStore();
+  const sale=(s.financeTransactions||[]).find(t=>String(t.id)===String(req.params.id)&&t.kind==='sale');
+  if(!sale)return res.status(404).send('Satış bulunamadı');
+  if(!staffSeesAllInvoices(req) && !txBelongsToActor(sale,currentActor(req))){
+    return res.status(403).send('Bu faturayı görme yetkiniz yok');
+  }
+  const record=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id))||{
+    invoiceNumber:sale.invoiceNumber||sale.reference,invoiceDate:sale.invoiceDate||sale.date,
+    reference:sale.reference,status:sale.invoiceStatus||'pending',docType:sale.invoiceType||'auto',
+    total:sale.total,items:sale.items||[],uuid:sale.uuid||''
+  };
+  const customer=(s.customers||[]).find(c=>String(c.id)===String(sale.customerId))||{};
+  sendInvoicePrint(res,{record,sale,customer,cfg:s.invoiceIntegration||{},settings:s.settings||{}});
 });
 app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_manage'),async(req,res)=>{
   if(isStaffPortalReq(req) && !staffCanInvoice(req)){
@@ -6733,8 +8423,19 @@ function applyPurchaseInvoiceToStore(s,{
   let matched=0,unmatched=0,created=0,priceUpdated=0,stockUpdated=0,total=0;
   const furniture=isIstikbalSupplier(supplierName);
   const chosenCategoryId=String(categoryId||'').trim();
+  const rawItems=Array.isArray(items)?items:[];
+  const seenStockCodes=new Set();
 
-  for(const raw of (Array.isArray(items)?items:[])){
+  if(addStock){
+    if(!stockCost.normalizeInvoiceNo(invoiceNo)){
+      throw new Error('Stok eklemek için fatura numarası zorunludur. Aynı faturayı ikinci kez işlememek için gereklidir.');
+    }
+    const codes=rawItems.map(r=>String(r.productCode||r.itemCode||r.searchName||'').trim()).filter(Boolean);
+    const dups=stockCost.duplicateProducts(s,invoiceNo,codes);
+    if(dups.length)throw new Error(stockCost.duplicateError(dups));
+  }
+
+  for(const raw of rawItems){
     const productCode=String(raw.productCode||raw.searchName||'').trim();
     const productName=String(raw.productName||'').trim();
     const itemCode=String(raw.itemCode||'').trim();
@@ -6778,6 +8479,13 @@ function applyPurchaseInvoiceToStore(s,{
     };
     if(!product){unmatched++;cleanItems.push(line);continue}
     if(!createdNow)matched++;
+    if(addStock){
+      const resolved=stockCost.normalizeProductCode(product.code);
+      if(seenStockCodes.has(resolved)||stockCost.duplicateProducts(s,invoiceNo,[product.code]).length){
+        throw new Error(stockCost.duplicateError([resolved]));
+      }
+      seenStockCodes.add(resolved);
+    }
     // İstikbal eşleşenlerde marka + malzeme adı düzelt; kategori seçildiyse onu kullan
     if(furniture){
       product.brand='İstikbal';
@@ -6795,8 +8503,17 @@ function applyPurchaseInvoiceToStore(s,{
     } else if(createdNow===false&&chosenCategoryId&&!product.category){
       product.category=resolvePurchaseCategoryId(s,chosenCategoryId,supplierName,'');
     }
-    // Sadece maliyet (veya both) modunda alış fiyatı yazılır; stok modunda mevcut maliyete dokunulmaz.
-    if(updatePurchasePrice&&unitCost>0){
+    // Stok eklenirken hareketli ortalama; sadece maliyet aktarımında son alış yazılır.
+    if(addStock&&unitCost>0){
+      const oldQty=stockCost.productQtyTotal(s,product.code);
+      product.purchasePrice=stockCost.weightedAverage(oldQty,prevCost,qty,unitCost);
+      product.purchasePriceSource='weighted-average';
+      product.purchasePriceUpdatedAt=new Date().toISOString();
+      product.updatedAt=new Date().toISOString();
+      product.importBatchId=importBatchId;
+      if(itemCode&&!product.itemCode)product.itemCode=itemCode;
+      priceUpdated++;
+    }else if(updatePurchasePrice&&unitCost>0){
       product.purchasePrice=unitCost;
       product.purchasePriceSource='purchase-invoice';
       product.purchasePriceUpdatedAt=new Date().toISOString();
@@ -7088,6 +8805,25 @@ app.post('/web-api/admin/purchase-invoice/:id/revert',requireAdmin,(req,res)=>{
   }
 });
 
+function clearAllProductsKeepCategories(s){
+  const removed=(s.products||[]).length;
+  const stocksCleared=(s.productStocks||[]).length;
+  const brandsBefore=(s.brands||[]).length;
+  s.products=[];
+  s.productStocks=[];
+  s.brands=collapseDuplicateBrands(s.brands);
+  audit(s,'Tüm ürünler silindi',`${removed} ürün`,{removed,stocksCleared,categoriesKept:(s.categories||[]).length,brandsBefore,brandsAfter:(s.brands||[]).length});
+  return {removed,stocksCleared,categories:(s.categories||[]).length,brands:(s.brands||[]).length};
+}
+app.post('/web-api/admin/products/clear-all',requireAdmin,(req,res)=>{
+  const ok=String(req.body?.confirm||'').trim().toLocaleUpperCase('tr-TR')==='SIL';
+  if(!ok)return res.status(400).json({error:'Onay için confirm=SIL yazın. Kategoriler durur, yalnızca ürünler silinir.'});
+  const s=readStore();
+  const result=clearAllProductsKeepCategories(s);
+  writeStore(s);
+  res.json({ok:true,...result});
+});
+
 /** Yüklenen ürünlerde sadece alış maliyetini sıfırla — ürün kartı silinmez */
 app.post('/web-api/admin/products/zero-purchase-costs',requireAdmin,(req,res)=>{
   try{
@@ -7178,9 +8914,16 @@ app.post('/web-api/admin/bulk-products',requireAdmin,(req,res)=>{ const s=readSt
 app.post('/web-api/admin/brand',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{};
   if(!x.name)return res.status(400).json({error:'Marka adı zorunlu'});
-  let b=s.brands.find(v=>v.id===x.id);
-  const data={name:String(x.name),active:x.active!==false,sort:Number(x.sort||0),logo:String(x.logo||'')};
-  if(b)Object.assign(b,data);else{b={id:slug(x.name)||crypto.randomUUID(),...data};if(s.brands.some(v=>v.id===b.id))b.id=`${b.id}-${Date.now()}`;s.brands.push(b);}
+  const data={name:String(x.name).trim(),active:x.active!==false,sort:Number(x.sort||0),logo:String(x.logo||'')};
+  const key=brandNameKey(data.name);
+  let b=s.brands.find(v=>v.id&&v.id===x.id)||s.brands.find(v=>brandNameKey(v.name)===key);
+  if(b)Object.assign(b,data);
+  else {
+    b={id:key==='istikbal'?'istikbal':(slug(data.name)||crypto.randomUUID()),...data};
+    s.brands.push(b);
+  }
+  s.brands=collapseDuplicateBrands(s.brands);
+  b=s.brands.find(v=>brandNameKey(v.name)===key)||b;
   audit(s,'Marka kaydedildi',b.name);writeStore(s);res.json({ok:true,brand:b});
 });
 app.delete('/web-api/admin/brand/:id',requireAdmin,(req,res)=>{
@@ -7227,6 +8970,7 @@ app.get('/web-api/admin/revenue-summary',requireAdmin,(req,res)=>{
   const posCounts={beko:0,istikbal:0,other:0};
   for(const t of (s.financeTransactions||[])){
     if(t.kind!=='sale'||t.cancelled)continue;
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
     const key=txDateKey(t);
     if(!key||key<startDate||key>endDate)continue;
     const b=dealerBrandKey(t);
@@ -7305,24 +9049,83 @@ app.post('/web-api/admin/beko-sync/start',requireAdmin,async(req,res)=>{const s=
 app.post('/web-api/admin/import-csv',requireAdmin,upload.single('file'),(req,res)=>{if(!req.file)return res.status(400).json({error:'CSV dosyası seçilmedi'});let rows;try{rows=parse(req.file.buffer.toString('utf8'),{columns:true,skip_empty_lines:true,bom:true,trim:true});}catch(e){return res.status(400).json({error:`CSV okunamadı: ${e.message}`});}const s=readStore();let added=0,updated=0,skipped=0;for(const r of rows){const brand=String(r.brand||r.marka||r['Marka']||'Beko').trim(),cat=String(r.category||r.kategori||r['Kategori']||'');if(!(brand.toLowerCase()==='beko'||(brand.toLowerCase()==='grundig'&&/kişisel|kisisel/i.test(cat)))){skipped++;continue;}const code=String(r.code||r.urun_kodu||r['Ürün Kodu']||'').trim(),name=String(r.name||r.urun_adi||r['Ürün Adı']||'').trim();if(!code||!name){skipped++;continue;}const i=s.products.findIndex(p=>p.code.toLowerCase()===code.toLowerCase());const p=sanitizeProduct({...r,code,name},i>=0?s.products[i]:{});if(i>=0){s.products[i]=p;updated++;}else{s.products.push(p);added++;}}s.syncLogs.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),source:'csv',added,updated,skipped});audit(s,'CSV ürün aktarımı','Ürünler',{added,updated,skipped});writeStore(s);res.json({ok:true,added,updated,skipped});});
 app.get('/web-api/admin/export-csv',requireAdmin,(req,res)=>{const s=readStore(),h=['code','barcode','brand','name','category','vatRate','purchasePrice','listPrice','cashPrice','cardPrice','minimumSalePrice','bekoPrice','oldPrice','salePrice','priceMode','priceValue','stock','active','featured','tags','image','description','sourceUrl'];const esc=v=>`"${String(Array.isArray(v)?v.join('|'):(v??'')).replace(/"/g,'""')}"`;const lines=[h.join(',')].concat(s.products.map(p=>h.map(k=>esc(p[k])).join(',')));res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="atakhome-products.csv"');res.send('\ufeff'+lines.join('\n'));});
 
-app.get('/web-admin',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
-app.get('/web-admin/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','admin.html'))});
+function isPublicShopHostEarly(req){
+  const h=String(req.headers['x-forwarded-host']||req.headers.host||'').split(',')[0].trim().toLowerCase().replace(/:\d+$/,'');
+  return h==='atakhome.com.tr'||h==='www.atakhome.com.tr';
+}
+app.get('/web-admin',(req,res)=>{
+  if(isPublicShopHostEarly(req))return res.redirect(302,'https://atakhome.com.tr/');
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+  res.sendFile(path.join(ROOT,'public','admin.html'));
+});
+app.get('/web-admin/*',(req,res)=>{
+  if(isPublicShopHostEarly(req))return res.redirect(302,'https://atakhome.com.tr/');
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+  res.sendFile(path.join(ROOT,'public','admin.html'));
+});
+app.get('/e-fatura',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','fatura.html'))});
+app.get('/e-fatura/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','fatura.html'))});
 app.get('/web-admin-v5',(req,res)=>res.redirect('/web-admin'));
 // Tasarım örnekleri (sahte veri, sadece görsel önizleme)
 app.get('/panel-ornek',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','panel-v2.html'))});
 app.get('/panel-ornek-2',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','panel-v3.html'))});
 app.get('/web-admin-legacy',(req,res)=>res.sendFile(path.join(ROOT,'public','admin-v5.html')));
-app.get('/personel',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','personel.html'))});
-app.get('/personel/*',(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.sendFile(path.join(ROOT,'public','personel.html'))});
-app.get('/',(req,res)=>res.redirect('/personel'));
+function requestHost(req){
+  return String(req.headers['x-forwarded-host']||req.headers.host||'').split(',')[0].trim().toLowerCase().replace(/:\d+$/,'');
+}
+function isPublicShopHost(req){
+  const h=requestHost(req);
+  return h==='atakhome.com.tr'||h==='www.atakhome.com.tr';
+}
+function sendPublicShopHold(res){
+  const vitrin=path.join(ROOT,'public','vitrin','index.html');
+  if(fs.existsSync(vitrin)){
+    res.status(200).set('Cache-Control','no-store').sendFile(vitrin);
+    return;
+  }
+  res.status(200).type('html').set('Cache-Control','no-store').send(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atak Home</title></head><body style="font-family:sans-serif;max-width:640px;margin:12vh auto;padding:24px"><h1>Atak Home</h1><p>Bu adres vitrin sitesidir. Personel girişi burada açılmaz.</p></body></html>`);
+}
+app.get('/personel',(req,res)=>{
+  if(isPublicShopHost(req))return res.redirect(302,'https://panel.atakhome.com.tr/personel');
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+  res.sendFile(path.join(ROOT,'public','personel.html'));
+});
+app.get('/personel/*',(req,res)=>{
+  if(isPublicShopHost(req))return res.redirect(302,'https://panel.atakhome.com.tr/personel');
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+  res.sendFile(path.join(ROOT,'public','personel.html'));
+});
+app.get('/',(req,res)=>{
+  if(isPublicShopHost(req))return sendPublicShopHold(res);
+  res.redirect('/personel');
+});
+app.get(['/styles.css','/app.js','/atak-header-logo.svg','/beko-logo.svg','/istikbal-logo.svg'],(req,res,next)=>{
+  if(!isPublicShopHost(req))return next();
+  const name=path.basename(req.path);
+  const files=[path.join(ROOT,'public','vitrin',name),path.join(ROOT,'public','assets',name)];
+  for(const f of files){ if(fs.existsSync(f)) return res.sendFile(f); }
+  next();
+});
+app.get('/img/:file',(req,res,next)=>{
+  if(!isPublicShopHost(req))return next();
+  const name=path.basename(req.params.file||'');
+  const f=path.join(ROOT,'public','vitrin','img',name);
+  if(fs.existsSync(f)) return res.sendFile(f);
+  next();
+});
 app.get('/assets/*',(req,res)=>res.status(404).type('text').send('Not found'));
 app.get('/web-admin-assets/*',(req,res)=>res.status(404).type('text').send('Not found'));
 app.get('/web-api/*',(req,res)=>res.status(404).json({error:'Bulunamadı'}));
 app.get('/foundation-api/*',(req,res)=>res.status(404).json({error:'Bulunamadı'}));
-app.get('*',(req,res)=>res.redirect('/personel'));
+app.get('*',(req,res)=>{
+  if(isPublicShopHost(req))return sendPublicShopHold(res);
+  res.redirect('/personel');
+});
 app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'Sunucu hatası'});});
+recoverStoreFile();
 ensureStore(readStore()); writeStore(readStore());
 app.listen(PORT,'127.0.0.1',()=>{
   console.log(`Atak Home ERP V2 http://127.0.0.1:${PORT}`);
   console.log(`[SECURITY] ownerOnly=${ownerOnlyEnabled()} owners=${ownerUsernames().join(',')} ipLock=${allowedIps().length?allowedIps().join(','):'off'} mfa=${mfaEnabled()} trustH=${Math.round(mfaTrustMs()/3600000)}`);
+  try{autoBackup.start()}catch(e){console.error('[backup] start',e.message||e)}
 });
