@@ -5070,8 +5070,8 @@ async function loadMailSettings(){
     const d=await api('/web-api/admin/mail-settings');
     const s=d.settings||{};
     if(q('#mailEnabled'))q('#mailEnabled').checked=s.configured===true||s.enabled===true;
-    if(q('#mailHost'))q('#mailHost').value=s.host||'smtp.gmail.com';
-    if(q('#mailPort'))q('#mailPort').value=s.port||587;
+    if(q('#mailHost'))q('#mailHost').value=s.host||'smtp.hostinger.com';
+    if(q('#mailPort'))q('#mailPort').value=s.port||465;
     if(q('#mailSecure'))q('#mailSecure').checked=s.secure===true;
     if(q('#mailUser'))q('#mailUser').value=s.user||'';
     if(q('#mailPass'))q('#mailPass').value=s.pass||'';
