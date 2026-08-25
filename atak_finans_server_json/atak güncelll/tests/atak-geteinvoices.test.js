@@ -63,7 +63,8 @@ const store = {
       invoiceDate: '2026-08-12',
       uuid: 'uuid-ret-1',
       total: 200,
-      status: 'cancelled',
+      status: 'issued',
+      isReturn: true,
       docType: 'efatura',
       customer: { name: 'İade Müşteri' }
     },
@@ -117,8 +118,10 @@ assert(all.$id === '1' && all._schema === 0 && all._reference === '', 'zarf meta
 const rootWant = ['$id','DealerId','startDate','endDate','RecordCount','EInvoiceCode','addReturns','EInvoices','_reference','_schema'];
 assert(rootWant.every(k => Object.prototype.hasOwnProperty.call(all, k)) && Object.keys(all).every(k => rootWant.includes(k)), 'zarf alanları');
 const giden = all.EInvoices.find(x => x.FaturaNo === 'ATK2026000000001');
+assert(giden && giden.FaturalanacakMusteriAdi === 'Ahmet Yılmaz', 'müşteri');
 assert(giden.FaturaNo === 'ATK2026000000001', 'FaturaNo');
-assert(giden.Rapid360No === 'ATK2026000000001', 'Rapid360No');
+assert(giden.FaturaAsama === 'NORMAL', 'satış NORMAL');
+assert(giden.FaturaSinifi === 'BEKLEYEN', 'EVA BEKLEYEN');
 assert(giden.Bayi === 'ATAKHOME', 'Bayi ATAKHOME');
 assert(String(giden.BayiKodu) === '340344', 'BayiKodu');
 assert(giden.FaturaTarihi === '10/08/2026', 'tr tarih');
@@ -136,6 +139,42 @@ const noRet = atak.buildResponse(store, creds, {
   addReturns: 'false'
 });
 assert(noRet.RecordCount === 1 && !noRet.EInvoices.some(x => x.FaturaAsama === 'IADE'), 'addReturns false');
+
+assert(atak.isReturnRow({docType:'earsiv',invoiceType:'auto',status:'draft_sent'}) === false, 'mağaza satışı iade değil');
+assert(atak.isReturnRow({docType:'efatura',invoiceType:'auto',status:'ready'}) === false, 'e-fatura iade değil');
+assert(atak.isReturnRow({isReturn:true,docType:'efatura'}) === true, 'işaretli iade');
+
+const evaStore = {
+  invoiceQueue: [
+    {
+      invoiceNumber: 'ATA2026000000005',
+      invoiceDate: '2026-08-25',
+      status: 'draft_sent',
+      docType: 'earsiv',
+      invoiceType: 'auto',
+      customer: { name: 'NULL', companyName: 'TAHA YASİN ATAK' },
+      items: [{ productCode: 'GLARY RUNNER', name: 'GLARY RUNNER', quantity: 1, unitPrice: 1000, vatRate: 10 }],
+      total: 1000,
+      description: 'KREDİKARTLISATIS'
+    },
+    {
+      invoiceNumber: 'ATA-CANCEL',
+      invoiceDate: '2026-08-25',
+      status: 'cancelled',
+      docType: 'earsiv',
+      total: 1
+    }
+  ]
+};
+const evaToday = atak.buildResponse(evaStore, creds, {
+  StartDate: '2026-08-25T00:00:00',
+  EndDate: '2026-08-25T00:00:00',
+  addReturns: 'false'
+}, new Date('2026-08-25T23:00:00'));
+assert(evaToday.RecordCount === 1, 'EVA bugün satış gelir ' + evaToday.RecordCount);
+assert(evaToday.EInvoices[0].FaturaAsama === 'NORMAL', 'EVA NORMAL');
+assert(evaToday.EInvoices[0].FaturaSinifi === 'BEKLEYEN', 'EVA BEKLEYEN');
+assert(evaToday.EInvoices[0].FaturalanacakMusteriAdi === 'TAHA YASİN ATAK', 'NULL ad düşmez');
 
 const noInbox = atak.buildResponse(store, { ...creds, includeInbox: false }, {
   StartDate: '2026-08-01',
@@ -268,7 +307,7 @@ assert(faturaHtml.includes('EVA Connect'), 'eva url kutusu');
 assert(faturaHtml.includes('atakDmsCopyBtn'), 'url kopyala');
 assert(!faturaHtml.includes('data-inv-module="efatura"'), 'e-Fatura ağacı yok');
 assert(!faturaHtml.includes('data-inv-view="ef_out_pending"'), 'gönderilecek klasör yok');
-assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v266'), 'fatura build');
+assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v268'), 'fatura build');
 assert(faturaJs.includes("view:'pending_sales'"), 'varsayılan kesilmeyen');
 assert(faturaJs.includes('digital-planet-test'), 'dp test api');
 

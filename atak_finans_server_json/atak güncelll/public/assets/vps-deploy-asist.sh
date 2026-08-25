@@ -2,16 +2,16 @@
 # Asist fatura+stok paneli — sadece ERP (atak). Vitrin/commerce'e DOKUNMAZ.
 # data/store.json ASLA değiştirilmez / restore edilmez.
 # Hostinger Web Terminal:
-#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/dijitalplanet-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/satis-fatura-oncelik-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
 set -euo pipefail
 OUT=/tmp/atak-asist-deploy.txt
 : > "$OUT"
 log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
-BRANCH="${ATAK_BRANCH:-cursor/dijitalplanet-474e}"
-EXPECT_V="${EXPECT_HEALTH:-6.3.263-eva-rapid}"
-EXPECT_B="${EXPECT_BUILD:-fix-v266}"
+BRANCH="${ATAK_BRANCH:-cursor/satis-fatura-oncelik-474e}"
+EXPECT_V="${EXPECT_HEALTH:-6.3.265-eva-normal}"
+EXPECT_B="${EXPECT_BUILD:-fix-v268}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"

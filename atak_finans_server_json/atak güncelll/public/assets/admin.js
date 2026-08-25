@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v266 */
+/* ATAK_ADMIN_BUILD=fix-v268 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -3625,6 +3625,8 @@ function salesRefreshRowStocks(){
 }
 
 let completingSaleId='';
+/** Satış Merkezi 3. adım: her zaman önce fatura kesilir. Kesilmeyen yalnızca "daha sonra kes" için. */
+function defaultSalesInvoiceStatus(){return 'queue_qnb'}
 function salesReset(opts={}){
   completingSaleId='';
   if(q('#salesRows'))q('#salesRows').innerHTML='';
@@ -3634,7 +3636,7 @@ function salesReset(opts={}){
   if(q('#salesDiscountAmount'))q('#salesDiscountAmount').value='0';
   ['#payCash','#payCard','#payTransfer','#payCredit','#payNote','#salesPaidAmount'].forEach(id=>{if(q(id))q(id).value=''});
   if(q('#salesDescription'))q('#salesDescription').value='';
-  if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value='not_required';
+  if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value=defaultSalesInvoiceStatus();
   if(q('#salesInvoiceNumber'))q('#salesInvoiceNumber').value='';
   if(q('#salesCustomerSearch'))q('#salesCustomerSearch').value='';
   if(q('#salesCustomerSelect'))q('#salesCustomerSelect').value='';
@@ -3695,7 +3697,7 @@ async function openRapidSaleInSalesCenter(saleId){
     if(sale.date && q('#salesDate'))q('#salesDate').value=String(sale.date).slice(0,10);
     if(q('#salesDiscountPct'))q('#salesDiscountPct').value=String(sale.discountPct||0);
     if(q('#salesDescription'))q('#salesDescription').value=sale.description||(`Rapid ${sale.rapidSalesId||sale.reference||''}`.trim());
-    if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value='not_required';
+    if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value=defaultSalesInvoiceStatus();
     (sale.items||[]).forEach(item=>{
       salesAddRow(item.productCode||item.itemCode||'',{
         qty:item.quantity,unitPrice:item.unitPrice,
@@ -4579,7 +4581,7 @@ function collectSalesDraft(){
     catch(err){return{error:err.message||'Kefil bilgisi geçersiz.',status,customerId,customer}}
     if(!guarantor)return{error:'Kefil eklendi ancak ad soyad boş. Doldurun veya kefili kaldırın.',status,customerId,customer};
   }
-  const draft={status,customerId,customer,billingParty,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,reserveStock,stockMode,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,guarantor,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||'not_required',invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
+  const draft={status,customerId,customer,billingParty,dealerId,dealer,salespersonId,salesperson,discountPct,discountAmount:calc.discountAmount,commissionPct:calc.commissionPct,commissionAmount:calc.commission,grossTotal,warehouseId,warehouse,deductStock,reserveStock,stockMode,items,total,paid:calc.paid,due:calc.due,method:calc.method,payments,promissory,guarantor,allocated:calc.allocated,remaining:calc.remaining,date:q('#salesDate').value,description:q('#salesDescription').value||'Mağaza satışı',invoiceStatus:q('#salesInvoiceStatus')?.value||defaultSalesInvoiceStatus(),invoiceNumber:q('#salesInvoiceNumber')?.value||'',invoiceDate:q('#salesInvoiceDate')?.value||''};
   if(!customerId)return{error:'Müşteri seçmelisiniz.',...draft};
   if(billingParty==='corporate'&&!customerHasCorporate(customer))return{error:'Kurumsal fatura için müşteri kartına firma / VKN ekleyin.',...draft};
   if(!dealer)return{error:'Satış bayisini seçmelisiniz.',...draft};
@@ -4621,7 +4623,7 @@ function salesPreviewHtml(d){
   const kefilNote=d.guarantor?`<div class="preview-note"><b>Kefil:</b> ${salesEsc(d.guarantor.name||'')}${d.guarantor.tckn?' · TCKN '+salesEsc(d.guarantor.tckn):''}${d.guarantor.phone?' · '+salesEsc(d.guarantor.phone):''}</div>`:'';
   const invLabel=d.invoiceStatus==='issued'
     ?`Manuel kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`
-    :(d.invoiceStatus==='queue_qnb'?'QNB Solist ile kesilecek (e-Fatura / e-Arşiv kuyruğu)'
+    :(d.invoiceStatus==='queue_qnb'?'Fatura kesilecek (e-Fatura / e-Arşiv · EVA Rapid360)'
       :(d.invoiceStatus==='pending'?'Daha sonra kesilecek (Kesilmeyen Faturalar)':'Fatura gerekmiyor'));
   const billLabel=d.billingParty==='corporate'
     ?`Kurumsal · ${d.customer?.companyName||'-'} · VKN ${d.customer?.taxNo||'-'}`
@@ -4962,15 +4964,15 @@ async function printSalesContractAndNotes(){
   openSalesPrintWindow('Atak Pazarlama · Sözleşme + Senet (Tek A4)',salesCombinedContractSenetA4Html(d));
 }
 async function salesIssueInvoiceNow(){
-  // Önce satışı kaydet / önizlemeden fatura niyeti
-  if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value='queue_qnb';
+  // Satış Merkezi 3. adım: her zaman önce fatura kes
+  if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value=defaultSalesInvoiceStatus();
   const d=collectSalesDraft();
   if(d.error){toast(d.error);return}
   activeSalesDraft=d;
   openSalesPreview();
-  toast('Fatura: Önizlemede “Satışı Yap” deyince QNB Solist kuyruğuna alınır');
+  toast('Fatura Kes: Önizlemede “Satışı Yap” deyince e-fatura kesilir (EVA Rapid Veri Çek)');
   const hint=q('#salesStatus');
-  if(hint){hint.textContent='Fatura Kes seçildi → satışı onaylayınca QNB kuyruğa düşer (e-Fatura / e-Arşiv).';hint.className='form-status success'}
+  if(hint){hint.textContent='Fatura Kes seçildi → satışı onaylayınca e-fatura kuyruğuna alınır. EVA Rapid Veri Çek bunu çeker.';hint.className='form-status success'}
 }
 async function confirmSalesDraft(){
   const d=activeSalesDraft||collectSalesDraft();if(d.error){toast(d.error);return}

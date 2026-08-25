@@ -328,9 +328,9 @@ function toRapidInvoice(row, store, cfg){
     EmanetMi: sale.reserveStock ? 'Evet' : 'Hayır',
     EFaturaMi: isEa ? 'No' : 'Yes',
     ResmiBelgeNo: String(row.invoiceNumber || row.reference || '').trim(),
-    FaturaSinifi: '',
+    FaturaSinifi: isReturnRow(row, sale) ? 'IADE' : 'BEKLEYEN',
     FaturaTipi: 'Mal Faturası',
-    FaturaAsama: isReturnRow(row) ? 'IADE' : 'NORMAL',
+    FaturaAsama: isReturnRow(row, sale) ? 'IADE' : 'NORMAL',
     FaturaAciklama: String(row.description || sale.description || '').trim(),
     MusteriKodu: String(customer.code || customer.customerCode || row.customerId || customer.id || '').trim(),
     MusteriEmail: String(customer.email || '').trim(),
@@ -348,7 +348,7 @@ function toRapidInvoice(row, store, cfg){
     EvTelefonu: String(customer.homePhone || '').trim(),
     CepTelefonu: String(customer.phone || customer.mobile || '').replace(/\D/g, ''),
     MuhasebeBaglantiKodu: '',
-    FaturalanacakMusteriAdi: String(customer.name || customer.companyName || '').trim(),
+    FaturalanacakMusteriAdi: displayCustomerName(customer),
     ValorTarihi: valor,
     TutarToplami: gross,
     KDVTutarToplami: vatSum,
@@ -440,13 +440,33 @@ function pendingSalesAsQueueRows(store){
   return extra;
 }
 
-function isReturnRow(row){
+function displayCustomerName(customer){
+  const c = customer && typeof customer === 'object' ? customer : {};
+  const names = [c.name, c.companyName, c.title]
+    .map(v => String(v == null ? '' : v).trim())
+    .filter(v => v && !/^null$/i.test(v) && v !== '-' && !/^undefined$/i.test(v));
+  return names[0] || '';
+}
+
+function isReturnToken(v){
+  const t = String(v || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return t === 'iade' || t === 'return' || t === 'creditnote' || t === 'credit' || t === 'iadefatura';
+}
+
+function isReturnRow(row, sale){
   if(!row) return false;
-  if(row.isReturn === true || row.isReturn === 'true') return true;
-  const st = String(row.status || '').toLowerCase();
-  if(st === 'cancelled' || st === 'return' || st === 'iade') return true;
-  const blob = `${row.docType || ''} ${row.invoiceType || ''} ${row.profile || ''}`.toLowerCase();
-  return /iade|return|credit/.test(blob);
+  const s = sale && typeof sale === 'object' ? sale : {};
+  if(row.isReturn === true || row.isReturn === 'true' || row.isReturn === 1 || row.isReturn === '1') return true;
+  if(s.isReturn === true || s.isReturn === 'true') return true;
+  if(String(row.kind || s.kind || '').toLowerCase() === 'return') return true;
+  const asama = String(row.FaturaAsama || s.FaturaAsama || '').toUpperCase().replace(/İ/g, 'I');
+  if(asama === 'IADE') return true;
+  return [row.docType, row.invoiceType, row.profile, row.invoiceTypeCode, s.docType, s.invoiceTypeCode].some(isReturnToken);
+}
+
+function isDroppedInvoiceStatus(status){
+  const st = String(status || '').toLowerCase();
+  return st === 'cancelled' || st === 'canceled' || st === 'void' || st === 'error';
 }
 
 function profileOf(row){
@@ -521,7 +541,7 @@ function collectRows(store, cfg, query, now){
   for(const row of queue){
     if(!row) continue;
     const st = String(row.status || '').toLowerCase();
-    if(st === 'not_required') continue;
+    if(st === 'not_required' || isDroppedInvoiceStatus(st)) continue;
     const sale = findSale(store, row.saleId) || {};
     const no = String(row.invoiceNumber || row.FaturaNo || row.reference || sale.invoiceNumber || sale.reference || '').trim();
     const uuid = String(row.uuid || row.ettn || sale.invoiceUuid || '').trim();
@@ -532,7 +552,7 @@ function collectRows(store, cfg, query, now){
     });
     if(!isAtakOwnInvoice(dated)) continue;
     if(!inDateRange(dated, range, store)) continue;
-    if(!addReturns && isReturnRow(row)) continue;
+    if(!addReturns && isReturnRow(dated, sale)) continue;
     const key = String(no || uuid || row.saleId || row.id);
     if(seen.has(key)) continue;
     seen.add(key);

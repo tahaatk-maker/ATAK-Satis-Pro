@@ -2068,8 +2068,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.263-eva-rapid',
-    build:'fix-v266',
+    version:'6.3.265-eva-normal',
+    build:'fix-v268',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,

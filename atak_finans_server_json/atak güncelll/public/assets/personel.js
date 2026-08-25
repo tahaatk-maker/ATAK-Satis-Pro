@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v264 */
+/* ATAK_PERSONEL_BUILD=fix-v268 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -79,6 +79,8 @@ function canScreen(id){return has(id)}
 function canSaleDocs(){return has('sale_docs')||has('*')}
 function canSaleOffer(){return has('sale_offer')||has('*')}
 function canSaleInvoice(){return has('sale_invoice_qnb')||has('finance_manage')||has('invoices_manage')||has('*')}
+/** Satış Merkezi 3. adım: her zaman önce fatura kesilir. Yetki yoksa Kesilmeyen’e düşer. */
+function defaultSalesInvoiceStatus(){return canSaleInvoice()?'queue_qnb':'pending'}
 function canInvoiceCenter(){
   return canScreen('screen_invoice_center')||canSaleInvoice()||has('screen_uninvoiced')
     ||canScreen('screen_sales_center')||has('orders_manage');
@@ -101,7 +103,7 @@ function applyStaffSalePermissions(){
       el.disabled=!ok;
       if(!ok && el.selected){
         const sel=el.parentElement;
-        if(sel)sel.value='not_required';
+        if(sel)sel.value='pending';
       }
     }
   });
@@ -650,7 +652,7 @@ function salesReset(){
   if($('#salesDiscountPct'))$('#salesDiscountPct').value='0';
   if($('#salesDiscountAmount'))$('#salesDiscountAmount').value='0';
   if($('#salesBillingParty'))$('#salesBillingParty').value='individual';
-  if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value='not_required';
+  if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value=defaultSalesInvoiceStatus();
   if($('#salesDescription'))$('#salesDescription').value='Mağaza satışı';
   if($('#salesDeductStock'))$('#salesDeductStock').value='no';
   if($('#salesInvoiceNumber'))$('#salesInvoiceNumber').value='';
@@ -744,7 +746,7 @@ async function openRapidSaleInSalesCenter(saleId){
     if(sale.date && $('#salesDate'))$('#salesDate').value=String(sale.date).slice(0,10);
     if($('#salesDiscountPct'))$('#salesDiscountPct').value=String(sale.discountPct||0);
     if($('#salesDescription'))$('#salesDescription').value=sale.description||(`Rapid ${sale.rapidSalesId||sale.reference||''}`.trim());
-    if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value='not_required';
+    if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value=defaultSalesInvoiceStatus();
     salesCart=(sale.items||[]).map(i=>({
       code:i.productCode||i.itemCode||'',
       name:i.productName||i.materialCode||i.productCode||'',
@@ -1404,7 +1406,7 @@ function collectSalesDraft(){
   const warehouseId=$('#salesWarehouse')?.value||'';
   if((deductStock||reserveStock) && !warehouseId)return{error:reserveStock?'Rezerve için depo seçin':'Stoktan düşmek için depo seçin',status};
   if(stockSel==='yes' && !canStock)return{error:'Stok düşme yetkiniz yok — Rezerve et kullanabilirsiniz',status};
-  let invoiceStatus=$('#salesInvoiceStatus')?.value||'not_required';
+  let invoiceStatus=$('#salesInvoiceStatus')?.value||defaultSalesInvoiceStatus();
   if((invoiceStatus==='queue_qnb'||invoiceStatus==='issued') && !canSaleInvoice()){
     return{error:'Fatura kesme yetkiniz yok',status};
   }
@@ -1456,7 +1458,7 @@ function salesPreviewHtml(d){
   const havaleAmt=Math.round(((d.payments||[]).filter(p=>p.method==='Havale').reduce((a,p)=>a+Number(p.amount||0),0))*100)/100;
   const havaleNote=havaleAmt>0?`<div class="preview-note"><b>Havale:</b> ${money(havaleAmt)} kasa/bankaya yazılmaz. Yönetici Ödemeler’den tahsil eder.</div>`:'';
   const note=d.promissory?`<div class="preview-note"><b>Senet:</b> ${money(d.promissory.amount)} · ${d.promissory.installments} taksit · İlk vade ${esc(d.promissory.firstDueDate)}</div>`:'';
-  const inv=d.invoiceStatus==='queue_qnb'?'Fatura kuyruğu':(d.invoiceStatus==='pending'?'Daha sonra kesilecek':(d.invoiceStatus==='issued'?`Manuel · ${esc(d.invoiceNumber)}`:'Fatura gerekmiyor'));
+  const inv=d.invoiceStatus==='queue_qnb'?'Fatura kesilecek (e-Fatura / EVA Rapid360)':(d.invoiceStatus==='pending'?'Daha sonra kesilecek':(d.invoiceStatus==='issued'?`Manuel · ${esc(d.invoiceNumber)}`:'Fatura gerekmiyor'));
   const stockTxt=d.deductStock?`Düşülecek · ${esc(d.warehouse?.name||'')}`:(d.reserveStock?`Rezerve · ${esc(d.warehouse?.name||'')} (teslimde düşülür)`:'Değişmeyecek');
   return `<div class="preview-cards"><div><small>Müşteri</small><b>${esc(d.customer?.name||'-')}</b><span>${esc(d.customer?.phone||'')}</span></div><div><small>Bayi / Satıcı</small><b>${esc(d.dealer?.name||'-')}</b><span>${esc(d.salesperson?.name||'')}</span></div><div><small>Ödeme</small><b>${esc(d.method)}</b><span>Şimdi tahsil: ${money(d.paid)}</span></div></div><div class="table-wrap"><table><thead><tr><th>Madde</th><th>Malzeme</th><th>Adet</th><th>Birim</th><th>Toplam</th></tr></thead><tbody>${rows}</tbody></table></div><div class="preview-totals"><div><span>Brüt</span><b>${money(d.grossTotal)}</b></div><div><span>İskonto</span><b>-${money(d.discountAmount||0)}</b></div><div><span>Net</span><b>${money(d.total)}</b></div>${payRows}<div><span>Prim</span><b>${money(d.commissionAmount||0)}</b></div></div>${havaleNote}${note}<div class="preview-note"><b>Fatura:</b> ${inv}<br><b>Stok:</b> ${stockTxt}<br><b>Açıklama:</b> ${esc(d.description||'-')}</div>`;
 }
@@ -1798,9 +1800,9 @@ function printSalesContractAndNotes(){
 }
 function salesIssueInvoiceNow(){
   if(!canSaleInvoice()){stToast('Fatura kesme yetkiniz yok');return}
-  if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value='queue_qnb';
+  if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value=defaultSalesInvoiceStatus();
   openSalesPreview();
-  stToast('Fatura: Önizlemede “Satışı Yap” deyince kuyruğa alınır');
+  stToast('Fatura Kes: Önizlemede “Satışı Yap” deyince e-fatura kesilir');
 }
 async function confirmSalesDraft(){
   const d=activeSalesDraft||collectSalesDraft();

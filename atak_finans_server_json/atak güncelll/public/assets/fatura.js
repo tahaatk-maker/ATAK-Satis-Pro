@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v266 */
+/* ATAK_FATURA_BUILD=fix-v268 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={view:'pending_sales',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
