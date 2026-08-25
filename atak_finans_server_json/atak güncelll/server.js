@@ -2068,8 +2068,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.265-eva-normal',
-    build:'fix-v268',
+    version:'6.3.266-musteri-hub',
+    build:'fix-v269',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -4616,6 +4616,22 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
     accounts:s.financeAccounts.filter(x=>x.active!==false).map(x=>({...x,balance:accountBalance(s,x.id)})),
     products:[],
     warehouses:[],
+    pendingInvoices:(s.financeTransactions||[])
+      .filter(t=>t.kind==='sale'&&!t.cancelled&&String(t.customerId)===String(customer.id)&&!rapidSalesCatalog.isOpenRapidSale(t)&&saleNeedsInvoice(t.invoiceStatus))
+      .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))
+      .map(t=>{
+        const rec=(s.invoiceQueue||[]).find(r=>String(r.saleId)===String(t.id));
+        return{
+          id:t.id,
+          reference:t.reference||'',
+          date:t.date||'',
+          total:Number(t.total||0),
+          invoiceStatus:t.invoiceStatus||'pending',
+          queueStatus:rec?.status||'',
+          invoiceNumber:t.invoiceNumber||rec?.invoiceNumber||'',
+          itemSummary:(t.items||[]).map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', ')
+        };
+      }),
     promissoryNotes:(s.promissoryNotes||[])
       .filter(n=>n.customerId===customer.id)
       .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))

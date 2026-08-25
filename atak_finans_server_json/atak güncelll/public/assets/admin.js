@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v268 */
+/* ATAK_ADMIN_BUILD=fix-v269 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2225,7 +2225,7 @@ q('#dealerSettingsForm')?.addEventListener('submit',async e=>{
 });
 
 /* ===== Müşteriler sayfası ===== */
-let customersPageData={customers:[],selectedId:'',total:0};
+let customersPageData={customers:[],selectedId:'',total:0,_pane:'summary',_pendingInvoices:[]};
 function customerInvoiceType(prefix){
   const checked=document.querySelector(`input[name="${prefix}InvoiceType"]:checked`);
   return checked?.value==='corporate'?'corporate':'individual';
@@ -2490,10 +2490,9 @@ async function loadCustomersPage(){
     customersPageData.total=0;
   }
   renderCustomerPageList();
-  if(customersPageData.selectedId&&customersPageData.customers.some(c=>String(c.id)===String(customersPageData.selectedId))){
+  if(customersPageData.selectedId){
     await selectCustomerPage(customersPageData.selectedId);
   }else{
-    customersPageData.selectedId='';
     q('#customerEmptyState')?.classList.remove('hidden');
     q('#customerDetailContent')?.classList.add('hidden');
   }
@@ -2511,11 +2510,18 @@ function renderCustomerSaleItems(items=[]){
     return `<div class="customer-sale-item"><div><b>${qty}× ${name}</b>${code?`<small>${code}</small>`:''}<small>Birim: ${money2(i.unitPrice||0)}</small></div><strong>${money2(line)}</strong></div>`;
   }).join('')}</div>`;
 }
+function saleNeedsInvoiceButton(t){
+  if(String(t.kind||'')!=='sale'||t.cancelled||!t.id)return false;
+  if(t.needsCompletion||t.rapidDraft)return false;
+  const st=String(t.invoiceStatus||'pending').toLowerCase();
+  return !['issued','not_required'].includes(st);
+}
 function customerSaleActionButtons(t,{compact=false}={}){
   const kind=String(t.kind||'');
   if(kind!=='sale'||t.cancelled||!t.id)return '';
   const id=String(t.id).replace(/"/g,'&quot;');
   const ref=salesEsc(t.reference||'');
+  const inv=saleNeedsInvoiceButton(t)?`<button type="button" class="primary" data-sale-invoice="${id}">FATURA KES</button>`:'';
   if(t.needsCompletion||t.rapidDraft){
     const btn=`<button type="button" class="primary" data-sale-complete="${id}">Satışa git / Tamamla</button>`;
     const drop=`<button type="button" data-sale-discard="${id}" data-ref="${ref}">Taslağı sil</button>`;
@@ -2523,12 +2529,14 @@ function customerSaleActionButtons(t,{compact=false}={}){
   }
   if(compact){
     return `<div class="customer-sale-actions compact">
+      ${inv}
       <button type="button" class="secondary-btn" data-sale-edit="${id}">Düzenle</button>
       <button type="button" class="secondary-btn" data-sale-return="${id}" data-ref="${ref}">İade</button>
       <button type="button" data-sale-cancel="${id}" data-ref="${ref}">İptal</button>
     </div>`;
   }
   return `<div class="customer-sale-actions">
+    ${inv}
     <button type="button" class="secondary-btn" data-sale-edit="${id}">Düzenle / Kısmi İade</button>
     <button type="button" class="secondary-btn" data-sale-return="${id}" data-ref="${ref}">Tam İade</button>
     <button type="button" data-sale-cancel="${id}" data-ref="${ref}">İptal</button>
@@ -2557,6 +2565,9 @@ function bindCustomerSaleActions(root){
   });
   root.querySelectorAll('[data-sale-cancel]').forEach(btn=>{
     btn.addEventListener('click',()=>requestCancellation('sale',btn.dataset.saleCancel,btn.dataset.ref||'',{requestKind:'cancel'}));
+  });
+  root.querySelectorAll('[data-sale-invoice]').forEach(btn=>{
+    btn.addEventListener('click',()=>issueCustomerSaleInvoice(btn.dataset.saleInvoice));
   });
 }
 function renderCustomerSaleCard(t){
@@ -2809,6 +2820,84 @@ function printCustomerComms(){
   w.focus();
   w.print();
 }
+function setCustomerHubPane(pane){
+  const id=String(pane||'summary');
+  customersPageData._pane=id;
+  qa('#customerHubTabs [data-customer-pane]').forEach(btn=>{
+    const on=btn.dataset.customerPane===id;
+    btn.classList.toggle('active',on);
+    btn.setAttribute('aria-selected',on?'true':'false');
+  });
+  qa('#customerDetailContent .customer-hub-pane').forEach(el=>el.classList.toggle('active',el.dataset.customerPane===id));
+}
+function updateCustomerInvoiceBadges(rows){
+  const n=(rows||[]).length;
+  ['#customerInvoiceHeroCount','#customerInvoiceTabCount'].forEach(sel=>{
+    const el=q(sel);if(!el)return;
+    el.textContent=String(n);
+    el.classList.toggle('hidden',n<=0);
+  });
+  q('#customerHubTabs [data-customer-pane="invoice"]')?.classList.toggle('has-pending',n>0);
+}
+function renderCustomerInvoiceList(rows){
+  const box=q('#customerInvoiceList');
+  customersPageData._pendingInvoices=Array.isArray(rows)?rows:[];
+  updateCustomerInvoiceBadges(customersPageData._pendingInvoices);
+  if(!box)return;
+  const list=customersPageData._pendingInvoices;
+  if(!list.length){
+    box.innerHTML='<div class="customer-invoice-empty"><b>Kesilmeyen fatura yok</b><p class="note" style="margin:8px 0 0">Yeni satışta 3. adımda FATURA KES ile kesin. Unutulanlar Kesilmeyen listesinde durur.</p></div>';
+    return;
+  }
+  box.innerHTML=list.map(r=>{
+    const st=String(r.queueStatus||r.invoiceStatus||'pending');
+    const label=st==='queued'||st==='ready'||st==='draft_sent'?'Kuyrukta · Tekrar dene':'FATURA KES';
+    return `<article class="customer-invoice-row">
+      <div><b>${salesEsc(r.date||'-')} · ${salesEsc(r.reference||'Satış')}</b>
+      <small>${salesEsc(r.itemSummary||'')} · ${money2(r.total)}</small></div>
+      <button type="button" data-sale-invoice="${salesEsc(r.id)}">${label}</button>
+    </article>`;
+  }).join('');
+  bindCustomerSaleActions(box);
+}
+async function issueCustomerSaleInvoice(saleId){
+  if(!saleId)return;
+  try{
+    const inv=await api('/web-api/admin/sale/'+encodeURIComponent(saleId)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const no=inv.sale?.invoiceNumber||inv.record?.invoiceNumber||'';
+    toast(no?`Fatura kuyruğa alındı · ${no}`:'Fatura kuyruğa alındı');
+    if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId);
+  }catch(e){toast(e.message||'Fatura kesilemedi')}
+}
+function openSalesCenterForCustomer(c){
+  goTab('salesCenter');
+  if(!c?.id)return;
+  setTimeout(()=>{
+    const sel=q('#salesCustomerSelect');if(!sel)return;
+    if(![...sel.options].some(o=>String(o.value)===String(c.id))){
+      const o=document.createElement('option');
+      o.value=c.id;o.textContent=c.name||c.id;
+      sel.appendChild(o);
+    }
+    sel.value=c.id;
+    sel.dispatchEvent(new Event('change'));
+  },80);
+}
+async function customerHeroInvoice(){
+  const pending=customersPageData._pendingInvoices||[];
+  if(pending.length===1){
+    if(!confirm(`${pending[0].reference||'Satış'} için fatura kesilsin mi?`))return;
+    await issueCustomerSaleInvoice(pending[0].id);
+    return;
+  }
+  if(pending.length>1){
+    setCustomerHubPane('invoice');
+    toast(`${pending.length} kesilmeyen satış var — listeden kesin`);
+    return;
+  }
+  toast('Kesilmeyen yok — satış merkezinden fatura kesin');
+  openSalesCenterForCustomer(customersPageData._selected);
+}
 async function selectCustomerPage(id){
   customersPageData.selectedId=id;
   renderCustomerPageList();
@@ -2872,6 +2961,8 @@ async function selectCustomerPage(id){
     customersPageData._pendingDelete=d.pendingDelete||null;
     customersPageData._smsType='';
     q('#customerSmsPanel')?.classList.add('hidden');
+    renderCustomerInvoiceList(d.pendingInvoices||[]);
+    setCustomerHubPane(customersPageData._pane||'summary');
     if(q('#customerSmsStatus')){q('#customerSmsStatus').textContent='';q('#customerSmsStatus').className='form-status'}
     const delBtn=q('[data-customer-action="delete"]');
     if(delBtn){
@@ -2891,6 +2982,7 @@ async function openCustomerSmsPanel(type){
   customersPageData._smsType=type==='overdue'?'overdue':'custom';
   const panel=q('#customerSmsPanel');
   panel?.classList.remove('hidden');
+  setCustomerHubPane('sms');
   if(q('#customerSmsTitle'))q('#customerSmsTitle').textContent=type==='overdue'?'Gecikme SMS':'Özel SMS';
   if(q('#customerSmsHint'))q('#customerSmsHint').textContent=type==='overdue'
     ?'Geciken senet / cari borca göre şablon doldurulur. İsterseniz metni düzenleyip gönderin.'
@@ -3196,32 +3288,19 @@ document.querySelectorAll('[data-vkn-lookup]').forEach(btn=>{
 document.addEventListener('click',e=>{
   const edit=e.target.closest('[data-customer-action="edit"]');
   if(edit){e.preventDefault();if(customersPageData._selected)openCustomerModal(customersPageData._selected)}
+  const inv=e.target.closest('[data-customer-action="invoice"]');
+  if(inv){e.preventDefault();customerHeroInvoice();return}
   const pay=e.target.closest('[data-customer-action="pay"]');
   if(pay){
     e.preventDefault();
+    setCustomerHubPane('pay');
     q('#customerPayPanel')?.scrollIntoView({behavior:'smooth',block:'start'});
     q('#customerPayAmount')?.focus();
   }
   const sale=e.target.closest('[data-customer-action="sale"]');
   if(sale){
     e.preventDefault();
-    const c=customersPageData._selected;
-    goTab('salesCenter');
-    if(c?.id){
-      setTimeout(()=>{
-        if(q('#salesCustomerSelect')){
-          // satış merkezi müşteri listesine ekle/seç
-          const opt=[...q('#salesCustomerSelect').options].find(o=>String(o.value)===String(c.id));
-          if(!opt){
-            const o=document.createElement('option');
-            o.value=c.id;o.textContent=c.name||c.id;
-            q('#salesCustomerSelect').appendChild(o);
-          }
-          q('#salesCustomerSelect').value=c.id;
-          q('#salesCustomerSelect').dispatchEvent(new Event('change'));
-        }
-      },80);
-    }
+    openSalesCenterForCustomer(customersPageData._selected);
   }
   const smsOver=e.target.closest('[data-customer-action="sms-overdue"]');
   if(smsOver){e.preventDefault();openCustomerSmsPanel('overdue');return}
@@ -3234,6 +3313,8 @@ document.addEventListener('click',e=>{
   }
   const goCust=e.target.closest('#openCustomersPage');
   if(goCust){e.preventDefault();goTab('customersPage')}
+  const paneBtn=e.target.closest('#customerHubTabs [data-customer-pane]');
+  if(paneBtn){e.preventDefault();setCustomerHubPane(paneBtn.dataset.customerPane)}
 });
 q('#customerSmsClose')?.addEventListener('click',()=>q('#customerSmsPanel')?.classList.add('hidden'));
 q('#customerSmsSendBtn')?.addEventListener('click',()=>sendCustomerSmsFromPanel());
@@ -4099,6 +4180,42 @@ async function salesSearchCustomers(){
   }finally{if(btn)btn.disabled=false}
 }
 function salesRenderCustomers(){ /* geriye uyum: ara butonuyla aynı */ return salesSearchCustomers(); }
+function salesCustomerInfoHtml(c){
+  if(!c)return '';
+  const addr=[c.district,c.city].filter(Boolean).join('/')||(c.address||'-');
+  const hasCorp=customerHasCorporate(c);
+  const corpLine=hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'-'}</b><span style="display:block;font-size:11px;color:#667890">VKN ${c.taxNo||'-'} · ${c.taxOffice||''}</span></div>`:'';
+  return `<div><small>Şahıs / Senet</small><b>${c.name}</b><span style="display:block;font-size:11px;color:#667890">Kod ${c.customerCode||c.rapidCustAccount||'—'} · TCKN ${c.tckn||'—'}</span></div><div><small>Telefon</small><b>${c.phone||'-'}</b>${sipBtn(c.phone,{className:'sip-call-sm',customerId:c.id})}</div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>${corpLine}`;
+}
+function fillSalesCustomerRail(c){
+  const rail=q('#salesCustomerRail');
+  const info=q('#salesCustomerRailInfo');
+  if(!rail)return;
+  if(!c){rail.classList.add('hidden');if(info)info.innerHTML='';return}
+  rail.classList.remove('hidden');
+  if(info)info.innerHTML=salesCustomerInfoHtml(c);
+}
+function salesRailAction(kind){
+  const c=salesCenterData.customers.find(x=>String(x.id)===String(q('#salesCustomerSelect')?.value||''));
+  if(!c){toast('Önce müşteri seçin');return}
+  if(kind==='continue'){
+    if(salesWizardStep===1 && salesWizardCanGo(2))salesSetWizardStep(2);
+    else if(salesWizardStep===2 && salesWizardCanGo(3))salesSetWizardStep(3);
+    return;
+  }
+  if(kind==='invoice'){
+    if(salesWizardCanGo(3))salesSetWizardStep(3);
+    else toast('Önce ürün ekleyin, sonra 3. adımda fatura kesin');
+    q('#salesInvoiceStatus')?.focus();
+    return;
+  }
+  if(kind==='sms'||kind==='card'){
+    customersPageData.selectedId=c.id;
+    customersPageData._pane=kind==='sms'?'sms':'card';
+    goTab('customersPage');
+    selectCustomerPage(c.id).then(()=>setCustomerHubPane(kind==='sms'?'sms':'card')).catch(e=>toast(e.message));
+  }
+}
 function salesCustomerChanged(){
   const c=salesCenterData.customers.find(x=>String(x.id)===String(q('#salesCustomerSelect')?.value||'')),box=q('#salesCustomerInfo'),noteWrap=q('#salesCustomerNoteWrap');
   const billWrap=q('#salesBillingPartyWrap'),billSel=q('#salesBillingParty');
@@ -4106,15 +4223,15 @@ function salesCustomerChanged(){
     box.classList.add('hidden');box.innerHTML='';noteWrap?.classList.add('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value='';
     billWrap?.classList.add('hidden');
     if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent='—';
+    fillSalesCustomerRail(null);
     salesDetachKefil({silent:true});
     salesUpdatePosSteps(salesCalcState());
     return;
   }
   box.classList.remove('hidden');
-  const addr=[c.district,c.city].filter(Boolean).join('/')||(c.address||'-');
+  box.innerHTML=salesCustomerInfoHtml(c);
+  fillSalesCustomerRail(c);
   const hasCorp=customerHasCorporate(c);
-  const corpLine=hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'-'}</b><span style="display:block;font-size:11px;color:#667890">VKN ${c.taxNo||'-'} · ${c.taxOffice||''}</span></div>`:'';
-  box.innerHTML=`<div><small>Şahıs / Senet</small><b>${c.name}</b><span style="display:block;font-size:11px;color:#667890">Kod ${c.customerCode||c.rapidCustAccount||'—'} · TCKN ${c.tckn||'—'}</span></div><div><small>Telefon</small><b>${c.phone||'-'}</b>${sipBtn(c.phone,{className:'sip-call-sm',customerId:c.id})}</div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>${corpLine}`;
   if(billWrap&&billSel){
     // Kurumsal bilgi varsa otomatik kurumsal; seçim gösterilmez
     billWrap.classList.add('hidden');
@@ -5033,6 +5150,10 @@ q('#salesDockDocsHintBtn')?.addEventListener('click',()=>printSalesContractAndNo
 q('#salesDockPreviewBtn')?.addEventListener('click',()=>{
   if(salesWizardStep<3){salesWizardNext();return}
   openSalesPreview();
+});
+q('#salesCustomerRail')?.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-sales-rail]');
+  if(btn)salesRailAction(btn.dataset.salesRail);
 });
 q('#posStep1')?.addEventListener('click',()=>salesSetWizardStep(1));
 q('#posStep2')?.addEventListener('click',()=>{if(salesWizardCanGo(2))salesSetWizardStep(2)});

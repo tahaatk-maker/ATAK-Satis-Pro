@@ -21,7 +21,7 @@ assert.match(personelJs, /function defaultSalesInvoiceStatus\(\)\{return canSale
 assert.match(adminJs, /q\('#salesInvoiceStatus'\)\.value=defaultSalesInvoiceStatus\(\)/);
 assert.match(personelJs, /\$\('#salesInvoiceStatus'\)\.value=defaultSalesInvoiceStatus\(\)/);
 assert.doesNotMatch(adminJs, /QNB Solist kuyruğuna alınır/);
-assert.match(server, /6\.3\.265-eva-normal/);
-assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v268/);
-assert.match(personelJs, /ATAK_PERSONEL_BUILD=fix-v268/);
+assert.match(server, /6\.3\.266-musteri-hub/);
+assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v269/);
+assert.match(personelJs, /ATAK_PERSONEL_BUILD=fix-v269/);
 console.log('sales-center-invoice-first.test.js ok');

@@ -26,7 +26,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/personel.css?v=fix-v248">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v268">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v269">
 <link rel="stylesheet" href="/assets/sip-call.css?v=fix-v236">
 </head>
 <body>
@@ -375,6 +375,15 @@ html.atak-reset-link #resetForm{display:grid!important}
   <button type="button" class="pos-step" data-pos-step="3"><b>3</b><span>Ödeme<small>Dağıtım + senet</small></span></button>
 </nav>
 <div class="pos-banner" id="salesBanner">ADIM 1/3 — Önce müşteri seçin</div>
+<aside class="sales-customer-rail hidden" id="salesCustomerRail">
+  <div class="sales-customer-rail-body" id="salesCustomerRailInfo"></div>
+  <div class="sales-customer-rail-actions">
+    <button type="button" data-sales-rail="continue">Satışa devam</button>
+    <button type="button" class="rail-invoice" data-sales-rail="invoice">Fatura</button>
+    <button type="button" data-sales-rail="sms">SMS</button>
+    <button type="button" data-sales-rail="card">Kart</button>
+  </div>
+</aside>
 <div id="salesStatus" class="status"></div>
 <div id="rapidOpenSalesHint" class="hidden" style="margin:8px 0;padding:10px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4"></div>
 
@@ -882,6 +891,6 @@ html.atak-reset-link #resetForm{display:grid!important}
   </div>
 </div>
 <script src="/assets/sip-call.js?v=fix-v236"></script>
-<script src="/assets/personel.js?v=fix-v268"></script>
+<script src="/assets/personel.js?v=fix-v269"></script>
 </body>
 </html>

@@ -1,0 +1,43 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const root = path.join(__dirname, '..');
+const adminHtml = fs.readFileSync(path.join(root, 'public', 'admin.html'), 'utf8');
+const personelHtml = fs.readFileSync(path.join(root, 'public', 'personel.html'), 'utf8');
+const adminJs = fs.readFileSync(path.join(root, 'public', 'assets', 'admin.js'), 'utf8');
+const personelJs = fs.readFileSync(path.join(root, 'public', 'assets', 'personel.js'), 'utf8');
+const adminCss = fs.readFileSync(path.join(root, 'public', 'assets', 'admin.css'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+const geteinvoices = fs.readFileSync(path.join(root, 'lib', 'atak-geteinvoices.js'), 'utf8');
+
+assert.match(adminHtml, /data-customer-action="invoice"/);
+assert.match(adminHtml, /id="customerHubTabs"/);
+assert.match(adminHtml, /data-customer-pane="invoice"/);
+assert.match(adminHtml, /data-customer-pane="sms"/);
+assert.match(adminHtml, /data-customer-pane="pay"/);
+assert.match(adminHtml, /data-customer-pane="card"/);
+assert.match(adminHtml, /id="salesCustomerRail"/);
+assert.match(adminHtml, /data-go="invoiceCenter"/);
+assert.match(adminHtml, /<b>KESİLMEYEN<\/b>/);
+assert.match(personelHtml, /id="salesCustomerRail"/);
+assert.match(personelHtml, /id="payCustomerBox"/);
+
+assert.match(adminJs, /function setCustomerHubPane/);
+assert.match(adminJs, /function issueCustomerSaleInvoice/);
+assert.match(adminJs, /data-customer-action="invoice"/);
+assert.match(adminJs, /function fillSalesCustomerRail/);
+assert.match(adminJs, /function salesRailAction/);
+assert.match(personelJs, /function fillSalesCustomerRail/);
+assert.match(personelJs, /function renderPayInvoiceBox/);
+assert.match(personelJs, /FATURA KES/);
+assert.match(adminCss, /\.customer-hub-tabs/);
+assert.match(adminCss, /\.customer-invoice-btn/);
+
+assert.match(server, /pendingInvoices:/);
+assert.match(server, /6\.3\.266-musteri-hub/);
+assert.match(server, /function handleAtakGetEInvoices/);
+assert.match(geteinvoices, /FaturaAsama: isReturnRow\(row, sale\) \? 'IADE' : 'NORMAL'/);
+assert.doesNotMatch(adminJs, /lib\/atak-geteinvoices/);
+
+console.log('customer-hub-ui.test.js ok');

@@ -226,3 +226,29 @@ input,select,textarea,button{touch-action:manipulation}
   main{padding:14px;padding-bottom:max(24px,env(safe-area-inset-bottom))}
   .hero{padding:22px}
 }
+
+.sales-customer-rail{
+  position:sticky;top:84px;z-index:6;display:flex;gap:12px;align-items:stretch;justify-content:space-between;flex-wrap:wrap;
+  margin:0 0 12px;padding:12px 14px;border-radius:16px;
+  background:linear-gradient(180deg,#fff,#f3f8ff);border:1px solid #c9dbf2;
+  box-shadow:0 10px 24px rgba(11,42,74,.08);
+}
+.sales-customer-rail.hidden{display:none!important}
+.sales-customer-rail-body{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;flex:1;min-width:220px}
+.sales-customer-rail-body>div{padding:8px 10px;border-radius:10px;background:#fff}
+.sales-customer-rail-body small{display:block;font-size:10px;font-weight:800;color:#7a8aa3;letter-spacing:.05em;text-transform:uppercase}
+.sales-customer-rail-body b{font-size:13px}
+.sales-customer-rail-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sales-customer-rail-actions button{
+  min-height:42px;padding:0 14px;border:0;border-radius:11px;background:#0b2a4a;color:#fff;font-weight:800;cursor:pointer
+}
+.sales-customer-rail-actions .rail-invoice{background:linear-gradient(180deg,#ea580c,#c2410c)}
+.pay-customer-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.pay-customer-actions button{min-height:40px}
+.pay-invoice-list{display:grid;gap:8px;margin-top:10px}
+.pay-invoice-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px;border:1px solid #f0d2a8;border-radius:10px;background:#fffaf3}
+.pay-invoice-row button{min-height:36px;padding:0 12px;border:0;border-radius:9px;background:#c2410c;color:#fff;font-weight:800;cursor:pointer}
+@media(max-width:700px){
+  .sales-customer-rail-body{grid-template-columns:1fr 1fr}
+  .sales-customer-rail{top:8px}
+}

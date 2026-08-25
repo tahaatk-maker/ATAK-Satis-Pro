@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v256" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v269" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-cockpit.css?v=fix-v256" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-calm.css?v=fix-v256" rel="stylesheet"/>
 <link href="/web-admin-assets/sip-call.css?v=fix-v256" rel="stylesheet"/>
@@ -131,6 +131,24 @@
 #salesCenter .sales-customer-count{
   display:inline-flex;align-items:center;min-height:40px;padding:0 12px;border-radius:999px;background:#e8f1ff;color:var(--blue);font-weight:800;font-size:12px;
 }
+#salesCenter .sales-customer-rail{
+  position:sticky;top:8px;z-index:8;display:flex;gap:12px;align-items:stretch;justify-content:space-between;flex-wrap:wrap;
+  margin:0 0 12px;padding:12px 14px;border-radius:16px;
+  background:linear-gradient(180deg,#fff,#f3f8ff);border:1px solid #c9dbf2;
+  box-shadow:0 10px 24px rgba(11,42,74,.08);
+}
+#salesCenter .sales-customer-rail.hidden{display:none!important}
+#salesCenter .sales-customer-rail-body{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;flex:1;min-width:240px;
+}
+#salesCenter .sales-customer-rail-body>div{padding:8px 10px;border-radius:10px;background:#fff}
+#salesCenter .sales-customer-rail-body small{display:block;font-size:10px;font-weight:800;color:#7a8aa3;letter-spacing:.05em;text-transform:uppercase}
+#salesCenter .sales-customer-rail-body b{font-size:13px;color:var(--navy)}
+#salesCenter .sales-customer-rail-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#salesCenter .sales-customer-rail-actions button{
+  min-height:42px;padding:0 14px;border:0;border-radius:11px;background:#0b2a4a;color:#fff;font-weight:800;cursor:pointer;
+}
+#salesCenter .sales-customer-rail-actions .rail-invoice{background:linear-gradient(180deg,#ea580c,#c2410c)}
 #salesCenter .sales-customer-info{
   display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px;padding:10px;border-radius:14px;background:#edf4ff;border:1px solid #c9dbf2;
 }
@@ -409,6 +427,7 @@
   #salesCenter #salesCustomerSearchBtn{grid-column:1/-1}
   #salesCenter .sales-customer-count{justify-self:start}
   #salesCenter .sales-customer-info{grid-template-columns:1fr 1fr}
+  #salesCenter .sales-customer-rail-body{grid-template-columns:1fr 1fr}
   #salesCenter .pos-scan-bar{grid-template-columns:1fr;padding:12px}
   #salesCenter #salesPosAddBtn{width:100%}
   #salesCenter .sales-product-filterbar{grid-template-columns:1fr}
@@ -711,7 +730,7 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 </section><section class="tab" id="salesCenter" data-pos-step="1">
 <div class="sales-center-head">
-<div><small>SATIŞ OPERASYON · KASA / POS <span class="pos-ver">v659 A4</span></small><h2>Satış Kasası</h2><p>Tek A4 sözleşme+senet · Fatura Kes · adım adım</p></div>
+<div><small>SATIŞ OPERASYON · KASA / POS <span class="pos-ver">v269 HUB</span></small><h2>Satış Kasası</h2><p>Tek A4 sözleşme+senet · Fatura Kes · adım adım</p></div>
 <div class="sales-center-head-actions">
   <button class="pos-head-btn" id="rapid360SalesXmlBtn" type="button">Rapid Aktar</button>
   <button class="pos-head-btn" id="salesTrackingShortcut" type="button">Sipariş Takibi</button>
@@ -724,6 +743,15 @@ body.inv-full #pageTitle{font-size:18px}
   <div class="pos-step locked" id="posStep3" role="button" tabindex="0"><b>3</b><span>Ödeme Planı<small>Önce ürün</small></span></div>
 </nav>
 <div class="pos-wizard-banner" id="salesWizardBanner">ADIM 1/3 — Önce müşteri seçin, sonra Devam Et</div>
+<aside class="sales-customer-rail hidden" id="salesCustomerRail">
+  <div class="sales-customer-rail-body" id="salesCustomerRailInfo"></div>
+  <div class="sales-customer-rail-actions">
+    <button type="button" data-sales-rail="continue">Satışa devam</button>
+    <button type="button" class="rail-invoice" data-sales-rail="invoice">Fatura</button>
+    <button type="button" data-sales-rail="sms">SMS</button>
+    <button type="button" data-sales-rail="card">Kart</button>
+  </div>
+</aside>
 <div class="sales-center-layout sales-center-flow">
 <section class="panel sales-customer-panel pos-step-visible" aria-hidden="false">
 <div class="pos-block-head pos-block-1">
@@ -2113,15 +2141,44 @@ Bulunamayan → Diğer.
 <strong id="customerDetailBalance">₺0</strong>
 </div>
 </div>
+<div class="customer-hero-actions">
+<button data-customer-action="invoice" type="button" class="customer-invoice-btn">FATURA KES <span id="customerInvoiceHeroCount" class="hub-tab-count hidden">0</span></button>
+<button data-customer-action="sale" type="button" class="customer-sale-btn">Satışa devam</button>
+</div>
 <div class="customer-action-buttons">
 <a id="customerDetailCallBtn" class="sip-call-btn is-off" href="#" aria-disabled="true">Ara</a>
 <button data-customer-action="edit" type="button">Bilgileri Düzenle</button>
 <button data-customer-action="pay" type="button" class="customer-pay-btn">Tahsilat Yap</button>
-<button data-customer-action="sale" type="button" class="customer-sale-btn">Satış Merkezi</button>
 <button data-customer-action="sms-overdue" type="button" class="customer-sms-btn">Gecikme SMS</button>
 <button data-customer-action="sms-custom" type="button" class="customer-sms-btn">Özel SMS</button>
 <button data-customer-action="delete" type="button" class="customer-delete-btn">Sil (Onaya)</button>
 </div>
+<nav class="customer-hub-tabs" id="customerHubTabs" role="tablist" aria-label="Müşteri kategorileri">
+<button type="button" class="customer-hub-tab active" data-customer-pane="summary">Özet</button>
+<button type="button" class="customer-hub-tab" data-customer-pane="sales">Satış</button>
+<button type="button" class="customer-hub-tab" data-customer-pane="invoice">Fatura <span id="customerInvoiceTabCount" class="hub-tab-count hidden">0</span></button>
+<button type="button" class="customer-hub-tab" data-customer-pane="sms">SMS</button>
+<button type="button" class="customer-hub-tab" data-customer-pane="pay">Tahsilat</button>
+<button type="button" class="customer-hub-tab" data-customer-pane="card">Kart</button>
+</nav>
+<div id="customerDebtBox" class="customer-debt-box"></div>
+<div class="customer-hub-pane active" data-customer-pane="summary" id="customerPaneSummary">
+<div class="panel-head compact"><h3>Cari Hareketler</h3><span id="customerTransactionCount"></span></div>
+<div class="customer-transaction-list" id="customerTransactionList"></div>
+</div>
+<div class="customer-hub-pane" data-customer-pane="sales" id="customerPaneSales">
+<div class="panel-head compact"><h3>Önceki Alışverişler</h3><span id="customerSalesCount"></span></div>
+<div class="customer-sales-history" id="customerSalesList"></div>
+</div>
+<div class="customer-hub-pane" data-customer-pane="invoice" id="customerPaneInvoice">
+<div class="panel-head compact">
+<h3>Kesilmeyen faturalar</h3>
+<button type="button" class="secondary-btn" data-go="invoiceCenter">Kesilmeyen listesi →</button>
+</div>
+<p class="note">Bu müşterinin henüz kesilmemiş satışları burada durur. Unuttuklarınızı buradan ve Kesilmeyen ekranından görürsünüz. EVA / Dijital Planet bağlantısı aynı kalır.</p>
+<div id="customerInvoiceList"></div>
+</div>
+<div class="customer-hub-pane" data-customer-pane="sms" id="customerPaneSms">
 <div class="customer-sms-panel hidden" id="customerSmsPanel">
   <div class="panel-head compact" style="margin:0;padding:0;border:0">
     <h3 id="customerSmsTitle">SMS</h3>
@@ -2154,7 +2211,8 @@ Bulunamayan → Diğer.
   <label>Arama notu<input id="customerCommNote" placeholder="Örn: 2 kez çaldı, açılmadı"></label>
   <div id="customerCommsList" class="customer-comms-list"></div>
 </section>
-<div id="customerDebtBox" class="customer-debt-box"></div>
+</div>
+<div class="customer-hub-pane" data-customer-pane="pay" id="customerPanePay">
 <div class="customer-action-form" id="customerPayPanel">
   <div class="panel-head compact" style="margin:0;padding:0;border:0">
     <h3>Tahsilat</h3>
@@ -2182,17 +2240,10 @@ Bulunamayan → Diğer.
   </form>
   <div id="customerPayStatus" class="form-status"></div>
 </div>
+</div>
+<div class="customer-hub-pane" data-customer-pane="card" id="customerPaneCard">
 <div id="customerBillingCards" class="customer-billing-cards"></div>
-<div class="panel-head compact">
-<h3>Önceki Alışverişler</h3>
-<span id="customerSalesCount"></span>
 </div>
-<div class="customer-sales-history" id="customerSalesList"></div>
-<div class="panel-head compact">
-<h3>Cari Hareketler</h3>
-<span id="customerTransactionCount"></span>
-</div>
-<div class="customer-transaction-list" id="customerTransactionList"></div>
 </div>
 </section>
 </div>
@@ -2888,5 +2939,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v268"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v269"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
