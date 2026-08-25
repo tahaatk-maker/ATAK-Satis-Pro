@@ -108,12 +108,27 @@ log "3) atak yeniden baslat (store dokunulmaz)"
 START_DIR="$APP"
 [ -f "$START_DIR/server.js" ] || die "start dir server.js yok: $START_DIR"
 grep -q "staff-send-login" "$START_DIR/server.js" || die "start dir sifre API yok"
+log "3100 ONCE: $(ss -lntp 2>/dev/null | grep 3100 || echo yok)"
 cd "$START_DIR"
 pm2 delete atak >/dev/null 2>&1 || true
 sleep 1
-pm2 start server.js --name atak --update-env || die "pm2 start fail"
+# Eski node 3100'u birakmazsa yeni process crash loop yapar; health 6.3.256 kalir.
+for i in 1 2 3 4 5 6; do
+  p=$(ss -lntp 2>/dev/null | grep ':3100' | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2 || true)
+  [ -n "$p" ] || break
+  args=$(ps -o args= -p "$p" 2>/dev/null || true)
+  case "$args" in *atakhome-web*|*atakhome-commerce*) log "SKIP 3100 pid=$p $args"; break ;; esac
+  log "KILL 3100 pid=$p $args"
+  kill "$p" 2>/dev/null || true
+  sleep 1
+  kill -9 "$p" 2>/dev/null || true
+  sleep 1
+done
+ss -lntp 2>/dev/null | grep -q ':3100' && die "3100 hala dolu"
+pm2 start "$START_DIR/server.js" --name atak --cwd "$START_DIR" --update-env || die "pm2 start fail"
 pm2 save >/dev/null 2>&1 || true
-sleep 5
+sleep 6
+pm2 describe atak | grep -E 'status|script path|exec cwd|unstable|restarts|pid' || true
 
 log "4) health"
 H1=$(curl -sS -m 10 http://127.0.0.1:3100/health 2>/dev/null || true)
