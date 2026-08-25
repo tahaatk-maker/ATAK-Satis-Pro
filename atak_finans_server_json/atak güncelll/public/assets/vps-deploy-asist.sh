@@ -58,6 +58,8 @@ grep -q "$EXPECT_V" "$SRC/server.js" || die "kaynak version yanlis"
 grep -q "build:'$EXPECT_B'" "$SRC/server.js" || die "kaynak build yanlis"
 grep -q "ATAK_ADMIN_BUILD=$EXPECT_B" "$SRC/public/assets/admin.js" || die "kaynak admin build yanlis"
 grep -q 'purchaseBothBtn' "$SRC/public/admin.html" || die "Asist butonu kaynakta yok"
+grep -q "staff-send-login" "$SRC/server.js" || die "kaynakta sifre API yok"
+grep -q "staffMailSendPassBtn" "$SRC/public/admin.html" || die "kaynakta sifre butonu yok"
 log "   kaynak OK"
 
 copy_critical(){
@@ -86,6 +88,7 @@ for D in "$APP" "${PM_CWD:-}" /root/atakhome-platform /root/atak-v10; do
   fi
   copy_critical "$D"
   grep -q "$EXPECT_V" "$D/server.js" || die "disk version yanlis: $D"
+  grep -q "staff-send-login" "$D/server.js" || die "disk sifre API yok: $D"
   log "   SYNCED $D"
   SYNCED=$((SYNCED+1))
 done
@@ -101,21 +104,28 @@ if [ -n "${PM_SCRIPT:-}" ] && [ -f "$PM_SCRIPT" ]; then
   esac
 fi
 
-log "3) sadece atak restart (store dokunulmaz)"
+log "3) atak yeniden baslat (store dokunulmaz)"
 START_DIR="$APP"
 [ -f "$START_DIR/server.js" ] || die "start dir server.js yok: $START_DIR"
-pm2 restart atak --update-env || {
-  cd "$START_DIR"
-  pm2 start server.js --name atak --update-env || die "pm2 start fail"
-}
+grep -q "staff-send-login" "$START_DIR/server.js" || die "start dir sifre API yok"
+cd "$START_DIR"
+pm2 delete atak >/dev/null 2>&1 || true
+sleep 1
+pm2 start server.js --name atak --update-env || die "pm2 start fail"
 pm2 save >/dev/null 2>&1 || true
-sleep 4
+sleep 5
 
 log "4) health"
 H1=$(curl -sS -m 10 http://127.0.0.1:3100/health 2>/dev/null || true)
 log "HEALTH=$H1"
-echo "$H1" | grep -q "$EXPECT_V" || die "health version yok"
+echo "$H1" | grep -q "$EXPECT_V" || die "health version yok — pm2 cwd yanlis olabilir"
 echo "$H1" | grep -q "$EXPECT_B" || die "health build yok"
+
+log "4b) sifre API (404 olmamali)"
+SL_CODE=$(curl -sS -m 8 -o /tmp/atak-sl.body -w "%{http_code}" -X POST http://127.0.0.1:3100/web-api/admin/staff-send-login -H "Content-Type: application/json" -d "{}" || true)
+log "STAFF_SEND_LOGIN_HTTP=$SL_CODE body=$(head -c 180 /tmp/atak-sl.body 2>/dev/null || true)"
+[ "$SL_CODE" = "404" ] && die "sifre API hala 404 — yanlis server.js calisiyor"
+[ "$SL_CODE" = "000" ] && die "sifre API yanit yok"
 
 log "5) panel HTML"
 HTML=$(curl -sS -m 12 https://panel.atakhome.com.tr/web-admin || true)
