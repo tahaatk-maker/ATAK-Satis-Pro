@@ -21,6 +21,7 @@ const salaryProrate = require('./lib/salary-prorate');
 const autoBackupLib = require('./lib/auto-backup');
 const rapid360 = require('./lib/rapid360-einvoice');
 const atakGetE = require('./lib/atak-geteinvoices');
+const digitalPlanet = require('./lib/digital-planet');
 const rapidSalesXml = require('./lib/rapid360-sales-xml');
 const rapidSalesFetch = require('./lib/rapid360-sales-fetch');
 const rapidSalesCatalog = require('./lib/rapid360-sales-catalog');
@@ -2067,8 +2068,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.261-kesilmeyen',
-    build:'fix-v264',
+    version:'6.3.263-eva-rapid',
+    build:'fix-v266',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -7092,6 +7093,7 @@ app.get('/web-api/admin/invoice-integration',requireAdminOrStaffAny(...INVOICE_C
         okta:d365Auth.publicAuth(cfg.rapid360)
       },
       atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal,baseUrl:publicBaseUrl(req)}),
+      digitalPlanet:digitalPlanet.publicConfig(cfg.digitalPlanet,{reveal}),
       efaturaSeries:efSeries,
       earsivSeries:eaSeries,
       efaturaNext:nextInvoiceSeq(cfg.efaturaNext),
@@ -7104,14 +7106,14 @@ app.get('/web-api/admin/invoice-integration',requireAdminOrStaffAny(...INVOICE_C
 });
 app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_manage','invoices_manage'),(req,res)=>{
   const s=readStore(),x=req.body||{},old=s.invoiceIntegration||{};
-  const env=['test','live'].includes(String(x.environment))?String(x.environment):'test';
-  const provider=['qnb-solist','qnb-esolutions','qnb-efinans'].includes(String(x.provider))?String(x.provider):'qnb-solist';
+  const env=['test','live'].includes(String(x.environment))?String(x.environment):(old.environment==='live'?'live':'test');
+  const provider=['qnb-solist','qnb-esolutions','qnb-efinans','digital-planet'].includes(String(x.provider))?String(x.provider):(old.provider||'qnb-solist');
   s.invoiceIntegration={
     ...old,
     provider,environment:env,
-    enabled:x.enabled===true||String(x.enabled)==='true',
-    companyVkn:String(x.companyVkn||'').trim(),
-    companyTitle:String(x.companyTitle||'').trim(),
+    enabled:x.enabled!=null?(x.enabled===true||String(x.enabled)==='true'):(old.enabled===true),
+    companyVkn:String(x.companyVkn!=null?x.companyVkn:old.companyVkn||'').trim(),
+    companyTitle:String(x.companyTitle!=null?x.companyTitle:old.companyTitle||'').trim(),
     companyTaxOffice:String(x.companyTaxOffice!=null?x.companyTaxOffice:old.companyTaxOffice||ATAK_COMPANY.taxOffice).trim(),
     companyAddress:String(x.companyAddress!=null?x.companyAddress:old.companyAddress||ATAK_COMPANY.address).trim(),
     companyCity:String(x.companyCity!=null?x.companyCity:old.companyCity||'').trim(),
@@ -7186,13 +7188,24 @@ app.post('/web-api/admin/invoice-integration',requireAdminOrStaffAny('settings_m
         clientSecret:incoming.clientSecret!=null?incoming.clientSecret:x.atakDmsSecret,
         allowedIps:incoming.allowedIps!=null?incoming.allowedIps:x.atakDmsAllowedIps
       },{rotate});
-    })()
+    })(),
+    digitalPlanet:digitalPlanet.mergeIncoming(old.digitalPlanet, x.digitalPlanet&&typeof x.digitalPlanet==='object'?x.digitalPlanet:{
+      enabled:x.dpEnabled,
+      environment:x.dpEnvironment,
+      serviceUrl:x.dpServiceUrl,
+      corporateCode:x.dpCorporateCode,
+      loginName:x.dpLoginName,
+      password:x.dpPassword,
+      templateCode:x.dpTemplateCode,
+      mapCode:x.dpMapCode,
+      receiverPostboxName:x.dpPostbox
+    })
   };
   if(rapid360.isChairmanMuleConsume(s.invoiceIntegration.rapid360)){
     return res.status(400).json({error:'Başkanın Arçelik Rapid360 hesabı (DealerID 21134761) Atak gelen kutusuna kaydedilmez.'});
   }
   s.invoiceIntegration.rapid360=rapid360.sanitizeConsumeConfig(s.invoiceIntegration.rapid360);
-  audit(s,'QNB Solist entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider,efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries});writeStore(s);res.json({ok:true,settings:{efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries,efaturaNext:s.invoiceIntegration.efaturaNext,earsivNext:s.invoiceIntegration.earsivNext}});
+  audit(s,'Fatura entegrasyon ayarları güncellendi','Fatura Entegrasyonu',{environment:env,enabled:s.invoiceIntegration.enabled,provider,efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries,digitalPlanet:!!s.invoiceIntegration.digitalPlanet?.corporateCode});writeStore(s);res.json({ok:true,settings:{efaturaSeries:s.invoiceIntegration.efaturaSeries,earsivSeries:s.invoiceIntegration.earsivSeries,efaturaNext:s.invoiceIntegration.efaturaNext,earsivNext:s.invoiceIntegration.earsivNext,digitalPlanet:digitalPlanet.publicConfig(s.invoiceIntegration.digitalPlanet,{reveal:false})}});
 });
 app.post('/web-api/admin/invoice-integration/atak-dms-rotate',requireAdminOrStaffAny('settings_manage','invoices_manage'),(req,res)=>{
   const s=readStore(),old=s.invoiceIntegration||{};
@@ -7202,19 +7215,29 @@ app.post('/web-api/admin/invoice-integration/atak-dms-rotate',requireAdminOrStaf
   const reveal=req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage');
   res.json({ok:true,atakDms:atakGetE.publicConfig(s.invoiceIntegration.atakDms,{reveal,baseUrl:publicBaseUrl(req)})});
 });
+app.post('/web-api/admin/invoice-integration/digital-planet-test',requireAdminOrStaffAny('settings_manage','invoices_manage'),async(req,res)=>{
+  const s=readStore();
+  const incoming=req.body&&typeof req.body==='object'?req.body:{};
+  const cfg=digitalPlanet.mergeIncoming((s.invoiceIntegration||{}).digitalPlanet, incoming);
+  const auth=await digitalPlanet.getTicket(cfg);
+  if(!auth.ok)return res.status(400).json({ok:false,error:auth.error||'Dijital Planet girişi başarısız'});
+  res.json({ok:true,message:'Dijital Planet girişi başarılı',corporateCode:cfg.corporateCode});
+});
 app.post('/web-api/admin/invoice-integration/test',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS,'settings_manage'),(req,res)=>{
   const s=readStore(),c=s.invoiceIntegration||{};
   const dms=atakGetE.publicConfig(c.atakDms,{reveal:false,baseUrl:publicBaseUrl(req)});
   const rz=rapid360.publicConfig(c.rapid360);
+  const dp=digitalPlanet.publicConfig(c.digitalPlanet,{reveal:false});
   const vkn=String(c.companyVkn||'').replace(/\D/g,'');
   const checks=[
     {name:'Firma VKN',ok:vkn.length>=10,detail:vkn||'Yazın'},
     {name:'Firma ünvanı',ok:!!String(c.companyTitle||'').trim(),detail:c.companyTitle||'Yazın'},
     {name:'e-Fatura seri',ok:!!String(c.efaturaSeries||c.earsivSeries||'').trim(),detail:`${c.efaturaSeries||'ATK'} / ${c.earsivSeries||'ATA'}`},
+    {name:'Dijital Planet',ok:!!dp.ready,detail:dp.ready?`Firma ${dp.corporateCode}`:'CorporateCode / kullanıcı / şifre yazın'},
     {name:'Arçelik Rapid360',ok:!rz.blocked,detail:rz.blocked?'Başkan hesabı kapalı':(rz.ready?`DealerID ${rz.dealerId}`:'Örnek link gelen kutuya çekilmez')},
     {name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} · DealerID ${dms.dealerId}`:'Eksik'}
   ];
-  res.json({ok:checks.every(x=>x.ok),mode:'atak',checks,atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Atak fatura merkezi. Başkanın Rapid360 linki gelen kutuya çekilmez.'});
+  res.json({ok:checks.every(x=>x.ok),mode:'atak',checks,digitalPlanet:{ready:dp.ready,corporateCode:dp.corporateCode},atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Dijital Planet faturaları SOAP ile alır. geteinvoices linki Rapid360 içindir, Dijital Planet’e verilmez.'});
 });
 app.get('/web-api/admin/invoice-queue',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
 /** Faturalar özet: kuyruk klasörleri + Rapid360 gelen + kesilmeyen satışlar */
@@ -7267,12 +7290,12 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
   };
   res.json({
     ok:true,
-    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext),rapid360:rapid360.publicConfig(cfg.rapid360),atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),baseUrl:publicBaseUrl(req)})},
+    settings:{provider:cfg.provider||'qnb-solist',environment:cfg.environment||'test',enabled:!!cfg.enabled,companyTitle:cfg.companyTitle||'',companyVkn:cfg.companyVkn||'',senderAlias:cfg.senderAlias||cfg.gbAlias||'',pkAlias:cfg.pkAlias||'',efaturaSeries:normalizeInvoiceSeries(cfg.efaturaSeries,'ATK'),earsivSeries:normalizeInvoiceSeries(cfg.earsivSeries,'ATA'),efaturaNext:nextInvoiceSeq(cfg.efaturaNext),earsivNext:nextInvoiceSeq(cfg.earsivNext),rapid360:rapid360.publicConfig(cfg.rapid360),atakDms:atakGetE.publicConfig(cfg.atakDms,{reveal:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),baseUrl:publicBaseUrl(req)}),digitalPlanet:digitalPlanet.publicConfig(cfg.digitalPlanet,{reveal:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage')})},
     counts,queue,inbox,responses,salesPending,
     portal:isStaffPortalReq(req)?'staff':'admin',
     canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),
     canIssue:req.session?.admin===true||staffCanInvoice(req),
-    note:'Kesilmeyen satışlar geteinvoices ile e-fatura firmasına otomatik aktarılır. Eski EndDate’li link bugüne kadar uzar.'
+    note:'Dijital Planet faturaları SOAP ile alır. Giriş bilgilerini kaydedip satırı gönderin. geteinvoices linki Dijital Planet değildir.'
   });
 });
 app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),async(req,res)=>{
@@ -7425,6 +7448,17 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_man
   sale.paymentNote=invoicePaymentNote.formatInvoicePaymentNote(sale);
   record.paymentNote=sale.paymentNote;
   const out=await qnbSolist.sendOrQueueInvoice({record,sale:{...sale,invoiceNumber:alloc.number},customer:invoiceParty,cfg});
+  if(out && out.ok===false){
+    record.status='error';
+    record.error=out.message||'Dijital Planet hata';
+    record.ublXml=out.ublXml||record.ublXml;
+    record.providerMessage=out.message||'';
+    record.updatedAt=new Date().toISOString();
+    writeStore(s);
+    return res.status(502).json({error:out.message||'Dijital Planet gönderilemedi',result:out});
+  }
+  if(out.providerDocumentId)record.providerDocumentId=out.providerDocumentId;
+  if(out.uuid)record.uuid=out.uuid;
   record.status=out.status||'ready';
   record.docType=out.docType||docTypeHint;
   record.ublXml=out.ublXml;
@@ -7437,7 +7471,7 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_man
   sale.invoiceType=out.docType||docTypeHint;
   sale.invoiceUuid=record.uuid;
   sale.updatedAt=new Date().toISOString();
-  audit(s,'Fatura kes / QNB kuyruğa alındı',invoiceParty.name,{saleId:sale.id,status:record.status,docType:record.docType,invoiceNumber:record.invoiceNumber,party:invoiceParty.partyType});
+  audit(s,out.mode==='digital_planet'?'Fatura Dijital Planet’e gönderildi':'Fatura kes / kuyruğa alındı',invoiceParty.name,{saleId:sale.id,status:record.status,docType:record.docType,invoiceNumber:record.invoiceNumber,party:invoiceParty.partyType,mode:out.mode||''});
   writeStore(s);
   res.json({ok:true,record,result:out,sale:{id:sale.id,invoiceStatus:sale.invoiceStatus,invoiceType:sale.invoiceType,invoiceNumber:sale.invoiceNumber,billingParty:sale.billingParty}});
 });

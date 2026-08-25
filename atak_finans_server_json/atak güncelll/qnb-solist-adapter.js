@@ -5,6 +5,7 @@
  */
 
 const {formatInvoicePaymentNote}=require('./lib/invoice-payment-note');
+const digitalPlanet=require('./lib/digital-planet');
 
 function escXml(v){
   return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
@@ -261,6 +262,23 @@ async function sendOrQueueInvoice({record,sale,customer,cfg}){
     cfg,
     docType
   });
+  const dpCfg=digitalPlanet.ensureConfig(cfg.digitalPlanet).cfg;
+  if(digitalPlanet.isReady(dpCfg)){
+    const sent=await digitalPlanet.sendUbl(dpCfg,ubl);
+    if(!sent.ok){
+      return {ok:false,mode:'digital_planet',status:'error',docType,ublXml:ubl,message:sent.error||'Dijital Planet gönderilemedi'};
+    }
+    return {
+      ok:true,
+      mode:'digital_planet',
+      status:'issued',
+      docType,
+      ublXml:ubl,
+      providerDocumentId:sent.invoiceId||'',
+      uuid:sent.uuid||'',
+      message:sent.message||'Dijital Planet’e gönderildi'
+    };
+  }
   if(!ready||!cfg.enabled){
     return {
       ok:true,
@@ -268,7 +286,7 @@ async function sendOrQueueInvoice({record,sale,customer,cfg}){
       status:'ready',
       docType,
       ublXml:ubl,
-      message:'QNB bilgileri tamamlanınca otomatik gönderime hazır. UBL taslağı üretildi; dış servise henüz gitmedi.'
+      message:'Dijital Planet firma kodu / kullanıcı / şifre kaydedilince gönderilir. UBL taslağı üretildi.'
     };
   }
   // Canlı SOAP entegrasyonu: QNB WSDL metodları (sendInvoice / belgeleriv2 vb.) buraya bağlanır.

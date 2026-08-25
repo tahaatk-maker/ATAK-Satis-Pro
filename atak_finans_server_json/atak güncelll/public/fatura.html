@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Kesilmeyen Faturalar · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v264"/>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v266"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
@@ -23,7 +23,7 @@
         <div>
           <small>ATAK PAZARLAMA</small>
           <h2 id="invViewTitle">Kesilmeyen Faturalar</h2>
-          <p id="invViewHint">Satışta “daha sonra kes” seçilenler burada durur. E-fatura firması geteinvoices ile bunları otomatik çeker — kuyruğa almanız gerekmez.</p>
+          <p id="invViewHint">EVA Connect → Rapid Veri Çek bu listedeki satışları geteinvoices linkinden çeker. Kesilmeyen’e EVA’dan bir şey yazılmaz; aşağıdaki URL’yi EVA Rapid360 ayarına yapıştırın.</p>
         </div>
         <div class="inv-head-actions">
           <a class="inv-btn ghost" href="/web-admin" id="backLink">← Panele dön</a>
@@ -32,7 +32,7 @@
       </div>
       <div class="inv-toolbar" id="invToolbar">
         <input id="invSearch" type="search" placeholder="Satış no, müşteri ara…"/>
-        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri kuyruğa al</button>
+        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri Dijital Planet’e gönder</button>
       </div>
       <div class="inv-panel">
         <div id="invTableWrap">
@@ -43,12 +43,35 @@
           <div class="inv-empty hidden" id="invEmpty">Kesilmeyen fatura yok.</div>
         </div>
         <div class="inv-firm-box hidden" id="invFirmBox">
-          <h3>E-fatura firması linki</h3>
-          <p class="note">Bu URL son 60 günü ve bugünü kapsar. Eski EndDate’li link artık yeni faturaları da verir; yine de firmaya güncel URL’yi verin.</p>
-          <textarea id="atakDmsCopyUrl" rows="3" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?…"></textarea>
+          <h3>EVA Connect · Rapid Veri Çek</h3>
+          <p class="note">Bu ekran (connect.evaportal.net Rapid360 Fatura) Atak’tan veri <b>çeker</b>. Kesilmeyen formuna kullanıcı/şifre yazılmaz. Aşağıdaki tam URL’yi EVA Rapid360 ayarına yapıştırın, sonra <b>Rapid Veri Çek</b>’e basın.</p>
+          <textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?…"></textarea>
           <div class="button-row">
-            <button class="inv-btn" type="button" id="atakDmsCopyBtn">URL’yi kopyala</button>
+            <button class="inv-btn primary" type="button" id="atakDmsCopyBtn">EVA için URL’yi kopyala</button>
           </div>
+          <details class="dp-advanced" id="dpAdvanced">
+            <summary>SOAP gönderim (Rapid Veri Çek değil — çoğu hesapta gerekmez)</summary>
+            <p class="note" id="dpReadyNote">NetInvoice SOAP ile Atak’ın faturayı itmesi. EVA’daki Rapid Veri Çek bununla çalışmaz.</p>
+            <div class="dp-grid">
+              <label>Firma kodu (CorporateCode)<input id="dpCorporateCode" autocomplete="off"/></label>
+              <label>Kullanıcı<input id="dpLoginName" autocomplete="off"/></label>
+              <label>Şifre<input id="dpPassword" type="password" autocomplete="new-password"/></label>
+              <label>Ortam
+                <select id="dpEnvironment">
+                  <option value="live">Canlı</option>
+                  <option value="test">Test</option>
+                </select>
+              </label>
+              <label>Template kodu (varsa)<input id="dpTemplateCode" placeholder="DTP’nin verdiği kod"/></label>
+              <label>Map kodu (varsa)<input id="dpMapCode"/></label>
+              <label class="wide">Servis URL (boş = canlı NetInvoice)<input id="dpServiceUrl" placeholder="https://integration.digitalplanet.com.tr/IntegrationService.asmx"/></label>
+              <label class="wide">Alıcı PK (opsiyonel)<input id="dpPostbox" placeholder="urn:mail:…"/></label>
+            </div>
+            <div class="button-row">
+              <button class="inv-btn" type="button" id="dpSaveBtn">SOAP bilgilerini kaydet</button>
+              <button class="inv-btn" type="button" id="dpTestBtn">SOAP girişi dene</button>
+            </div>
+          </details>
         </div>
       </div>
       <div class="inv-foot">
@@ -60,6 +83,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v264"></script>
+  <script src="/assets/fatura.js?v=fix-v266"></script>
 </body>
 </html>

@@ -2,16 +2,16 @@
 # Asist fatura+stok paneli — sadece ERP (atak). Vitrin/commerce'e DOKUNMAZ.
 # data/store.json ASLA değiştirilmez / restore edilmez.
 # Hostinger Web Terminal:
-#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/kesilmeyen-fatura-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/dijitalplanet-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
 set -euo pipefail
 OUT=/tmp/atak-asist-deploy.txt
 : > "$OUT"
 log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
-BRANCH="${ATAK_BRANCH:-cursor/kesilmeyen-fatura-474e}"
-EXPECT_V="${EXPECT_HEALTH:-6.3.261-kesilmeyen}"
-EXPECT_B="${EXPECT_BUILD:-fix-v264}"
+BRANCH="${ATAK_BRANCH:-cursor/dijitalplanet-474e}"
+EXPECT_V="${EXPECT_HEALTH:-6.3.263-eva-rapid}"
+EXPECT_B="${EXPECT_BUILD:-fix-v266}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"
@@ -62,6 +62,7 @@ grep -q 'purchaseBothBtn' "$SRC/public/admin.html" || die "Asist butonu kaynakta
 grep -q "staff-send-login" "$SRC/server.js" || die "kaynakta sifre API yok"
 [ -f "$SRC/lib/session-actor.js" ] || die "kaynakta session-actor yok"
 [ -f "$SRC/lib/stock-decrease.js" ] || die "kaynakta stock-decrease yok"
+[ -f "$SRC/lib/digital-planet.js" ] || die "kaynakta digital-planet yok"
 grep -q "staffMailSendPassBtn" "$SRC/public/admin.html" || die "kaynakta sifre butonu yok"
 log "   kaynak OK"
 

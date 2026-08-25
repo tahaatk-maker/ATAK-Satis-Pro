@@ -324,6 +324,7 @@ function toRapidInvoice(row, store, cfg){
     FaturaTarihi: dateTr,
     FaturaSayac: sayac,
     FaturaNo: String(row.invoiceNumber || row.reference || '').trim(),
+    Rapid360No: String(row.invoiceNumber || row.reference || '').trim(),
     EmanetMi: sale.reserveStock ? 'Evet' : 'Hayır',
     EFaturaMi: isEa ? 'No' : 'Yes',
     ResmiBelgeNo: String(row.invoiceNumber || row.reference || '').trim(),
