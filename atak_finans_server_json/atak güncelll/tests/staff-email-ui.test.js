@@ -9,6 +9,10 @@ const adminJs=fs.readFileSync(path.join(root,'public','assets','admin.js'),'utf8
 assert.match(server,/require\('\.\/lib\/staff-email'\)/);
 assert.match(server,/app\.get\('\/web-api\/admin\/staff-emails'/);
 assert.match(adminHtml,/id="staffEmailPanel"/);
-assert.match(adminHtml,/id="staffMailFillBtn"/);
+assert.doesNotMatch(adminHtml,/id="staffMailFillBtn"/);
+assert.match(adminHtml,/id="staffMailSendPassBtn"/);
 assert.match(adminJs,/\/web-api\/admin\/staff-emails/);
+assert.match(adminJs,/\/web-api\/admin\/staff-send-login/);
+assert.match(server,/app\.post\('\/web-api\/admin\/staff-send-login'/);
+assert.doesNotMatch(adminJs,/fillMissing:true/);
 console.log('staff-email-ui.test.js ok');

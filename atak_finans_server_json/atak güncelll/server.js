@@ -840,6 +840,13 @@ function staffCanDeductStock(req){
 function hashPassword(password,salt=crypto.randomBytes(16).toString('hex')){
   return`${salt}:${crypto.scryptSync(String(password),salt,64).toString('hex')}`;
 }
+function generateStaffPassword(){
+  const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const buf=crypto.randomBytes(10);
+  let out='';
+  for(const b of buf)out+=alphabet[b%alphabet.length];
+  return out;
+}
 function verifyPassword(password,stored){
   const [salt,hash]=String(stored||'').split(':');
   if(!salt||!hash)return false;
@@ -2046,8 +2053,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.257-data-restore',
-    build:'fix-v257',
+    version:'6.3.258-staff-mail',
+    build:'fix-v258',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -2253,10 +2260,10 @@ app.post('/web-api/admin/staff-emails',requirePermission('users_manage'),(req,re
     const s=readStore(),x=req.body||{};
     const result=staffEmail.applyAssignments(s,{
       domain:x.domain,
-      fillMissing:x.fillMissing===true,
+      fillMissing:false,
       items:x.items
     });
-    audit(s,'Personel e-posta güncellendi',result.domain,{updated:result.updated,fillMissing:x.fillMissing===true});
+    audit(s,'Personel e-posta güncellendi',result.domain,{updated:result.updated,fillMissing:false});
     writeStore(s);
     const users=(s.users||[]).filter(u=>u.active!==false);
     res.json({
@@ -2268,6 +2275,52 @@ app.post('/web-api/admin/staff-emails',requirePermission('users_manage'),(req,re
   }catch(e){
     res.status(400).json({error:e.message||'E-posta kaydedilemedi'});
   }
+});
+
+app.post('/web-api/admin/staff-send-login',requirePermission('users_manage'),async(req,res)=>{
+  const s=readStore();
+  if(!smtpConfig(s).enabled){
+    return res.status(400).json({error:'E-posta (SMTP) kapalı. Ayarlar → E-posta’dan kaydedin, sonra tekrar deneyin.'});
+  }
+  const all=req.body?.all===true;
+  const id=String(req.body?.userId||'').trim();
+  const users=(s.users||[]).filter(u=>u&&u.active!==false&&(all||String(u.id)===id));
+  if(!users.length)return res.status(404).json({error:'Kullanıcı bulunamadı'});
+  const origin=appMail.panelOrigin(req,process.env);
+  const loginUrl=`${origin}/personel`;
+  let sent=0,skipped=0;
+  const errors=[];
+  for(const user of users){
+    const email=String(user.email||'').trim();
+    if(!email){skipped++;continue}
+    const password=generateStaffPassword();
+    user.passwordHash=hashPassword(password);
+    user.updatedAt=new Date().toISOString();
+    const st=(s.staff||[]).find(x=>String(x.userId)===String(user.id)||String(x.username||'').toLocaleLowerCase('tr-TR')===String(user.username||'').toLocaleLowerCase('tr-TR'));
+    if(st){st.passwordHash=user.passwordHash;st.email=email}
+    const name=String(user.name||user.username||'').replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));
+    try{
+      await sendAppMail(s,{
+        to:email,
+        subject:'ATAK · Personel giriş şifresi',
+        text:`Merhaba ${user.name||user.username},\n\nPersonel paneli: ${loginUrl}\nKullanıcı adı: ${user.username||''}\nŞifre: ${password}\n\nBu mail kutunuza düştüyse giriş yapabilirsiniz.\n`,
+        html:`<p>Merhaba <b>${name}</b>,</p>
+          <p>Personel girişi: <a href="${loginUrl}">${loginUrl}</a></p>
+          <p>Kullanıcı adı: <b>${String(user.username||'')}</b><br>Şifre: <b>${password}</b></p>
+          <p style="color:#666;font-size:12px">Bu şifre yeni üretildi. Eski şifre geçersiz olur.</p>`
+      });
+      sent++;
+    }catch(e){
+      errors.push(`${user.username||user.name}: ${e.message||'mail gitmedi'}`);
+    }
+  }
+  audit(s,'Personel şifre maili',all?'toplu':(users[0]?.username||''),{sent,skipped,errors});
+  writeStore(s);
+  if(!sent&&errors.length)return res.status(400).json({error:errors[0]});
+  const parts=[`${sent} kişiye şifre maili gitti`];
+  if(skipped)parts.push(`${skipped} kişide e-posta yok (atlandı)`);
+  if(errors.length)parts.push(`hata: ${errors.join('; ')}`);
+  res.json({ok:true,sent,skipped,errors,message:parts.join(' · ')});
 });
 
 app.get('/web-api/admin/mail-settings',requirePermission('settings_manage'),(req,res)=>{

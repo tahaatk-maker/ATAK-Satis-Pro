@@ -10,8 +10,8 @@ log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
 BRANCH="${ATAK_BRANCH:-cursor/asist-fatura-aktarim-474e}"
-EXPECT_V="${EXPECT_HEALTH:-6.3.257-data-restore}"
-EXPECT_B="${EXPECT_BUILD:-fix-v257}"
+EXPECT_V="${EXPECT_HEALTH:-6.3.258-staff-mail}"
+EXPECT_B="${EXPECT_BUILD:-fix-v258}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"
@@ -70,6 +70,7 @@ copy_critical(){
   [ -f "$SRC/lib/purchase-csv.js" ] && mkdir -p "$D/lib" && cp -f "$SRC/lib/purchase-csv.js" "$D/lib/purchase-csv.js"
   [ -f "$SRC/lib/istikbal-category.js" ] && cp -f "$SRC/lib/istikbal-category.js" "$D/lib/istikbal-category.js"
   [ -f "$SRC/lib/stock-cost.js" ] && cp -f "$SRC/lib/stock-cost.js" "$D/lib/stock-cost.js"
+  [ -f "$SRC/lib/staff-email.js" ] && cp -f "$SRC/lib/staff-email.js" "$D/lib/staff-email.js"
 }
 
 log "2) kopyala (data / node_modules / .env dokunulmaz — store ASLA kopyalanmaz)"

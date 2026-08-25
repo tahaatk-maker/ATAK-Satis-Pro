@@ -87,6 +87,8 @@ function applyAssignments(store, {domain, fillMissing, items}={}){
     if(String(user.email||'').trim().toLocaleLowerCase('tr-TR')===e)return;
     user.email=e;
     user.updatedAt=new Date().toISOString();
+    const st=(store.staff||[]).find(x=>String(x.userId)===String(user.id)||String(x.username||'').toLocaleLowerCase('tr-TR')===String(user.username||'').toLocaleLowerCase('tr-TR'));
+    if(st)st.email=e;
     taken.add(e);
     updated+=1;
   };

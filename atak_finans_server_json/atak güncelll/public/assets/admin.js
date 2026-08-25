@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v256 */
+/* ATAK_ADMIN_BUILD=fix-v258 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1291,6 +1291,7 @@ function renderUsers(){
     </div>
     <div class="admin-card-actions" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <button type="button" data-user-edit="${u.id}">Düzenle</button>
+      ${u.email&&!u.fromStaff?`<button type="button" class="secondary-btn" data-user-send-pass="${u.id}">Şifreyi mail at</button>`:''}
       ${u.fromStaff?'':(u.active===false
         ?`<button type="button" class="primary" data-user-activate="${u.id}">Aktifleştir</button>`
         :`<button type="button" data-user-disable="${u.id}">Pasife al</button>`)}
@@ -1302,6 +1303,7 @@ function renderUsers(){
   });
   qa('[data-user-activate]').forEach(b=>b.onclick=()=>activateUser(b.dataset.userActivate));
   qa('[data-user-disable]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDisable));
+  qa('[data-user-send-pass]').forEach(b=>b.onclick=()=>sendStaffLoginMail(b.dataset.userSendPass));
   qa('[data-user-del]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDel));
   if(q('#users')?.classList.contains('active'))loadStaffEmails().catch(()=>{});
 }
@@ -1311,15 +1313,15 @@ function renderStaffEmails(d){
   const st=q('#staffMailStatus');
   const miss=Number(d.missing||0);
   if(st)st.textContent=miss
-    ?`${miss} kişide e-posta yok. “Otomatik yaz” ile @${d.domain||'atakhome.com.tr'} verilir.`
-    :`Aktif kullanıcılarda e-posta var. Hotmail/Gmail kayıtlıysa aynı kalır.`;
+    ?`${miss} kişide kayıtlı e-posta yok (şifre maili gitmez). Tabloya yazıp Kaydet’e basın.`
+    :`Aktif kullanıcılarda e-posta kayıtlı. Şifre maili bu adreslere gider.`;
   const rows=d.rows||[];
   q('#staffMailTable').innerHTML=rows.length
-    ?`<table><thead><tr><th>Ad</th><th>Kullanıcı</th><th>Kayıtlı</th><th>Şirket adresi</th></tr></thead><tbody>${rows.map(r=>`<tr>
+    ?`<table><thead><tr><th>Ad</th><th>Kullanıcı</th><th>Kayıtlı</th><th>E-posta</th></tr></thead><tbody>${rows.map(r=>`<tr>
       <td><b>${ckEsc(r.name)}</b></td>
       <td>${ckEsc(r.username||'-')}</td>
       <td>${r.email?ckEsc(r.email):'<small class="warn-text">yok</small>'}</td>
-      <td><input data-staff-mail-id="${ckEsc(r.id)}" value="${ckEsc(r.suggested)}" autocomplete="off"/></td>
+      <td><input data-staff-mail-id="${ckEsc(r.id)}" value="${ckEsc(r.email||'')}" placeholder="ör. ad@atakhome.com.tr" autocomplete="off"/></td>
     </tr>`).join('')}</tbody></table>`
     :'<p class="note">Aktif kullanıcı yok. Önce soldan kullanıcı ekleyin.</p>';
 }
@@ -1334,17 +1336,6 @@ async function loadStaffEmails(){
 function staffMailItemsFromTable(){
   return qa('[data-staff-mail-id]').map(inp=>({id:inp.getAttribute('data-staff-mail-id'),email:String(inp.value||'').trim()})).filter(x=>x.id&&x.email);
 }
-q('#staffMailFillBtn')?.addEventListener('click',async()=>{
-  try{
-    const r=await api('/web-api/admin/staff-emails',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({domain:q('#staffMailDomain')?.value||'atakhome.com.tr',fillMissing:true})
-    });
-    renderStaffEmails(r);
-    await load();
-    toast(`${r.updated||0} kişiye şirket e-postası yazıldı`);
-  }catch(e){toast(e.message||'E-posta yazılamadı')}
-});
 q('#staffMailSaveBtn')?.addEventListener('click',async()=>{
   try{
     const r=await api('/web-api/admin/staff-emails',{
@@ -1355,6 +1346,20 @@ q('#staffMailSaveBtn')?.addEventListener('click',async()=>{
     await load();
     toast(`${r.updated||0} e-posta kaydedildi`);
   }catch(e){toast(e.message||'Kaydedilemedi')}
+});
+async function sendStaffLoginMail(userId,all=false){
+  try{
+    const r=await api('/web-api/admin/staff-send-login',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(all?{all:true}:{userId})
+    });
+    toast(r.message||`${r.sent||0} şifre maili gönderildi`);
+    if(q('#staffMailStatus')&&r.message)q('#staffMailStatus').textContent=r.message;
+  }catch(e){toast(e.message||'Şifre maili gönderilemedi')}
+}
+q('#staffMailSendPassBtn')?.addEventListener('click',()=>{
+  if(!confirm('Kayıtlı e-postası olan tüm personele yeni panel şifresi mail ile gitsin mi?'))return;
+  sendStaffLoginMail('',true);
 });
 q('#userForm').onsubmit=async e=>{
   e.preventDefault();
