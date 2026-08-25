@@ -488,6 +488,28 @@ function recoverStoreFile(){
   }
   return storeFileSize(STORE_PATH)>=200;
 }
+/** Canlı store çok küçüldüyse (müşteri kaybı) en büyük yedeği geri al — kod değişmez. */
+function recoverIfLiveIsTiny(){
+  const live=storeFileSize(STORE_PATH);
+  const src=bestExistingStorePath();
+  if(!src)return false;
+  let srcSize=0;
+  try{srcSize=fs.statSync(src).size}catch(_){return false}
+  // 5MB+ yedek var, canlı < %40 ve < 3MB → felaket (boş/yeni store)
+  if(!(srcSize>=5*1024*1024 && live>=0 && live<3*1024*1024 && live<srcSize*0.4))return false;
+  if(path.resolve(src)===path.resolve(STORE_PATH))return false;
+  try{
+    const bak=`${STORE_PATH}.bak-tiny-${new Date().toISOString().replace(/[:.]/g,'-')}`;
+    if(live>=200)fs.copyFileSync(STORE_PATH,bak);
+    fs.copyFileSync(src,STORE_PATH);
+    console.warn('[store] live tiny',live,'restored from',src,'size',srcSize);
+    storeMem=null;storeMemMtime=-1;
+    return true;
+  }catch(e){
+    console.error('[store] tiny-restore fail',e.message||e);
+    return false;
+  }
+}
 let storeMem=null;
 let storeMemMtime=-1;
 function storeFileMtime(){
@@ -2014,8 +2036,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.256-pp-stok',
-    build:'fix-v256',
+    version:'6.3.257-data-restore',
+    build:'fix-v257',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
