@@ -54,11 +54,11 @@ const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 assert.match(server, /require\('\.\/lib\/session-actor'\)/);
 assert.match(server, /function applyReviewActor/);
 assert.match(server, /sessionActor\.resolveReviewedBy/);
-assert.match(server, /6\.3\.259-actor-name/);
+assert.match(server, /6\.3\.26/);
 assert.doesNotMatch(server, /if\(req\.session\?\.systemOwner===true\)return\{id:'system-owner',name:'Sistem Yöneticisi'/);
 
 const adminJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'admin.js'), 'utf8');
 assert.match(adminJs, /function fillAdminChip/);
-assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v262/);
+assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v26/);
 
 console.log('session-actor.test.js ok');

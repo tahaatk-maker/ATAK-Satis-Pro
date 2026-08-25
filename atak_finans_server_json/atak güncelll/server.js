@@ -38,6 +38,7 @@ const staffEmail = require('./lib/staff-email');
 const purchaseCsv = require('./lib/purchase-csv');
 const istikbalCategory = require('./lib/istikbal-category');
 const sessionActor = require('./lib/session-actor');
+const stockDecrease = require('./lib/stock-decrease');
 
 const app = express();
 const ROOT = __dirname;
@@ -1928,6 +1929,18 @@ function addStockMovement(s,{productCode,warehouseId,type,quantity,reference='',
   s.stockMovements.unshift(movement);
   return{stock,movement};
 }
+function decreaseStockInStore(s,{productCode,warehouseId,quantity,note='',user='Admin',reference='Stok düşüm'}){
+  const code=String(productCode||'').trim();
+  const wh=String(warehouseId||'').trim();
+  if(!code||!wh)throw new Error('Ürün ve depo zorunludur');
+  const row=currentStock(s,code,wh);
+  const plan=stockDecrease.plannedDecrease(row?.quantity||0,row?.reserved||0,quantity);
+  if(!plan.ok)throw new Error(plan.error);
+  return addStockMovement(s,{
+    productCode:code,warehouseId:wh,type:'adjustment',quantity:plan.delta,
+    reference,note:note||'Tek kalem stok düşümü',user
+  });
+}
 
 
 function accountBalance(s,accountId){
@@ -2054,8 +2067,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.259-actor-name',
-    build:'fix-v262',
+    version:'6.3.260-stock-drop',
+    build:'fix-v263',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -3279,6 +3292,32 @@ app.post('/web-api/admin/stock-adjust',requireAdmin,(req,res)=>{
     }
   }
   audit(s,'Stok sayımı',productCode,{warehouseId,before:current,after:target,openingCost:openingCost||undefined});writeStore(s);res.json({ok:true,...result});
+});
+app.post('/web-api/admin/stock-decrease',requireAdminOrStaffAny('stock_manage','screen_stock_in','products_manage'),(req,res)=>{
+  try{
+    const s=readStore(),x=req.body||{};
+    const warehouseId=String(x.warehouseId||'').trim() || (()=>{
+      const code=String(x.productCode||'').trim().toLocaleUpperCase('tr-TR');
+      const hits=(s.productStocks||[]).filter(r=>String(r.productCode||'').toLocaleUpperCase('tr-TR')===code && Number(r.quantity||0)>0);
+      return hits.length===1?String(hits[0].warehouseId||''):'';
+    })();
+    if(!(s.warehouses||[]).some(w=>String(w.id)===warehouseId&&w.active!==false&&!w.deletedAt)){
+      return res.status(400).json({error:'Geçerli bir depo seçiniz'});
+    }
+    const result=decreaseStockInStore(s,{
+      productCode:x.productCode,
+      warehouseId,
+      quantity:x.quantity,
+      note:String(x.note||'').trim(),
+      user:currentActor(req)?.name||'Admin',
+      reference:String(x.reference||'Stok düşüm')
+    });
+    audit(s,'Stok düşümü',String(x.productCode||''),{warehouseId,quantity:Number(x.quantity||0),after:result.stock?.quantity});
+    writeStore(s);
+    res.json({ok:true,...result});
+  }catch(e){
+    res.status(400).json({error:e.message||'Stok düşülemedi'});
+  }
 });
 app.post('/web-api/admin/stock-receipt',requireAdminOrStaffAny('stock_manage','screen_stock_in'),(req,res)=>{
   try{
@@ -9319,7 +9358,17 @@ app.get('/web-api/admin/purchase-invoice/:id',requireAdmin,(req,res)=>{
   const s=readStore();
   const inv=(s.purchaseInvoices||[]).find(x=>String(x.id)===String(req.params.id));
   if(!inv)return res.status(404).json({error:'Alış faturası bulunamadı'});
-  res.json({ok:true,invoice:inv});
+  const wh=(s.warehouses||[]).find(w=>String(w.id)===String(inv.warehouseId||''));
+  const items=(inv.items||[]).map(line=>{
+    const row=currentStock(s,line.productCode,inv.warehouseId);
+    return{
+      ...line,
+      currentQty:Number(row?.quantity||0),
+      reservedQty:Number(row?.reserved||0),
+      availableQty:Math.max(0,Number(row?.quantity||0)-Number(row?.reserved||0))
+    };
+  });
+  res.json({ok:true,invoice:{...inv,items,warehouseName:wh?.name||''}});
 });
 
 app.post('/web-api/admin/product',requireAdmin,(req,res)=>{ const s=readStore(),x=req.body||{}; if(!x.code||!x.name)return res.status(400).json({error:'Ürün kodu ve adı zorunlu'}); const i=s.products.findIndex(p=>String(p.id)===String(x.id)||String(p.code).toLowerCase()===String(x.code).toLowerCase()); const p=sanitizeProduct(x,i>=0?s.products[i]:{}); if(i>=0)s.products[i]=p;else s.products.unshift(p); audit(s,i>=0?'Ürün güncellendi':'Ürün eklendi',p.code,{name:p.name}); writeStore(s); res.json({ok:true,product:p}); });

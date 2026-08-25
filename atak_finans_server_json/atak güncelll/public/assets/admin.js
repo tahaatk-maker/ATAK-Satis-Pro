@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v262 */
+/* ATAK_ADMIN_BUILD=fix-v263 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1647,7 +1647,23 @@ function renderReceiptHint(){
 function renderStockTable(){
   const term=(q('#stockSearch')?.value||'').toLocaleLowerCase('tr-TR');
   const rows=stockData.stocks.filter(x=>`${x.productCode} ${x.productName} ${x.warehouseName}`.toLocaleLowerCase('tr-TR').includes(term));
-  q('#stockTable').innerHTML=rows.length?`<table><thead><tr><th>Ürün</th><th>Depo</th><th>Fiziksel</th><th>Rezerve</th><th>Satılabilir</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.productCode}</b><small>${x.productName}</small></td><td>${x.warehouseName}</td><td>${x.quantity}</td><td>${x.reserved||0}</td><td><b>${x.available}</b></td></tr>`).join('')}</tbody></table>`:'<p>Stok kaydı bulunamadı.</p>';
+  q('#stockTable').innerHTML=rows.length?`<table><thead><tr><th>Ürün</th><th>Depo</th><th>Fiziksel</th><th>Rezerve</th><th>Satılabilir</th><th></th></tr></thead><tbody>${rows.map((x,i)=>`<tr><td><b>${x.productCode}</b><small>${x.productName}</small></td><td>${x.warehouseName}</td><td>${x.quantity}</td><td>${x.reserved||0}</td><td><b>${x.available}</b></td><td><button type="button" class="mini-btn danger" data-stock-drop="${i}" ${Number(x.available||0)<=0?'disabled':''}>Stok düş</button></td></tr>`).join('')}</tbody></table>`:'<p>Stok kaydı bulunamadı.</p>';
+  q('#stockTable')?.querySelectorAll('[data-stock-drop]').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const row=rows[Number(btn.dataset.stockDrop)];if(!row)return;
+      const raw=prompt(`${row.productCode} — ${row.productName}\nŞu an ${row.quantity} adet. Kaç adet düşülsün?`,'1');
+      if(raw==null)return;
+      const qty=Number(String(raw).replace(',','.'));
+      if(!(qty>0)){toast('Geçerli adet girin');return}
+      try{
+        await api('/web-api/admin/stock-decrease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          productCode:row.productCode,warehouseId:row.warehouseId,quantity:qty,note:'Stok merkezi tek kalem düşüm'
+        })});
+        toast(`${row.productCode} stoğundan ${qty} adet düşüldü`);
+        await loadStockCenter();
+      }catch(e){toast(e.message)}
+    });
+  });
 }
 q('#stockSearch')?.addEventListener('input',renderStockTable);
 ['#receiptProduct','#receiptQty','#receiptUnitCost'].forEach(id=>q(id)?.addEventListener('input',renderReceiptHint));
@@ -5714,19 +5730,81 @@ function renderPurchaseInvoiceList(d){
       <td>${Number(r.created||0)}</td>
       <td>${Number(r.priceUpdated||0)}</td>
       <td>${r.reverted?'Geri alındı':(r.source==='excel'?'Excel':'Manuel')}</td>
-      <td>${r.reverted?'':`<button type="button" class="mini-btn danger" data-purchase-revert="${purchaseEsc(r.id)}">Geri Al / Sil</button>`}</td>
+      <td>${r.reverted?'':`<button type="button" class="mini-btn" data-purchase-lines="${purchaseEsc(r.id)}">Kalemler / Stok düş</button> <button type="button" class="mini-btn danger" data-purchase-revert="${purchaseEsc(r.id)}">Geri Al / Sil</button>`}</td>
     </tr>`).join('')}</tbody></table>`
     :'<p class="note">Henüz alış faturası yok. Excel/CSV yükleyin veya manuel girin.</p>';
+  box.querySelectorAll('[data-purchase-lines]').forEach(btn=>{
+    btn.addEventListener('click',()=>purchaseOpenInvoiceLines(btn.dataset.purchaseLines));
+  });
   box.querySelectorAll('[data-purchase-revert]').forEach(btn=>{
     btn.addEventListener('click',async()=>{
-      if(!confirm('Bu aktarım geri alınsın mı?\n• Yeni eklenen ürünler silinir (satışı yoksa)\n• Güncellenen maliyetler eski haline döner'))return;
+      if(!confirm('TÜM bu aktarım geri alınsın mı?\n• Yeni eklenen ürünler silinir (satışı yoksa)\n• Güncellenen maliyetler eski haline döner\n\nTek ürün için “Kalemler / Stok düş” kullanın.'))return;
       try{
         const r=await api('/web-api/admin/purchase-invoice/'+btn.dataset.purchaseRevert+'/revert',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
         toast(`Geri alındı · ${r.productsRemoved||0} ürün silindi · ${r.pricesRestored||0} maliyet eskiye döndü`);
+        const det=q('#purchaseInvoiceDetail');if(det){det.classList.add('hidden');det.innerHTML=''}
         await loadPurchaseInvoices();
       }catch(e){toast(e.message)}
     });
   });
+  const latest=(rows||[]).find(r=>!r.reverted);
+  if(latest?.id)purchaseOpenInvoiceLines(latest.id,{silent:true});
+}
+async function purchaseOpenInvoiceLines(id,opts={}){
+  const box=q('#purchaseInvoiceDetail');if(!box||!id)return;
+  try{
+    const d=await api('/web-api/admin/purchase-invoice/'+encodeURIComponent(id));
+    const inv=d.invoice||{};
+    const items=inv.items||[];
+    const canDrop=inv.addStock!==false && !inv.reverted;
+    box.classList.remove('hidden');
+    box.innerHTML=`<div class="panel" style="margin:0">
+      <div class="panel-head"><div><small class="v4-kicker">SON AKTARIM KALEMLERİ</small>
+        <h2>${purchaseEsc(inv.invoiceNo||inv.supplierName||'Aktarım')} · ${purchaseEsc(inv.warehouseName||'Depo')}</h2>
+        <p class="note">${canDrop?'Yanlış giren 1 ürün için adedi yazıp <b>Stok düş</b> deyin. Tüm faturayı silmez.':'Bu kayıt stok eklemeden (yalnız maliyet) işlenmiş; stok düşülmez.'}</p></div>
+        <input id="purchaseLineSearch" placeholder="Kod veya ürün ara" style="min-width:220px">
+      </div>
+      <div class="turnover-table">${items.length?`<table><thead><tr><th>Kod</th><th>Ürün</th><th>Yüklenen</th><th>Şu an stok</th><th>Satılabilir</th>${canDrop?'<th>Stok düş</th>':''}</tr></thead><tbody id="purchaseLineBody">${items.map((line,i)=>`<tr data-line-hay="${purchaseEsc(`${line.productCode||''} ${line.productName||''} ${line.itemCode||''}`.toLocaleLowerCase('tr-TR'))}">
+        <td><b>${purchaseEsc(line.productCode||'-')}</b></td>
+        <td>${purchaseEsc(line.productName||'')}</td>
+        <td>${Number(line.quantity||0)}</td>
+        <td>${Number(line.currentQty||0)}</td>
+        <td><b>${Number(line.availableQty||0)}</b></td>
+        ${canDrop?`<td>
+          <input type="number" min="1" max="${Math.max(1,Number(line.availableQty||0))}" value="1" data-drop-qty="${i}" style="width:64px">
+          <button type="button" class="mini-btn danger" data-stock-drop="${i}" ${Number(line.availableQty||0)<=0?'disabled':''}>Stok düş</button>
+        </td>`:''}
+      </tr>`).join('')}</tbody></table>`:'<p class="note">Kalem yok.</p>'}</div>
+    </div>`;
+    q('#purchaseLineSearch')?.addEventListener('input',()=>{
+      const term=(q('#purchaseLineSearch').value||'').trim().toLocaleLowerCase('tr-TR');
+      box.querySelectorAll('#purchaseLineBody tr').forEach(tr=>{
+        tr.style.display=!term||String(tr.dataset.lineHay||'').includes(term)?'':'none';
+      });
+    });
+    box.querySelectorAll('[data-stock-drop]').forEach(btn=>{
+      btn.addEventListener('click',async()=>{
+        const i=Number(btn.dataset.stockDrop);
+        const line=items[i];if(!line)return;
+        const qtyEl=box.querySelector(`[data-drop-qty="${i}"]`);
+        const qty=Number(qtyEl?.value||1);
+        if(!confirm(`${line.productCode} stoğundan ${qty} adet düşülsün mü?\nŞu an: ${line.currentQty} · kalacak: ${Math.max(0,Number(line.availableQty||0)-qty)}`))return;
+        try{
+          await api('/web-api/admin/stock-decrease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            productCode:line.productCode,
+            warehouseId:inv.warehouseId,
+            quantity:qty,
+            note:`Alış aktarımı ${inv.invoiceNo||inv.id} tek kalem düzeltme`,
+            reference:inv.invoiceNo||'Stok düşüm'
+          })});
+          toast(`${line.productCode} stoğundan ${qty} adet düşüldü`);
+          await purchaseOpenInvoiceLines(id);
+        }catch(e){toast(e.message)}
+      });
+    });
+  }catch(e){
+    if(!opts.silent)toast(e.message);
+  }
 }
 async function loadPurchaseInvoices(){
   try{
