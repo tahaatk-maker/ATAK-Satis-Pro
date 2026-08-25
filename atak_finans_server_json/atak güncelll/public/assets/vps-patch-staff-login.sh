@@ -1,10 +1,10 @@
 #!/bin/bash
 # Sifre-mail API: 3100'u tutan ESKI node'u oldurur, yeni server.js baslatir.
 # store.json / musteri / stok DOKUNULMAZ. atakhome-web ve commerce DOKUNULMAZ.
-#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/dijitalplanet-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/satis-fatura-oncelik-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
 set -euo pipefail
-BRANCH="${ATAK_BRANCH:-cursor/dijitalplanet-474e}"
-EXPECT="6.3.263-eva-rapid"
+BRANCH="${ATAK_BRANCH:-cursor/satis-fatura-oncelik-474e}"
+EXPECT="6.3.264-satis-fatura"
 log(){ echo "$*"; }
 die(){
   echo "FAIL: $*"

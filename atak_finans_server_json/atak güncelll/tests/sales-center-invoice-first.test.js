@@ -1,0 +1,27 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const root = path.join(__dirname, '..');
+const adminHtml = fs.readFileSync(path.join(root, 'public', 'admin.html'), 'utf8');
+const personelHtml = fs.readFileSync(path.join(root, 'public', 'personel.html'), 'utf8');
+const adminJs = fs.readFileSync(path.join(root, 'public', 'assets', 'admin.js'), 'utf8');
+const personelJs = fs.readFileSync(path.join(root, 'public', 'assets', 'personel.js'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+
+assert.match(adminHtml, /value="queue_qnb" selected/);
+assert.match(personelHtml, /value="queue_qnb" selected/);
+assert.doesNotMatch(adminHtml, /FATURA KES \(QNB\)/);
+assert.match(adminHtml, />FATURA KES</);
+assert.match(personelHtml, />FATURA KES</);
+assert.match(personelHtml, /<h4>Fatura Kes<\/h4>/);
+assert.doesNotMatch(personelHtml, /<h4>Kesilmeyen fatura<\/h4>/);
+assert.match(adminJs, /function defaultSalesInvoiceStatus\(\)\{return 'queue_qnb'\}/);
+assert.match(personelJs, /function defaultSalesInvoiceStatus\(\)\{return canSaleInvoice\(\)\?'queue_qnb':'pending'\}/);
+assert.match(adminJs, /q\('#salesInvoiceStatus'\)\.value=defaultSalesInvoiceStatus\(\)/);
+assert.match(personelJs, /\$\('#salesInvoiceStatus'\)\.value=defaultSalesInvoiceStatus\(\)/);
+assert.doesNotMatch(adminJs, /QNB Solist kuyruğuna alınır/);
+assert.match(server, /6\.3\.264-satis-fatura/);
+assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v267/);
+assert.match(personelJs, /ATAK_PERSONEL_BUILD=fix-v267/);
+console.log('sales-center-invoice-first.test.js ok');

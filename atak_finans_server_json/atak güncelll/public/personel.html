@@ -26,7 +26,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/personel.css?v=fix-v248">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v264">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v267">
 <link rel="stylesheet" href="/assets/sip-call.css?v=fix-v236">
 </head>
 <body>
@@ -565,9 +565,9 @@ html.atak-reset-link #resetForm{display:grid!important}
     <div class="sc-sec-title"><span>Fatura &amp; not</span></div>
     <label class="field">Fatura durumu
       <select id="salesInvoiceStatus">
-        <option value="not_required" selected>Fatura gerekmiyor</option>
+        <option value="queue_qnb" selected data-need-perm="sale_invoice_qnb">Fatura kes (e-Fatura / e-Arşiv)</option>
         <option value="pending">Daha sonra kes (Kesilmeyen Faturalar’a düşer)</option>
-        <option value="queue_qnb" data-need-perm="sale_invoice_qnb">e-Fatura kuyruğuna al</option>
+        <option value="not_required">Fatura gerekmiyor</option>
         <option value="issued" data-need-perm="sale_invoice_qnb">Manuel faturalandı</option>
       </select>
     </label>
@@ -607,10 +607,10 @@ html.atak-reset-link #resetForm{display:grid!important}
         <button class="pos-action-btn secondary" id="salesWizardOfferBtn" type="button" data-need-perm="sale_offer">TEKLİF YAZDIR / GÖNDER</button>
       </div>
       <div class="pos-finish-card invoice">
-        <h4>Kesilmeyen fatura</h4>
-        <p>Kesilmeyen liste ayrı sekmede. E-fatura firması bunları otomatik çeker.</p>
-        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">KESİLMEYEN FATURALARI AÇ</button>
+        <h4>Fatura Kes</h4>
+        <p>3. adımda her zaman önce fatura kesilir. Satışı onaylayınca e-fatura kuyruğuna alınır; EVA Rapid Veri Çek bunu çeker.</p>
         <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button" data-need-perm="sale_invoice_qnb">FATURA KES</button>
+        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">KESİLMEYEN (SONRA)</button>
       </div>
     </div>
     <div class="pos-nav">
@@ -882,6 +882,6 @@ html.atak-reset-link #resetForm{display:grid!important}
   </div>
 </div>
 <script src="/assets/sip-call.js?v=fix-v236"></script>
-<script src="/assets/personel.js?v=fix-v264"></script>
+<script src="/assets/personel.js?v=fix-v267"></script>
 </body>
 </html>

@@ -711,7 +711,7 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 </section><section class="tab" id="salesCenter" data-pos-step="1">
 <div class="sales-center-head">
-<div><small>SATIŞ OPERASYON · KASA / POS <span class="pos-ver">v659 A4</span></small><h2>Satış Kasası</h2><p>Tek A4 sözleşme+senet · Fatura Kes (QNB) · adım adım</p></div>
+<div><small>SATIŞ OPERASYON · KASA / POS <span class="pos-ver">v659 A4</span></small><h2>Satış Kasası</h2><p>Tek A4 sözleşme+senet · Fatura Kes · adım adım</p></div>
 <div class="sales-center-head-actions">
   <button class="pos-head-btn" id="rapid360SalesXmlBtn" type="button">Rapid Aktar</button>
   <button class="pos-head-btn" id="salesTrackingShortcut" type="button">Sipariş Takibi</button>
@@ -1027,9 +1027,9 @@ body.inv-full #pageTitle{font-size:18px}
       <div class="sales-invoice-box">
         <label>Fatura durumu
           <select id="salesInvoiceStatus">
-            <option value="not_required" selected>Fatura gerekmiyor</option>
+            <option value="queue_qnb" selected>Fatura kes (e-Fatura / e-Arşiv)</option>
             <option value="pending">Daha sonra kes (Kesilmeyen Faturalar’a düşer)</option>
-            <option value="queue_qnb">QNB Solist ile kes (e-Fatura / e-Arşiv)</option>
+            <option value="not_required">Fatura gerekmiyor</option>
             <option value="issued">Manuel faturalandı</option>
           </select>
         </label>
@@ -1073,8 +1073,8 @@ body.inv-full #pageTitle{font-size:18px}
       </div>
       <div class="pos-finish-card invoice">
         <h4>Fatura Kes</h4>
-        <p>QNB Solist e-Fatura / e-Arşiv kuyruğuna al.</p>
-        <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button">FATURA KES (QNB)</button>
+        <p>3. adımda her zaman önce fatura kesilir. Satışı onaylayınca e-fatura kuyruğuna alınır; EVA Rapid Veri Çek bunu çeker.</p>
+        <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button">FATURA KES</button>
       </div>
     </div>
     <div class="pos-wizard-nav">
@@ -2888,5 +2888,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v266"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v267"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

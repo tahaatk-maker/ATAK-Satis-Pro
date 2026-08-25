@@ -117,6 +117,7 @@ assert(all.$id === '1' && all._schema === 0 && all._reference === '', 'zarf meta
 const rootWant = ['$id','DealerId','startDate','endDate','RecordCount','EInvoiceCode','addReturns','EInvoices','_reference','_schema'];
 assert(rootWant.every(k => Object.prototype.hasOwnProperty.call(all, k)) && Object.keys(all).every(k => rootWant.includes(k)), 'zarf alanları');
 const giden = all.EInvoices.find(x => x.FaturaNo === 'ATK2026000000001');
+assert(giden && giden.FaturalanacakMusteriAdi === 'Ahmet Yılmaz', 'müşteri');
 assert(giden.FaturaNo === 'ATK2026000000001', 'FaturaNo');
 assert(giden.Rapid360No === 'ATK2026000000001', 'Rapid360No');
 assert(giden.Bayi === 'ATAKHOME', 'Bayi ATAKHOME');
@@ -268,7 +269,7 @@ assert(faturaHtml.includes('EVA Connect'), 'eva url kutusu');
 assert(faturaHtml.includes('atakDmsCopyBtn'), 'url kopyala');
 assert(!faturaHtml.includes('data-inv-module="efatura"'), 'e-Fatura ağacı yok');
 assert(!faturaHtml.includes('data-inv-view="ef_out_pending"'), 'gönderilecek klasör yok');
-assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v266'), 'fatura build');
+assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v267'), 'fatura build');
 assert(faturaJs.includes("view:'pending_sales'"), 'varsayılan kesilmeyen');
 assert(faturaJs.includes('digital-planet-test'), 'dp test api');
 
