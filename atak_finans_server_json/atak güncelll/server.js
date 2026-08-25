@@ -2026,12 +2026,13 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
   }
 }));
 app.get('/health',(req,res)=>{
-  let productCount=-1,brandCount=-1,categoryCount=-1;
+  let productCount=-1,brandCount=-1,categoryCount=-1,customerCount=-1;
   try{
     const s=readStore();
     productCount=(s.products||[]).length;
     brandCount=(s.brands||[]).length;
     categoryCount=(s.categories||[]).length;
+    customerCount=(s.customers||[]).length;
   }catch(_){}
   res.json({
     ok:true,
@@ -2043,6 +2044,7 @@ app.get('/health',(req,res)=>{
     productCount,
     brandCount,
     categoryCount,
+    customerCount,
     backup:autoBackup.status(),
     mfa:mfaEnabled(),
     mfaTrustHours:Math.round(mfaTrustMs()/3600000),
