@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v251 */
+/* ATAK_ADMIN_BUILD=fix-v261 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -55,9 +55,11 @@ async function api(url,opt={}){
   }else if(r.status===502||r.status===504||r.status===524){
     throw new Error('Aktarım uzun sürdü. Tekrar Aktar’a basın; kaldığı yerden devam eder.');
   }else if(r.redirected||/^\s*</.test(text)){
-    const err=new Error(String(url||'').includes('excel-import')
-      ?'Aktarım kesildi. Tekrar Aktar’a basın; kaldığı yerden devam eder.'
-      :'API bulunamadı (sunucu güncellemesi gerekli)');
+    const err=new Error(String(url||'').includes('staff-send-login')||String(url||'').includes('staff-emails')
+      ?'Şifre API sunucuda yok (hâlâ eski 6.3.256). VPS’te vps-patch-staff-login.sh çalıştırın, sonra Ctrl+F5.'
+      :(String(url||'').includes('excel-import')
+        ?'Aktarım kesildi. Tekrar Aktar’a basın; kaldığı yerden devam eder.'
+        :'API bulunamadı (sunucu güncellemesi gerekli)'));
     err.status=r.status;
     throw err;
   }
@@ -1291,6 +1293,7 @@ function renderUsers(){
     </div>
     <div class="admin-card-actions" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <button type="button" data-user-edit="${u.id}">Düzenle</button>
+      ${u.email&&!u.fromStaff?`<button type="button" class="secondary-btn" data-user-send-pass="${u.id}">Şifreyi mail at</button>`:''}
       ${u.fromStaff?'':(u.active===false
         ?`<button type="button" class="primary" data-user-activate="${u.id}">Aktifleştir</button>`
         :`<button type="button" data-user-disable="${u.id}">Pasife al</button>`)}
@@ -1302,6 +1305,7 @@ function renderUsers(){
   });
   qa('[data-user-activate]').forEach(b=>b.onclick=()=>activateUser(b.dataset.userActivate));
   qa('[data-user-disable]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDisable));
+  qa('[data-user-send-pass]').forEach(b=>b.onclick=()=>sendStaffLoginMail(b.dataset.userSendPass));
   qa('[data-user-del]').forEach(b=>b.onclick=()=>deleteUser(b.dataset.userDel));
   if(q('#users')?.classList.contains('active'))loadStaffEmails().catch(()=>{});
 }
@@ -1311,15 +1315,15 @@ function renderStaffEmails(d){
   const st=q('#staffMailStatus');
   const miss=Number(d.missing||0);
   if(st)st.textContent=miss
-    ?`${miss} kişide e-posta yok. “Otomatik yaz” ile @${d.domain||'atakhome.com.tr'} verilir.`
-    :`Aktif kullanıcılarda e-posta var. Hotmail/Gmail kayıtlıysa aynı kalır.`;
+    ?`${miss} kişide kayıtlı e-posta yok (şifre maili gitmez). Tabloya yazıp Kaydet’e basın.`
+    :`Aktif kullanıcılarda e-posta kayıtlı. Şifre maili bu adreslere gider.`;
   const rows=d.rows||[];
   q('#staffMailTable').innerHTML=rows.length
-    ?`<table><thead><tr><th>Ad</th><th>Kullanıcı</th><th>Kayıtlı</th><th>Şirket adresi</th></tr></thead><tbody>${rows.map(r=>`<tr>
+    ?`<table><thead><tr><th>Ad</th><th>Kullanıcı</th><th>Kayıtlı</th><th>E-posta</th></tr></thead><tbody>${rows.map(r=>`<tr>
       <td><b>${ckEsc(r.name)}</b></td>
       <td>${ckEsc(r.username||'-')}</td>
       <td>${r.email?ckEsc(r.email):'<small class="warn-text">yok</small>'}</td>
-      <td><input data-staff-mail-id="${ckEsc(r.id)}" value="${ckEsc(r.suggested)}" autocomplete="off"/></td>
+      <td><input data-staff-mail-id="${ckEsc(r.id)}" value="${ckEsc(r.email||'')}" placeholder="ör. ad@atakhome.com.tr" autocomplete="off"/></td>
     </tr>`).join('')}</tbody></table>`
     :'<p class="note">Aktif kullanıcı yok. Önce soldan kullanıcı ekleyin.</p>';
 }
@@ -1334,17 +1338,6 @@ async function loadStaffEmails(){
 function staffMailItemsFromTable(){
   return qa('[data-staff-mail-id]').map(inp=>({id:inp.getAttribute('data-staff-mail-id'),email:String(inp.value||'').trim()})).filter(x=>x.id&&x.email);
 }
-q('#staffMailFillBtn')?.addEventListener('click',async()=>{
-  try{
-    const r=await api('/web-api/admin/staff-emails',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({domain:q('#staffMailDomain')?.value||'atakhome.com.tr',fillMissing:true})
-    });
-    renderStaffEmails(r);
-    await load();
-    toast(`${r.updated||0} kişiye şirket e-postası yazıldı`);
-  }catch(e){toast(e.message||'E-posta yazılamadı')}
-});
 q('#staffMailSaveBtn')?.addEventListener('click',async()=>{
   try{
     const r=await api('/web-api/admin/staff-emails',{
@@ -1355,6 +1348,47 @@ q('#staffMailSaveBtn')?.addEventListener('click',async()=>{
     await load();
     toast(`${r.updated||0} e-posta kaydedildi`);
   }catch(e){toast(e.message||'Kaydedilemedi')}
+});
+async function sendStaffResetLinksFallback(userId,all=false){
+  const d=await api('/web-api/admin/staff-emails');
+  const rows=(d.rows||[]).filter(r=>r&&r.email&&(all||String(r.id)===String(userId)));
+  if(!rows.length)throw new Error('Gönderilecek kayıtlı e-posta yok. Tabloda adresi kaydedin.');
+  let sent=0,lastErr='';
+  for(const row of rows){
+    try{
+      await api('/web-api/forgot-password',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username:row.username||row.email})
+      });
+      sent++;
+    }catch(x){lastErr=x.message||'mail gitmedi'}
+  }
+  if(!sent)throw new Error(lastErr||'Mail gönderilemedi. Ayarlar → E-posta: smtp.hostinger.com kaydedin.');
+  const msg=`${sent} kişiye şifre sıfırlama linki gitti. Maildeki “Şifreyi Sıfırla” ile yeni şifre belirlensin.`;
+  toast(msg);
+  if(q('#staffMailStatus'))q('#staffMailStatus').textContent=msg;
+  return sent;
+}
+async function sendStaffLoginMail(userId,all=false){
+  try{
+    const r=await api('/web-api/admin/staff-send-login',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(all?{all:true}:{userId})
+    });
+    toast(r.message||`${r.sent||0} şifre maili gönderildi`);
+    if(q('#staffMailStatus')&&r.message)q('#staffMailStatus').textContent=r.message;
+    return;
+  }catch(e){
+    const missing=e.status===404||/sunucuda yok|6\.3\.256|API bulunamadı|Cannot POST/i.test(String(e.message||''));
+    if(!missing){toast(e.message||'Şifre maili gönderilemedi');return}
+  }
+  try{
+    await sendStaffResetLinksFallback(userId,all);
+  }catch(e2){toast(e2.message||'Şifre maili gönderilemedi')}
+}
+q('#staffMailSendPassBtn')?.addEventListener('click',()=>{
+  if(!confirm('Kayıtlı e-postası olan tüm personele yeni panel şifresi mail ile gitsin mi?'))return;
+  sendStaffLoginMail('',true);
 });
 q('#userForm').onsubmit=async e=>{
   e.preventDefault();
@@ -5573,9 +5607,11 @@ async function purchaseCreateCategory(){
       try{renderCategoryOptions?.()}catch{}
       purchaseRefreshCategorySelects(cat.id);
       if(q('#purchaseExcelCategory'))q('#purchaseExcelCategory').value=cat.id;
+      // Yeni kategori ürün düzenleme listesinde de görünsün
+      try{await load?.()}catch{}
     }
     if(input)input.value='';
-    toast(`Kategori eklendi: ${cat?.name||name}`);
+    toast(`Kategori eklendi: ${cat?.name||name} — ürünlerde seçilebilir`);
   }catch(e){
     toast('Kategori eklenemedi: '+e.message);
   }finally{
@@ -5592,7 +5628,12 @@ function purchaseApplyDefaultCategoryToRows(){
     const row=(purchasePreviewData?.preview||[]).find(r=>purchaseRowKey(r)===key);
     if(row)row.categoryId=def;
   });
-  toast(n?`${n} yeni ürüne kategori uygulandı`:'Uygulanacak yeni ürün yok');
+  (purchasePreviewData?.preview||[]).forEach(r=>{
+    if(r.status==='will_create'||r.status==='unmatched'){
+      r.categoryId=def;n++;
+    }
+  });
+  toast(n?`${n} ürüne kategori uygulandı`:'Uygulanacak yeni ürün yok');
 }
 function purchaseIsIstikbal(){
   return /istikbal|doğtaş|dogtas/i.test(String(q('#purchaseExcelSupplier')?.value||''));
@@ -5687,41 +5728,112 @@ function purchaseSetMode(mode){
 }
 qa('[data-purchase-mode]').forEach(b=>b.addEventListener('click',()=>purchaseSetMode(b.dataset.purchaseMode)));
 
-function renderPurchasePreview(d){
-  purchasePreviewData=d;
-  const willCreate=Number(d.willCreate||d.unmatched||0);
-  const withCost=Number(d.withCost||0);
-  const stockRows=Number(d.matched||0)+willCreate;
+let purchaseSelectedInvoiceKey='';
+let purchaseExcelFilter='all'; // all | undefined
+
+function purchaseSelectedInvoiceKeys(){
+  return (purchasePreviewData?.invoices||[]).filter(inv=>inv.selected!==false&&inv.status!=='exists').map(inv=>inv.key);
+}
+function purchaseInvoiceKeyOfRow(r){
+  const no=String(r?.invoiceNo||'').trim();
+  if(!no)return '_NONE_';
+  return no.toLocaleUpperCase('tr-TR').replace(/[^0-9A-ZÇĞİÖŞÜ]/g,'')||'_NONE_';
+}
+function renderPurchaseInvoiceLines(inv){
+  const box=q('#purchaseInvoiceLinesTable');
+  const title=q('#purchaseSelectedInvoiceTitle');
+  if(title)title.textContent=inv?`${inv.invoiceNo||'-'} · ${inv.lineCount||0} kalem`:'Seçili fatura';
+  if(!box)return;
+  if(!inv){box.innerHTML='<tr><td colspan="6" class="muted">Soldan fatura seçin</td></tr>';return}
+  const label={matched:'Eşleşti',will_create:'Tanımsız',unmatched:'Tanımsız',invalid:'Hatalı'};
+  const lines=(purchasePreviewData?.preview||[])
+    .filter(r=>purchaseInvoiceKeyOfRow(r)===String(inv.key||'_NONE_'))
+    .slice(0,200);
+  box.innerHTML=lines.map(r=>{
+    const st=r.status==='unmatched'?'will_create':r.status;
+    const cls=st==='will_create'?'asist-undef':(st==='matched'?'asist-ready':'');
+    return `<tr class="${cls}">
+      <td>${purchaseEsc(label[st]||st)}</td>
+      <td><b>${purchaseEsc(r.itemCode||r.productCode||r.matchCode||'-')}</b></td>
+      <td>${purchaseEsc(r.productName||r.searchName||'-')}</td>
+      <td>${Number(r.quantity||0)}</td>
+      <td><b>${money(r.unitCost)}</b></td>
+      <td>%${Number(r.vatRate||20)}</td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="6" class="muted">${Number(inv.lineCount||0)} kalem · önizlemede ilk ${(purchasePreviewData?.preview||[]).length} satır</td></tr>`;
+}
+function renderPurchaseInvoicePick(){
+  const box=q('#purchaseInvoicePickTable');if(!box)return;
+  const invoices=purchasePreviewData?.invoices||[];
+  if(!purchaseSelectedInvoiceKey&&invoices.length){
+    const first=invoices.find(i=>i.status==='ready')||invoices[0];
+    purchaseSelectedInvoiceKey=first?.key||'';
+  }
+  box.innerHTML=invoices.map(inv=>{
+    const cls=inv.status==='exists'?'asist-exists':(inv.status==='ready'?'asist-ready':'');
+    const active=inv.key===purchaseSelectedInvoiceKey?'asist-active':'';
+    const disabled=inv.status==='exists'?'disabled':'';
+    const checked=inv.selected!==false&&inv.status!=='exists'?'checked':'';
+    return `<tr class="${cls} ${active}" data-asist-inv="${purchaseEsc(inv.key)}">
+      <td><input type="checkbox" data-asist-check="${purchaseEsc(inv.key)}" ${checked} ${disabled}/></td>
+      <td>${purchaseEsc(inv.statusLabel||inv.status)}</td>
+      <td><b>${purchaseEsc(inv.invoiceNo||'-')}</b></td>
+      <td>${purchaseEsc(inv.date||'-')}</td>
+      <td>${Number(inv.lineCount||0)}</td>
+      <td><b>${money(inv.total)}</b></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="6" class="muted">Fatura yok</td></tr>';
+  box.querySelectorAll('[data-asist-inv]').forEach(tr=>{
+    tr.addEventListener('click',e=>{
+      if(e.target?.matches?.('input[type=checkbox]'))return;
+      purchaseSelectedInvoiceKey=tr.dataset.asistInv||'';
+      const inv=(purchasePreviewData?.invoices||[]).find(x=>x.key===purchaseSelectedInvoiceKey);
+      renderPurchaseInvoicePick();
+      renderPurchaseInvoiceLines(inv);
+    });
+  });
+  box.querySelectorAll('[data-asist-check]').forEach(cb=>{
+    cb.addEventListener('change',()=>{
+      const inv=(purchasePreviewData?.invoices||[]).find(x=>x.key===cb.dataset.asistCheck);
+      if(inv&&inv.status!=='exists')inv.selected=cb.checked;
+    });
+  });
+  const selected=(purchasePreviewData?.invoices||[]).find(x=>x.key===purchaseSelectedInvoiceKey);
+  renderPurchaseInvoiceLines(selected);
+}
+function renderPurchaseExcelRows(){
+  const d=purchasePreviewData;if(!d)return;
+  if(Array.isArray(d.categories)&&d.categories.length){
+    purchaseFillCategories(d.categories);
+  }
   const furniture=Boolean(d.furniture||purchaseIsIstikbal());
   const defCat=String(q('#purchaseExcelCategory')?.value||d.autoCategoryId||'').trim();
-  q('#purchaseExcelSummary').innerHTML=
-    `<article><b>${d.total||0}</b><span>Toplam Satır</span></article>
-     <article class="good"><b>${d.matched||0}</b><span>Eşleşen kod (kart yok)</span></article>
-     <article class="warn"><b>${willCreate}</b><span>Yeni ürün kodu</span></article>
-     <article class="bad"><b>${d.invalid||0}</b><span>Hatalı</span></article>`;
-  const rows=d.preview||[];
-  const label={matched:'Eşleşti',will_create:'Yeni eklenecek',unmatched:'Yeni eklenecek',invalid:'Hatalı'};
-  q('#purchasePreviewTable').innerHTML=rows.map(r=>{
+  let rows=d.preview||[];
+  if(purchaseExcelFilter==='undefined')rows=rows.filter(r=>r.status==='will_create'||r.status==='unmatched');
+  const label={matched:'Eşleşti',will_create:'Tanımsız',unmatched:'Tanımsız',invalid:'Hatalı'};
+  const limit=Math.min(rows.length,350);
+  q('#purchasePreviewTable').innerHTML=rows.slice(0,limit).map(r=>{
     const st=r.status==='unmatched'?'will_create':r.status;
-    const why=r.reason?`<small class="warn-text">${purchaseEsc(r.reason)}</small>`:'';
     const key=purchaseRowKey(r);
-    const selected=String(r.categoryId||defCat||'').trim();
+    const selected=String(r.categoryId||r.suggestedCategoryId||defCat||'').trim();
     if(st==='will_create'&&selected)r.categoryId=selected;
+    const sugHint=r.suggestedCategoryName
+      ?`<small class="muted">Tahmin: ${purchaseEsc(r.suggestedCategoryName)}${r.suggestConfidence?` · %${Math.round(Number(r.suggestConfidence)*100)}`:''}</small>`
+      :'';
     const catCell=st==='will_create'
-      ?(furniture
-        ?`<span class="muted">${purchaseEsc(r.categoryName||d.autoCategoryName||'Mobilya')} · KDV %10</span>`
-        :`<select class="purchase-row-cat" data-purchase-row-cat="${purchaseEsc(key)}">${purchaseCategoryOptionsHtml(selected)}</select>`)
-      :(st==='matched'?`<span class="muted">${purchaseEsc(r.categoryName||'—')}${furniture?' · KDV %10':''}</span>`:'—');
-    const codeLine=[r.itemCode||r.productCode||r.matchCode,r.matchCode&&r.productCode&&r.matchCode!==r.productCode?`sistem: ${r.matchCode}`:''].filter(Boolean).join(' · ');
-    return `<tr class="dynamics-preview-row ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">
-    <td><span class="dynamics-status ${st==='matched'?'existing':st==='will_create'?'new':'invalid'}">${label[st]||st}</span>${why}</td>
-    <td><b>${purchaseEsc(r.productName||r.searchName||r.productCode||r.itemCode||'-')}</b><small>${purchaseEsc(codeLine||'')}</small></td>
-    <td>${catCell}</td>
-    <td>${Number(r.quantity||0)}</td>
-    <td><b>${money(r.unitCost)}</b></td>
-    <td>${st==='matched'?money(r.currentPurchasePrice):'—'}</td>
-    <td>${purchaseEsc(r.invoiceNo||'-')}<small>${purchaseEsc(r.date||'')}</small></td>
-  </tr>`;
+      ?`<div class="purchase-cat-cell"><select class="purchase-row-cat" data-purchase-row-cat="${purchaseEsc(key)}">${purchaseCategoryOptionsHtml(selected)}</select>${sugHint}</div>`
+      :`${purchaseEsc(r.categoryName||'—')}${furniture?' · KDV %10':''}`;
+    const cls=st==='will_create'?'asist-undef':(st==='matched'?'':'');
+    return `<tr class="${cls}">
+      <td>${purchaseEsc(label[st]||st)}</td>
+      <td><b>${purchaseEsc(r.itemCode||r.productCode||r.matchCode||'-')}</b></td>
+      <td>${purchaseEsc(r.productName||r.searchName||'-')}</td>
+      <td>${Number(r.quantity||0)}</td>
+      <td><b>${money(r.unitCost)}</b></td>
+      <td>%${Number(r.vatRate||20)}</td>
+      <td>${purchaseEsc(r.invoiceNo||'-')}</td>
+      <td>${catCell}</td>
+    </tr>`;
   }).join('');
   qa('#purchasePreviewTable select[data-purchase-row-cat]').forEach(sel=>{
     sel.addEventListener('change',()=>{
@@ -5730,16 +5842,40 @@ function renderPurchasePreview(d){
       if(row)row.categoryId=String(sel.value||'');
     });
   });
-  q('#purchasePreviewEmpty').style.display=rows.length?'none':'block';
+  const empty=q('#purchasePreviewEmpty');
+  if(empty)empty.classList.toggle('hidden',rows.length>0);
+}
+function renderPurchasePreview(d){
+  purchasePreviewData=d;
+  purchaseSelectedInvoiceKey='';
+  purchaseExcelFilter='all';
+  const willCreate=Number(d.willCreate||d.unmatched||0);
+  const withCost=Number(d.withCost||0);
+  const stockRows=Number(d.matched||0)+willCreate;
+  q('#purchaseExcelSummary').innerHTML=
+    `<article><b>${d.total||0}</b><span>Toplam Satır</span></article>
+     <article class="good"><b>${d.matched||0}</b><span>Eşleşen ürün</span></article>
+     <article class="warn"><b>${willCreate}</b><span>Tanımsız kart</span></article>
+     <article class="bad"><b>${(d.invoices||[]).filter(i=>i.status==='exists').length}</b><span>Kayıtlı fatura</span></article>`;
+  q('#purchaseAsistBoard')?.classList.remove('hidden');
+  q('#purchasePreviewEmptyIdle')?.classList.add('hidden');
+  renderPurchaseInvoicePick();
+  renderPurchaseExcelRows();
+  const canGo=stockRows>0||withCost>0||(d.invoices||[]).some(i=>i.status==='ready');
   q('#purchaseCostBtn')&&(q('#purchaseCostBtn').disabled=!withCost);
   q('#purchaseStockBtn')&&(q('#purchaseStockBtn').disabled=!stockRows);
+  q('#purchaseBothBtn')&&(q('#purchaseBothBtn').disabled=!canGo);
+  try{q('#purchaseAsistBoard')?.scrollIntoView({behavior:'smooth',block:'start'})}catch(_){}
 }
 q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
   const status=q('#purchaseExcelStatus');
+  const btn=q('#purchasePreviewBtn');
   const file=q('#purchaseExcelFile')?.files?.[0];
   if(!file){toast('Önce CSV veya Excel seçin');return}
   try{
-    status.textContent='CSV / Excel okunuyor…';status.className='form-status';
+    if(btn)btn.disabled=true;
+    const mb=(file.size/1024/1024).toFixed(1).replace('.',',');
+    status.textContent=`Önizleniyor… ${file.name} (${mb} MB) — kayıtlar geliyor`;status.className='form-status';
     const fd=new FormData();fd.append('file',file);
     fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'');
     const d=await api('/web-api/admin/purchase-invoice-preview',{method:'POST',body:fd});
@@ -5747,18 +5883,44 @@ q('#purchasePreviewBtn')?.addEventListener('click',async()=>{
     renderPurchasePreview(d);
     const will=Number(d.willCreate||d.unmatched||0);
     const withCost=Number(d.withCost||0);
+    const invCount=(d.invoices||[]).length;
+    const ready=(d.invoices||[]).filter(i=>i.status==='ready').length;
     if(d.suggestedInvoiceNo&&q('#purchaseExcelInvoiceNo')&&!q('#purchaseExcelInvoiceNo').value){
       q('#purchaseExcelInvoiceNo').value=d.suggestedInvoiceNo;
       q('#purchaseExcelInvoiceNo').placeholder=d.suggestedInvoiceNo;
     }
-    status.textContent=`${d.total} satır · ${withCost} maliyetli · ${will} yeni kod · ${d.matched||0} eşleşen kod`;
+    status.textContent=`Önizleme hazır · ${d.total} satır · ${invCount} fatura (${ready} uygun) · ${will} tanımsız · ${d.matched||0} eşleşen`;
     if(d.furniture)status.textContent+=` · Mobilya · KDV %10`;
-    if(!d.hasInvoiceNo)status.textContent+=` · sanal fatura: ${d.suggestedInvoiceNo||q('#purchaseExcelInvoiceNo')?.value||'otomatik'}`;
-    if(d.truncated)status.textContent+=` · listede ilk 800, aktarımın tamamı ${d.total} satır`;
+    if(d.ms!=null)status.textContent+=` · ${d.ms} ms`;
+    if(!d.hasInvoiceNo)status.textContent+=` · sanal: ${d.suggestedInvoiceNo||q('#purchaseExcelInvoiceNo')?.value||'otomatik'}`;
+    if(d.truncated)status.textContent+=` · tabloda ilk ${(d.preview||[]).length}, aktarımın tamamı ${d.total}`;
+    status.textContent+=` · şimdi “Fatura Ve Stok Aktarım Başlat”`;
     status.className='form-status success';
+    toast(`${d.total} kayıt önizlendi`);
   }catch(e){
-    status.textContent=e.message;status.className='form-status error';
+    const msg=String(e.message||'');
+    status.textContent=/uzun sürdü|502|504|524|Failed to fetch|NetworkError|timeout/i.test(msg)
+      ?'Önizleme zaman aşımı — dosya çok büyük. Sayfayı Ctrl+F5 ile yenileyip tekrar Önizle. Hâlâ olursa CSV’yi bölerek (ör. 2–3 bin satır) deneyin.'
+      :msg;
+    status.className='form-status error';
+  }finally{
+    if(btn)btn.disabled=false;
   }
+});
+q('#purchaseSelectReadyBtn')?.addEventListener('click',()=>{
+  (purchasePreviewData?.invoices||[]).forEach(inv=>{
+    inv.selected=inv.status==='ready';
+  });
+  renderPurchaseInvoicePick();
+  toast('Aktarıma uygun faturalar seçildi');
+});
+q('#purchaseShowUndefinedBtn')?.addEventListener('click',()=>{
+  purchaseExcelFilter='undefined';
+  renderPurchaseExcelRows();
+});
+q('#purchaseShowAllRowsBtn')?.addEventListener('click',()=>{
+  purchaseExcelFilter='all';
+  renderPurchaseExcelRows();
 });
 async function runPurchaseImport(mode){
   const status=q('#purchaseExcelStatus');
@@ -5768,8 +5930,8 @@ async function runPurchaseImport(mode){
   const matched=Number(purchasePreviewData?.matched||0);
   const withCost=Number(purchasePreviewData?.withCost||0);
   if(mode==='cost'&&!withCost){toast('Maliyet okunamadı — Excel’de “Maliyet tutarı” kolonunu kontrol edin');return}
-  if(mode==='stock'&&!(matched+will)){toast('Aktarılacak satır yok — önce Önizle');return}
-  if(mode==='stock'&&!q('#purchaseExcelWarehouse')?.value){
+  if((mode==='stock'||mode==='both')&&!(matched+will)){toast('Aktarılacak satır yok — önce Önizle');return}
+  if((mode==='stock'||mode==='both')&&!q('#purchaseExcelWarehouse')?.value){
     toast('Stok için depo seçin — yukarıdaki depo kartına tıklayın');
     q('#purchaseExcelWarehouseBox')?.scrollIntoView({behavior:'smooth',block:'center'});
     q('#purchaseExcelWarehouseBox')?.classList.add('need-stock');
@@ -5780,12 +5942,10 @@ async function runPurchaseImport(mode){
   if(will>0&&!purchaseIsIstikbal()&&!(purchasePreviewData?.furniture)){
     const miss=purchaseMissingCategoryCount();
     if(miss>0&&!categoryId){
-      toast(`${miss} yeni ürünün kategorisi eksik — satırdan seç veya üstten uygula`);
-      const emptySel=[...qa('#purchasePreviewTable select[data-purchase-row-cat]')].find(s=>!String(s.value||'').trim());
-      emptySel?.focus();
+      toast(`${miss} yeni ürünün kategorisi eksik — üstten kategori seçin`);
+      q('#purchaseExcelCategory')?.focus();
       return;
     }
-    // Varsayılan varsa boş satırlara yaz
     if(categoryId){
       qa('#purchasePreviewTable select[data-purchase-row-cat]').forEach(sel=>{
         if(!String(sel.value||'').trim()){
@@ -5793,6 +5953,13 @@ async function runPurchaseImport(mode){
           const key=sel.dataset.purchaseRowCat;
           const row=(purchasePreviewData?.preview||[]).find(r=>purchaseRowKey(r)===key);
           if(row)row.categoryId=categoryId;
+          if(key)categoryMap[key]=categoryId;
+        }
+      });
+      (purchasePreviewData?.preview||[]).forEach(r=>{
+        if((r.status==='will_create'||r.status==='unmatched')&&!r.categoryId){
+          r.categoryId=categoryId;
+          const key=purchaseRowKey(r);
           if(key)categoryMap[key]=categoryId;
         }
       });
@@ -5806,39 +5973,83 @@ async function runPurchaseImport(mode){
       }
     });
   }
-  const label=mode==='stock'?'Sadece stok':mode==='cost'?'Sadece maliyet':'Aktarım';
-  if(!confirm(`${label} aktarılsın mı?\n${matched} eşleşen · ${will} yeni${mode==='cost'?` · ${withCost} maliyetli`:''}${will>0?`\nKategori: satır satır (${Object.keys(categoryMap).length} seçili)`:''}\nSonra Geri Al ile silebilirsin.`))return;
+  const selectedKeys=purchaseSelectedInvoiceKeys();
+  const readyCount=(purchasePreviewData?.invoices||[]).filter(i=>i.status==='ready').length;
+  if((mode==='both'||mode==='stock'||mode==='cost')&&readyCount&&!selectedKeys.length){
+    toast('Aktarılacak fatura seçin (yeşil satırlar)');
+    return;
+  }
+  const label=mode==='stock'?'Sadece stok':mode==='cost'?'Sadece maliyet':'Fatura ve stok';
+  const invLabel=selectedKeys.length?`${selectedKeys.length} fatura`:'tüm satırlar';
+  const totalHint=Number(purchasePreviewData?.total||matched+will||0);
+  if(!confirm(`${label} aktarılsın mı?\n${invLabel} · ${matched} eşleşen · ${will} tanımsız kart${mode!=='stock'?` · ${withCost} maliyetli`:''}${totalHint>250?`\nAkıllı aktarım: ${totalHint} satır parçalar halinde`:''}\nSonra Geri Al ile silebilirsin.`))return;
   try{
     status.textContent='Aktarılıyor…';status.className='form-status';
-    const fd=new FormData();
-    fd.append('file',file);
-    fd.append('mode',mode);
-    fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'Arçelik A.Ş.');
-    fd.append('warehouseId',q('#purchaseExcelWarehouse')?.value||'');
-    fd.append('categoryId',categoryId);
-    fd.append('categoryMap',JSON.stringify(categoryMap));
-    fd.append('pricesIncludeVat',q('#purchaseExcelIncVat')?.checked?'1':'0');
-    fd.append('invoiceNo',q('#purchaseExcelInvoiceNo')?.value||'');
-    const d=await api('/web-api/admin/purchase-invoice-import',{method:'POST',body:fd});
-    status.textContent=mode==='stock'
-      ?`Stok tamam · fatura ${d.invoice.invoiceNo||'-'}${d.invoice.virtualInvoice?' (sanal)':''} · ${d.invoice.stockUpdated||0} stok · ${d.invoice.created||0} yeni`
-      :`Maliyet tamam · fatura ${d.invoice.invoiceNo||'-'}${d.invoice.virtualInvoice?' (sanal)':''} · ${d.invoice.priceUpdated||0} alış · ${d.invoice.created||0} yeni · ${money(d.invoice.total)}`;
+    const invoiceNoFixed=String(q('#purchaseExcelInvoiceNo')?.value||purchasePreviewData?.suggestedInvoiceNo||'').trim();
+    const useChunks=totalHint>200;
+    const CHUNK=220;
+    let offset=0;
+    let agg={invoiceCount:0,stockUpdated:0,priceUpdated:0,created:0,total:0,itemCount:0,virtualInvoice:false,invoiceNos:[]};
+    let last=null;
+    do{
+      const fd=new FormData();
+      fd.append('file',file);
+      fd.append('mode',mode);
+      fd.append('supplierName',q('#purchaseExcelSupplier')?.value||'Arçelik A.Ş.');
+      fd.append('warehouseId',q('#purchaseExcelWarehouse')?.value||'');
+      fd.append('categoryId',categoryId);
+      fd.append('categoryMap',JSON.stringify(categoryMap));
+      fd.append('pricesIncludeVat',q('#purchaseExcelIncVat')?.checked?'1':'0');
+      fd.append('invoiceNo',invoiceNoFixed);
+      if(selectedKeys.length)fd.append('selectedInvoiceNos',JSON.stringify(selectedKeys));
+      if(useChunks){
+        fd.append('chunkOffset',String(offset));
+        fd.append('chunkLimit',String(CHUNK));
+      }
+      if(useChunks)status.textContent=`Aktarılıyor… ${Math.min(offset+CHUNK,totalHint)} / ${totalHint}`;
+      last=await api('/web-api/admin/purchase-invoice-import',{method:'POST',body:fd});
+      const inv=last.invoice||{};
+      agg.invoiceCount+=Number(last.invoiceCount||0);
+      agg.stockUpdated+=Number(inv.stockUpdated||0);
+      agg.priceUpdated+=Number(inv.priceUpdated||0);
+      agg.created+=Number(inv.created||0);
+      agg.total+=Number(inv.total||0);
+      agg.itemCount+=Number(inv.itemCount||0);
+      if(inv.virtualInvoice)agg.virtualInvoice=true;
+      if(inv.invoiceNo)agg.invoiceNos.push(inv.invoiceNo);
+      if(!useChunks||!last.chunk||last.chunk.done)break;
+      offset=Number(last.chunk.nextOffset||offset+CHUNK);
+      if(!(offset>0)||offset>=Number(last.chunk.total||totalHint))break;
+    }while(true);
+    status.textContent=mode==='both'
+      ?`Fatura+stok tamam · ${agg.itemCount} kalem · ${agg.stockUpdated} stok · ${agg.priceUpdated} maliyet · ${agg.created} yeni kart · ${money(agg.total)}`
+      :(mode==='stock'
+        ?`Stok tamam · ${agg.itemCount} kalem · ${agg.stockUpdated} stok · ${agg.created} yeni`
+        :`Maliyet tamam · ${agg.itemCount} kalem · ${agg.priceUpdated} alış · ${agg.created} yeni · ${money(agg.total)}`);
     status.className='form-status success';
     toast(label+' aktarıldı');
-    if(mode==='stock'){
+    if(mode==='stock'||mode==='both'){
       const wh=q('#purchaseExcelWarehouse')?.value||'';
       if(wh){try{localStorage.setItem(PURCHASE_WH_LS_KEY,wh)}catch{}}
     }
     purchasePreviewData=null;
+    q('#purchaseAsistBoard')?.classList.add('hidden');
+    q('#purchasePreviewEmptyIdle')?.classList.remove('hidden');
     q('#purchaseCostBtn')&&(q('#purchaseCostBtn').disabled=true);
     q('#purchaseStockBtn')&&(q('#purchaseStockBtn').disabled=true);
+    q('#purchaseBothBtn')&&(q('#purchaseBothBtn').disabled=true);
     await loadPurchaseInvoices();
   }catch(e){
-    status.textContent=e.message;status.className='form-status error';
+    const msg=String(e.message||'');
+    status.textContent=/uzun sürdü|502|504|524/i.test(msg)
+      ?'Aktarım parçası zaman aşımına uğradı. Tekrar “Fatura Ve Stok Aktarım Başlat” — aynı kodlar ikinci kez kart açmaz, kaldığı yerden devam eder.'
+      :msg;
+    status.className='form-status error';
   }
 }
 q('#purchaseCostBtn')?.addEventListener('click',()=>runPurchaseImport('cost'));
 q('#purchaseStockBtn')?.addEventListener('click',()=>runPurchaseImport('stock'));
+q('#purchaseBothBtn')?.addEventListener('click',()=>runPurchaseImport('both'));
 q('#purchaseExcelSupplier')?.addEventListener('change',()=>{
   purchaseSuggestCategory();
   purchaseSuggestWarehouse();

@@ -36,6 +36,7 @@ const appMail = require('./lib/mail');
 const passwordReset = require('./lib/password-reset');
 const staffEmail = require('./lib/staff-email');
 const purchaseCsv = require('./lib/purchase-csv');
+const istikbalCategory = require('./lib/istikbal-category');
 
 const app = express();
 const ROOT = __dirname;
@@ -182,9 +183,10 @@ function resolveVatRate(p={}){
   // Yazar kasa / X30 TR → %10
   if(cat==='yazar-kasa' || cat==='yazarkasa') return 10;
   if(/\bx30\s*tr\b/.test(text) || compact.includes('x30tr') || /yazar\s*kasa/.test(text) || compact.includes('yazarkasa')) return 10;
-  // İstikbal mobilya → %10
-  if(cat==='mobilya') return 10;
+  // İstikbal mobilya / alt kategoriler → %10
+  if(cat==='mobilya'||cat.startsWith('istikbal-')) return 10;
   if(brand.includes('istikbal')) return 10;
+  if((p.tags||[]).map(t=>String(t).toLocaleLowerCase('tr-TR')).includes('mobilya')) return 10;
   // Beyaz eşya ve diğer tüm ürünler → %20
   return 20;
 }
@@ -360,15 +362,16 @@ function ensureStore(store) {
   ensureCat('yazar-kasa','Yazar Kasa',90);
   ensureCat('mobilya','Mobilya',50);
   ensureCat('beyaz-esya','Beyaz Eşya',10);
+  try{istikbalCategory.ensureFurnitureCategories(store)}catch(_){}
   if(!(store.brands||[]).some(b=>/istikbal/i.test(b.name||''))){
     store.brands.push({id:'istikbal',name:'İstikbal',active:true,sort:(store.brands||[]).length,logo:''});
   }
-  store.categories = store.categories.map((c,i)=>({ id:c.id||slug(c.name)||crypto.randomUUID(), name:c.name||'Kategori', active:c.active!==false, sort:Number(c.sort??i), description:c.description||'' }));
+  store.categories = store.categories.map((c,i)=>({ id:c.id||slug(c.name)||crypto.randomUUID(), name:c.name||'Kategori', active:c.active!==false, sort:Number(c.sort??i), description:c.description||'', tags:Array.isArray(c.tags)?c.tags:[] }));
   store.brands = collapseDuplicateBrands(store.brands);
-  // İstikbal ürünleri yanlışlıkla "Diğer"de kaldıysa → Mobilya
+  // İstikbal: kategori boş/Diğer ise Mobilya’ya al — alt kategori (Yatak Odası vb.) korunur
   const mobilyaCat=(store.categories||[]).find(c=>c.id==='mobilya'||String(c.name||'').toLocaleLowerCase('tr-TR')==='mobilya');
   const mobilyaId=mobilyaCat?.id||'mobilya';
-  if(!mobilyaCat)store.categories.push({id:'mobilya',name:'Mobilya',active:true,sort:50,description:''});
+  if(!mobilyaCat)store.categories.push({id:'mobilya',name:'Mobilya',active:true,sort:50,description:'',tags:['istikbal','mobilya','furniture']});
   let istikbalFixed=0;
   store.products = store.products.map(p=>{
     const row={
@@ -379,10 +382,15 @@ function ensureStore(store) {
     const brand=String(row.brand||'').toLocaleLowerCase('tr-TR');
     const tags=(row.tags||[]).map(t=>String(t).toLocaleLowerCase('tr-TR'));
     const isIstikbal=/istikbal/.test(brand)||tags.includes('istikbal');
-    if(isIstikbal&&row.category!==mobilyaId){
-      row.category=mobilyaId;
+    if(isIstikbal){
       row.vatRate=10;
-      istikbalFixed++;
+      const cat=String(row.category||'').trim();
+      const catLow=cat.toLocaleLowerCase('tr-TR');
+      const keep=cat&&catLow!=='diger'&&catLow!=='diğer'&&catLow!=='other';
+      if(!keep){
+        row.category=mobilyaId;
+        istikbalFixed++;
+      }
     }
     row.vatRate=resolveVatRate(row);
     return row;
@@ -480,6 +488,37 @@ function recoverStoreFile(){
   }
   return storeFileSize(STORE_PATH)>=200;
 }
+/** Canlı store çok küçüldüyse (müşteri kaybı) en büyük yedeği geri al — kod değişmez. */
+function recoverIfLiveIsTiny(){
+  const live=storeFileSize(STORE_PATH);
+  const src=bestExistingStorePath();
+  if(!src)return false;
+  let srcSize=0;
+  try{srcSize=fs.statSync(src).size}catch(_){return false}
+  // 5MB+ yedek var, canlı < %40 ve < 3MB → felaket (boş/yeni store)
+  // Ürün silindikten sonra müşteriler duruyorsa GERİ YÜKLEME (ürünler geri gelmesin)
+  if(!(srcSize>=5*1024*1024 && live>=0 && live<3*1024*1024 && live<srcSize*0.4))return false;
+  try{
+    const liveObj=JSON.parse(fs.readFileSync(STORE_PATH,'utf8'));
+    const liveCust=Array.isArray(liveObj.customers)?liveObj.customers.length:0;
+    if(liveCust>=500){
+      console.warn('[store] tiny skip — live has',liveCust,'customers; not replacing with larger backup');
+      return false;
+    }
+  }catch(_){}
+  if(path.resolve(src)===path.resolve(STORE_PATH))return false;
+  try{
+    const bak=`${STORE_PATH}.bak-tiny-${new Date().toISOString().replace(/[:.]/g,'-')}`;
+    if(live>=200)fs.copyFileSync(STORE_PATH,bak);
+    fs.copyFileSync(src,STORE_PATH);
+    console.warn('[store] live tiny',live,'restored from',src,'size',srcSize);
+    storeMem=null;storeMemMtime=-1;
+    return true;
+  }catch(e){
+    console.error('[store] tiny-restore fail',e.message||e);
+    return false;
+  }
+}
 let storeMem=null;
 let storeMemMtime=-1;
 function storeFileMtime(){
@@ -570,7 +609,9 @@ function normalizeNumber(value){
   let raw=String(value).trim()
     .replace(/[\u200b\u200c\u200d\ufeff]/g,'')
     .replace(/\s/g,'')
-    .replace(/[₺]/g,'')
+    .replace(/[₺€£¥]/g,'')
+    .replace(/\uFFFD/g,'') // bozuk ₺ (CSV'de ? veya �)
+    .replace(/^[^\d\-(]+/,'') // baştaki para birimi / çöp
     .replace(/(TRY|TL|USD|EUR|\$)/gi,'');
   if(!raw) return 0;
   // Muhasebe negatif: (1.234,56)
@@ -595,6 +636,18 @@ function normalizeNumber(value){
   }
   const n=Number(raw.replace(',','.'));
   return (Number.isFinite(n)?n:0)*(neg?-1:1);
+}
+/** SAP/İstikbal stok miktarı: 2,000 → 2 (ondalık), US binlik 2,000 ile karışmasın diye kısa sol taraf */
+function normalizeSapQty(value){
+  if(value===null||value===undefined||value==='')return 0;
+  if(typeof value==='number')return Number.isFinite(value)?value:0;
+  const raw=String(value).trim().replace(/\s/g,'');
+  // 2,000 / 12,500 → SAP ondalık (TR)
+  if(/^\d{1,6},\d{3}$/.test(raw)&&!raw.includes('.')){
+    const n=Number(raw.replace(',','.'));
+    return Number.isFinite(n)?n:0;
+  }
+  return normalizeNumber(value);
 }
 function slug(input){ return String(input||'').toLocaleLowerCase('tr-TR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
 function calculateSalePrice(p){ const base=Number(p.bekoPrice||0),v=Number(p.priceValue||0); if(p.priceMode==='percent_down')return Math.max(0,Math.round(base*(1-v/100))); if(p.priceMode==='percent_up')return Math.max(0,Math.round(base*(1+v/100))); if(p.priceMode==='fixed_down')return Math.max(0,Math.round(base-v)); if(p.priceMode==='fixed_up')return Math.max(0,Math.round(base+v)); if(p.priceMode==='manual')return Math.max(0,Math.round(v||p.salePrice||base)); return Math.max(0,Math.round(base)); }
@@ -700,9 +753,9 @@ const PERMISSION_CATALOG=[
   {id:'sale_deduct_stock',name:'Satışta stok düş',group:'Satış işlemleri'},
   {id:'products_view',name:'Ürün görüntüle',group:'Ürün & Stok'},
   {id:'products_manage',name:'Ürün yönet',group:'Ürün & Stok'},
-  {id:'stock_view',name:'Stok görüntüle',group:'Ürün & Stok'},
+  {id:'stock_view',name:'Stok bak (personel listesi)',group:'Ürün & Stok'},
   {id:'stock_manage',name:'Stok yönet',group:'Ürün & Stok'},
-  {id:'screen_stock_in',name:'Stok girişi (fatura no ile)',group:'Ürün & Stok'},
+  {id:'screen_stock_in',name:'Stok girişi (ayrı ekran)',group:'Ürün & Stok'},
   {id:'customers_manage',name:'Müşteri kartı düzenle',group:'Finans işlemleri'},
   {id:'finance_view',name:'Finans verisi görüntüle',group:'Finans işlemleri'},
   {id:'finance_manage',name:'Finans yönet (tahsilat/masraf)',group:'Finans işlemleri'},
@@ -786,6 +839,13 @@ function staffCanDeductStock(req){
 }
 function hashPassword(password,salt=crypto.randomBytes(16).toString('hex')){
   return`${salt}:${crypto.scryptSync(String(password),salt,64).toString('hex')}`;
+}
+function generateStaffPassword(){
+  const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const buf=crypto.randomBytes(10);
+  let out='';
+  for(const b of buf)out+=alphabet[b%alphabet.length];
+  return out;
 }
 function verifyPassword(password,stored){
   const [salt,hash]=String(stored||'').split(':');
@@ -1982,23 +2042,25 @@ app.use('/uploads',express.static(path.join(ROOT,'public','uploads'),{
   }
 }));
 app.get('/health',(req,res)=>{
-  let productCount=-1,brandCount=-1,categoryCount=-1;
+  let productCount=-1,brandCount=-1,categoryCount=-1,customerCount=-1;
   try{
     const s=readStore();
     productCount=(s.products||[]).length;
     brandCount=(s.brands||[]).length;
     categoryCount=(s.categories||[]).length;
+    customerCount=(s.customers||[]).length;
   }catch(_){}
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.251-istikbal-kod',
-    build:'fix-v251',
+    version:'6.3.258-staff-mail',
+    build:'fix-v261',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
     brandCount,
     categoryCount,
+    customerCount,
     backup:autoBackup.status(),
     mfa:mfaEnabled(),
     mfaTrustHours:Math.round(mfaTrustMs()/3600000),
@@ -2198,10 +2260,10 @@ app.post('/web-api/admin/staff-emails',requirePermission('users_manage'),(req,re
     const s=readStore(),x=req.body||{};
     const result=staffEmail.applyAssignments(s,{
       domain:x.domain,
-      fillMissing:x.fillMissing===true,
+      fillMissing:false,
       items:x.items
     });
-    audit(s,'Personel e-posta güncellendi',result.domain,{updated:result.updated,fillMissing:x.fillMissing===true});
+    audit(s,'Personel e-posta güncellendi',result.domain,{updated:result.updated,fillMissing:false});
     writeStore(s);
     const users=(s.users||[]).filter(u=>u.active!==false);
     res.json({
@@ -2215,11 +2277,57 @@ app.post('/web-api/admin/staff-emails',requirePermission('users_manage'),(req,re
   }
 });
 
+app.post('/web-api/admin/staff-send-login',requirePermission('users_manage'),async(req,res)=>{
+  const s=readStore();
+  if(!smtpConfig(s).enabled){
+    return res.status(400).json({error:'E-posta (SMTP) kapalı. Ayarlar → E-posta’dan kaydedin, sonra tekrar deneyin.'});
+  }
+  const all=req.body?.all===true;
+  const id=String(req.body?.userId||'').trim();
+  const users=(s.users||[]).filter(u=>u&&u.active!==false&&(all||String(u.id)===id));
+  if(!users.length)return res.status(404).json({error:'Kullanıcı bulunamadı'});
+  const origin=appMail.panelOrigin(req,process.env);
+  const loginUrl=`${origin}/personel`;
+  let sent=0,skipped=0;
+  const errors=[];
+  for(const user of users){
+    const email=String(user.email||'').trim();
+    if(!email){skipped++;continue}
+    const password=generateStaffPassword();
+    const name=String(user.name||user.username||'').replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));
+    try{
+      await sendAppMail(s,{
+        to:email,
+        subject:'ATAK · Personel giriş şifresi',
+        text:`Merhaba ${user.name||user.username},\n\nPersonel paneli: ${loginUrl}\nKullanıcı adı: ${user.username||''}\nŞifre: ${password}\n\nBu mail kutunuza düştüyse giriş yapabilirsiniz.\n`,
+        html:`<p>Merhaba <b>${name}</b>,</p>
+          <p>Personel girişi: <a href="${loginUrl}">${loginUrl}</a></p>
+          <p>Kullanıcı adı: <b>${String(user.username||'')}</b><br>Şifre: <b>${password}</b></p>
+          <p style="color:#666;font-size:12px">Bu şifre yeni üretildi. Eski şifre geçersiz olur.</p>`
+      });
+      user.passwordHash=hashPassword(password);
+      user.updatedAt=new Date().toISOString();
+      const st=(s.staff||[]).find(x=>String(x.userId)===String(user.id)||String(x.username||'').toLocaleLowerCase('tr-TR')===String(user.username||'').toLocaleLowerCase('tr-TR'));
+      if(st){st.passwordHash=user.passwordHash;st.email=email}
+      sent++;
+    }catch(e){
+      errors.push(`${user.username||user.name}: ${e.message||'mail gitmedi'}`);
+    }
+  }
+  audit(s,'Personel şifre maili',all?'toplu':(users[0]?.username||''),{sent,skipped,errors});
+  writeStore(s);
+  if(!sent&&errors.length)return res.status(400).json({error:errors[0]});
+  const parts=[`${sent} kişiye şifre maili gitti`];
+  if(skipped)parts.push(`${skipped} kişide e-posta yok (atlandı)`);
+  if(errors.length)parts.push(`hata: ${errors.join('; ')}`);
+  res.json({ok:true,sent,skipped,errors,message:parts.join(' · ')});
+});
+
 app.get('/web-api/admin/mail-settings',requirePermission('settings_manage'),(req,res)=>{
   const s=readStore(),cfg=smtpConfig(s),raw=s.settings.smtp||{};
   res.json({settings:{
     enabled:cfg.enabled,
-    host:raw.host||'smtp.gmail.com',
+    host:raw.host||'smtp.hostinger.com',
     port:Number(raw.port||587)||587,
     secure:raw.secure===true||Number(raw.port||0)===465,
     user:raw.user||'',
@@ -2239,7 +2347,7 @@ app.post('/web-api/admin/mail-settings',requirePermission('settings_manage'),(re
   const hasCreds=Boolean(user&&pass);
   s.settings.smtp={
     enabled:x.enabled===false?false:(x.enabled===true||hasCreds),
-    host:String(x.host||'smtp.gmail.com').trim()||'smtp.gmail.com',
+    host:String(x.host||'smtp.hostinger.com').trim()||'smtp.hostinger.com',
     port,
     secure:x.secure===true||port===465,
     user,
@@ -3139,7 +3247,7 @@ app.get('/web-api/admin/stock-center',requireAdminOrStaffAny('stock_manage','sto
       items:(r.items||[]).map(i=>({productCode:i.productCode,productName:i.productName,quantity:i.quantity,unitCost:i.unitCost,newPurchasePrice:i.newPurchasePrice}))
     };
   }):[];
-  res.json({warehouses:s.warehouses,products,stocks,movements:s.stockMovements.slice(0,500),receipts,canReceive,canManage});
+  res.json({warehouses:s.warehouses,products,stocks,movements:s.stockMovements.slice(0,500),receipts,canReceive,canManage,categories:(s.categories||[]).filter(c=>c.active!==false).map(c=>({id:c.id,name:c.name}))});
 });
 app.post('/web-api/admin/warehouse',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},name=String(x.name||'').trim();
@@ -7828,17 +7936,9 @@ function dynamicsReadableCode(searchName,itemCode){
   if(!s)return String(itemCode||'').trim();
   return s;
 }
-function dynamicsRowPick(row,aliases){
-  const map=new Map();
-  for(const [k,v] of Object.entries(row||{})) map.set(purchaseHeaderKey(k),v);
-  for(const a of aliases){
-    const key=purchaseHeaderKey(a);
-    if(map.has(key)){
-      const v=map.get(key);
-      if(v!==null&&v!==undefined&&String(v).trim()!=='')return v;
-    }
-  }
-  return '';
+function dynamicsRowPick(row,aliases,preMap){
+  const map=preMap||purchaseRowMap(row);
+  return purchasePickFromMap(map,aliases);
 }
 function parseDynamicsWorkbook(buffer){
   const wb=XLSX.read(buffer,{type:'buffer',cellDates:false});
@@ -7862,22 +7962,23 @@ function parseDynamicsWorkbook(buffer){
   const stockHeaderFound=headers.some(h=>['Fiziksel stok','Kullanılabilir fiziksel miktar','Kullanilabilir fiziksel miktar'].map(purchaseHeaderKey).includes(purchaseHeaderKey(h)));
 
   const parsed=rows.map((r,index)=>{
-    const itemCode=String(dynamicsRowPick(r,['Madde kodu','Item Code','Malzeme Kodu'])||r['Madde kodu']||'').trim();
-    const searchName=String(dynamicsRowPick(r,['Arama adı','Arama adi','Search name'])||r['Arama adı']||'').trim();
-    const physicalStock=normalizeNumber(dynamicsRowPick(r,['Fiziksel stok','Physical inventory'])||r['Fiziksel stok']||0);
-    const reservedStock=normalizeNumber(dynamicsRowPick(r,['Fiziksel rezerve miktar','Physical reserved'])||r['Fiziksel rezerve miktar']||0);
-    const availableStock=normalizeNumber(dynamicsRowPick(r,['Kullanılabilir fiziksel miktar','Kullanilabilir fiziksel miktar','Available physical'])||r['Kullanılabilir fiziksel miktar']||0);
-    const purchasePrice=normalizeNumber(dynamicsRowPick(r,costAliases)||0);
+    const fmap=purchaseRowMap(r);
+    const itemCode=String(dynamicsRowPick(r,['Madde kodu','Item Code','Malzeme Kodu'],fmap)||r['Madde kodu']||'').trim();
+    const searchName=String(dynamicsRowPick(r,['Arama adı','Arama adi','Search name'],fmap)||r['Arama adı']||'').trim();
+    const physicalStock=normalizeNumber(dynamicsRowPick(r,['Fiziksel stok','Physical inventory'],fmap)||r['Fiziksel stok']||0);
+    const reservedStock=normalizeNumber(dynamicsRowPick(r,['Fiziksel rezerve miktar','Physical reserved'],fmap)||r['Fiziksel rezerve miktar']||0);
+    const availableStock=normalizeNumber(dynamicsRowPick(r,['Kullanılabilir fiziksel miktar','Kullanilabilir fiziksel miktar','Available physical'],fmap)||r['Kullanılabilir fiziksel miktar']||0);
+    const purchasePrice=normalizeNumber(dynamicsRowPick(r,costAliases,fmap)||0);
     const stockQty=availableStock>0||physicalStock>0?(availableStock||physicalStock):0;
     return{
       rowNo:index+2,
       itemCode,
-      dynamicsName:String(dynamicsRowPick(r,['Ürün adı','Urun adi','Product name'])||r['Ürün adı']||'').trim(),
+      dynamicsName:String(dynamicsRowPick(r,['Ürün adı','Urun adi','Product name'],fmap)||r['Ürün adı']||'').trim(),
       searchName,
       physicalStock,reservedStock,availableStock,stockQty,
       purchasePrice,
-      unit:String(dynamicsRowPick(r,['Stok birimi','Unit'])||r['Stok birimi']||'Adet').trim(),
-      dynamicsProductId:String(dynamicsRowPick(r,['Ürün kimliği','Urun kimligi','Product id'])||r['Ürün kimliği']||itemCode).trim()
+      unit:String(dynamicsRowPick(r,['Stok birimi','Unit'],fmap)||r['Stok birimi']||'Adet').trim(),
+      dynamicsProductId:String(dynamicsRowPick(r,['Ürün kimliği','Urun kimligi','Product id'],fmap)||r['Ürün kimliği']||itemCode).trim()
     };
   }).filter(r=>r.itemCode||r.searchName);
   parsed._meta={costHeaderFound,stockHeaderFound,headers};
@@ -7896,13 +7997,18 @@ function dynamicsApplyStock(s,productCode,warehouseId,targetQty,actor='Dynamics 
   });
   return true;
 }
-function dynamicsExistingProduct(s,row){
+function dynamicsExistingProduct(s,row,index){
+  const lookup=index||buildDynamicsProductIndex(s);
   const item=normKey(row.itemCode),search=normKey(row.searchName),pid=normKey(row.dynamicsProductId);
-  return (s.products||[]).find(p=>
-    (item && normKey(p.itemCode)===item) ||
-    (search && (normKey(p.searchName)===search || normKey(p.code)===search)) ||
-    (pid && normKey(p.dynamicsProductId)===pid)
-  )||null;
+  return (item&&lookup.get(item))||(search&&lookup.get(search))||(pid&&lookup.get(pid))||null;
+}
+function buildDynamicsProductIndex(s){
+  const map=new Map();
+  const add=(k,p)=>{const n=normKey(k);if(n&&!map.has(n))map.set(n,p)};
+  for(const p of s.products||[]){
+    add(p.itemCode,p);add(p.searchName,p);add(p.code,p);add(p.dynamicsProductId,p);
+  }
+  return map;
 }
 function ensureDynamicsCategory(s,name){
   const id=slug(name)||'diger';let c=(s.categories||[]).find(x=>x.id===id||normKey(x.name)===normKey(name));
@@ -7993,10 +8099,11 @@ app.post('/web-api/admin/dynamics-excel-preview',requireAdmin,excelFile,(req,res
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
     const s=readStore(),rows=parseDynamicsWorkbook(req.file.buffer);
     const meta=rows._meta||{};
-    ensureDynamicsCoreCategories(s);writeStore(s);
+    ensureDynamicsCoreCategories(s);
+    const dynIndex=buildDynamicsProductIndex(s);
     let newCount=0,existingCount=0,invalidCount=0,withCost=0,withStock=0;
     const preview=rows.map(r=>{
-      const existing=dynamicsExistingProduct(s,r);
+      const existing=dynamicsExistingProduct(s,r,dynIndex);
       const valid=Boolean(String(r.searchName||'').trim());
       if(!valid)invalidCount++;else if(existing)existingCount++;else newCount++;
       if(r.purchasePrice>0)withCost++;
@@ -8046,10 +8153,11 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,excelFile,(req,res)
     const actor=currentSessionUser(req)?.name||'Dynamics Excel';
 
     let added=0,skipped=0,invalid=0,categoryMissing=0,stockUpdated=0,priceUpdated=0,existingUpdated=0;
+    const dynIndex=buildDynamicsProductIndex(s);
     for(const r of rows){
       const searchName=String(r.searchName||'').trim();
       if(!searchName){invalid++;continue}
-      let product=dynamicsExistingProduct(s,r);
+      let product=dynamicsExistingProduct(s,r,dynIndex);
 
       if(!product){
         const selected=String(categoryMap[r.itemCode]||categoryMap[searchName]||'').trim();
@@ -8075,6 +8183,8 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,excelFile,(req,res)
           product.purchasePriceUpdatedAt=new Date().toISOString();
         }
         s.products.unshift(product);
+        const add=(k)=>{const n=normKey(k);if(n&&!dynIndex.has(n))dynIndex.set(n,product)};
+        add(product.itemCode);add(product.searchName);add(product.code);add(product.dynamicsProductId);
         added++;
         if(r.purchasePrice>0)priceUpdated++;
       }else{
@@ -8112,9 +8222,12 @@ app.post('/web-api/admin/dynamics-excel-import',requireAdmin,excelFile,(req,res)
 function purchaseHeaderKey(h){
   return purchaseCsv.purchaseHeaderKey(h);
 }
-function purchasePick(row,aliases){
+function purchaseRowMap(row){
   const map=new Map();
   for(const [k,v] of Object.entries(row||{})) map.set(purchaseHeaderKey(k),v);
+  return map;
+}
+function purchasePickFromMap(map,aliases){
   for(const a of aliases){
     const key=purchaseHeaderKey(a);
     if(map.has(key)){
@@ -8123,6 +8236,21 @@ function purchasePick(row,aliases){
     }
   }
   return '';
+}
+function purchasePick(row,aliases){
+  return purchasePickFromMap(purchaseRowMap(row),aliases);
+}
+function purchasePickContainsFromMap(map,needles=[]){
+  for(const [k,v] of map){
+    if(v===null||v===undefined||String(v).trim()==='')continue;
+    for(const n of needles){
+      if(k.includes(purchaseHeaderKey(n)))return v;
+    }
+  }
+  return '';
+}
+function purchasePickContains(row,needles=[]){
+  return purchasePickContainsFromMap(purchaseRowMap(row),needles);
 }
 function purchaseProductLookup(s){
   const map=new Map();
@@ -8151,25 +8279,24 @@ function purchaseProductLookup(s){
     register
   };
 }
+const purchaseLookupCache=new WeakMap();
+function getPurchaseLookup(s){
+  const list=s.products||(s.products=[]);
+  let lookup=purchaseLookupCache.get(list);
+  if(!lookup){
+    lookup=purchaseProductLookup(s);
+    try{purchaseLookupCache.set(list,lookup)}catch(_){}
+  }
+  return lookup;
+}
 function findProductForPurchase(s,code,name='',itemCode=''){
-  return purchaseProductLookup(s).find(code,name,itemCode);
+  return getPurchaseLookup(s).find(code,name,itemCode);
 }
 function purchaseBufferText(buffer){
   return purchaseCsv.bufferText(buffer);
 }
 function parsePurchaseCsvBuffer(buffer){
   return purchaseCsv.parseCsvBuffer(buffer);
-}
-function purchasePickContains(row,needles=[]){
-  const map=new Map();
-  for(const [k,v] of Object.entries(row||{})) map.set(purchaseHeaderKey(k),v);
-  for(const [k,v] of map){
-    if(v===null||v===undefined||String(v).trim()==='')continue;
-    for(const n of needles){
-      if(k.includes(purchaseHeaderKey(n)))return v;
-    }
-  }
-  return '';
 }
 function parsePurchaseDate(dateVal){
   if(dateVal instanceof Date)return dateVal.toISOString().slice(0,10);
@@ -8188,44 +8315,36 @@ function parsePurchaseVat(raw){
   return normalizeNumber(raw)||20;
 }
 function purchaseSheetRows(ws){
-  // Başlık satırını bul + hem ham sayı hem formatlı metni al (Excel TR/US)
+  // Tek AOA geçişi (ham) — büyük İstikbal Excel’de 2× parse yavaşlatıyordu
   const aoaRaw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
-  const aoaFmt=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
   if(!aoaRaw.length)return [];
   let headerIdx=0;
-  for(let i=0;i<Math.min(aoaRaw.length,15);i++){
+  for(let i=0;i<Math.min(aoaRaw.length,20);i++){
     const line=(aoaRaw[i]||[]).map(c=>String(c??'')).join(' | ');
-    if(/Madde\s*kodu|Maliyet\s*tutar|Arama\s*ad|Ürün\s*numar|Cost\s*amount|Malzeme1|Birim\s*Fiyat|Malzeme\s*Uzun/i.test(line)){headerIdx=i;break}
+  if(/Madde\s*kodu|Maliyet\s*tutar|Arama\s*ad|Ürün\s*numar|Cost\s*amount|Malzeme1|Birim\s*Fiyat|Malzeme\s*Uzun|\bPP\b|Stok\s*Miktar/i.test(line)){headerIdx=i;break}
   }
   const headers=(aoaRaw[headerIdx]||[]).map(h=>String(h??'').trim());
   let costIdx=headers.findIndex(h=>{
     const k=purchaseHeaderKey(h);
-    return k.includes('maliyettutar')||k.includes('costamount')||k==='maliyet'||k==='birimmaliyet'||k==='birimfiyat';
+    return k.includes('maliyettutar')||k.includes('costamount')||k==='maliyet'||k==='birimmaliyet'||k==='birimfiyat'||k==='pp';
   });
-  // Dynamics hareket export: M kolonu (index 12) = Maliyet tutarı
   if(costIdx<0&&headers.length>=13)costIdx=12;
   const rows=[];
   for(let r=headerIdx+1;r<aoaRaw.length;r++){
     const cols=aoaRaw[r]||[];
-    const colsFmt=(aoaFmt[r]||[]);
     if(!cols.some(c=>c!==null&&c!==undefined&&String(c).trim()!==''))continue;
     const row={};
     headers.forEach((h,i)=>{
       if(!h)return;
-      const raw=cols[i], fmt=colsFmt[i];
-      // Sayı kolonlarında ham değeri tercih et; 0/boşsa formatlı metni dene
+      const raw=cols[i];
       if(typeof raw==='number'&&Number.isFinite(raw))row[h]=raw;
-      else if(raw!==null&&raw!==undefined&&String(raw).trim()!=='')row[h]=raw;
-      else row[h]=fmt??'';
+      else if(raw!==null&&raw!==undefined&&String(raw).trim()!=='')row[h]=purchaseCsv.fixTrMojibake(String(raw));
+      else row[h]='';
     });
-    // Maliyet yedek: başlık eşleşmese bile index 12 / bulunan costIdx
     if(costIdx>=0){
-      const raw=cols[costIdx], fmt=colsFmt[costIdx];
-      const nRaw=normalizeNumber(raw);
-      const nFmt=normalizeNumber(fmt);
-      const best=nRaw>0?raw:(nFmt>0?fmt:raw);
-      if(!row['Maliyet tutarı']&&best!==''&&best!=null)row['Maliyet tutarı']=best;
-      row.__costRaw=best;
+      const raw=cols[costIdx];
+      if(!row['Maliyet tutarı']&&raw!==''&&raw!=null)row['Maliyet tutarı']=raw;
+      row.__costRaw=raw;
     }
     rows.push(row);
   }
@@ -8237,11 +8356,12 @@ function parsePurchaseWorkbook(buffer,fileName=''){
   const name=String(fileName||'').toLocaleLowerCase('tr-TR');
   const isZip=Buffer.isBuffer(buffer)&&buffer.length>3&&buffer[0]===0x50&&buffer[1]===0x4b; // PK = xlsx
   // .xlsx asla CSV sanılmasın
-  const looksCsv=!isZip&&(name.endsWith('.csv')||((name.endsWith('.txt')||!/\.xlsx?$/.test(name))&&/Maliyet tutar|Madde kodu|Arama ad|Ürün numar|Fatura|Malzeme1|Birim Fiyat|Malzeme Uzun/i.test(asText.slice(0,1200))&&(/;|,|\t/).test(asText.slice(0,300))));
+  const looksCsv=!isZip&&(name.endsWith('.csv')||((name.endsWith('.txt')||!/\.xlsx?$/.test(name))&&/Maliyet tutar|Madde kodu|Arama ad|Ürün numar|Fatura|Malzeme1|Birim Fiyat|Malzeme Uzun|\bPP\b|Stok Miktar/i.test(asText.slice(0,1200))&&(/;|,|\t/).test(asText.slice(0,300))));
   if(looksCsv){
     rows=parsePurchaseCsvBuffer(buffer);
   }else{
-    const wb=XLSX.read(buffer,{type:'buffer',cellDates:true,codepage:1254,cellText:true});
+    // cellDates/cellText kapalı → büyük dosyada belirgin hız
+    const wb=XLSX.read(buffer,{type:'buffer',cellDates:false,cellText:false,codepage:1254});
     const sheetName=wb.SheetNames.find(n=>{
       const ws=wb.Sheets[n];
       const sample=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}).slice(0,5).map(r=>(r||[]).join(' ')).join(' ');
@@ -8256,9 +8376,9 @@ function parsePurchaseWorkbook(buffer,fileName=''){
   const codeAliases=['Ürün Kodu','Urun Kodu','Madde Kodu','Madde kodu','Ürün numarası','Urun numarasi','Malzeme Kodu','Malzeme1','Malzeme 1','Malzeme No','Malzeme','Stok Kodu','Kod','Barkod','Item Code','Material'];
   const searchAliases=['Arama Adı','Arama Adi','Arama adı','Search name'];
   const nameAliases=['Ürün Adı','Urun Adi','Ürün adı','Malzeme Adı','Malzeme Uzun Metni E','Malzeme Uzun Metni','Malzeme Uzun Metin','Uzun Metin','Malzeme Tanımı','Açıklama','Aciklama','Ürün','Product Name','Tanım'];
-  const qtyAliases=['Miktar','Quantity','Qty','Miktarı'];
-  // Maliyet / birim fiyat — İstikbal "Birim Fiyat" dahil
-  const unitAliases=['Maliyet tutarı','Maliyet tutari','Maliyet Tutarı','Cost amount','Maliyet tutar','Birim maliyet','Birim Maliyet','Birim Fiyat','Birim Fiyatı','Alış Fiyatı','Alis Fiyati','Net Birim Fiyat','Birim Tutar','Unit Price','Maliyet','Fiyat'];
+  const qtyAliases=['Miktar','Quantity','Qty','Miktarı','Stok Miktarı','Stok Miktari','Stok Adedi','Stok'];
+  // Maliyet / birim fiyat — İstikbal "Birim Fiyat" + depo stok "PP"
+  const unitAliases=['Maliyet tutarı','Maliyet tutari','Maliyet Tutarı','Cost amount','Maliyet tutar','Birim maliyet','Birim Maliyet','Birim Fiyat','Birim Fiyatı','Alış Fiyatı','Alis Fiyati','Net Birim Fiyat','Birim Tutar','Unit Price','Maliyet','Fiyat','PP','Pp'];
   const totalAliases=['Satır Tutarı','Satir Tutari','Line Total','Net Tutar','Malzeme Tutarı','Toplam Tutar'];
   const invAliases=['Fatura No','Fatura Numarası','Fatura Numarasi','Belge No','Invoice No','Arçelik Fatura Numarası','Arcelik Fatura Numarasi'];
   const dateAliases=['Fatura Tarihi','Tarih','Belge Tarihi','Invoice Date','Date','Fiili tarih','Fiili Tarih'];
@@ -8266,45 +8386,45 @@ function parsePurchaseWorkbook(buffer,fileName=''){
   const supplierAliases=['Tedarikçi','Tedarikci','Cari','Firma','Supplier','Taraf'];
 
   const parsed=rows.map((r,index)=>{
-    const itemCode=String(
-      purchasePick(r,['Madde Kodu','Madde kodu','Ürün numarası','Urun numarasi','Malzeme Kodu','Malzeme1','Malzeme 1','Malzeme No','Malzeme'])||
-      purchasePickContains(r,['maddekod','urunnumara','malzemekod','malzeme1','malzemeno'])||''
-    ).trim();
-    const searchName=String(purchasePick(r,searchAliases)||purchasePickContains(r,['aramaad'])||'').trim();
-    const productName=String(
-      purchasePick(r,nameAliases)||
-      purchasePickContains(r,['urunad','malzemead','malzemeuzun','uzunmetin','tanim'])||
+    const fmap=purchaseRowMap(r);
+    const itemCode=purchaseCsv.fixTrMojibake(String(
+      purchasePickFromMap(fmap,['Madde Kodu','Madde kodu','Ürün numarası','Urun numarasi','Malzeme Kodu','Malzeme1','Malzeme 1','Malzeme No','Malzeme'])||
+      purchasePickContainsFromMap(fmap,['maddekod','urunnumara','malzemekod','malzeme1','malzemeno'])||''
+    ).trim());
+    const searchName=purchaseCsv.fixTrMojibake(String(purchasePickFromMap(fmap,searchAliases)||purchasePickContainsFromMap(fmap,['aramaad'])||'').trim());
+    const productName=purchaseCsv.fixTrMojibake(String(
+      purchasePickFromMap(fmap,nameAliases)||
+      purchasePickContainsFromMap(fmap,['urunad','malzemead','malzemeuzun','uzunmetin','tanim'])||
       searchName||''
-    ).trim();
+    ).trim());
     // Benzersiz kod: Madde/Malzeme kodu
-    const productCode=String(itemCode||searchName||purchasePick(r,codeAliases)||productName||'').trim();
-    let quantity=normalizeNumber(purchasePick(r,qtyAliases)||purchasePickContains(r,['miktar','qty'])||0);
+    const productCode=String(itemCode||searchName||purchasePickFromMap(fmap,codeAliases)||productName||'').trim();
+    const qtyRaw=purchasePickFromMap(fmap,qtyAliases)||purchasePickContainsFromMap(fmap,['stokmiktar','miktar','qty'])||0;
+    let quantity=normalizeSapQty(qtyRaw);
     let costRaw=r.__costRaw;
-    if(costRaw===''||costRaw==null)costRaw=purchasePick(r,unitAliases);
+    if(costRaw===''||costRaw==null)costRaw=purchasePickFromMap(fmap,unitAliases);
     if(costRaw===''||costRaw==null){
-      for(const [k,v] of Object.entries(r||{})){
-        if(k.startsWith('__'))continue;
+      for(const [hk,v] of fmap){
         if(v===null||v===undefined||String(v).trim()==='')continue;
-        const hk=purchaseHeaderKey(k);
-        if(hk.includes('maliyettutar')||hk.includes('costamount')||hk==='maliyet'||hk==='birimmaliyet'||hk==='birimfiyat'||hk==='fiyat'){costRaw=v;break}
+        if(hk.includes('maliyettutar')||hk.includes('costamount')||hk==='maliyet'||hk==='birimmaliyet'||hk==='birimfiyat'||hk==='fiyat'||hk==='pp'){costRaw=v;break}
       }
     }
     if(costRaw===''||costRaw==null){
-      costRaw=purchasePickContains(r,['birimfiyat','alisfiyat','unitprice','fiyat'])||'';
+      costRaw=purchasePickContainsFromMap(fmap,['birimfiyat','alisfiyat','unitprice','fiyat','pp'])||'';
     }
     let unitCost=normalizeNumber(costRaw||0);
-    const lineTotalRaw=normalizeNumber(purchasePick(r,totalAliases)||0);
+    const lineTotalRaw=normalizeNumber(purchasePickFromMap(fmap,totalAliases)||0);
     // Miktar yoksa (İstikbal fiyat listesi) → 1
     if(!(quantity>0)&&(unitCost>0||productCode))quantity=1;
     if(!(unitCost>0)&&lineTotalRaw>0&&quantity>0)unitCost=Math.round((lineTotalRaw/quantity)*100)/100;
     const lineTotal=lineTotalRaw>0?lineTotalRaw:Math.round(unitCost*Math.max(quantity||1,0)*100)/100;
-    const dateVal=parsePurchaseDate(purchasePick(r,dateAliases)||purchasePickContains(r,['tarih','date']));
-    const vatRaw=purchasePick(r,vatAliases)||purchasePickContains(r,['kdv','vat','vergi']);
+    const dateVal=parsePurchaseDate(purchasePickFromMap(fmap,dateAliases)||purchasePickContainsFromMap(fmap,['tarih','date']));
+    const vatRaw=purchasePickFromMap(fmap,vatAliases)||purchasePickContainsFromMap(fmap,['kdv','vat','vergi']);
     return{
       rowNo:index+2,
-      invoiceNo:String(purchasePick(r,invAliases)||purchasePickContains(r,['fatura'])||'').trim(),
+      invoiceNo:String(purchasePickFromMap(fmap,invAliases)||purchasePickContainsFromMap(fmap,['fatura'])||'').trim(),
       date:dateVal,
-      supplierName:String(purchasePick(r,supplierAliases)||purchasePickContains(r,['taraf','tedarik','supplier'])||'').trim(),
+      supplierName:String(purchasePickFromMap(fmap,supplierAliases)||purchasePickContainsFromMap(fmap,['taraf','tedarik','supplier'])||'').trim(),
       productCode,itemCode,searchName,productName,
       quantity:quantity>0?quantity:0,
       unitCost,
@@ -8315,11 +8435,13 @@ function parsePurchaseWorkbook(buffer,fileName=''){
 
   if(!parsed.length)throw new Error('Satır bulunamadı. Madde kodu / Arama adı + Maliyet tutarı gerekli');
 
-  // Aynı madde birden fazla satırda gelebilir → birleştir (miktar toplam, maliyet son tarih)
+  // Aynı fatura + aynı madde birden fazla satırda → birleştir (farklı faturalar ayrı kalır)
   const merged=new Map();
   for(const r of parsed){
-    const key=normKey(r.itemCode||r.productCode||r.productName);
-    if(!key)continue;
+    const prod=normKey(r.itemCode||r.productCode||r.productName);
+    if(!prod)continue;
+    const inv=stockCost.normalizeInvoiceNo(r.invoiceNo)||'_';
+    const key=`${inv}::${prod}`;
     if(!merged.has(key)){
       merged.set(key,{...r,quantity:r.quantity>0?r.quantity:1});
       continue;
@@ -8358,7 +8480,13 @@ function resolvePurchaseCategoryId(s,categoryId,supplierName,hint=''){
   }
   const furniture=isIstikbalSupplier(supplierName);
   const ids=ensureDynamicsCoreCategories(s);
-  if(furniture)return ids.mobilya;
+  if(furniture){
+    try{
+      const sug=istikbalCategory.suggestCategory(s,hint,'');
+      if(sug.categoryId)return sug.categoryId;
+    }catch(_){}
+    return ids.mobilya;
+  }
   return dynamicsSuggestedCategoryId(s,hint)||ids.diger||ids.beyazEsya||'';
 }
 function ensureProductFromPurchase(s,{productCode,productName,itemCode,searchName,unitCost,vatRate,supplierName,importBatchId,categoryId}){
@@ -8425,12 +8553,22 @@ function applyPurchaseInvoiceToStore(s,{
   const chosenCategoryId=String(categoryId||'').trim();
   const rawItems=Array.isArray(items)?items:[];
   const seenStockCodes=new Set();
-  const lookup=purchaseProductLookup(s);
+  const lookup=getPurchaseLookup(s);
   const catIds=furniture?ensureDynamicsCoreCategories(s):null;
   const furnitureCategoryId=furniture?(chosenCategoryId||catIds.mobilya):chosenCategoryId;
+  const receiptKeys=addStock?stockCost.existingReceiptKeys(s):null;
+  const invKey=addStock?stockCost.normalizeInvoiceNo(invoiceNo):'';
+  const qtyByCode=addStock?new Map():null;
+  if(qtyByCode){
+    for(const row of (s.productStocks||[])){
+      const c=stockCost.normalizeProductCode(row.productCode);
+      if(!c)continue;
+      qtyByCode.set(c,(qtyByCode.get(c)||0)+Math.max(0,Number(row.quantity||0)));
+    }
+  }
 
   if(addStock){
-    if(!stockCost.normalizeInvoiceNo(invoiceNo)){
+    if(!invKey){
       throw new Error('Stok eklemek için fatura numarası zorunludur. Aynı faturayı ikinci kez işlememek için gereklidir.');
     }
     const codes=rawItems.map(r=>String(r.productCode||r.itemCode||r.searchName||'').trim()).filter(Boolean);
@@ -8488,16 +8626,24 @@ function applyPurchaseInvoiceToStore(s,{
     if(!createdNow)matched++;
     if(addStock){
       const resolved=stockCost.normalizeProductCode(product.code);
-      if(seenStockCodes.has(resolved)||stockCost.duplicateProducts(s,invoiceNo,[product.code]).length){
+      const rk=`${invKey}::${resolved}`;
+      if(seenStockCodes.has(resolved)||(receiptKeys&&receiptKeys.has(rk))){
         throw new Error(stockCost.duplicateError([resolved]));
       }
       seenStockCodes.add(resolved);
     }
-    // İstikbal eşleşenlerde marka + ürün kodu + malzeme adı düzelt; kategori Mobilya; KDV %10
+    // İstikbal eşleşenlerde marka + ürün kodu + malzeme adı düzelt; KDV %10; kategori (seçilmiş/tahmin)
     if(furniture){
       product.brand='İstikbal';
       const rowCat=String(raw.categoryId||furnitureCategoryId||'').trim();
-      product.category=resolvePurchaseCategoryId(s,rowCat,supplierName,`${product.name||''} ${productCode}`);
+      if(rowCat){
+        product.category=resolvePurchaseCategoryId(s,rowCat,supplierName,`${product.name||''} ${productCode}`);
+      }else{
+        const cur=String(product.category||'').trim().toLocaleLowerCase('tr-TR');
+        if(!cur||cur==='diger'||cur==='diğer'){
+          product.category=resolvePurchaseCategoryId(s,'',supplierName,`${product.name||''} ${productName} ${productCode}`);
+        }
+      }
       product.vatRate=10;
       if(productName){
         product.name=productName;
@@ -8517,13 +8663,15 @@ function applyPurchaseInvoiceToStore(s,{
     }
     // Stok eklenirken hareketli ortalama; sadece maliyet aktarımında son alış yazılır.
     if(addStock&&unitCost>0){
-      const oldQty=stockCost.productQtyTotal(s,product.code);
+      const codeN=stockCost.normalizeProductCode(product.code);
+      const oldQty=qtyByCode?Number(qtyByCode.get(codeN)||0):stockCost.productQtyTotal(s,product.code);
       product.purchasePrice=stockCost.weightedAverage(oldQty,prevCost,qty,unitCost);
       product.purchasePriceSource='weighted-average';
       product.purchasePriceUpdatedAt=new Date().toISOString();
       product.updatedAt=new Date().toISOString();
       product.importBatchId=importBatchId;
       if(itemCode&&!product.itemCode)product.itemCode=itemCode;
+      if(qtyByCode)qtyByCode.set(codeN,oldQty+qty);
       priceUpdated++;
     }else if(updatePurchasePrice&&unitCost>0){
       product.purchasePrice=unitCost;
@@ -8619,6 +8767,15 @@ function revertPurchaseInvoiceInStore(s,invoiceId){
 
 app.get('/web-api/admin/purchase-invoices',requireAdmin,(req,res)=>{
   const s=readStore();
+  let catsChanged=false;
+  try{
+    const before=(s.categories||[]).length;
+    istikbalCategory.ensureFurnitureCategories(s);
+    if((s.categories||[]).length!==before)catsChanged=true;
+  }catch(_){}
+  if(catsChanged){
+    try{writeStore(s)}catch(_){}
+  }
   const list=(s.purchaseInvoices||[]).slice(0,100).map(inv=>({
     id:inv.id,date:inv.date,supplierName:inv.supplierName,invoiceNo:inv.invoiceNo,
     total:inv.total,matched:inv.matched,unmatched:inv.unmatched,created:inv.created||0,
@@ -8673,65 +8830,187 @@ app.get('/web-api/admin/purchase-invoice-template',requireAdmin,(req,res)=>{
 app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,excelFile,(req,res)=>{
   try{
     if(!req.file)return res.status(400).json({error:'Excel dosyası seçilmelidir'});
+    const t0=Date.now();
     const s=readStore();
     const rows=parsePurchaseWorkbook(req.file.buffer,req.file.originalname||'');
     const supplierHint=String(req.body?.supplierName||'');
     const furniture=isIstikbalSupplier(supplierHint);
+    let furnitureCatIds=null;
+    if(furniture){
+      try{furnitureCatIds=istikbalCategory.ensureFurnitureCategories(s)}catch(_){furnitureCatIds={}}
+    }
     const catIds=furniture?ensureDynamicsCoreCategories(s):null;
-    const autoCatId=furniture?(catIds.mobilya||''):'';
-    const autoCatName=furniture
-      ?((s.categories||[]).find(c=>String(c.id)===String(autoCatId))?.name||'Mobilya')
-      :'';
-    let matched=0,willCreate=0,invalid=0,stockOk=0,withCost=0;
-    const preview=rows.map(r=>{
+    const autoCatId=furniture?(furnitureCatIds?.mobilya||catIds?.mobilya||'mobilya'):'';
+    const catNameById=new Map((s.categories||[]).map(c=>[String(c.id),c.name||'']));
+    const autoCatName=furniture?(catNameById.get(String(autoCatId))||'Mobilya'):'';
+    const lookup=getPurchaseLookup(s);
+    const hasAnyInvoiceNo=rows.some(r=>String(r.invoiceNo||'').trim());
+    // İstikbal stok listesinde fatura yok → receipt taraması gereksiz (yavaş)
+    const receiptKeys=(!furniture||hasAnyInvoiceNo)?stockCost.existingReceiptKeys(s):new Set();
+    const knownInvoices=new Set();
+    if(hasAnyInvoiceNo){
+      for(const inv of (s.purchaseInvoices||[])){
+        if(inv.reverted)continue;
+        const no=stockCost.normalizeInvoiceNo(inv.invoiceNo);
+        if(no)knownInvoices.add(no);
+      }
+    }
+    const PREVIEW_CAP=350;
+    const SUGGEST_CAP=furniture?Math.min(PREVIEW_CAP,500):0; // büyük listelerde sadece tablodaki satırlarda tahmin
+    let matched=0,willCreate=0,invalid=0,stockOk=0,withCost=0,suggestDone=0;
+    const slimRow=(r,extra={})=>({
+      rowNo:r.rowNo,
+      invoiceNo:r.invoiceNo||'',
+      date:r.date||'',
+      productCode:r.productCode||'',
+      itemCode:r.itemCode||r.productCode||'',
+      productName:r.productName||r.searchName||'',
+      searchName:r.searchName||'',
+      quantity:r.quantity||0,
+      unitCost:r.unitCost||0,
+      lineTotal:r.lineTotal||0,
+      vatRate:furniture?10:(normalizeNumber(r.vatRate||20)||20),
+      ...extra
+    });
+    const preview=[];
+    const byInv=new Map();
+    const round=n=>Math.round(Number(n||0)*100)/100;
+    const bumpInv=(row)=>{
+      const displayNo=String(row.invoiceNo||'').trim()||'(fatura no yok)';
+      const key=stockCost.normalizeInvoiceNo(row.invoiceNo)||'_NONE_';
+      if(!byInv.has(key)){
+        byInv.set(key,{
+          key,
+          invoiceNo:displayNo,
+          date:row.date||'',
+          supplierName:supplierHint||'',
+          lineCount:0,
+          total:0,
+          vatTotal:0,
+          matched:0,
+          willCreate:0,
+          invalid:0,
+          selected:true,
+          status:'ready',
+          statusLabel:'Aktarıma uygun',
+          _sampleCodes:[]
+        });
+      }
+      const inv=byInv.get(key);
+      inv.lineCount++;
+      const lt=round(row.lineTotal||(Number(row.unitCost||0)*Number(row.quantity||0)));
+      inv.total=round(inv.total+lt);
+      const vat=Number(row.vatRate||20)||20;
+      inv.vatTotal=round(inv.vatTotal+lt*(vat/(100+vat)));
+      if(row.date&&(!inv.date||String(row.date)>String(inv.date)))inv.date=row.date;
+      if(row.status==='matched')inv.matched++;
+      else if(row.status==='will_create')inv.willCreate++;
+      else if(row.status==='invalid')inv.invalid++;
+      if(inv._sampleCodes.length<40){
+        const code=stockCost.normalizeProductCode(row.matchCode||row.productCode||row.itemCode);
+        if(code)inv._sampleCodes.push(code);
+      }
+    };
+
+    for(const r of rows){
       const hasCode=Boolean(r.productCode||r.itemCode||r.productName||r.searchName);
       if(!(r.quantity>0))r.quantity=r.unitCost>0?1:0;
+      let row;
       if(!hasCode||!(r.quantity>0)){
         invalid++;
-        const why=!hasCode?'ürün kodu yok':'miktar yok';
-        return{...r,status:'invalid',reason:why,matchCode:'',currentPurchasePrice:0,vatRate:furniture?10:r.vatRate};
+        row=slimRow(r,{status:'invalid',reason:!hasCode?'ürün kodu yok':'miktar yok',matchCode:'',currentPurchasePrice:0});
+      }else{
+        const p=lookup.find(r.productCode||r.searchName,r.productName,r.itemCode);
+        const hasCost=r.unitCost>0;
+        if(hasCost)withCost++; else stockOk++;
+        if(p){
+          matched++;
+          row=slimRow(r,{
+            status:'matched',
+            reason:hasCost?'aynı ürün kodu · kart açılmaz':'aynı ürün kodu · maliyet yok',
+            matchCode:p.code||'',
+            productName:r.productName||p.name||'',
+            itemCode:r.itemCode||r.productCode||p.itemCode||'',
+            categoryId:p.category||autoCatId||'',
+            categoryName:catNameById.get(String(p.category))||autoCatName||'',
+            vatRate:furniture?10:(normalizeNumber(p.vatRate||r.vatRate||20)||20),
+            currentPurchasePrice:normalizeNumber(p.purchasePrice||0)
+          });
+        }else{
+          willCreate++;
+          let sugCatId=autoCatId||'';
+          let sugCatName=autoCatName||'';
+          let sugReason='';
+          let sugConfidence=0;
+          // Sadece önizleme tablosuna girecek satırlarda kategori tahmini (büyük CSV timeout olmasın)
+          if(furniture&&suggestDone<SUGGEST_CAP){
+            try{
+              const guess=istikbalCategory.classifyText(`${r.productName||''} ${r.searchName||''} ${r.itemCode||r.productCode||''}`);
+              sugCatId=(furnitureCatIds&&furnitureCatIds[guess.id])||sugCatId;
+              sugCatName=catNameById.get(String(sugCatId))||guess.name||sugCatName;
+              sugReason=guess.reason||'';
+              sugConfidence=Number(guess.confidence||0);
+              suggestDone++;
+            }catch(_){}
+          }
+          row=slimRow(r,{
+            status:'will_create',
+            reason:furniture
+              ?(sugCatName?`yeni kart · tahmin: ${sugCatName}`:'yeni kart · Mobilya · KDV %10')
+              :(hasCost?'tanımsız stok kartı':'maliyet yok · tanımsız kart'),
+            matchCode:'',
+            itemCode:r.itemCode||r.productCode||'',
+            categoryId:sugCatId,
+            categoryName:sugCatName,
+            suggestedCategoryId:sugCatId,
+            suggestedCategoryName:sugCatName,
+            suggestReason:sugReason,
+            suggestConfidence:sugConfidence,
+            autoCategory:Boolean(furniture),
+            undefinedCard:true,
+            currentPurchasePrice:0
+          });
+        }
       }
-      const p=findProductForPurchase(s,r.productCode||r.searchName,r.productName,r.itemCode);
-      const hasCost=r.unitCost>0;
-      if(hasCost)withCost++; else stockOk++;
-      if(p){
-        matched++;
-        return{
-          ...r,
-          status:'matched',
-          reason:hasCost?'aynı ürün kodu · kart açılmaz':('aynı ürün kodu · maliyet yok'),
-          matchCode:p.code,
-          productName:r.productName||p.name,
-          itemCode:r.itemCode||r.productCode||p.itemCode||'',
-          categoryId:p.category||autoCatId,
-          categoryName:(s.categories||[]).find(c=>String(c.id)===String(p.category))?.name||autoCatName||'',
-          vatRate:furniture?10:(normalizeNumber(p.vatRate||r.vatRate||20)||20),
-          currentPurchasePrice:normalizeNumber(p.purchasePrice||0)
-        };
+      bumpInv(row);
+      if(preview.length<PREVIEW_CAP)preview.push(row);
+    }
+
+    const invoices=[...byInv.values()].map(inv=>{
+      const norm=stockCost.normalizeInvoiceNo(inv.invoiceNo);
+      let already=false;
+      if(norm&&knownInvoices.has(norm))already=true;
+      if(!already&&norm&&receiptKeys.size){
+        for(const code of (inv._sampleCodes||[])){
+          if(code&&receiptKeys.has(`${norm}::${code}`)){already=true;break}
+        }
       }
-      willCreate++;
-      return{
-        ...r,
-        status:'will_create',
-        reason:furniture
-          ?(hasCost?'yeni kart · kod işlenecek · Mobilya · KDV %10':'yeni kart · Mobilya · KDV %10')
-          :(hasCost?'':'maliyet yok (stok aktarılabilir)'),
-        matchCode:'',
-        itemCode:r.itemCode||r.productCode||'',
-        categoryId:r.categoryId||autoCatId||'',
-        categoryName:autoCatName||'',
-        vatRate:furniture?10:(normalizeNumber(r.vatRate||20)||20),
-        currentPurchasePrice:0,
-        autoCategory:Boolean(furniture)
-      };
-    });
-    const invoiceNos=[...new Set(preview.map(x=>x.invoiceNo).filter(Boolean))];
+      delete inv._sampleCodes;
+      if(already){
+        inv.status='exists';
+        inv.statusLabel='Asiste kayıt var';
+        inv.selected=false;
+      }else if(inv.invalid&&!inv.matched&&!inv.willCreate){
+        inv.status='invalid';
+        inv.statusLabel='Hatalı';
+        inv.selected=false;
+      }else{
+        inv.status='ready';
+        inv.statusLabel='Aktarıma uygun';
+        inv.selected=true;
+      }
+      inv.generalTotal=inv.total;
+      return inv;
+    }).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(a.invoiceNo).localeCompare(String(b.invoiceNo),'tr'));
+
+    const invoiceNos=invoices.filter(i=>i.key!=='_NONE_').map(i=>i.invoiceNo);
     const suggestedInvoiceNo=invoiceNos.length
       ?''
       :purchaseCsv.virtualInvoiceNo({supplier:supplierHint||'İstikbal',date:todayISO(),mode:'stock'});
+    const productCount=(s.products||[]).length;
     res.json({
       ok:true,
-      total:preview.length,matched,willCreate,unmatched:willCreate,invalid,stockOk,withCost,
+      total:rows.length,matched,willCreate,unmatched:willCreate,invalid,stockOk,withCost,
       invoiceNos,
       hasInvoiceNo:invoiceNos.length>0,
       suggestedInvoiceNo,
@@ -8739,15 +9018,20 @@ app.post('/web-api/admin/purchase-invoice-preview',requireAdmin,excelFile,(req,r
       autoCategoryId:autoCatId,
       autoCategoryName:autoCatName,
       autoVatRate:furniture?10:null,
-      preview:preview.slice(0,800),
-      truncated:preview.length>800,
-      note:furniture
-        ?(invoiceNos.length
-          ?'İstikbal: ürün kodu (Malzeme1) kart koduna yazılır. Aynı kod ikinci kez kart açmaz. Kategori Mobilya, KDV %10.'
-          :'İstikbal: ürün kodu aktarılır · aynı kod tekrar kart açmaz · Mobilya · KDV %10 · sanal fatura no verilir.')
-        :(invoiceNos.length
-          ?'Dosyadaki fatura numaraları kullanılacak.'
-          :'Dosyada fatura no yok. Aktarımda sanal fatura no verilir.')
+      invoices,
+      categories:(s.categories||[]).filter(c=>c&&c.active!==false).map(c=>({id:c.id,name:c.name})).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr')),
+      preview,
+      truncated:rows.length>PREVIEW_CAP,
+      productCount,
+      storeEmpty:productCount===0,
+      ms:Date.now()-t0,
+      note:productCount===0
+        ?'UYARI: Ürün kartları boş (store). Önce yedekten ürünleri geri yükleyin; aksi halde tüm satırlar yeni kart sayılır.'
+        :(furniture
+          ?`İstikbal: ilk ${SUGGEST_CAP} tanımsız satırda kategori tahmini; kalanlar varsayılan kategori. KDV %10.`
+          :(invoiceNos.length
+            ?'Faturaları seçip tek tuşla fatura + stok aktarın. Kırmızı = daha önce işlenmiş.'
+            :'Dosyada fatura no yok. Aktarımda sanal fatura no verilir.'))
     });
   }catch(e){
     res.status(400).json({error:e.message||'Excel okunamadı'});
@@ -8760,7 +9044,7 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,re
     const s=readStore();
     const rows=parsePurchaseWorkbook(req.file.buffer,req.file.originalname||'');
     const actor=currentSessionUser(req)?.name||'Yönetici';
-    const mode=String(req.body?.mode||'cost'); // cost | stock | both
+    const mode=String(req.body?.mode||'both'); // cost | stock | both
     const createMissingProducts=true; // yoksa kart açılsın
     const updatePurchasePrice=mode==='cost'||mode==='both';
     const addStock=mode==='stock'||mode==='both'||String(req.body?.addStock||'0')==='1';
@@ -8774,6 +9058,20 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,re
       categoryMap=typeof rawMap==='string'?JSON.parse(rawMap||'{}'):(rawMap&&typeof rawMap==='object'?rawMap:{});
       if(!categoryMap||typeof categoryMap!=='object'||Array.isArray(categoryMap))categoryMap={};
     }catch{ categoryMap={}; }
+    let selectedInvoiceNos=null;
+    try{
+      const rawSel=req.body?.selectedInvoiceNos;
+      if(rawSel!=null&&rawSel!==''){
+        const parsed=typeof rawSel==='string'?JSON.parse(rawSel):rawSel;
+        if(Array.isArray(parsed)){
+          selectedInvoiceNos=parsed.map(x=>{
+            const s=String(x||'').trim();
+            if(!s||s==='_NONE_'||s==='(fatura no yok)')return '_NONE_';
+            return stockCost.normalizeInvoiceNo(s)||'_NONE_';
+          }).filter(Boolean);
+        }
+      }
+    }catch{ selectedInvoiceNos=null; }
     const lookupRowCategory=(r)=>{
       const keys=[r.itemCode,r.productCode,r.searchName,r.productName]
         .map(x=>String(x||'').trim()).filter(Boolean);
@@ -8788,17 +9086,44 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,re
     const furnitureCatId=furniture?(ensureDynamicsCoreCategories(s).mobilya||''):'';
     const validCatIds=new Set((s.categories||[]).filter(c=>c&&c.active!==false).map(c=>String(c.id)));
     if(furnitureCatId)validCatIds.add(String(furnitureCatId));
+    const productLookup=getPurchaseLookup(s);
 
-    const items=rows
-      .filter(r=>{
-        const hasCode=r.productCode||r.productName||r.itemCode;
-        if(!hasCode||!(r.quantity>0))return false;
-        // İstikbal: 0 fiyatlı satırlar da ürün kartı açılsın (Mobilya)
-        if(furniture&&(mode==='cost'||mode==='both'))return true;
-        if(mode==='cost'||mode==='both')return r.unitCost>0;
-        return true; // stock: miktar yeterli
-      })
-      .map(r=>{
+    const filterRows=rows.filter(r=>{
+      const hasCode=r.productCode||r.productName||r.itemCode;
+      if(!hasCode||!(r.quantity>0))return false;
+      if(selectedInvoiceNos&&selectedInvoiceNos.length){
+        const inv=stockCost.normalizeInvoiceNo(r.invoiceNo)||'_NONE_';
+        if(!selectedInvoiceNos.includes(inv))return false;
+      }
+      if(furniture&&(mode==='cost'||mode==='both'))return true;
+      if(mode==='cost'||mode==='both')return r.unitCost>0;
+      return true;
+    });
+    const totalFilter=filterRows.length;
+    const chunkOffset=Math.max(0,Number(req.body?.chunkOffset||0)||0);
+    let chunkLimit=Number(req.body?.chunkLimit||0)||0;
+    if(chunkLimit>0)chunkLimit=Math.min(400,Math.max(50,chunkLimit));
+    const workRows=chunkLimit>0?filterRows.slice(chunkOffset,chunkOffset+chunkLimit):filterRows;
+    if(!workRows.length){
+      if(totalFilter>0&&chunkOffset>=totalFilter){
+        return res.json({ok:true,invoiceCount:0,virtualInvoice:false,chunk:{offset:chunkOffset,limit:chunkLimit,total:totalFilter,nextOffset:totalFilter,done:true},invoice:{id:'',invoiceNo:'',total:0,matched:0,unmatched:0,created:0,priceUpdated:0,stockUpdated:0,itemCount:0,mode,reverted:false,virtualInvoice:false},invoices:[]});
+      }
+      return res.status(400).json({error:'Aktarılacak satır yok. Madde kodu / Miktar / Maliyet tutarı kontrol edin.'});
+    }
+
+    const byInvoice=new Map();
+    for(const r of workRows){
+      const invKey=stockCost.normalizeInvoiceNo(r.invoiceNo)||'_NONE_';
+      if(!byInvoice.has(invKey))byInvoice.set(invKey,[]);
+      byInvoice.get(invKey).push(r);
+    }
+    if(!byInvoice.size)return res.status(400).json({error:'Aktarılacak satır yok. Madde kodu / Miktar / Maliyet tutarı kontrol edin.'});
+
+    const results=[];
+    let virtualInvoice=false;
+    const forcedInvoiceNo=String(req.body?.invoiceNo||'').trim();
+    for(const [invKey,invRows] of byInvoice){
+      const items=invRows.map(r=>{
         const rowCat=lookupRowCategory(r)||furnitureCatId;
         return{
           productCode:r.productCode,
@@ -8811,50 +9136,71 @@ app.post('/web-api/admin/purchase-invoice-import',requireAdmin,excelFile,(req,re
           categoryId:rowCat
         };
       });
-    if(!items.length)return res.status(400).json({error:'Aktarılacak satır yok. Madde kodu / Miktar / Maliyet tutarı kontrol edin.'});
-
-    const missingCats=[];
-    for(const r of items){
-      if(findProductForPurchase(s,r.productCode||r.searchName,r.productName,r.itemCode))continue;
-      const rowCat=String(r.categoryId||furnitureCatId||'').trim();
-      if(!rowCat){missingCats.push(r.itemCode||r.productCode||r.productName||'?');continue}
-      r.categoryId=rowCat;
-      if(!validCatIds.has(String(r.categoryId))){
-        return res.status(400).json({error:`Geçersiz kategori: ${r.categoryId}`});
+      const missingCats=[];
+      for(const r of items){
+        if(productLookup.find(r.productCode||r.searchName,r.productName,r.itemCode))continue;
+        const rowCat=String(r.categoryId||furnitureCatId||'').trim();
+        if(!rowCat){missingCats.push(r.itemCode||r.productCode||r.productName||'?');continue}
+        r.categoryId=rowCat;
+        if(!validCatIds.has(String(r.categoryId))){
+          return res.status(400).json({error:`Geçersiz kategori: ${r.categoryId}`});
+        }
       }
-    }
-    if(missingCats.length&&!furniture){
-      return res.status(400).json({error:`${missingCats.length} yeni ürünün kategorisi eksik — tabloda satır satır seçin`});
+      if(missingCats.length&&!furniture){
+        return res.status(400).json({error:`${missingCats.length} yeni ürünün kategorisi eksik — üstten kategori seçin`});
+      }
+
+      const date=String(req.body?.date||invRows.find(r=>r.date)?.date||todayISO()).slice(0,10);
+      let invoiceNo=String(
+        forcedInvoiceNo||
+        (invKey!=='_NONE_'?invRows.find(r=>r.invoiceNo)?.invoiceNo:'')||
+        ''
+      ).trim();
+      let virt=false;
+      if(!stockCost.normalizeInvoiceNo(invoiceNo)&&(addStock||furniture||mode==='cost'||mode==='both')){
+        invoiceNo=purchaseCsv.virtualInvoiceNo({supplier:supplierFallback,date,mode,now:new Date()});
+        virt=true;virtualInvoice=true;
+      }
+      const supplierName=furniture
+        ? supplierFallback
+        : String(invRows.find(r=>r.supplierName)?.supplierName||supplierFallback).trim();
+
+      const invoice=applyPurchaseInvoiceToStore(s,{
+        supplierName,invoiceNo,date,warehouseId,
+        note:String(req.body?.note||(virt?`Sanal fatura · Excel alış (${mode})`:`Excel alış (${mode})`)),
+        source:'excel',
+        updatePurchasePrice,addStock,pricesIncludeVat,createMissingProducts,
+        categoryId,items,actor
+      });
+      results.push(invoice);
+      audit(s,'Alış faturası Excel aktarımı',invoice.invoiceNo||invoice.id,{
+        mode,matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total,virtualInvoice:virt,
+        chunkOffset,chunkLimit
+      });
     }
 
-    const date=String(req.body?.date||rows.find(r=>r.date)?.date||todayISO()).slice(0,10);
-    let invoiceNo=String(req.body?.invoiceNo||rows.find(r=>r.invoiceNo)?.invoiceNo||'').trim();
-    let virtualInvoice=false;
-    if(!stockCost.normalizeInvoiceNo(invoiceNo)&&(addStock||furniture||mode==='cost')){
-      invoiceNo=purchaseCsv.virtualInvoiceNo({supplier:supplierFallback,date,mode,now:new Date()});
-      virtualInvoice=true;
-    }
-    const supplierName=furniture
-      ? supplierFallback
-      : String(rows.find(r=>r.supplierName)?.supplierName||supplierFallback).trim();
-
-    const invoice=applyPurchaseInvoiceToStore(s,{
-      supplierName,invoiceNo,date,warehouseId,
-      note:String(req.body?.note||(virtualInvoice?`Sanal fatura · Excel alış (${mode})`:`Excel alış (${mode})`)),
-      source:'excel',
-      updatePurchasePrice,addStock,pricesIncludeVat,createMissingProducts,
-      categoryId,items,actor
-    });
-    audit(s,'Alış faturası Excel aktarımı',invoice.invoiceNo||invoice.id,{
-      mode,matched:invoice.matched,created:invoice.created,priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,total:invoice.total,virtualInvoice
-    });
     writeStore(s);
-    res.json({ok:true,invoice:{
-      id:invoice.id,date:invoice.date,invoiceNo:invoice.invoiceNo,supplierName:invoice.supplierName,
-      total:invoice.total,matched:invoice.matched,unmatched:invoice.unmatched,created:invoice.created,
-      priceUpdated:invoice.priceUpdated,stockUpdated:invoice.stockUpdated,itemCount:invoice.items.length,
+    const sum=(k)=>results.reduce((a,x)=>a+Number(x[k]||0),0);
+    const primary=results[0];
+    const nextOffset=chunkOffset+workRows.length;
+    res.json({ok:true,invoiceCount:results.length,virtualInvoice,chunk:{
+      offset:chunkOffset,
+      limit:chunkLimit||totalFilter,
+      processed:workRows.length,
+      total:totalFilter,
+      nextOffset,
+      done:nextOffset>=totalFilter
+    },invoice:{
+      id:primary.id,date:primary.date,invoiceNo:results.map(r=>r.invoiceNo).filter(Boolean).join(', '),
+      supplierName:primary.supplierName,
+      total:sum('total'),matched:sum('matched'),unmatched:sum('unmatched'),created:sum('created'),
+      priceUpdated:sum('priceUpdated'),stockUpdated:sum('stockUpdated'),
+      itemCount:results.reduce((a,x)=>a+(x.items||[]).length,0),
       mode,reverted:false,virtualInvoice
-    }});
+    },invoices:results.map(inv=>({
+      id:inv.id,invoiceNo:inv.invoiceNo,total:inv.total,matched:inv.matched,created:inv.created,
+      priceUpdated:inv.priceUpdated,stockUpdated:inv.stockUpdated,itemCount:(inv.items||[]).length
+    }))});
   }catch(e){
     res.status(400).json({error:e.message||'Excel aktarılamadı'});
   }
@@ -9202,6 +9548,7 @@ app.get('*',(req,res)=>{
   res.redirect('/personel');
 });
 app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'Sunucu hatası'});});
+recoverIfLiveIsTiny();
 recoverStoreFile();
 ensureStore(readStore()); writeStore(readStore());
 app.listen(PORT,'127.0.0.1',()=>{
