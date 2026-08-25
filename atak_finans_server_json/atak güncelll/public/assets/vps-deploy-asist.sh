@@ -2,16 +2,16 @@
 # Asist fatura+stok paneli — sadece ERP (atak). Vitrin/commerce'e DOKUNMAZ.
 # data/store.json ASLA değiştirilmez / restore edilmez.
 # Hostinger Web Terminal:
-#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/asist-fatura-aktarim-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/onay-islem-adi-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
 set -euo pipefail
 OUT=/tmp/atak-asist-deploy.txt
 : > "$OUT"
 log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
-BRANCH="${ATAK_BRANCH:-cursor/asist-fatura-aktarim-474e}"
-EXPECT_V="${EXPECT_HEALTH:-6.3.258-staff-mail}"
-EXPECT_B="${EXPECT_BUILD:-fix-v261}"
+BRANCH="${ATAK_BRANCH:-cursor/onay-islem-adi-474e}"
+EXPECT_V="${EXPECT_HEALTH:-6.3.259-actor-name}"
+EXPECT_B="${EXPECT_BUILD:-fix-v262}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"
@@ -59,6 +59,7 @@ grep -q "build:'$EXPECT_B'" "$SRC/server.js" || die "kaynak build yanlis"
 grep -q "ATAK_ADMIN_BUILD=$EXPECT_B" "$SRC/public/assets/admin.js" || die "kaynak admin build yanlis"
 grep -q 'purchaseBothBtn' "$SRC/public/admin.html" || die "Asist butonu kaynakta yok"
 grep -q "staff-send-login" "$SRC/server.js" || die "kaynakta sifre API yok"
+[ -f "$SRC/lib/session-actor.js" ] || die "kaynakta session-actor yok"
 grep -q "staffMailSendPassBtn" "$SRC/public/admin.html" || die "kaynakta sifre butonu yok"
 log "   kaynak OK"
 
@@ -76,6 +77,7 @@ copy_critical(){
   [ -f "$SRC/lib/istikbal-category.js" ] && cp -f "$SRC/lib/istikbal-category.js" "$D/lib/istikbal-category.js"
   [ -f "$SRC/lib/stock-cost.js" ] && cp -f "$SRC/lib/stock-cost.js" "$D/lib/stock-cost.js"
   [ -f "$SRC/lib/staff-email.js" ] && cp -f "$SRC/lib/staff-email.js" "$D/lib/staff-email.js"
+  [ -f "$SRC/lib/session-actor.js" ] && cp -f "$SRC/lib/session-actor.js" "$D/lib/session-actor.js"
 }
 
 log "2) kopyala (data / node_modules / .env dokunulmaz — store ASLA kopyalanmaz)"

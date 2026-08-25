@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v261 */
+/* ATAK_ADMIN_BUILD=fix-v262 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1163,7 +1163,27 @@ function applyPermissionVisibility(){
   });
 }
 async function loadCurrentAdminPermissions(){
-  try{const d=await api('/web-api/me');window.__currentAdminUser=d.user||null;applyPermissionVisibility()}catch(e){}
+  try{
+    const d=await api('/web-api/me');
+    window.__currentAdminUser=d.user||null;
+    applyPermissionVisibility();
+    fillAdminChip(d.user);
+  }catch(e){}
+}
+function fillAdminChip(user){
+  const name=String(user?.name||'').trim();
+  if(!name)return;
+  const nameEl=q('#adminChipName');
+  const roleEl=q('#adminChipRole');
+  const iniEl=q('#adminChipInitials');
+  if(nameEl)nameEl.textContent=name;
+  if(roleEl)roleEl.textContent=String(user?.roleName||user?.role||'Yönetici').trim()||'Yönetici';
+  if(iniEl){
+    const parts=name.split(/\s+/).filter(Boolean);
+    const a=(parts[0]||'A')[0]||'A';
+    const b=(parts[1]||parts[0]||'A')[0]||a;
+    iniEl.textContent=(a+b).toLocaleUpperCase('tr-TR');
+  }
 }
 function syncUserStatusUi(){
   const active=q('#userActive')?.checked!==false;
