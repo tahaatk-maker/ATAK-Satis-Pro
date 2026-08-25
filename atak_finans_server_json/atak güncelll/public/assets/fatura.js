@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v264 */
+/* ATAK_FATURA_BUILD=fix-v265 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={view:'pending_sales',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -83,7 +83,7 @@ function invRenderTable(rows){
       <td>${invEsc(r.paymentMethod||'-')}</td>
       <td>${invStatusBadge(r.invoiceStatus)}</td>
       <td style="display:flex;gap:6px;flex-wrap:wrap">
-        ${issueBtns?`<button type="button" class="inv-btn" data-inv-qnb="${invEsc(r.id)}">Kuyruğa al</button>
+        ${issueBtns?`<button type="button" class="inv-btn" data-inv-qnb="${invEsc(r.id)}">Dijital Planet’e gönder</button>
         <button type="button" class="inv-btn" data-mark-invoiced="${invEsc(r.id)}">Manuel Kes</button>`:''}
         <button type="button" class="inv-btn" data-inv-print="${invEsc(r.id)}">Belgeyi aç</button>
       </td>
@@ -112,7 +112,7 @@ function invRenderTable(rows){
   qa('[data-inv-qnb]').forEach(btn=>btn.onclick=async()=>{
     try{
       const out=await api('/web-api/admin/sale/'+encodeURIComponent(btn.dataset.invQnb)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-      toast(`Kuyruk: ${out.result?.docType||''}`);await loadInvoiceCenter();
+      toast(out.result?.message||'Dijital Planet’e gönderildi');await loadInvoiceCenter();
     }catch(e){toast(e.message)}
   });
   qa('[data-mark-invoiced]').forEach(btn=>btn.onclick=async()=>{
@@ -129,7 +129,7 @@ function invRenderTable(rows){
 function invPaintCurrentView(){
   const rows=invApplySearch(state.data?.salesPending||[]);
   invRenderTable(rows);
-  if(q('#invFootStatus'))q('#invFootStatus').textContent=state.data?.note||'Kesilmeyen faturalar e-fatura firmasına otomatik aktarılır';
+  if(q('#invFootStatus'))q('#invFootStatus').textContent=state.data?.note||'Dijital Planet SOAP gönderimi';
 }
 
 async function loadInvoiceCenter(){
@@ -139,6 +139,7 @@ async function loadInvoiceCenter(){
     if(d.canSetup!=null)state.canSetup=!!d.canSetup;
     if(d.canIssue!=null)state.canIssue=!!d.canIssue;
     applyAccessUi();
+    fillDigitalPlanet(d.settings?.digitalPlanet||{});
     const url=d.settings?.atakDms?.copyUrl||'';
     if(q('#atakDmsCopyUrl'))q('#atakDmsCopyUrl').value=url;
     invPaintCurrentView();
@@ -157,19 +158,55 @@ q('#invIssueSelectedBtn')?.addEventListener('click',async()=>{
   for(const id of ids){
     try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})}catch(_){}
   }
-  toast(`${ids.length} satış kuyruğa alındı`);
+  toast(`${ids.length} satış Dijital Planet’e gönderildi`);
   await loadInvoiceCenter();
 });
-q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
-  const url=String(q('#atakDmsCopyUrl')?.value||'').trim();
-  if(!url || url.indexOf('client_id=')<0 || url.indexOf('client_secret=')<0)return toast('Hazır URL tam değil, sayfayı yenileyin');
-  try{
-    await navigator.clipboard.writeText(url);
-    toast('Güncel geteinvoices URL kopyalandı');
-  }catch(_){
-    q('#atakDmsCopyUrl')?.select();
-    try{document.execCommand('copy');toast('Güncel geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}
+
+function fillDigitalPlanet(d){
+  if(q('#dpCorporateCode'))q('#dpCorporateCode').value=d.corporateCode||'';
+  if(q('#dpLoginName'))q('#dpLoginName').value=d.loginName||'';
+  if(q('#dpPassword'))q('#dpPassword').value=d.password||'';
+  if(q('#dpEnvironment'))q('#dpEnvironment').value=d.environment||'live';
+  if(q('#dpTemplateCode'))q('#dpTemplateCode').value=d.templateCode||'';
+  if(q('#dpMapCode'))q('#dpMapCode').value=d.mapCode||'';
+  if(q('#dpServiceUrl'))q('#dpServiceUrl').value=d.serviceUrl||'';
+  if(q('#dpPostbox'))q('#dpPostbox').value=d.receiverPostboxName||'';
+  if(q('#dpReadyNote')){
+    q('#dpReadyNote').textContent=d.ready
+      ?`Hazır: ${d.corporateCode} · ${d.loginName}. Satırdaki “gönder” NetInvoice’a UBL yollar.`
+      :'Bu firma geteinvoices linkini kullanmaz. Aşağıdaki CorporateCode / kullanıcı / şifre ile Atak faturayı SOAP’tan gönderir.';
   }
+}
+function dpPayload(){
+  return {
+    digitalPlanet:{
+      enabled:true,
+      corporateCode:q('#dpCorporateCode')?.value||'',
+      loginName:q('#dpLoginName')?.value||'',
+      password:q('#dpPassword')?.value||'',
+      environment:q('#dpEnvironment')?.value||'live',
+      templateCode:q('#dpTemplateCode')?.value||'',
+      mapCode:q('#dpMapCode')?.value||'',
+      serviceUrl:q('#dpServiceUrl')?.value||'',
+      receiverPostboxName:q('#dpPostbox')?.value||''
+    }
+  };
+}
+q('#dpSaveBtn')?.addEventListener('click',async()=>{
+  if(!state.canSetup)return toast('Kurulum yetkiniz yok');
+  try{
+    const r=await api('/web-api/admin/invoice-integration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:'digital-planet',...dpPayload()})});
+    toast('Dijital Planet kaydedildi');
+    fillDigitalPlanet(r.settings?.digitalPlanet||dpPayload().digitalPlanet);
+    await loadInvoiceCenter();
+  }catch(e){toast(e.message)}
+});
+q('#dpTestBtn')?.addEventListener('click',async()=>{
+  if(!state.canSetup)return toast('Kurulum yetkiniz yok');
+  try{
+    const r=await api('/web-api/admin/invoice-integration/digital-planet-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(dpPayload().digitalPlanet)});
+    toast(r.message||'Giriş başarılı');
+  }catch(e){toast(e.message)}
 });
 
 boot();

@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Kesilmeyen Faturalar · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v264"/>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v265"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
@@ -23,7 +23,7 @@
         <div>
           <small>ATAK PAZARLAMA</small>
           <h2 id="invViewTitle">Kesilmeyen Faturalar</h2>
-          <p id="invViewHint">Satışta “daha sonra kes” seçilenler burada durur. E-fatura firması geteinvoices ile bunları otomatik çeker — kuyruğa almanız gerekmez.</p>
+          <p id="invViewHint">Satışta “daha sonra kes” seçilenler. Dijital Planet’e göndermek için giriş bilgilerini kaydedin; satırdaki buton fatura XML’ini NetInvoice’a yollar.</p>
         </div>
         <div class="inv-head-actions">
           <a class="inv-btn ghost" href="/web-admin" id="backLink">← Panele dön</a>
@@ -32,7 +32,7 @@
       </div>
       <div class="inv-toolbar" id="invToolbar">
         <input id="invSearch" type="search" placeholder="Satış no, müşteri ara…"/>
-        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri kuyruğa al</button>
+        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri Dijital Planet’e gönder</button>
       </div>
       <div class="inv-panel">
         <div id="invTableWrap">
@@ -43,12 +43,29 @@
           <div class="inv-empty hidden" id="invEmpty">Kesilmeyen fatura yok.</div>
         </div>
         <div class="inv-firm-box hidden" id="invFirmBox">
-          <h3>E-fatura firması linki</h3>
-          <p class="note">Bu URL son 60 günü ve bugünü kapsar. Eski EndDate’li link artık yeni faturaları da verir; yine de firmaya güncel URL’yi verin.</p>
-          <textarea id="atakDmsCopyUrl" rows="3" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?…"></textarea>
-          <div class="button-row">
-            <button class="inv-btn" type="button" id="atakDmsCopyBtn">URL’yi kopyala</button>
+          <h3>Dijital Planet (NetInvoice)</h3>
+          <p class="note" id="dpReadyNote">Bu firma geteinvoices linkini kullanmaz. Aşağıdaki CorporateCode / kullanıcı / şifre ile Atak faturayı SOAP’tan gönderir.</p>
+          <div class="dp-grid">
+            <label>Firma kodu (CorporateCode)<input id="dpCorporateCode" autocomplete="off"/></label>
+            <label>Kullanıcı<input id="dpLoginName" autocomplete="off"/></label>
+            <label>Şifre<input id="dpPassword" type="password" autocomplete="new-password"/></label>
+            <label>Ortam
+              <select id="dpEnvironment">
+                <option value="live">Canlı</option>
+                <option value="test">Test</option>
+              </select>
+            </label>
+            <label>Template kodu (varsa)<input id="dpTemplateCode" placeholder="DTP’nin verdiği kod"/></label>
+            <label>Map kodu (varsa)<input id="dpMapCode"/></label>
+            <label class="wide">Servis URL (boş = canlı NetInvoice)<input id="dpServiceUrl" placeholder="https://integration.digitalplanet.com.tr/IntegrationService.asmx"/></label>
+            <label class="wide">Alıcı PK (opsiyonel)<input id="dpPostbox" placeholder="urn:mail:…"/></label>
           </div>
+          <div class="button-row">
+            <button class="inv-btn primary" type="button" id="dpSaveBtn">Dijital Planet’i kaydet</button>
+            <button class="inv-btn" type="button" id="dpTestBtn">Girişi dene</button>
+          </div>
+          <p class="note hidden" style="margin-top:14px">Eski Rapid360 çekme URL’si (Dijital Planet değil):</p>
+          <textarea class="hidden" id="atakDmsCopyUrl" rows="2" readonly></textarea>
         </div>
       </div>
       <div class="inv-foot">
@@ -60,6 +77,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v264"></script>
+  <script src="/assets/fatura.js?v=fix-v265"></script>
 </body>
 </html>

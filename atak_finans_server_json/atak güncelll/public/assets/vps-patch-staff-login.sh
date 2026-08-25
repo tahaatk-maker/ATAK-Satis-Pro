@@ -1,10 +1,10 @@
 #!/bin/bash
 # Sifre-mail API: 3100'u tutan ESKI node'u oldurur, yeni server.js baslatir.
 # store.json / musteri / stok DOKUNULMAZ. atakhome-web ve commerce DOKUNULMAZ.
-#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/kesilmeyen-fatura-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/dijitalplanet-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
 set -euo pipefail
-BRANCH="${ATAK_BRANCH:-cursor/kesilmeyen-fatura-474e}"
-EXPECT="6.3.261-kesilmeyen"
+BRANCH="${ATAK_BRANCH:-cursor/dijitalplanet-474e}"
+EXPECT="6.3.262-dijitalplanet"
 log(){ echo "$*"; }
 die(){
   echo "FAIL: $*"
@@ -45,7 +45,7 @@ SRC=$(find /tmp/atak-patch-src -type d -name 'atak güncelll' | head -1)
 grep -q "$EXPECT" "$SRC/server.js" || die "kaynak surum yanlis"
 grep -q "staff-send-login" "$SRC/server.js" || die "kaynakta API yok"
 [ -f "$SRC/lib/session-actor.js" ] || die "kaynakta session-actor yok"
-[ -f "$SRC/lib/stock-decrease.js" ] || die "kaynakta stock-decrease yok"
+[ -f "$SRC/lib/digital-planet.js" ] || die "kaynakta digital-planet yok"
 log "SRC=$SRC"
 
 copy_one(){

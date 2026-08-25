@@ -263,9 +263,11 @@ const path = require('path');
 const faturaHtml = fs.readFileSync(path.join(__dirname, '../public/fatura.html'), 'utf8');
 const faturaJs = fs.readFileSync(path.join(__dirname, '../public/assets/fatura.js'), 'utf8');
 assert(faturaHtml.includes('Kesilmeyen Faturalar'), 'fatura başlık');
+assert(faturaHtml.includes('Dijital Planet'), 'dijital planet form');
 assert(!faturaHtml.includes('data-inv-module="efatura"'), 'e-Fatura ağacı yok');
 assert(!faturaHtml.includes('data-inv-view="ef_out_pending"'), 'gönderilecek klasör yok');
-assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v264'), 'fatura build');
+assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v265'), 'fatura build');
 assert(faturaJs.includes("view:'pending_sales'"), 'varsayılan kesilmeyen');
+assert(faturaJs.includes('digital-planet-test'), 'dp test api');
 
 console.log('atak-geteinvoices.test.js ok');
