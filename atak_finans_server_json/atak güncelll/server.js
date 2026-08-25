@@ -2054,7 +2054,7 @@ app.get('/health',(req,res)=>{
     ok:true,
     service:'atakhome-erp-v2',
     version:'6.3.258-staff-mail',
-    build:'fix-v260',
+    build:'fix-v261',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -8338,7 +8338,7 @@ function purchaseSheetRows(ws){
       if(!h)return;
       const raw=cols[i];
       if(typeof raw==='number'&&Number.isFinite(raw))row[h]=raw;
-      else if(raw!==null&&raw!==undefined&&String(raw).trim()!=='')row[h]=raw;
+      else if(raw!==null&&raw!==undefined&&String(raw).trim()!=='')row[h]=purchaseCsv.fixTrMojibake(String(raw));
       else row[h]='';
     });
     if(costIdx>=0){
@@ -8387,16 +8387,16 @@ function parsePurchaseWorkbook(buffer,fileName=''){
 
   const parsed=rows.map((r,index)=>{
     const fmap=purchaseRowMap(r);
-    const itemCode=String(
+    const itemCode=purchaseCsv.fixTrMojibake(String(
       purchasePickFromMap(fmap,['Madde Kodu','Madde kodu','Ürün numarası','Urun numarasi','Malzeme Kodu','Malzeme1','Malzeme 1','Malzeme No','Malzeme'])||
       purchasePickContainsFromMap(fmap,['maddekod','urunnumara','malzemekod','malzeme1','malzemeno'])||''
-    ).trim();
-    const searchName=String(purchasePickFromMap(fmap,searchAliases)||purchasePickContainsFromMap(fmap,['aramaad'])||'').trim();
-    const productName=String(
+    ).trim());
+    const searchName=purchaseCsv.fixTrMojibake(String(purchasePickFromMap(fmap,searchAliases)||purchasePickContainsFromMap(fmap,['aramaad'])||'').trim());
+    const productName=purchaseCsv.fixTrMojibake(String(
       purchasePickFromMap(fmap,nameAliases)||
       purchasePickContainsFromMap(fmap,['urunad','malzemead','malzemeuzun','uzunmetin','tanim'])||
       searchName||''
-    ).trim();
+    ).trim());
     // Benzersiz kod: Madde/Malzeme kodu
     const productCode=String(itemCode||searchName||purchasePickFromMap(fmap,codeAliases)||productName||'').trim();
     const qtyRaw=purchasePickFromMap(fmap,qtyAliases)||purchasePickContainsFromMap(fmap,['stokmiktar','miktar','qty'])||0;

@@ -15,35 +15,52 @@ function looksLikeHeaderLine(line){
   return HEADER_RE.test(String(line||''));
 }
 
+function fixTrMojibake(s){
+  return String(s??'')
+    .replace(/Ý/g,'İ').replace(/ý/g,'ı')
+    .replace(/Þ/g,'Ş').replace(/þ/g,'ş')
+    .replace(/Ð/g,'Ğ').replace(/ð/g,'ğ');
+}
+
 function scoreHeaderText(t){
   const head=String(t||'').slice(0,2500);
   let s=0;
   if(looksLikeHeaderLine(head))s+=5;
   if(/Malzeme1|Birim Fiyat|Stok Miktar|\bPP\b|Madde kodu/i.test(head))s+=3;
-  if(/�/.test(head))s-=4; // bozuk UTF-8
+  if(/�/.test(head))s-=8;
+  s-=(head.match(/[ýÝþÞðÐ]/g)||[]).length*4;
+  s+=(head.match(/[İıŞşĞğÜüÖöÇç]/g)||[]).length;
+  if(/Üretim|Miktarı|Malzeme/i.test(head.slice(0,400)))s+=2;
   return s;
+}
+
+function decodeWin1254(buf){
+  try{return new TextDecoder('windows-1254').decode(buf)}catch(_){}
+  try{return new TextDecoder('iso-8859-9').decode(buf)}catch(_){}
+  return buf.toString('latin1');
 }
 
 function bufferText(buffer){
   if(!buffer)return '';
   const buf=Buffer.isBuffer(buffer)?buffer:Buffer.from(buffer);
   if(buf.length>=2&&buf[0]===0xFF&&buf[1]===0xFE){
-    return buf.toString('utf16le').replace(/^\uFEFF/,'');
+    return fixTrMojibake(buf.toString('utf16le').replace(/^\uFEFF/,''));
   }
   if(buf.length>=2&&buf[0]===0xFE&&buf[1]===0xFF){
     const swapped=Buffer.alloc(buf.length-2);
     for(let i=2;i+1<buf.length;i+=2){swapped[i-2]=buf[i+1];swapped[i-1]=buf[i]}
-    return swapped.toString('utf16le').replace(/^\uFEFF/,'');
+    return fixTrMojibake(swapped.toString('utf16le').replace(/^\uFEFF/,''));
+  }
+  if(buf.length>=3&&buf[0]===0xEF&&buf[1]===0xBB&&buf[2]===0xBF){
+    return buf.slice(3).toString('utf8');
   }
   const utf8=String(buf.toString('utf8')||'').replace(/^\uFEFF/,'');
-  let cp1254='';
-  try{cp1254=String(buf.toString('latin1')||'').replace(/^\uFEFF/,'')}catch(_){cp1254=''}
-  // Hostinger/İstikbal CSV çoğu zaman Windows-1254; Türkçe başlıklar UTF-8'de bozulur
+  const win=fixTrMojibake(decodeWin1254(buf).replace(/^\uFEFF/,''));
   const cands=[
     {t:utf8,s:scoreHeaderText(utf8)},
-    {t:cp1254,s:scoreHeaderText(cp1254)+(/Üretim|Miktarı|Malzeme/i.test(cp1254.slice(0,300))?2:0)}
+    {t:win,s:scoreHeaderText(win)}
   ].sort((a,b)=>b.s-a.s);
-  return cands[0].t||utf8;
+  return fixTrMojibake(cands[0].t||utf8);
 }
 
 function detectDelim(line){
@@ -138,13 +155,21 @@ function parseCsvBuffer(buffer){
       headers.forEach((h,i)=>{row[h]=cols[i]!=null?cols[i]:''});
       return fillIstikbalAliases(row,headers,cols);
     });
-    return records;
+    return records.map(fixPurchaseRowText);
   }
   const headers=Object.keys(records[0]||{});
   return records.map(row=>{
     const cols=headers.map(h=>row[h]);
-    return fillIstikbalAliases(row,headers,cols);
+    return fixPurchaseRowText(fillIstikbalAliases(row,headers,cols));
   });
+}
+
+function fixPurchaseRowText(row){
+  if(!row||typeof row!=='object')return row;
+  for(const k of Object.keys(row)){
+    if(typeof row[k]==='string')row[k]=fixTrMojibake(row[k]);
+  }
+  return row;
 }
 
 /** İstikbal stok listesinde fatura yok → her aktarıma tek sanal no (gerçek faturalarla karışmaz). */
@@ -171,6 +196,7 @@ function virtualInvoiceNo({supplier='',date='',mode='',now=new Date()}={}){
 module.exports={
   purchaseHeaderKey,
   looksLikeHeaderLine,
+  fixTrMojibake,
   bufferText,
   detectDelim,
   headerIndex,

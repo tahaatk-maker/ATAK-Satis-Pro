@@ -55,4 +55,20 @@ assert.ok(String(depoRows[0]['Birim Fiyat']||'').includes('15.545'),'PP → Biri
 assert.equal(String(depoRows[0]['Miktar']||''),'2,000');
 assert.ok(depoRows[0]['Malzeme Uzun Metni E'],'ad uzun metin');
 
+function toWin1254(str){
+  const map={ı:0xFD,İ:0xDD,ş:0xFE,Ş:0xDE,ğ:0xF0,Ğ:0xD0,ü:0xFC,Ü:0xDC,ö:0xF6,Ö:0xD6,ç:0xE7,Ç:0xC7};
+  const bytes=[];
+  for(const ch of str){
+    if(Object.prototype.hasOwnProperty.call(map,ch))bytes.push(map[ch]);
+    else bytes.push(ch.charCodeAt(0));
+  }
+  return Buffer.from(bytes);
+}
+const trCsv=toWin1254(';Malzeme1;Üretim yeri;Stok Miktarı;PP\n;borneo açılır masa;4041;1,000;₺10,00\n;borneo konsol aynası;4041;1;1\n');
+const trRows=csv.parseCsvBuffer(trCsv);
+assert.equal(trRows[0]['Malzeme1'],'borneo açılır masa');
+assert.equal(trRows[1]['Malzeme1'],'borneo konsol aynası');
+assert.equal(csv.fixTrMojibake('borneo açýlýr masa'),'borneo açılır masa');
+assert.equal(csv.fixTrMojibake('borneo konsol aynasý'),'borneo konsol aynası');
+
 console.log('OK purchase-csv tests passed');
