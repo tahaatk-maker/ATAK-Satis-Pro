@@ -1,0 +1,26 @@
+'use strict';
+const assert=require('assert');
+const fs=require('fs');
+const path=require('path');
+const root=path.join(__dirname,'..');
+const html=fs.readFileSync(path.join(root,'public','personel.html'),'utf8');
+const js=fs.readFileSync(path.join(root,'public','assets','personel.js'),'utf8');
+const server=fs.readFileSync(path.join(root,'server.js'),'utf8');
+
+assert.match(html,/id="salesTrackingCard"/);
+assert.match(html,/id="salesTrackingPanel"/);
+assert.match(html,/id="stockInCard"/);
+assert.match(html,/id="stockInPanel"/);
+assert.match(html,/id="staffStockSearch"/);
+assert.match(html,/id="staffStockCategory"/);
+assert.doesNotMatch(html,/id="staffTrackingStatus"/);
+assert.match(js,/function canStockIn\(\)\{return has\('screen_stock_in'\)\|\|has\('stock_manage'\)/);
+assert.doesNotMatch(js,/function canStockIn\(\)\{return has\('stock_manage'\)\|\|has\('screen_stock_in'\)\|\|has\('\*'\)\}/);
+assert.match(js,/if\(canScreen\('screen_sales_tracking'\)\)/);
+assert.match(js,/if\(canStockIn\(\)\)\$\('#stockInCard'/);
+assert.match(js,/renderStaffStockView/);
+assert.match(js,/staffStockSearch/);
+assert.match(server,/categories:\(s\.categories\|\|\[\]\)\.filter/);
+assert.match(server,/Stok bak \(personel listesi\)/);
+assert.match(server,/Stok girişi \(ayrı ekran\)/);
+console.log('personel-stock-ui.test.js ok');

@@ -26,7 +26,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/personel.css?v=fix-v248">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v236">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v261">
 <link rel="stylesheet" href="/assets/sip-call.css?v=fix-v236">
 </head>
 <body>
@@ -108,6 +108,12 @@ html.atak-reset-link #resetForm{display:grid!important}
 <small>Müşteri → ürün → ödeme</small>
 </button>
 
+<button id="salesTrackingCard" class="module-card hidden tile-track" type="button">
+<span class="mod-ico">🚚</span>
+<b>SATIŞ TAKİBİ</b>
+<small>Sipariş durumu, teslimat</small>
+</button>
+
 <button id="invoiceCard" class="module-card hidden tile-invoice" type="button">
 <span class="mod-ico">📄</span>
 <b>FATURALAR</b>
@@ -128,8 +134,14 @@ html.atak-reset-link #resetForm{display:grid!important}
 
 <button id="stockCard" class="module-card hidden tile-stock" type="button">
 <span class="mod-ico">▣</span>
-<b>STOK / DEPO</b>
-<small>Stok girişi ve depo bakiyesi</small>
+<b>STOK BAK</b>
+<small>Tüm ürünler, arama ve kategori</small>
+</button>
+
+<button id="stockInCard" class="module-card hidden tile-stock-in" type="button">
+<span class="mod-ico">＋</span>
+<b>STOK GİRİŞİ</b>
+<small>Fatura no ile stok ekle</small>
 </button>
 
 <button id="announceCard" class="module-card tile-news" type="button">
@@ -678,16 +690,71 @@ html.atak-reset-link #resetForm{display:grid!important}
 </div>
 </section>
 
+<section id="salesTrackingPanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">SATIŞ</small>
+<h2>Satış Takibi</h2>
+<p>Sipariş durumu ve teslimat. Rapid taslak varsa Satış Merkezi’nden tamamlanır.</p>
+</div>
+<button id="staffTrackingRefresh" class="ghost-btn" type="button">Yenile</button>
+</div>
+<div class="toolbar finance-filters">
+<label>Durum
+<select id="staffTrackingFilter">
+<option value="">Tümü</option>
+<option value="needs_completion">Tamamlanacak Rapid</option>
+<option value="order_received">Sipariş Alındı</option>
+<option value="preparing">Hazırlanıyor</option>
+<option value="ready">Teslimata Hazır</option>
+<option value="shipped">Sevkte</option>
+<option value="delivered">Teslim Edildi</option>
+</select>
+</label>
+<label>Ara<input id="staffTrackingSearch" placeholder="Müşteri, satış no, ürün veya personel"></label>
+</div>
+<div id="staffTrackingSummary" class="stat-grid"></div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Satış No</th><th>Müşteri</th><th>Bayi / Satıcı</th><th>Tutar</th><th>Durum</th><th></th></tr></thead>
+<tbody id="staffTrackingRows"></tbody>
+</table>
+</div>
+<div id="staffTrackingHint" class="status"></div>
+</section>
+
 <section id="stockPanel" class="panel hidden">
 <div class="panel-head">
 <div>
 <small class="eyebrow">STOK</small>
-<h2>Stok &amp; Depo</h2>
-<p>Mal gelince soldan fatura no ile giriş yapın. Aynı faturayı aynı ürüne ikinci kez işleyemezsiniz.</p>
+<h2>Stok bak</h2>
+<p>Tüm ürünler. Stoğu 0 olanlar da listelenir. Eklemek için ana sayfadaki Stok Girişi yetkisi gerekir.</p>
 </div>
 </div>
-<div id="stockStatus" class="status">Yükleniyor...</div>
-<form id="staffReceiptForm" class="stock-in-card hidden">
+<div class="toolbar finance-filters">
+<label>Ara<input id="staffStockSearch" placeholder="Kod, ad, marka veya barkod"></label>
+<label>Kategori<select id="staffStockCategory"><option value="">Tüm kategoriler</option></select></label>
+</div>
+<p id="staffStockCount" class="note">Yükleniyor…</p>
+<div id="stockStatus" class="status"></div>
+<div class="table-wrap" style="margin-top:8px">
+<table>
+<thead><tr><th>Ürün</th><th>Kategori</th><th>Depo / stok</th><th>Toplam</th><th>Kullanılabilir</th></tr></thead>
+<tbody id="stockRows"></tbody>
+</table>
+</div>
+</section>
+
+<section id="stockInPanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">STOK GİRİŞİ</small>
+<h2>Fatura ile stok ekle</h2>
+<p>Mal gelince fatura no ile giriş yapın. Aynı faturayı aynı ürüne ikinci kez işleyemezsiniz.</p>
+</div>
+</div>
+<div id="stockInStatus" class="status"></div>
+<form id="staffReceiptForm" class="stock-in-card">
   <small class="eyebrow">MAL GELDİ</small>
   <h2>Stok girişi</h2>
   <p class="note">Adet eklenir. Fatura numarası zorunlu — maliyetler karışmasın diye aynı fatura + aynı ürün tekrar işlenmez.</p>
@@ -703,12 +770,6 @@ html.atak-reset-link #resetForm{display:grid!important}
   <p class="status" id="staffReceiptHint"></p>
   <button class="primary-btn" type="submit">Stoka Ekle</button>
 </form>
-<div class="table-wrap" style="margin-top:16px">
-<table>
-<thead><tr><th>Ürün</th><th>Depo</th><th>Stok</th><th>Kullanılabilir</th></tr></thead>
-<tbody id="stockRows"></tbody>
-</table>
-</div>
 <div class="panel-head" style="margin-top:18px">
 <div><small class="eyebrow">GİRİŞLER</small><h2>Son fatura ile girişler</h2></div>
 </div>
@@ -821,6 +882,6 @@ html.atak-reset-link #resetForm{display:grid!important}
   </div>
 </div>
 <script src="/assets/sip-call.js?v=fix-v236"></script>
-<script src="/assets/personel.js?v=fix-v248"></script>
+<script src="/assets/personel.js?v=fix-v261"></script>
 </body>
 </html>

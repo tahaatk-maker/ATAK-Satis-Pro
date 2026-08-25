@@ -753,9 +753,9 @@ const PERMISSION_CATALOG=[
   {id:'sale_deduct_stock',name:'Satışta stok düş',group:'Satış işlemleri'},
   {id:'products_view',name:'Ürün görüntüle',group:'Ürün & Stok'},
   {id:'products_manage',name:'Ürün yönet',group:'Ürün & Stok'},
-  {id:'stock_view',name:'Stok görüntüle',group:'Ürün & Stok'},
+  {id:'stock_view',name:'Stok bak (personel listesi)',group:'Ürün & Stok'},
   {id:'stock_manage',name:'Stok yönet',group:'Ürün & Stok'},
-  {id:'screen_stock_in',name:'Stok girişi (fatura no ile)',group:'Ürün & Stok'},
+  {id:'screen_stock_in',name:'Stok girişi (ayrı ekran)',group:'Ürün & Stok'},
   {id:'customers_manage',name:'Müşteri kartı düzenle',group:'Finans işlemleri'},
   {id:'finance_view',name:'Finans verisi görüntüle',group:'Finans işlemleri'},
   {id:'finance_manage',name:'Finans yönet (tahsilat/masraf)',group:'Finans işlemleri'},
@@ -3247,7 +3247,7 @@ app.get('/web-api/admin/stock-center',requireAdminOrStaffAny('stock_manage','sto
       items:(r.items||[]).map(i=>({productCode:i.productCode,productName:i.productName,quantity:i.quantity,unitCost:i.unitCost,newPurchasePrice:i.newPurchasePrice}))
     };
   }):[];
-  res.json({warehouses:s.warehouses,products,stocks,movements:s.stockMovements.slice(0,500),receipts,canReceive,canManage});
+  res.json({warehouses:s.warehouses,products,stocks,movements:s.stockMovements.slice(0,500),receipts,canReceive,canManage,categories:(s.categories||[]).filter(c=>c.active!==false).map(c=>({id:c.id,name:c.name}))});
 });
 app.post('/web-api/admin/warehouse',requireAdmin,(req,res)=>{
   const s=readStore(),x=req.body||{},name=String(x.name||'').trim();

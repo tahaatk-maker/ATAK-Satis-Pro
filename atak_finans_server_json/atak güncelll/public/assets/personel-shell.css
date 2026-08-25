@@ -146,6 +146,8 @@ main{max-width:1250px;margin:auto;padding:22px 20px 48px}
 .modules.kiosk .tile-collect{background:linear-gradient(135deg,#15803d,#22c55e)}
 .modules.kiosk .tile-finance{background:linear-gradient(135deg,#0f766e,#14b8a6)}
 .modules.kiosk .tile-stock{background:linear-gradient(135deg,#b45309,#f59e0b)}
+.modules.kiosk .tile-stock-in{background:linear-gradient(135deg,#9a3412,#ea580c)}
+.modules.kiosk .tile-track{background:linear-gradient(135deg,#1d4ed8,#38bdf8)}
 .modules.kiosk .tile-news{background:linear-gradient(135deg,#4c1d95,#7c3aed)}
 .modules.kiosk .tile-training{background:linear-gradient(135deg,#1e3a8a,#0ea5e9)}
 .modules.kiosk .tile-invoice{background:linear-gradient(135deg,#1e3a8a,#2563eb)}
