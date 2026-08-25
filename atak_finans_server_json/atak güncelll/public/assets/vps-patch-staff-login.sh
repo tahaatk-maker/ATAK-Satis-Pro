@@ -4,7 +4,7 @@
 #   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/dijitalplanet-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/dijitalplanet-474e}"
-EXPECT="6.3.262-dijitalplanet"
+EXPECT="6.3.263-eva-rapid"
 log(){ echo "$*"; }
 die(){
   echo "FAIL: $*"

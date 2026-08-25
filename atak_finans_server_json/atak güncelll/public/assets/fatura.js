@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v265 */
+/* ATAK_FATURA_BUILD=fix-v266 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={view:'pending_sales',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -207,6 +207,17 @@ q('#dpTestBtn')?.addEventListener('click',async()=>{
     const r=await api('/web-api/admin/invoice-integration/digital-planet-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(dpPayload().digitalPlanet)});
     toast(r.message||'Giriş başarılı');
   }catch(e){toast(e.message)}
+});
+q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
+  const url=String(q('#atakDmsCopyUrl')?.value||'').trim();
+  if(!url || url.indexOf('client_id=')<0 || url.indexOf('client_secret=')<0)return toast('Hazır URL tam değil, sayfayı yenileyin');
+  try{
+    await navigator.clipboard.writeText(url);
+    toast('EVA Rapid Veri Çek URL kopyalandı — EVA Rapid360 ayarına yapıştırın');
+  }catch(_){
+    q('#atakDmsCopyUrl')?.select();
+    try{document.execCommand('copy');toast('EVA Rapid Veri Çek URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}
+  }
 });
 
 boot();
