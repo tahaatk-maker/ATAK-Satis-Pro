@@ -37,6 +37,7 @@ const passwordReset = require('./lib/password-reset');
 const staffEmail = require('./lib/staff-email');
 const purchaseCsv = require('./lib/purchase-csv');
 const istikbalCategory = require('./lib/istikbal-category');
+const sessionActor = require('./lib/session-actor');
 
 const app = express();
 const ROOT = __dirname;
@@ -854,10 +855,10 @@ function verifyPassword(password,stored){
   return expected.length===calculated.length&&crypto.timingSafeEqual(expected,calculated);
 }
 function currentSessionUser(req){
-  if(req.session?.systemOwner===true)return{id:'system-owner',name:'Sistem Yöneticisi',username:'admin',role:'owner',roleName:'Sahip / Tam Yetki',permissions:['*'],active:true};
-  return req.session?.user||null;
+  return sessionActor.currentSessionUser(req);
 }
 function hasPermission(req,permission){
+  if(req.session?.systemOwner===true)return true;
   const permissions=currentSessionUser(req)?.permissions||[];
   return permissions.includes('*')||permissions.includes(permission);
 }
@@ -869,13 +870,13 @@ function requirePermission(permission){
   };
 }
 function currentActor(req){
-  // Personel oturumu varsa onu kullan — admin paneli cookie/bayrağı personel kimliğini ezmesin
-  if(req.session?.staffUser) return req.session.staffUser;
-  if(req.session?.systemOwner===true){
-    return {id:'system-owner',name:'Sistem Yöneticisi',username:'admin',role:'owner',permissions:['*']};
-  }
-  if(req.session?.user) return req.session.user;
-  return null;
+  return sessionActor.currentActor(req);
+}
+function applyReviewActor(row,req){
+  const a=currentActor(req);
+  row.reviewedBy=sessionActor.actorDisplayName(a,'Yönetici');
+  row.reviewedById=a?.id||'';
+  row.reviewedAt=new Date().toISOString();
 }
 /** Satış tutarı: total yoksa customerDelta / amount */
 function saleAmount(tx={}){
@@ -2053,8 +2054,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.258-staff-mail',
-    build:'fix-v261',
+    version:'6.3.259-actor-name',
+    build:'fix-v262',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -6915,16 +6916,18 @@ app.get('/web-api/admin/cancellation-requests',requireAdminOrStaffAny('finance_m
   const s=readStore(),u=currentActor(req),canManage=actorIsManager(req);
   let rows=s.cancellationRequests||[];
   if(!canManage)rows=rows.filter(r=>String(r.requestedById)===String(u?.id||'')||String(r.requestedByName)===String(u?.name||''));
-  res.json({ok:true,canManage,rows,managerAlert:canManage&&rows.some(r=>r.status==='pending')});
+  const out=rows.map(r=>({...r,reviewedBy:sessionActor.resolveReviewedBy(s,r)||r.reviewedBy||''}));
+  res.json({ok:true,canManage,rows:out,managerAlert:canManage&&out.some(r=>r.status==='pending')});
 });
 app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny('finance_manage','finance_view','orders_manage','users_manage'),(req,res)=>{
   if(!actorIsManager(req))return res.status(403).json({error:'Yönetici onayı gerekli'});
   const s=readStore(),row=(s.cancellationRequests||[]).find(r=>String(r.id)===String(req.params.id));
   if(!row)return res.status(404).json({error:'İptal/iade talebi bulunamadı'});
   if(row.status!=='pending')return res.status(400).json({error:'Talep daha önce sonuçlandırılmış'});
-  const action=String(req.body?.action||''),note=String(req.body?.note||''),actor=currentActor(req)?.name||'Yönetici';
+  const action=String(req.body?.action||''),note=String(req.body?.note||'');
+  const actor=sessionActor.actorDisplayName(currentActor(req),'Yönetici');
   if(action==='reject'){
-    row.status='rejected';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
+    row.status='rejected';applyReviewActor(row,req);row.reviewNote=note;
     const rejectLabel=row.targetType==='customer_edit'?'Müşteri düzenleme reddedildi'
       :row.targetType==='customer_delete'?'Müşteri silme reddedildi'
       :row.targetType==='sale_edit'?'Satış düzenleme reddedildi'
@@ -6940,7 +6943,7 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny
       const data=parseCustomerPayload({...(row.payload?.after||{}),id:customer.id});
       data.customerCode=customerCode.resolveForSave(s,data.customerCode,{existing:customer});
       applyCustomerData(customer,data);
-      row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
+      row.status='approved';applyReviewActor(row,req);row.reviewNote=note;
       audit(s,'Müşteri düzenleme onaylandı',customer.name,{reason:row.reason,personel:row.requestedByName});
       writeStore(s);return res.json({ok:true,row,customer:{...customer,balance:customerBalance(s,customer.id)}});
     }catch(e){return res.status(400).json({error:e.message})}
@@ -6949,7 +6952,7 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny
     const customer=(s.customers||[]).find(c=>String(c.id)===String(row.targetId));
     if(!customer)return res.status(404).json({error:'Müşteri bulunamadı'});
     if(customer.active===false||customer.deletedAt){
-      row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note||'Zaten pasif';
+      row.status='approved';applyReviewActor(row,req);row.reviewNote=note||'Zaten pasif';
       writeStore(s);return res.json({ok:true,row,alreadyDeleted:true});
     }
     customer.active=false;
@@ -6957,7 +6960,7 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny
     customer.deletedBy=actor;
     customer.deleteReason=row.reason||'';
     customer.updatedAt=new Date().toISOString();
-    row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
+    row.status='approved';applyReviewActor(row,req);row.reviewNote=note;
     audit(s,'Müşteri silme onaylandı',customer.name,{reason:row.reason,personel:row.requestedByName,balance:customerBalance(s,customer.id)});
     writeStore(s);
     return res.json({ok:true,row,customer:{...customer,balance:customerBalance(s,customer.id)}});
@@ -6967,7 +6970,7 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny
     if(!sale)return res.status(404).json({error:'Satış bulunamadı'});
     try{
       const result=applySaleEditInStore(s,sale,row.payload?.after||{},actor,row.reason);
-      row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
+      row.status='approved';applyReviewActor(row,req);row.reviewNote=note;
       audit(s,'Satış düzenleme onaylandı',sale.reference||sale.id,{reason:row.reason,personel:row.requestedByName,total:result.after.total});
       writeStore(s);return res.json({ok:true,row,result});
     }catch(e){return res.status(400).json({error:e.message})}
@@ -6980,7 +6983,7 @@ app.post('/web-api/admin/cancellation-request/:id/review',requireAdminOrStaffAny
     if(isSaleCancel && target){
       target.cancelKind=(row.requestKind==='return'||row.targetType==='sale_return')?'return':'cancel';
     }
-    row.status='approved';row.reviewedBy=actor;row.reviewedAt=new Date().toISOString();row.reviewNote=note;
+    row.status='approved';applyReviewActor(row,req);row.reviewNote=note;
     const okLabel=(row.requestKind==='return'||row.targetType==='sale_return')?'İade talebi onaylandı':'İptal talebi onaylandı';
     audit(s,okLabel,row.targetReference||row.targetId,{targetType:row.targetType,reason:row.reason,commissionCancelled:target.cancelledCommissionAmount||0});
     writeStore(s);res.json({ok:true,row,result});
