@@ -9,7 +9,7 @@ function shopHost(host){
 
 function smtpConfig(fromStore, env=process.env){
   const raw=(fromStore&&typeof fromStore==='object')?fromStore:{};
-  const host=String(env.SMTP_HOST||raw.host||'').trim()||'smtp.gmail.com';
+  const host=String(env.SMTP_HOST||raw.host||'').trim()||'smtp.hostinger.com';
   const user=String(env.SMTP_USER||raw.user||'').trim();
   const pass=String(env.SMTP_PASS||raw.pass||'').replace(/\s+/g,'');
   const from=String(env.SMTP_FROM||raw.from||user||'').trim();
@@ -27,7 +27,7 @@ function transportOptions(cfg){
   const port=Number(cfg.port||587)||587;
   const secure=cfg.secure===true||port===465;
   return{
-    host:cfg.host||'smtp.gmail.com',
+    host:cfg.host||'smtp.hostinger.com',
     port,
     secure,
     requireTLS:!secure,
@@ -38,13 +38,18 @@ function transportOptions(cfg){
   };
 }
 
-function friendlyMailError(err){
+function friendlyMailError(err, cfg){
   const m=String(err&&(err.response||err.message)||err||'Mail gönderilemedi');
+  const host=String(cfg&&cfg.host||'').toLowerCase();
+  const gmail=/gmail|google/i.test(host);
   if(/EAUTH|Invalid login|Username and Password not accepted|535/i.test(m)){
-    return 'Gmail şifresi reddedildi. Normal Gmail şifresi olmaz. Google Hesap → Güvenlik → Uygulama şifreleri ile 16 haneli şifre üretin.';
+    if(gmail){
+      return 'Gmail şifresi reddedildi. @atakhome.com.tr kutusu Gmail değildir. Sunucuyu smtp.hostinger.com yapın; şifre Hostinger e-posta şifresi olsun (Google uygulama şifresi değil).';
+    }
+    return 'SMTP giriş reddedildi. Sunucu smtp.hostinger.com, kullanıcı tam adres (ör. taha.atak@atakhome.com.tr), şifre o kutunun Hostinger e-posta şifresi olmalı.';
   }
   if(/ECONNECTION|ETIMEDOUT|ECONNREFUSED|ESOCKET|timeout|connect/i.test(m)){
-    return 'SMTP sunucusuna bağlanılamadı. Port 587 (STARTTLS) deneyin. Hostinger bazen 465’i kapar.';
+    return 'SMTP sunucusuna bağlanılamadı. Hostinger için smtp.hostinger.com + port 465 (SSL) veya 587 (SSL kapalı) deneyin.';
   }
   return m.slice(0,280);
 }
@@ -62,7 +67,7 @@ async function sendWith(nodemailer, cfg, mail){
 
 async function sendAppMail(cfg, mail, deps={}){
   if(!cfg||!cfg.enabled){
-    throw new Error('E-posta (SMTP) ayarı yok. Ayarlar → E-posta’dan Gmail kullanıcı ve uygulama şifresi kaydedin.');
+    throw new Error('E-posta (SMTP) ayarı yok. Ayarlar → E-posta’dan smtp.hostinger.com ve kutu şifresini kaydedin.');
   }
   if(!String(mail&&mail.to||'').trim())throw new Error('Alıcı e-posta yok');
   let nodemailer=deps.nodemailer;
@@ -82,10 +87,10 @@ async function sendAppMail(cfg, mail, deps={}){
         await send(nodemailer, {...cfg,port:587,secure:false}, mail);
         return true;
       }catch(second){
-        throw new Error(friendlyMailError(second));
+        throw new Error(friendlyMailError(second, cfg));
       }
     }
-    throw new Error(friendlyMailError(first));
+    throw new Error(friendlyMailError(first, cfg));
   }
 }
 

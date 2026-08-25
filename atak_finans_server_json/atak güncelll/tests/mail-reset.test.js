@@ -56,6 +56,15 @@ const user=reset.consumeResetToken(store,issued.token,'yeniSifre1',p=>'HASH:'+p,
 assert.equal(user.passwordHash,'HASH:yeniSifre1');
 assert.throws(()=>reset.consumeResetToken(store,issued.token,'yeniSifre1',p=>p,1_700_000_000_200),/kullanılmış/);
 
+assert.match(
+  mail.friendlyMailError({message:'535 Username and Password not accepted'}, {host:'smtp.gmail.com'}),
+  /smtp\.hostinger\.com/
+);
+assert.match(
+  mail.friendlyMailError({message:'Invalid login'}, {host:'smtp.hostinger.com'}),
+  /Hostinger e-posta şifresi/
+);
+
 async function testRetry587(){
   const sent=[];
   await mail.sendAppMail(

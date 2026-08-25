@@ -2327,7 +2327,7 @@ app.get('/web-api/admin/mail-settings',requirePermission('settings_manage'),(req
   const s=readStore(),cfg=smtpConfig(s),raw=s.settings.smtp||{};
   res.json({settings:{
     enabled:cfg.enabled,
-    host:raw.host||'smtp.gmail.com',
+    host:raw.host||'smtp.hostinger.com',
     port:Number(raw.port||587)||587,
     secure:raw.secure===true||Number(raw.port||0)===465,
     user:raw.user||'',
@@ -2347,7 +2347,7 @@ app.post('/web-api/admin/mail-settings',requirePermission('settings_manage'),(re
   const hasCreds=Boolean(user&&pass);
   s.settings.smtp={
     enabled:x.enabled===false?false:(x.enabled===true||hasCreds),
-    host:String(x.host||'smtp.gmail.com').trim()||'smtp.gmail.com',
+    host:String(x.host||'smtp.hostinger.com').trim()||'smtp.hostinger.com',
     port,
     secure:x.secure===true||port===465,
     user,
