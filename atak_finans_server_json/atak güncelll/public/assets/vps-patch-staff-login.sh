@@ -112,7 +112,7 @@ pm2 list
 
 H=$(curl -sS -m 10 http://127.0.0.1:3100/health || true)
 log "SONRA HEALTH=$H"
-echo "$H" | grep -q "$EXPECT" || die "health hala eski — calisan process yeni server.js degil"
+echo "$H" | grep -q "$EXPECT" || die "health hala eski (3100 eski process). admin.js yine de kopyalandi — panelde Ctrl+F5: sifre butonu sifirlama linki dener. SMTP: smtp.hostinger.com"
 
 CODE=$(curl -sS -m 8 -o /tmp/atak-sl.body -w "%{http_code}" -X POST http://127.0.0.1:3100/web-api/admin/staff-send-login -H "Content-Type: application/json" -d "{}" || true)
 log "POST /web-api/admin/staff-send-login HTTP=$CODE $(head -c 160 /tmp/atak-sl.body 2>/dev/null)"

@@ -2054,7 +2054,7 @@ app.get('/health',(req,res)=>{
     ok:true,
     service:'atakhome-erp-v2',
     version:'6.3.258-staff-mail',
-    build:'fix-v259',
+    build:'fix-v260',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,

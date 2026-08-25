@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v259 */
+/* ATAK_ADMIN_BUILD=fix-v260 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -1349,6 +1349,26 @@ q('#staffMailSaveBtn')?.addEventListener('click',async()=>{
     toast(`${r.updated||0} e-posta kaydedildi`);
   }catch(e){toast(e.message||'Kaydedilemedi')}
 });
+async function sendStaffResetLinksFallback(userId,all=false){
+  const d=await api('/web-api/admin/staff-emails');
+  const rows=(d.rows||[]).filter(r=>r&&r.email&&(all||String(r.id)===String(userId)));
+  if(!rows.length)throw new Error('Gönderilecek kayıtlı e-posta yok. Tabloda adresi kaydedin.');
+  let sent=0,lastErr='';
+  for(const row of rows){
+    try{
+      await api('/web-api/forgot-password',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username:row.username||row.email})
+      });
+      sent++;
+    }catch(x){lastErr=x.message||'mail gitmedi'}
+  }
+  if(!sent)throw new Error(lastErr||'Mail gönderilemedi. Ayarlar → E-posta: smtp.hostinger.com kaydedin.');
+  const msg=`${sent} kişiye şifre sıfırlama linki gitti. Maildeki “Şifreyi Sıfırla” ile yeni şifre belirlensin.`;
+  toast(msg);
+  if(q('#staffMailStatus'))q('#staffMailStatus').textContent=msg;
+  return sent;
+}
 async function sendStaffLoginMail(userId,all=false){
   try{
     const r=await api('/web-api/admin/staff-send-login',{
@@ -1357,7 +1377,14 @@ async function sendStaffLoginMail(userId,all=false){
     });
     toast(r.message||`${r.sent||0} şifre maili gönderildi`);
     if(q('#staffMailStatus')&&r.message)q('#staffMailStatus').textContent=r.message;
-  }catch(e){toast(e.message||'Şifre maili gönderilemedi')}
+    return;
+  }catch(e){
+    const missing=e.status===404||/sunucuda yok|6\.3\.256|API bulunamadı|Cannot POST/i.test(String(e.message||''));
+    if(!missing){toast(e.message||'Şifre maili gönderilemedi');return}
+  }
+  try{
+    await sendStaffResetLinksFallback(userId,all);
+  }catch(e2){toast(e2.message||'Şifre maili gönderilemedi')}
 }
 q('#staffMailSendPassBtn')?.addEventListener('click',()=>{
   if(!confirm('Kayıtlı e-postası olan tüm personele yeni panel şifresi mail ile gitsin mi?'))return;

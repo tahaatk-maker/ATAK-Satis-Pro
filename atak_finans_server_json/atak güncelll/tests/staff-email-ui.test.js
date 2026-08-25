@@ -19,5 +19,6 @@ const sendBlock=server.slice(server.indexOf("app.post('/web-api/admin/staff-send
 const mailAt=sendBlock.indexOf('await sendAppMail');
 const hashAt=sendBlock.indexOf('user.passwordHash=hashPassword(password)');
 assert.ok(mailAt>=0&&hashAt>mailAt,'şifre hash mail gittikten sonra yazılmalı');
-assert.match(adminJs,/Şifre API sunucuda yok/);
+assert.match(adminJs,/\/web-api\/forgot-password/);
+assert.match(adminJs,/sendStaffResetLinksFallback/);
 console.log('staff-email-ui.test.js ok');
