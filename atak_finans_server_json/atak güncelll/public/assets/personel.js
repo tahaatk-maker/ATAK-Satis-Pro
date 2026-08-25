@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v261 */
+/* ATAK_PERSONEL_BUILD=fix-v264 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -150,7 +150,7 @@ async function loadSession(){
     const closed=[];
     if(!canScreen('screen_staff_sales_report'))closed.push('Personel Satış Raporu');
     if(!canScreen('screen_manager_approvals'))closed.push('Yönetici Onayları');
-    if(!canInvoiceCenter())closed.push('e-Fatura Merkezi');
+    if(!canInvoiceCenter())closed.push('Kesilmeyen Faturalar');
     if(!canSaleInvoice())closed.push('Fatura Kes');
     if(!canDeductStock())closed.push('Stok düş');
     if($('#permissionText')){
@@ -773,7 +773,7 @@ $('#salesCard').onclick=async()=>{
 };
 function openPersonelInvoiceCenter(){
   const w=window.open('/e-fatura','_blank','noopener');
-  if(!w)stToast('Tarayıcı yeni sekmeyi engelledi — e-Fatura ekranı açılamadı');
+  if(!w)stToast('Tarayıcı yeni sekmeyi engelledi — Kesilmeyen Faturalar açılamadı');
 }
 $('#invoiceCard')?.addEventListener('click',openPersonelInvoiceCenter);
 $('#invoiceHeaderBtn')?.addEventListener('click',openPersonelInvoiceCenter);

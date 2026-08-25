@@ -1,10 +1,10 @@
 #!/bin/bash
 # Sifre-mail API: 3100'u tutan ESKI node'u oldurur, yeni server.js baslatir.
 # store.json / musteri / stok DOKUNULMAZ. atakhome-web ve commerce DOKUNULMAZ.
-#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/stok-eksilt-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/kesilmeyen-fatura-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
 set -euo pipefail
-BRANCH="${ATAK_BRANCH:-cursor/stok-eksilt-474e}"
-EXPECT="6.3.260-stock-drop"
+BRANCH="${ATAK_BRANCH:-cursor/kesilmeyen-fatura-474e}"
+EXPECT="6.3.261-kesilmeyen"
 log(){ echo "$*"; }
 die(){
   echo "FAIL: $*"
@@ -58,6 +58,9 @@ copy_one(){
   [ -f "$SRC/public/personel.html" ] && cp -f "$SRC/public/personel.html" "$D/public/personel.html"
   [ -f "$SRC/public/assets/personel.js" ] && cp -f "$SRC/public/assets/personel.js" "$D/public/assets/personel.js"
   [ -f "$SRC/public/assets/personel-shell.css" ] && cp -f "$SRC/public/assets/personel-shell.css" "$D/public/assets/personel-shell.css"
+  [ -f "$SRC/public/fatura.html" ] && cp -f "$SRC/public/fatura.html" "$D/public/fatura.html"
+  [ -f "$SRC/public/assets/fatura.js" ] && cp -f "$SRC/public/assets/fatura.js" "$D/public/assets/fatura.js"
+  [ -f "$SRC/public/assets/fatura.css" ] && cp -f "$SRC/public/assets/fatura.css" "$D/public/assets/fatura.css"
   cp -a "$SRC/lib/." "$D/lib/"
   [ -f "$SRC/qnb-solist-adapter.js" ] && cp -f "$SRC/qnb-solist-adapter.js" "$D/qnb-solist-adapter.js"
   [ -f "$SRC/customer-excel-import.js" ] && cp -f "$SRC/customer-excel-import.js" "$D/customer-excel-import.js"
