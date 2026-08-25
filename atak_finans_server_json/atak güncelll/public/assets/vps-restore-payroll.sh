@@ -46,9 +46,8 @@ def score(path):
     hire = 0
     names = set()
     for p in people:
-        if Number := float(p.get("salaryMonthly") or 0):
-            if Number > 0:
-                sal += 1
+        if float(p.get("salaryMonthly") or 0) > 0:
+            sal += 1
         if str(p.get("hireDate") or "").strip():
             hire += 1
         n = str(p.get("name") or p.get("username") or "").casefold()

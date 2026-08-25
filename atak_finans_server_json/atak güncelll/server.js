@@ -2054,7 +2054,7 @@ app.get('/health',(req,res)=>{
     ok:true,
     service:'atakhome-erp-v2',
     version:'6.3.258-staff-mail',
-    build:'fix-v258',
+    build:'fix-v259',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -2294,10 +2294,6 @@ app.post('/web-api/admin/staff-send-login',requirePermission('users_manage'),asy
     const email=String(user.email||'').trim();
     if(!email){skipped++;continue}
     const password=generateStaffPassword();
-    user.passwordHash=hashPassword(password);
-    user.updatedAt=new Date().toISOString();
-    const st=(s.staff||[]).find(x=>String(x.userId)===String(user.id)||String(x.username||'').toLocaleLowerCase('tr-TR')===String(user.username||'').toLocaleLowerCase('tr-TR'));
-    if(st){st.passwordHash=user.passwordHash;st.email=email}
     const name=String(user.name||user.username||'').replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));
     try{
       await sendAppMail(s,{
@@ -2309,6 +2305,10 @@ app.post('/web-api/admin/staff-send-login',requirePermission('users_manage'),asy
           <p>Kullanıcı adı: <b>${String(user.username||'')}</b><br>Şifre: <b>${password}</b></p>
           <p style="color:#666;font-size:12px">Bu şifre yeni üretildi. Eski şifre geçersiz olur.</p>`
       });
+      user.passwordHash=hashPassword(password);
+      user.updatedAt=new Date().toISOString();
+      const st=(s.staff||[]).find(x=>String(x.userId)===String(user.id)||String(x.username||'').toLocaleLowerCase('tr-TR')===String(user.username||'').toLocaleLowerCase('tr-TR'));
+      if(st){st.passwordHash=user.passwordHash;st.email=email}
       sent++;
     }catch(e){
       errors.push(`${user.username||user.name}: ${e.message||'mail gitmedi'}`);

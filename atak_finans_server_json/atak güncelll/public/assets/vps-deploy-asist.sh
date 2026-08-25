@@ -11,7 +11,7 @@ die(){ log "FAIL: $*"; exit 1; }
 
 BRANCH="${ATAK_BRANCH:-cursor/asist-fatura-aktarim-474e}"
 EXPECT_V="${EXPECT_HEALTH:-6.3.258-staff-mail}"
-EXPECT_B="${EXPECT_BUILD:-fix-v258}"
+EXPECT_B="${EXPECT_BUILD:-fix-v259}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"

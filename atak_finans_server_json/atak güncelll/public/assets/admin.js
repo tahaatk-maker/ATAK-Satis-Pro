@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v258 */
+/* ATAK_ADMIN_BUILD=fix-v259 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -55,9 +55,11 @@ async function api(url,opt={}){
   }else if(r.status===502||r.status===504||r.status===524){
     throw new Error('Aktarım uzun sürdü. Tekrar Aktar’a basın; kaldığı yerden devam eder.');
   }else if(r.redirected||/^\s*</.test(text)){
-    const err=new Error(String(url||'').includes('excel-import')
-      ?'Aktarım kesildi. Tekrar Aktar’a basın; kaldığı yerden devam eder.'
-      :'API bulunamadı (sunucu güncellemesi gerekli)');
+    const err=new Error(String(url||'').includes('staff-send-login')||String(url||'').includes('staff-emails')
+      ?'Şifre API sunucuda yok (hâlâ eski 6.3.256). VPS’te vps-patch-staff-login.sh çalıştırın, sonra Ctrl+F5.'
+      :(String(url||'').includes('excel-import')
+        ?'Aktarım kesildi. Tekrar Aktar’a basın; kaldığı yerden devam eder.'
+        :'API bulunamadı (sunucu güncellemesi gerekli)'));
     err.status=r.status;
     throw err;
   }
