@@ -59,6 +59,6 @@ assert.doesNotMatch(server, /if\(req\.session\?\.systemOwner===true\)return\{id:
 
 const adminJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'admin.js'), 'utf8');
 assert.match(adminJs, /function fillAdminChip/);
-assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v26/);
+assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v27/);
 
 console.log('session-actor.test.js ok');

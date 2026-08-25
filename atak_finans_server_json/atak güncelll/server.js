@@ -803,7 +803,8 @@ function sanitizePermissions(list,role){
   return cleaned.length?cleaned:preset.slice();
 }
 function staffCanInvoice(req){
-  return actorHasPermission(req,'sale_invoice_qnb')||actorHasPermission(req,'finance_manage')||actorHasPermission(req,'invoices_manage');
+  return actorHasPermission(req,'sale_invoice_qnb')||actorHasPermission(req,'finance_manage')||actorHasPermission(req,'invoices_manage')
+    ||actorHasPermission(req,'screen_sales_center')||actorHasPermission(req,'orders_manage');
 }
 const INVOICE_CENTER_VIEW_PERMS=[
   'screen_invoice_center','invoices_manage','sale_invoice_qnb','screen_uninvoiced','finance_manage',
@@ -2068,8 +2069,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.266-musteri-hub',
-    build:'fix-v269',
+    version:'6.3.267-satis-hub',
+    build:'fix-v270',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -3869,10 +3870,12 @@ function customerSearchHandler(req,res){
   const id=String(req.query.id||'').trim();
   const listAll=['1','true','yes'].includes(String(req.query.list||'').toLowerCase());
   const found=customerSearch.searchIndex(s,{q,id,limit,listAll});
-  if(found.needQuery)return res.json({ok:true,total:found.total,rows:[],needQuery:true,limit});
+  if(found.needQuery)return res.json({ok:true,total:found.total,rows:[],needQuery:true,limit,uninvoicedCustomerCount:0});
   const bal=customerBalanceMap(s);
+  const invIndex=customerInvoiceIndex(s);
   const rows=found.entries.map(entry=>{
     const c=entry.c;
+    const stats=invIndex.map.get(String(c.id))||{pending:0,issued:0,lastTotal:0,lastDate:''};
     return {
       id:c.id,name:c.name||'',firstName:c.firstName||'',lastName:c.lastName||'',phone:c.phone||'',email:c.email||'',
       taxNo:c.taxNo||'',tckn:c.tckn||'',birthDate:c.birthDate||'',city:c.city||'',district:c.district||'',
@@ -3885,10 +3888,15 @@ function customerSearchHandler(req,res){
       rapidCustAccount:c.rapidCustAccount||'',
       guarantor:normalizeGuarantor(c.guarantor),
       balance:bal.get(String(c.id))||0,
-      active:c.active!==false
+      active:c.active!==false,
+      invoicePending:Number(stats.pending||0),
+      invoiceIssued:Number(stats.issued||0),
+      lastSaleTotal:Number(stats.lastTotal||0),
+      lastSaleDate:stats.lastDate||'',
+      invoiceTone:invoiceToneOf(stats)
     };
   });
-  res.json({ok:true,total:found.total,rows,needQuery:false,limit});
+  res.json({ok:true,total:found.total,rows,needQuery:false,limit,uninvoicedCustomerCount:invIndex.pendingCustomerCount});
 }
 app.get('/web-api/admin/customers/search',requireAdminOrStaffAny('customers_manage','orders_manage','finance_view','finance_manage'),customerSearchHandler);
 // Alias — bazı proxy/yönlendirmelerde /customers/search takılırsa
@@ -4618,7 +4626,7 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
     warehouses:[],
     pendingInvoices:(s.financeTransactions||[])
       .filter(t=>t.kind==='sale'&&!t.cancelled&&String(t.customerId)===String(customer.id)&&!rapidSalesCatalog.isOpenRapidSale(t)&&saleNeedsInvoice(t.invoiceStatus))
-      .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))
+      .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')))
       .map(t=>{
         const rec=(s.invoiceQueue||[]).find(r=>String(r.saleId)===String(t.id));
         return{
@@ -4632,6 +4640,19 @@ app.get('/web-api/admin/customer-detail/:id',requireAdminOrStaffAny('finance_man
           itemSummary:(t.items||[]).map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', ')
         };
       }),
+    invoiceSummary:(()=>{
+      const stats=customerInvoiceIndex(s).map.get(String(customer.id))||{pending:0,issued:0,lastTotal:0,lastDate:''};
+      return {pending:stats.pending,issued:stats.issued,lastSaleTotal:stats.lastTotal,lastSaleDate:stats.lastDate,tone:invoiceToneOf(stats)};
+    })(),
+    invoiceHistory:(s.financeTransactions||[])
+      .filter(t=>t.kind==='sale'&&!t.cancelled&&String(t.customerId)===String(customer.id)&&!rapidSalesCatalog.isOpenRapidSale(t))
+      .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))
+      .slice(0,30)
+      .map(t=>({
+        id:t.id,reference:t.reference||'',date:t.date||'',total:Number(t.total||0),
+        invoiceStatus:t.invoiceStatus||'pending',invoiceNumber:t.invoiceNumber||'',
+        itemSummary:(t.items||[]).map(i=>`${i.quantity||1}× ${i.productName||i.materialCode||i.productCode||'Ürün'}`).join(', ')
+      })),
     promissoryNotes:(s.promissoryNotes||[])
       .filter(n=>n.customerId===customer.id)
       .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))
@@ -4724,7 +4745,33 @@ app.post('/web-api/admin/customer/:id/delete-request',requireAdminOrStaff('custo
 
 function saleNeedsInvoice(status){
   const st=String(status||'pending').toLowerCase();
-  return st==='pending'||st==='queued'||st==='queue_qnb';
+  return st==='pending'||st==='queue_qnb';
+}
+function customerInvoiceIndex(s){
+  const map=new Map();
+  const pendingCustomers=new Set();
+  for(const t of (s.financeTransactions||[])){
+    if(t.kind!=='sale'||t.cancelled)continue;
+    if(rapidSalesCatalog.isOpenRapidSale(t))continue;
+    const id=String(t.customerId||'');
+    if(!id)continue;
+    let row=map.get(id);
+    if(!row){row={pending:0,issued:0,lastTotal:0,lastDate:''};map.set(id,row)}
+    const st=String(t.invoiceStatus||'pending').toLowerCase();
+    if(saleNeedsInvoice(st)){row.pending+=1;pendingCustomers.add(id)}
+    else if(st==='issued')row.issued+=1;
+    if(String(t.date||'')>=row.lastDate){
+      row.lastDate=String(t.date||'');
+      row.lastTotal=Number(t.total||0);
+    }
+  }
+  return {map,pendingCustomerCount:pendingCustomers.size};
+}
+function invoiceToneOf(stats){
+  if(!stats)return 'new';
+  if(Number(stats.pending||0)>0)return 'pending';
+  if(Number(stats.issued||0)>0)return 'ok';
+  return 'new';
 }
 function normalizeSaleInvoiceStatus(raw){
   const st=String(raw||'not_required').toLowerCase().trim();
@@ -4748,10 +4795,12 @@ app.get('/web-api/admin/uninvoiced-sales',requireAdminOrStaffAny('screen_uninvoi
       customerName:customerMap.get(String(t.customerId))?.name||'',
       total:Number(t.total||0),
       paymentMethod:t.paymentMethod||'',
+      dealerId:t.dealerId||'',
+      dealerName:t.dealerName||t.dealer?.name||'',
       items:t.items||[],
       invoiceStatus:t.invoiceStatus||'pending'
     }))
-    .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.reference||'').localeCompare(String(b.reference||'')));
   res.json({ok:true,rows,count:rows.length});
 });
 
@@ -7276,9 +7325,9 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
       id:t.id,reference:t.reference||'',date:t.date||'',customerId:t.customerId||'',
       customerName:customerMap.get(String(t.customerId))?.name||'',total:Number(t.total||0),
       paymentMethod:t.paymentMethod||'',invoiceStatus:t.invoiceStatus||'pending',
-      invoiceQueueId:t.invoiceQueueId||''
+      invoiceQueueId:t.invoiceQueueId||'',dealerId:t.dealerId||'',dealerName:t.dealerName||t.dealer?.name||''
     }))
-    .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.reference||'').localeCompare(String(b.reference||'')));
   const isSent=r=>['issued','draft_sent','queued_remote','queued'].includes(String(r.status||''));
   const isPending=r=>['pending','ready'].includes(String(r.status||''))||!r.status;
   const isError=r=>String(r.status||'')==='error';
@@ -7422,7 +7471,7 @@ app.get('/web-api/admin/sale/:id/invoice-print',requireAdminOrStaffAny(...INVOIC
   const customer=(s.customers||[]).find(c=>String(c.id)===String(sale.customerId))||{};
   sendInvoicePrint(res,{record,sale,customer,cfg:s.invoiceIntegration||{},settings:s.settings||{}});
 });
-app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaff('orders_manage'),async(req,res)=>{
+app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaffAny('orders_manage','screen_sales_center','sale_invoice_qnb','invoices_manage','finance_manage'),async(req,res)=>{
   if(isStaffPortalReq(req) && !staffCanInvoice(req)){
     return res.status(403).json({error:'Fatura kesme yetkiniz yok — yöneticiden sale_invoice_qnb açın'});
   }

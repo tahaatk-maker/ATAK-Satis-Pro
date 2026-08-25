@@ -26,7 +26,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/personel.css?v=fix-v248">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v269">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v270">
 <link rel="stylesheet" href="/assets/sip-call.css?v=fix-v236">
 </head>
 <body>
@@ -106,6 +106,12 @@ html.atak-reset-link #resetForm{display:grid!important}
 <span class="mod-ico">₺</span>
 <b>SATIŞ YAP</b>
 <small>Müşteri → ürün → ödeme</small>
+</button>
+
+<button id="customersCard" class="module-card hidden tile-customers" type="button">
+<span class="mod-ico">👤</span>
+<b>MÜŞTERİLER</b>
+<small>Kart, fatura, SMS</small>
 </button>
 
 <button id="salesTrackingCard" class="module-card hidden tile-track" type="button">
@@ -358,6 +364,51 @@ html.atak-reset-link #resetForm{display:grid!important}
 <div id="payStatus" class="status"></div>
 </section>
 
+<section id="customersPanel" class="panel hidden">
+<div class="panel-head">
+<div>
+<small class="eyebrow">MÜŞTERİ KARTLARI</small>
+<h2>Müşteriler</h2>
+<p>Rozet: yeşil Tamam · kırmızı Fatura kesilmedi · gri Yeni. Satırdan Fatura kes.</p>
+</div>
+<button id="custHubCloseBtn" class="ghost-btn" type="button">Ana sayfa</button>
+</div>
+<div class="sales-hub">
+  <aside class="sales-hub-list">
+    <button type="button" class="sales-hub-uninvoiced" id="custHubUninvoicedBtn">Kesilmeyen faturalar: <b id="custHubUninvoicedCount">0</b> müşteri</button>
+    <div class="toolbar sales-customer-search-bar">
+      <input id="custHubSearch" placeholder="Ad, telefon, kod, VKN" autocomplete="off">
+      <button id="custHubSearchBtn" class="primary-btn" type="button">🔍 Ara</button>
+    </div>
+    <div class="sales-hub-rows" id="custHubList"></div>
+  </aside>
+  <div class="sales-hub-card" id="custHubCard">
+    <div class="sales-hub-empty" id="custHubEmpty">Soldan müşteri seçin.</div>
+    <div class="hidden" id="custHubCardBody">
+      <div class="sales-hub-card-head">
+        <div class="sales-hub-avatar" id="custHubAvatar">?</div>
+        <div class="sales-hub-card-id">
+          <h3 id="custHubName">—</h3>
+          <small id="custHubMeta">—</small>
+        </div>
+        <button type="button" class="customer-invoice-btn" id="custHubInvoiceBtn">Fatura kes</button>
+      </div>
+      <div class="sales-hub-metrics">
+        <article><small>Son satış</small><b id="custHubLastSale">₺0</b></article>
+        <article><small>Kesilen fatura</small><b id="custHubIssuedCount">0</b></article>
+        <article><small>Fatura durumu</small><b id="custHubTone">—</b></article>
+      </div>
+      <div class="sales-hub-cats">
+        <button type="button" data-cust-hub-cat="invoice">Fatura geçmişi</button>
+        <button type="button" data-cust-hub-cat="sms">SMS gönder</button>
+        <button type="button" class="primary" data-cust-hub-cat="sale">Satışa devam et</button>
+      </div>
+      <div id="custHubInvoiceHistory" class="sales-hub-history hidden"></div>
+    </div>
+  </div>
+</div>
+</section>
+
 <section id="salesPanel" class="panel hidden sales-panel-v17">
 <div class="panel-head sales-panel-head">
 <div>
@@ -375,29 +426,50 @@ html.atak-reset-link #resetForm{display:grid!important}
   <button type="button" class="pos-step" data-pos-step="3"><b>3</b><span>Ödeme<small>Dağıtım + senet</small></span></button>
 </nav>
 <div class="pos-banner" id="salesBanner">ADIM 1/3 — Önce müşteri seçin</div>
-<aside class="sales-customer-rail hidden" id="salesCustomerRail">
-  <div class="sales-customer-rail-body" id="salesCustomerRailInfo"></div>
-  <div class="sales-customer-rail-actions">
-    <button type="button" data-sales-rail="continue">Satışa devam</button>
-    <button type="button" class="rail-invoice" data-sales-rail="invoice">Fatura</button>
-    <button type="button" data-sales-rail="sms">SMS</button>
-    <button type="button" data-sales-rail="card">Kart</button>
-  </div>
-</aside>
 <div id="salesStatus" class="status"></div>
 <div id="rapidOpenSalesHint" class="hidden" style="margin:8px 0;padding:10px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4"></div>
 
 <div id="salesStep1" class="pos-step-panel">
-  <div class="toolbar sales-customer-search-bar">
-    <input id="customerSearchSale" placeholder="Ad, müşteri kodu, telefon, VKN veya TCKN — otomatik arar" autocomplete="off">
-    <button id="customerSearchSaleBtn" class="primary-btn" type="button">🔍 Ara</button>
-    <button id="salesNewCustomerBtn" class="ghost-btn" type="button">+ Yeni Müşteri</button>
+  <div class="sales-hub" id="salesHub">
+    <aside class="sales-hub-list">
+      <button type="button" class="sales-hub-uninvoiced" id="salesHubUninvoicedBtn">Kesilmeyen faturalar: <b id="salesHubUninvoicedCount">0</b> müşteri</button>
+      <div class="toolbar sales-customer-search-bar">
+        <input id="customerSearchSale" placeholder="Ad, müşteri kodu, telefon, VKN veya TCKN" autocomplete="off">
+        <button id="customerSearchSaleBtn" class="primary-btn" type="button">🔍 Ara</button>
+        <button id="salesNewCustomerBtn" class="ghost-btn" type="button">+ Yeni Müşteri</button>
+      </div>
+      <p class="sales-customer-hint" id="salesCustomerSearchHint">Soldan müşteri seçin. Kırmızı rozet = fatura kesilmedi.</p>
+      <label class="sales-hub-select-fallback">Sonuçlar
+        <select id="salesCustomerSelect"><option value="">Önce arayın, sonra seçin</option></select>
+      </label>
+      <small id="salesCustomerCount" class="muted">0 sonuç</small>
+      <div class="sales-hub-rows" id="salesHubCustomerList"></div>
+    </aside>
+    <div class="sales-hub-card" id="salesHubCard">
+      <div class="sales-hub-empty" id="salesHubEmpty">Soldan bir müşteri seçin. Fatura kesmek zorunlu değil — satışı bitirirseniz Kesilmeyen’e düşer.</div>
+      <div class="hidden" id="salesHubCardBody">
+        <div class="sales-hub-card-head">
+          <div class="sales-hub-avatar" id="salesHubAvatar">?</div>
+          <div class="sales-hub-card-id">
+            <h3 id="salesHubName">—</h3>
+            <small id="salesHubMeta">—</small>
+          </div>
+          <button type="button" class="customer-invoice-btn" id="salesHubInvoiceBtn">Fatura kes</button>
+        </div>
+        <div class="sales-hub-metrics">
+          <article><small>Son satış</small><b id="salesHubLastSale">₺0</b></article>
+          <article><small>Kesilen fatura</small><b id="salesHubIssuedCount">0</b></article>
+          <article><small>Fatura durumu</small><b id="salesHubTone">—</b></article>
+        </div>
+        <div class="sales-hub-cats">
+          <button type="button" data-sales-hub-cat="invoice">Fatura geçmişi</button>
+          <button type="button" data-sales-hub-cat="sms">SMS gönder</button>
+          <button type="button" class="primary" data-sales-hub-cat="sale">Satışa devam et</button>
+        </div>
+        <div id="salesHubInvoiceHistory" class="sales-hub-history hidden"></div>
+      </div>
+    </div>
   </div>
-  <p class="sales-customer-hint" id="salesCustomerSearchHint">10.000+ müşteri için tüm liste yüklenmez. Ara butonuyla bulun, sonra seçin.</p>
-  <label class="field">Sonuçlar
-    <select id="salesCustomerSelect"><option value="">Önce arayın, sonra seçin</option></select>
-  </label>
-  <small id="salesCustomerCount" class="muted">0 sonuç</small>
   <div id="salesCustomerInfo" class="info-box hidden"></div>
   <input type="hidden" id="salesBillingParty" value="individual"/>
   <div id="salesBillingAutoHint" class="status hidden"></div>
@@ -574,8 +646,8 @@ html.atak-reset-link #resetForm{display:grid!important}
     <div class="sc-sec-title"><span>Fatura &amp; not</span></div>
     <label class="field">Fatura durumu
       <select id="salesInvoiceStatus">
-        <option value="queue_qnb" selected data-need-perm="sale_invoice_qnb">Fatura kes (e-Fatura / e-Arşiv)</option>
-        <option value="pending">Daha sonra kes (Kesilmeyen Faturalar’a düşer)</option>
+        <option value="pending" selected>Daha sonra kes (Kesilmeyen Faturalar’a düşer)</option>
+        <option value="queue_qnb" data-need-perm="sale_invoice_qnb">Fatura kes (e-Fatura / e-Arşiv)</option>
         <option value="not_required">Fatura gerekmiyor</option>
         <option value="issued" data-need-perm="sale_invoice_qnb">Manuel faturalandı</option>
       </select>
@@ -610,16 +682,16 @@ html.atak-reset-link #resetForm{display:grid!important}
         <button class="pos-action-btn docs" id="salesWizardDocsBtn" type="button">TEK A4 BAS</button>
       </div>
       <div class="pos-finish-card offer">
-        <h4>Önizle / Teklif</h4>
-        <p>Teklif şablonunu yazdırın veya WhatsApp ile gönderin.</p>
-        <button class="pos-action-btn preview" id="salesSaveInlineBtn" type="button">ÖNİZLE VE SATIŞI YAP</button>
+        <h4>Satışı bitir</h4>
+        <p>Fatura kesmek zorunlu değil. Basmazsanız satış Kesilmeyen’e düşer.</p>
+        <button class="pos-action-btn preview" id="salesSaveInlineBtn" type="button">SATIŞI BİTİR</button>
         <button class="pos-action-btn secondary" id="salesWizardOfferBtn" type="button" data-need-perm="sale_offer">TEKLİF YAZDIR / GÖNDER</button>
       </div>
       <div class="pos-finish-card invoice">
-        <h4>Fatura Kes</h4>
-        <p>3. adımda her zaman önce fatura kesilir. Satışı onaylayınca e-fatura kuyruğuna alınır; EVA Rapid Veri Çek bunu çeker.</p>
+        <h4>Fatura kes</h4>
+        <p>İsteğe bağlı, satışın yanında ayrı basılır. Mevcut Dijital Planet / EVA akışı aynı kalır.</p>
         <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button" data-need-perm="sale_invoice_qnb">FATURA KES</button>
-        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">KESİLMEYEN (SONRA)</button>
+        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">KESİLMEYEN</button>
       </div>
     </div>
     <div class="pos-nav">
@@ -891,6 +963,6 @@ html.atak-reset-link #resetForm{display:grid!important}
   </div>
 </div>
 <script src="/assets/sip-call.js?v=fix-v236"></script>
-<script src="/assets/personel.js?v=fix-v269"></script>
+<script src="/assets/personel.js?v=fix-v270"></script>
 </body>
 </html>

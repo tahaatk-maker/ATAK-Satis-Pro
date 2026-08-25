@@ -113,7 +113,15 @@
 .customer-card>div:first-child,.customer-card-pick{display:grid;gap:4px;min-width:0}
 .customer-card b,.customer-card small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .customer-card small{color:#6e7a8c}
-.customer-card-balance{display:grid;justify-items:end;gap:3px;flex-shrink:0}
+.customer-invoice-badge{display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800}
+.customer-invoice-badge.ok{background:#f0fdf4;color:#15803d}
+.customer-invoice-badge.pending{background:#fef2f2;color:#b91c1c}
+.customer-invoice-badge.new{background:#f1f5f9;color:#64748b}
+.customer-card-invoice{min-height:36px;padding:0 10px;border:0;border-radius:9px;background:#c2410c;color:#fff;font-weight:800;cursor:pointer;flex-shrink:0}
+.inv-tone{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+.inv-tone.ok{background:#f0fdf4;color:#15803d}
+.inv-tone.pending{background:#fef2f2;color:#b91c1c}
+.inv-tone.new{background:#f8fafc;color:#64748b}
 .customer-card-balance.debt strong{color:#b02b2b}.customer-card-balance.credit strong{color:#087c47}.customer-card-balance.closed strong{color:#41536c}
 .form-status{min-height:20px;font-size:12px;font-weight:800}.form-status.success{color:#087c47}.form-status.error{color:#b02b2b}
 @media(max-width:900px){.customer-page-grid{grid-template-columns:1fr}.customer-list-panel{position:static}}

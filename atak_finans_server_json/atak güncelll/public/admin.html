@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v269" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v270" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-cockpit.css?v=fix-v256" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-calm.css?v=fix-v256" rel="stylesheet"/>
 <link href="/web-admin-assets/sip-call.css?v=fix-v256" rel="stylesheet"/>
@@ -71,9 +71,10 @@
 #salesCenter .sales-products-panel .sales-product-results{max-height:min(52vh,480px);min-height:260px}
 #salesCenter .sales-products-panel .pos-cart{min-height:260px;height:100%}
 /* Müşteri satırı tam genişlik */
-#salesCenter .sales-customer-top{
-  display:grid;grid-template-columns:minmax(0,1.4fr) auto minmax(0,1.1fr) auto;gap:10px;align-items:end;
+#salesCenter .sales-hub .sales-customer-top{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end
 }
+#salesCenter .sales-hub .sales-customer-count{grid-column:1/-1}
 #salesCenter .sales-customer-top label{display:grid;gap:5px;font-size:12px;font-weight:800;color:var(--blue)}
 #salesCenter #salesCustomerSearchBtn{
   min-height:46px;border:0;border-radius:12px;padding:0 18px;background:linear-gradient(180deg,#1565c0,#0b4d94);
@@ -149,6 +150,44 @@
   min-height:42px;padding:0 14px;border:0;border-radius:11px;background:#0b2a4a;color:#fff;font-weight:800;cursor:pointer;
 }
 #salesCenter .sales-customer-rail-actions .rail-invoice{background:linear-gradient(180deg,#ea580c,#c2410c)}
+#salesCenter .sales-hub{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(0,1.2fr);gap:14px;align-items:start}
+#salesCenter .sales-hub-list{display:grid;gap:10px;min-width:0}
+#salesCenter .sales-hub-uninvoiced{
+  width:100%;text-align:left;min-height:48px;padding:10px 14px;border:1px solid #fecaca;border-radius:12px;
+  background:#fef2f2;color:#991b1b;font-weight:800;cursor:pointer
+}
+#salesCenter .sales-hub-uninvoiced b{font-size:18px}
+#salesCenter .sales-hub-rows{display:grid;gap:6px;max-height:min(52vh,460px);overflow:auto}
+#salesCenter .sales-hub-row{
+  display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;
+  width:100%;padding:10px 12px;border:1px solid #d5e0ee;border-radius:12px;background:#fff;text-align:left;cursor:pointer
+}
+#salesCenter .sales-hub-row.active{border-color:#93c5fd;background:#eff6ff}
+#salesCenter .sales-hub-row .av{width:36px;height:36px;border-radius:12px;background:#0b2a4a;color:#fff;display:grid;place-items:center;font-weight:800;font-size:12px}
+#salesCenter .sales-hub-row small{display:block;color:#64748b}
+#salesCenter .inv-tone{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+#salesCenter .inv-tone.ok{background:#f0fdf4;color:#15803d}
+#salesCenter .inv-tone.pending{background:#fef2f2;color:#b91c1c}
+#salesCenter .inv-tone.new{background:#f8fafc;color:#64748b}
+#salesCenter .sales-hub-card{padding:16px;border:1px solid #d5e0ee;border-radius:16px;background:#fff;min-height:280px}
+#salesCenter .sales-hub-empty{padding:40px 12px;text-align:center;color:#64748b;font-weight:700}
+#salesCenter .sales-hub-card-head{display:flex;gap:12px;align-items:center;margin-bottom:14px}
+#salesCenter .sales-hub-avatar{width:52px;height:52px;border-radius:16px;background:#0b2a4a;color:#fff;display:grid;place-items:center;font-weight:900}
+#salesCenter .sales-hub-card-id{flex:1;min-width:0}
+#salesCenter .sales-hub-card-id h3{margin:0;font-size:20px}
+#salesCenter .sales-hub-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 14px}
+#salesCenter .sales-hub-metrics article{padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}
+#salesCenter .sales-hub-metrics small{display:block;font-size:11px;color:#64748b;font-weight:800}
+#salesCenter .sales-hub-metrics b{display:block;margin-top:4px;font-size:16px}
+#salesCenter .sales-hub-cats{display:flex;flex-wrap:wrap;gap:8px}
+#salesCenter .sales-hub-cats button{min-height:42px;padding:0 14px;border:0;border-radius:11px;background:#0b2a4a;color:#fff;font-weight:800;cursor:pointer}
+#salesCenter .sales-hub-cats button.primary{background:linear-gradient(180deg,#1565c0,#0b4d94)}
+#salesCenter .sales-hub-history{margin-top:12px;display:grid;gap:8px}
+#salesCenter .sales-hub-select-fallback{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+@media(max-width:950px){
+  #salesCenter .sales-hub{grid-template-columns:1fr}
+  #salesCenter .sales-hub-metrics{grid-template-columns:1fr}
+}
 #salesCenter .sales-customer-info{
   display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px;padding:10px;border-radius:14px;background:#edf4ff;border:1px solid #c9dbf2;
 }
@@ -730,7 +769,7 @@ body.inv-full #pageTitle{font-size:18px}
 </div>
 </section><section class="tab" id="salesCenter" data-pos-step="1">
 <div class="sales-center-head">
-<div><small>SATIŞ OPERASYON · KASA / POS <span class="pos-ver">v269 HUB</span></small><h2>Satış Kasası</h2><p>Tek A4 sözleşme+senet · Fatura Kes · adım adım</p></div>
+<div><small>SATIŞ OPERASYON · KASA / POS <span class="pos-ver">v270 HUB</span></small><h2>Satış Kasası</h2><p>Tek A4 sözleşme+senet · Fatura Kes · adım adım</p></div>
 <div class="sales-center-head-actions">
   <button class="pos-head-btn" id="rapid360SalesXmlBtn" type="button">Rapid Aktar</button>
   <button class="pos-head-btn" id="salesTrackingShortcut" type="button">Sipariş Takibi</button>
@@ -743,15 +782,6 @@ body.inv-full #pageTitle{font-size:18px}
   <div class="pos-step locked" id="posStep3" role="button" tabindex="0"><b>3</b><span>Ödeme Planı<small>Önce ürün</small></span></div>
 </nav>
 <div class="pos-wizard-banner" id="salesWizardBanner">ADIM 1/3 — Önce müşteri seçin, sonra Devam Et</div>
-<aside class="sales-customer-rail hidden" id="salesCustomerRail">
-  <div class="sales-customer-rail-body" id="salesCustomerRailInfo"></div>
-  <div class="sales-customer-rail-actions">
-    <button type="button" data-sales-rail="continue">Satışa devam</button>
-    <button type="button" class="rail-invoice" data-sales-rail="invoice">Fatura</button>
-    <button type="button" data-sales-rail="sms">SMS</button>
-    <button type="button" data-sales-rail="card">Kart</button>
-  </div>
-</aside>
 <div class="sales-center-layout sales-center-flow">
 <section class="panel sales-customer-panel pos-step-visible" aria-hidden="false">
 <div class="pos-block-head pos-block-1">
@@ -759,12 +789,42 @@ body.inv-full #pageTitle{font-size:18px}
   <button class="pos-big-btn" id="salesNewCustomerBtn" type="button">+ Yeni Müşteri</button>
 </div>
 <div class="pos-block-body">
-<div class="sales-customer-top">
-  <label>Müşteri Ara<input id="salesCustomerSearch" placeholder="Ad, müşteri kodu, telefon, VKN veya TCKN — otomatik arar" autocomplete="off"/></label>
-  <button id="salesCustomerSearchBtn" type="button">🔍 Ara</button>
-  <label>Sonuçlar<select id="salesCustomerSelect"><option value="">Önce arayın, sonra seçin</option></select></label>
-  <span class="sales-customer-count" id="salesCustomerCount">0 sonuç</span>
-  <p class="sales-customer-hint" id="salesCustomerSearchHint">10.000+ müşteri kaydı için listeyi yüklemiyoruz. Ad / kod / telefon / VKN ile arayıp seçin.</p>
+<div class="sales-hub" id="salesHub">
+  <aside class="sales-hub-list">
+    <button type="button" class="sales-hub-uninvoiced" id="salesHubUninvoicedBtn">Kesilmeyen faturalar: <b id="salesHubUninvoicedCount">0</b> müşteri</button>
+    <div class="sales-customer-top">
+      <label>Müşteri Ara<input id="salesCustomerSearch" placeholder="Ad, müşteri kodu, telefon, VKN veya TCKN — otomatik arar" autocomplete="off"/></label>
+      <button id="salesCustomerSearchBtn" type="button">🔍 Ara</button>
+      <span class="sales-customer-count" id="salesCustomerCount">0 sonuç</span>
+      <p class="sales-customer-hint" id="salesCustomerSearchHint">Soldan müşteri seçin. Kırmızı rozet = fatura kesilmedi.</p>
+    </div>
+    <label class="sales-hub-select-fallback">Sonuçlar<select id="salesCustomerSelect"><option value="">Önce arayın, sonra seçin</option></select></label>
+    <div class="sales-hub-rows" id="salesHubCustomerList"></div>
+  </aside>
+  <div class="sales-hub-card" id="salesHubCard">
+    <div class="sales-hub-empty" id="salesHubEmpty">Soldan bir müşteri seçin. Fatura kesmek zorunlu değil — satışı bitirirseniz Kesilmeyen’e düşer.</div>
+    <div class="hidden" id="salesHubCardBody">
+      <div class="sales-hub-card-head">
+        <div class="sales-hub-avatar" id="salesHubAvatar">?</div>
+        <div class="sales-hub-card-id">
+          <h3 id="salesHubName">—</h3>
+          <small id="salesHubMeta">—</small>
+        </div>
+        <button type="button" class="customer-invoice-btn" id="salesHubInvoiceBtn">Fatura kes</button>
+      </div>
+      <div class="sales-hub-metrics">
+        <article><small>Son satış</small><b id="salesHubLastSale">₺0</b></article>
+        <article><small>Kesilen fatura</small><b id="salesHubIssuedCount">0</b></article>
+        <article><small>Fatura durumu</small><b id="salesHubTone">—</b></article>
+      </div>
+      <div class="sales-hub-cats">
+        <button type="button" data-sales-hub-cat="invoice">Fatura geçmişi</button>
+        <button type="button" data-sales-hub-cat="sms">SMS gönder</button>
+        <button type="button" class="primary" data-sales-hub-cat="sale">Satışa devam et</button>
+      </div>
+      <div id="salesHubInvoiceHistory" class="sales-hub-history hidden"></div>
+    </div>
+  </div>
 </div>
 <div class="sales-customer-info hidden" id="salesCustomerInfo"></div>
 <label class="sales-billing-party hidden" id="salesBillingPartyWrap">Fatura kime kesilsin?
@@ -1055,8 +1115,8 @@ body.inv-full #pageTitle{font-size:18px}
       <div class="sales-invoice-box">
         <label>Fatura durumu
           <select id="salesInvoiceStatus">
-            <option value="queue_qnb" selected>Fatura kes (e-Fatura / e-Arşiv)</option>
-            <option value="pending">Daha sonra kes (Kesilmeyen Faturalar’a düşer)</option>
+            <option value="pending" selected>Daha sonra kes (Kesilmeyen Faturalar’a düşer)</option>
+            <option value="queue_qnb">Fatura kes (e-Fatura / e-Arşiv)</option>
             <option value="not_required">Fatura gerekmiyor</option>
             <option value="issued">Manuel faturalandı</option>
           </select>
@@ -1094,14 +1154,14 @@ body.inv-full #pageTitle{font-size:18px}
         <button class="pos-action-btn docs" id="salesDockDocsHintBtn" type="button" style="display:none">SENET / SÖZLEŞME</button>
       </div>
       <div class="pos-finish-card offer">
-        <h4>Önizle / Teklif</h4>
-        <p>Teklif şablonunu yazdırın veya WhatsApp ile gönderin.</p>
-        <button class="pos-action-btn preview" id="salesSaveBtn" type="button">ÖNİZLE VE SATIŞI YAP</button>
+        <h4>Satışı bitir</h4>
+        <p>Fatura kesmek zorunlu değil. Basmazsanız satış Kesilmeyen listesine düşer.</p>
+        <button class="pos-action-btn preview" id="salesSaveBtn" type="button">SATIŞI BİTİR</button>
         <button class="pos-action-btn secondary" id="salesWizardOfferBtn" type="button">TEKLİF YAZDIR / GÖNDER</button>
       </div>
       <div class="pos-finish-card invoice">
-        <h4>Fatura Kes</h4>
-        <p>3. adımda her zaman önce fatura kesilir. Satışı onaylayınca e-fatura kuyruğuna alınır; EVA Rapid Veri Çek bunu çeker.</p>
+        <h4>Fatura kes</h4>
+        <p>İsteğe bağlı, satışın yanında ayrı basılır. Mevcut Dijital Planet / EVA akışı aynı kalır.</p>
         <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button">FATURA KES</button>
       </div>
     </div>
@@ -2156,7 +2216,7 @@ Bulunamayan → Diğer.
 <nav class="customer-hub-tabs" id="customerHubTabs" role="tablist" aria-label="Müşteri kategorileri">
 <button type="button" class="customer-hub-tab active" data-customer-pane="summary">Özet</button>
 <button type="button" class="customer-hub-tab" data-customer-pane="sales">Satış</button>
-<button type="button" class="customer-hub-tab" data-customer-pane="invoice">Fatura <span id="customerInvoiceTabCount" class="hub-tab-count hidden">0</span></button>
+<button type="button" class="customer-hub-tab" data-customer-pane="invoice">Fatura geçmişi <span id="customerInvoiceTabCount" class="hub-tab-count hidden">0</span></button>
 <button type="button" class="customer-hub-tab" data-customer-pane="sms">SMS</button>
 <button type="button" class="customer-hub-tab" data-customer-pane="pay">Tahsilat</button>
 <button type="button" class="customer-hub-tab" data-customer-pane="card">Kart</button>
@@ -2172,10 +2232,10 @@ Bulunamayan → Diğer.
 </div>
 <div class="customer-hub-pane" data-customer-pane="invoice" id="customerPaneInvoice">
 <div class="panel-head compact">
-<h3>Kesilmeyen faturalar</h3>
+<h3>Fatura geçmişi</h3>
 <button type="button" class="secondary-btn" data-go="invoiceCenter">Kesilmeyen listesi →</button>
 </div>
-<p class="note">Bu müşterinin henüz kesilmemiş satışları burada durur. Unuttuklarınızı buradan ve Kesilmeyen ekranından görürsünüz. EVA / Dijital Planet bağlantısı aynı kalır.</p>
+<p class="note">Kesilen ve kesilmeyen satışlar. Kesilmeyenler kırmızı rozetle durur; EVA / Dijital Planet bağlantısı aynı kalır.</p>
 <div id="customerInvoiceList"></div>
 </div>
 <div class="customer-hub-pane" data-customer-pane="sms" id="customerPaneSms">
@@ -2939,5 +2999,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v269"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v270"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>

@@ -307,7 +307,7 @@ assert(faturaHtml.includes('EVA Connect'), 'eva url kutusu');
 assert(faturaHtml.includes('atakDmsCopyBtn'), 'url kopyala');
 assert(!faturaHtml.includes('data-inv-module="efatura"'), 'e-Fatura ağacı yok');
 assert(!faturaHtml.includes('data-inv-view="ef_out_pending"'), 'gönderilecek klasör yok');
-assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v268'), 'fatura build');
+assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v270'), 'fatura build');
 assert(faturaJs.includes("view:'pending_sales'"), 'varsayılan kesilmeyen');
 assert(faturaJs.includes('digital-planet-test'), 'dp test api');
 

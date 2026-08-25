@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Kesilmeyen Faturalar · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v268"/>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v270"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
@@ -31,8 +31,13 @@
         </div>
       </div>
       <div class="inv-toolbar" id="invToolbar">
-        <input id="invSearch" type="search" placeholder="Satış no, müşteri ara…"/>
-        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri Dijital Planet’e gönder</button>
+        <input id="invSearch" type="search" placeholder="Müşteri ara…"/>
+        <label>Başlangıç<input id="invDateFrom" type="date"/></label>
+        <label>Bitiş<input id="invDateTo" type="date"/></label>
+        <label>Bayi
+          <select id="invDealer"><option value="">Tüm bayiler</option></select>
+        </label>
+        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri kes</button>
       </div>
       <div class="inv-panel">
         <div id="invTableWrap">
@@ -83,6 +88,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v268"></script>
+  <script src="/assets/fatura.js?v=fix-v270"></script>
 </body>
 </html>
