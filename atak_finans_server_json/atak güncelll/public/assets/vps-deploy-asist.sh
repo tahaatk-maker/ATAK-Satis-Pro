@@ -10,8 +10,8 @@ log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
 BRANCH="${ATAK_BRANCH:-cursor/satis-fatura-oncelik-474e}"
-EXPECT_V="${EXPECT_HEALTH:-6.3.264-satis-fatura}"
-EXPECT_B="${EXPECT_BUILD:-fix-v267}"
+EXPECT_V="${EXPECT_HEALTH:-6.3.265-eva-normal}"
+EXPECT_B="${EXPECT_BUILD:-fix-v268}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"
