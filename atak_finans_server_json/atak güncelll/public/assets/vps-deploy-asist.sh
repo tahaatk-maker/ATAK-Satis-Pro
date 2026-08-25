@@ -2,16 +2,16 @@
 # Asist fatura+stok paneli — sadece ERP (atak). Vitrin/commerce'e DOKUNMAZ.
 # data/store.json ASLA değiştirilmez / restore edilmez.
 # Hostinger Web Terminal:
-#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/stok-eksilt-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/kesilmeyen-fatura-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
 set -euo pipefail
 OUT=/tmp/atak-asist-deploy.txt
 : > "$OUT"
 log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
-BRANCH="${ATAK_BRANCH:-cursor/stok-eksilt-474e}"
-EXPECT_V="${EXPECT_HEALTH:-6.3.260-stock-drop}"
-EXPECT_B="${EXPECT_BUILD:-fix-v263}"
+BRANCH="${ATAK_BRANCH:-cursor/kesilmeyen-fatura-474e}"
+EXPECT_V="${EXPECT_HEALTH:-6.3.261-kesilmeyen}"
+EXPECT_B="${EXPECT_BUILD:-fix-v264}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"
@@ -57,6 +57,7 @@ log "SRC=$SRC"
 grep -q "$EXPECT_V" "$SRC/server.js" || die "kaynak version yanlis"
 grep -q "build:'$EXPECT_B'" "$SRC/server.js" || die "kaynak build yanlis"
 grep -q "ATAK_ADMIN_BUILD=$EXPECT_B" "$SRC/public/assets/admin.js" || die "kaynak admin build yanlis"
+grep -q "ATAK_FATURA_BUILD=$EXPECT_B" "$SRC/public/assets/fatura.js" || die "kaynak fatura build yanlis"
 grep -q 'purchaseBothBtn' "$SRC/public/admin.html" || die "Asist butonu kaynakta yok"
 grep -q "staff-send-login" "$SRC/server.js" || die "kaynakta sifre API yok"
 [ -f "$SRC/lib/session-actor.js" ] || die "kaynakta session-actor yok"
@@ -74,6 +75,9 @@ copy_critical(){
   [ -f "$SRC/public/personel.html" ] && cp -f "$SRC/public/personel.html" "$D/public/personel.html"
   [ -f "$SRC/public/assets/personel.js" ] && cp -f "$SRC/public/assets/personel.js" "$D/public/assets/personel.js"
   [ -f "$SRC/public/assets/personel-shell.css" ] && cp -f "$SRC/public/assets/personel-shell.css" "$D/public/assets/personel-shell.css"
+  [ -f "$SRC/public/fatura.html" ] && cp -f "$SRC/public/fatura.html" "$D/public/fatura.html"
+  [ -f "$SRC/public/assets/fatura.js" ] && cp -f "$SRC/public/assets/fatura.js" "$D/public/assets/fatura.js"
+  [ -f "$SRC/public/assets/fatura.css" ] && cp -f "$SRC/public/assets/fatura.css" "$D/public/assets/fatura.css"
   [ -f "$SRC/lib/purchase-csv.js" ] && mkdir -p "$D/lib" && cp -f "$SRC/lib/purchase-csv.js" "$D/lib/purchase-csv.js"
   [ -f "$SRC/lib/istikbal-category.js" ] && cp -f "$SRC/lib/istikbal-category.js" "$D/lib/istikbal-category.js"
   [ -f "$SRC/lib/stock-cost.js" ] && cp -f "$SRC/lib/stock-cost.js" "$D/lib/stock-cost.js"

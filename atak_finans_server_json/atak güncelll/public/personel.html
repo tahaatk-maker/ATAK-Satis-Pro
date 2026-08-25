@@ -26,7 +26,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/personel.css?v=fix-v248">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v261">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v264">
 <link rel="stylesheet" href="/assets/sip-call.css?v=fix-v236">
 </head>
 <body>
@@ -87,7 +87,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 <small id="roleName"></small>
 </div>
 <button id="homeBtn" type="button">Ana Sayfa</button>
-<button id="invoiceHeaderBtn" class="hidden" type="button">Faturalar</button>
+<button id="invoiceHeaderBtn" class="hidden" type="button">Kesilmeyen</button>
 <button id="logout" type="button">Çıkış</button>
 </header>
 
@@ -116,8 +116,8 @@ html.atak-reset-link #resetForm{display:grid!important}
 
 <button id="invoiceCard" class="module-card hidden tile-invoice" type="button">
 <span class="mod-ico">📄</span>
-<b>FATURALAR</b>
-<small>Kesilmeyenler, kuyruk, Rapid360</small>
+<b>KESİLMEYEN</b>
+<small>Kesilmeyen faturalar</small>
 </button>
 
 <button id="paymentsCard" class="module-card hidden tile-collect" type="button">
@@ -566,7 +566,7 @@ html.atak-reset-link #resetForm{display:grid!important}
     <label class="field">Fatura durumu
       <select id="salesInvoiceStatus">
         <option value="not_required" selected>Fatura gerekmiyor</option>
-        <option value="pending">Daha sonra kes (Faturalar’a düşer)</option>
+        <option value="pending">Daha sonra kes (Kesilmeyen Faturalar’a düşer)</option>
         <option value="queue_qnb" data-need-perm="sale_invoice_qnb">e-Fatura kuyruğuna al</option>
         <option value="issued" data-need-perm="sale_invoice_qnb">Manuel faturalandı</option>
       </select>
@@ -607,9 +607,9 @@ html.atak-reset-link #resetForm{display:grid!important}
         <button class="pos-action-btn secondary" id="salesWizardOfferBtn" type="button" data-need-perm="sale_offer">TEKLİF YAZDIR / GÖNDER</button>
       </div>
       <div class="pos-finish-card invoice">
-        <h4>e-Fatura</h4>
-        <p>Kesilmeyen faturalar ve belge. Kuyruk Atak Faturalar sekmesindedir.</p>
-        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">FATURALAR EKRANINI AÇ</button>
+        <h4>Kesilmeyen fatura</h4>
+        <p>Kesilmeyen liste ayrı sekmede. E-fatura firması bunları otomatik çeker.</p>
+        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">KESİLMEYEN FATURALARI AÇ</button>
         <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button" data-need-perm="sale_invoice_qnb">FATURA KES</button>
       </div>
     </div>
@@ -882,6 +882,6 @@ html.atak-reset-link #resetForm{display:grid!important}
   </div>
 </div>
 <script src="/assets/sip-call.js?v=fix-v236"></script>
-<script src="/assets/personel.js?v=fix-v261"></script>
+<script src="/assets/personel.js?v=fix-v264"></script>
 </body>
 </html>

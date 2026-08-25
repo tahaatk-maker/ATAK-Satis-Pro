@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>Faturalar · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v236"/>
+  <title>Kesilmeyen Faturalar · ATAK Pazarlama</title>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v264"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
     <small>ATAK PAZARLAMA</small>
-    <h1>Faturalar</h1>
-    <p>Personel veya yönetim girişi gerekir. Önce panele girin; faturalar ayrı sekmede açılır.</p>
+    <h1>Kesilmeyen Faturalar</h1>
+    <p>Personel veya yönetim girişi gerekir. Önce panele girin; bu ekran ayrı sekmede açılır.</p>
     <a class="inv-btn primary" href="/personel">Personel girişi</a>
     <a class="inv-btn" href="/web-admin">Yönetim paneli</a>
   </div>
@@ -18,97 +18,20 @@
   <div id="app" class="hidden">
   <section id="invoiceCenter">
   <div class="inv-shell">
-    <aside class="inv-side">
-      <div class="inv-side-brand">
-        <small>ATAK PAZARLAMA</small>
-        <b>Faturalar</b>
-        <span class="inv-env" id="invEnvBadge">ATAK</span>
-      </div>
-      <div class="inv-modules">
-        <button type="button" class="inv-mod-btn active" data-inv-module="efatura"><span>e-Fatura</span><b>›</b></button>
-        <button type="button" class="inv-mod-btn" data-inv-module="earsiv"><span>e-Arşiv</span><b>›</b></button>
-        <button type="button" class="inv-mod-btn" data-inv-module="pending"><span>Kesilmeyen Faturalar</span><b id="invCountPendingMod">0</b></button>
-        <button type="button" class="inv-mod-btn" data-inv-module="setup" id="invSetupModBtn"><span>Kurulum</span><b>›</b></button>
-      </div>
-      <div class="inv-tree">
-        <div class="inv-mod-pane" data-inv-pane="pending">
-          <div class="inv-folder open" data-inv-folder="pending">
-            <button type="button" data-inv-toggle="pending"><span>Geç kesilen satışlar</span><span>▾</span></button>
-            <div class="inv-sub">
-              <button type="button" data-inv-view="pending_sales">Kesilmeyen Faturalar <span class="inv-count" id="invCountPendingSales">0</span></button>
-            </div>
-          </div>
-        </div>
-        <div class="inv-mod-pane active" data-inv-pane="efatura">
-          <div class="inv-folder open" data-inv-folder="ef_out">
-            <button type="button" data-inv-toggle="ef_out"><span>Giden Kutusu</span><span>▾</span></button>
-            <div class="inv-sub">
-              <button type="button" class="active" data-inv-view="ef_out_pending">Gönderilecek <span class="inv-count" id="invCountEfOutPending">0</span></button>
-              <button type="button" data-inv-view="ef_out_sent">Gönderilen <span class="inv-count" id="invCountEfOutSent">0</span></button>
-              <button type="button" data-inv-view="ef_out_error">Hatalı <span class="inv-count" id="invCountEfOutError">0</span></button>
-              <button type="button" data-inv-view="ef_out_archive">Arşiv <span class="inv-count" id="invCountEfOutArchive">0</span></button>
-            </div>
-          </div>
-          <div class="inv-folder open" data-inv-folder="ef_in">
-            <button type="button" data-inv-toggle="ef_in"><span>Gelen Kutusu</span><span>▾</span></button>
-            <div class="inv-sub">
-              <button type="button" data-inv-view="ef_in_incoming">Gelen Faturalar <span class="inv-count" id="invCountEfInIncoming">0</span></button>
-              <button type="button" data-inv-view="ef_in_responses">Uygulama Yanıtları <span class="inv-count" id="invCountEfInResponses">0</span></button>
-              <button type="button" data-inv-view="ef_in_archive">Arşiv <span class="inv-count" id="invCountEfInArchive">0</span></button>
-            </div>
-          </div>
-        </div>
-        <div class="inv-mod-pane" data-inv-pane="earsiv">
-          <div class="inv-folder open" data-inv-folder="ea_out">
-            <button type="button" data-inv-toggle="ea_out"><span>Giden e-Arşiv</span><span>▾</span></button>
-            <div class="inv-sub">
-              <button type="button" data-inv-view="ea_out_pending">Gönderilecek <span class="inv-count" id="invCountEaOutPending">0</span></button>
-              <button type="button" data-inv-view="ea_out_sent">Gönderilen <span class="inv-count" id="invCountEaOutSent">0</span></button>
-              <button type="button" data-inv-view="ea_out_error">Hatalı <span class="inv-count" id="invCountEaOutError">0</span></button>
-              <button type="button" data-inv-view="ea_out_archive">Arşiv <span class="inv-count" id="invCountEaOutArchive">0</span></button>
-            </div>
-          </div>
-          <div class="inv-folder open" data-inv-folder="ea_in">
-            <button type="button" data-inv-toggle="ea_in"><span>Gelen e-Arşiv</span><span>▾</span></button>
-            <div class="inv-sub">
-              <button type="button" data-inv-view="ea_in_incoming">Gelen <span class="inv-count" id="invCountEaInIncoming">0</span></button>
-              <button type="button" data-inv-view="ea_in_archive">Arşiv <span class="inv-count" id="invCountEaInArchive">0</span></button>
-            </div>
-          </div>
-        </div>
-        <div class="inv-mod-pane" data-inv-pane="setup">
-          <div class="inv-folder open" data-inv-folder="setup">
-            <button type="button" data-inv-toggle="setup"><span>Atak kurulum</span><span>▾</span></button>
-            <div class="inv-sub">
-              <button type="button" data-inv-view="setup_settings">Firma ve servis</button>
-              <button type="button" data-inv-view="setup_ready">Hazırlık</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </aside>
     <div class="inv-main">
       <div class="inv-head">
         <div>
-          <small>ATAK PAZARLAMA · FATURALAR</small>
-          <h2 id="invViewTitle">Gönderilecek Faturalar</h2>
-          <p id="invViewHint">Satıştan kesilen faturalar burada kuyruğa düşer. Gelen kutuya başkanın Rapid360 linki çekilmez.</p>
+          <small>ATAK PAZARLAMA</small>
+          <h2 id="invViewTitle">Kesilmeyen Faturalar</h2>
+          <p id="invViewHint">Satışta “daha sonra kes” seçilenler burada durur. E-fatura firması geteinvoices ile bunları otomatik çeker — kuyruğa almanız gerekmez.</p>
         </div>
         <div class="inv-head-actions">
           <a class="inv-btn ghost" href="/web-admin" id="backLink">← Panele dön</a>
-          <button class="inv-btn ghost" id="invRefreshBtn" type="button">Sayfayı Yenile</button>
-          <button class="inv-btn primary hidden" id="invPortalQueryBtn" type="button">Kendi Rapid360 hesabından çek</button>
+          <button class="inv-btn ghost" id="invRefreshBtn" type="button">Yenile</button>
         </div>
       </div>
       <div class="inv-toolbar" id="invToolbar">
-        <input id="invSearch" type="search" placeholder="Fatura no, müşteri, satış no ara…"/>
-        <select id="invDocTypeFilter">
-          <option value="all">Tüm tipler</option>
-          <option value="efatura">e-Fatura</option>
-          <option value="earsiv">e-Arşiv</option>
-        </select>
-        <label class="check" style="margin:0;font-size:12px;font-weight:700;color:#475569"><input id="invUnreadOnly" type="checkbox"/> Okunmamışları göster</label>
-        <button class="inv-btn" id="invRetrySelectedBtn" type="button">Seçilileri Tekrar Dene</button>
+        <input id="invSearch" type="search" placeholder="Satış no, müşteri ara…"/>
         <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri kuyruğa al</button>
       </div>
       <div class="inv-panel">
@@ -117,66 +40,15 @@
             <thead id="invTableHead"></thead>
             <tbody id="invTableBody"></tbody>
           </table>
-          <div class="inv-empty hidden" id="invEmpty">Bu klasörde kayıt yok.</div>
+          <div class="inv-empty hidden" id="invEmpty">Kesilmeyen fatura yok.</div>
         </div>
-        <div class="inv-settings-box hidden" id="invSetupBox">
-          <form class="form-stack" id="invoiceIntegrationForm" style="margin:0;padding:0;border:0;background:transparent;box-shadow:none">
-            <div class="panel-head" style="padding:0;margin:0 0 10px"><div>
-              <h2 style="margin:0;font-size:18px;color:#0b2a4a">Atak fatura ayarları</h2>
-              <p class="note">Atak’a özel fatura ekranı: satış kuyruğu ve e-fatura firmasına verilen geteinvoices linki. Başkanın Rapid360 linki buraya çekilmez.</p>
-            </div></div>
-            <input type="hidden" id="invoiceProvider" value="qnb-solist"/>
-            <input type="hidden" id="invoiceEnvironment" value="live"/>
-            <input type="hidden" id="invoiceSenderAlias" value=""/>
-            <input type="hidden" id="invoicePkAlias" value=""/>
-            <input type="hidden" id="invoiceServiceUrl" value=""/>
-            <input type="hidden" id="invoiceUsername" value=""/>
-            <input type="hidden" id="invoicePassword" value=""/>
-            <label class="check hidden"><input id="invoiceEnabled" type="checkbox" checked/></label>
-            <label class="check hidden"><input id="invoiceDraftMode" type="checkbox" checked/></label>
-            <label class="check hidden"><input id="invoiceAutoDetect" type="checkbox" checked/></label>
-            <div class="two-col"><label>Firma VKN<input id="invoiceCompanyVkn" placeholder="10 haneli VKN"/></label><label>Firma Ünvanı<input id="invoiceCompanyTitle"/></label></div>
-            <div class="two-col"><label>Vergi dairesi<input id="invoiceCompanyTaxOffice" placeholder="Sarıyer"/></label><label>MERSİS no<input id="invoiceMersisNo" placeholder="Opsiyonel"/></label></div>
-            <div class="two-col"><label>Telefon<input id="invoiceCompanyPhone" placeholder="0212…"/></label><label>E-posta<input id="invoiceCompanyEmail" type="email" placeholder="fatura@firma.com"/></label></div>
-            <label>Açık adres<textarea id="invoiceCompanyAddress" placeholder="Mahalle, cadde, no, ilçe / il"></textarea></label>
-            <div class="two-col"><label>İlçe<input id="invoiceCompanyDistrict" placeholder="Sarıyer"/></label><label>İl<input id="invoiceCompanyCity" placeholder="İstanbul"/></label></div>
-            <div class="two-col">
-              <label>e-Fatura seri (3 harf)<input id="invoiceEfaturaSeries" maxlength="3" placeholder="ATK" value="ATK"/><small class="field-hint">Örn. ATK2026000000252</small></label>
-              <label>e-Arşiv seri (3 harf)<input id="invoiceEarsivSeries" maxlength="3" placeholder="ATA" value="ATA"/><small class="field-hint">Örn. ATA2026000000001</small></label>
-            </div>
-            <div class="two-col">
-              <label>e-Fatura sonraki no<input id="invoiceEfaturaNext" type="number" min="1" max="999999999" step="1" value="1"/><small class="field-hint" id="invoiceEfaturaPreview">Önizleme: ATK…</small></label>
-              <label>e-Arşiv sonraki no<input id="invoiceEarsivNext" type="number" min="1" max="999999999" step="1" value="1"/><small class="field-hint" id="invoiceEarsivPreview">Önizleme: ATA…</small></label>
-            </div>
-            <div class="button-row"><button class="primary" type="submit">Ayarları Kaydet</button><button id="invoiceConnectionTestBtn" class="secondary-btn" type="button">Hazırlığı kontrol et</button></div>
-            <div class="form-status" id="invoiceIntegrationStatus"></div>
-            <div class="self-test-result" id="invoiceConnectionTestResult"></div>
-            <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
-            <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Arçelik Rapid360 (isteğe bağlı)</h2>
-            <p class="note">Firmaya attığımız örnek link <b>gelen kutuya çekilmez</b>. O link Atak’ın kendi geteinvoices çıktısı içindir. Buraya yalnızca Atak’ın kendi Arçelik bayi hesabı yazılır — başkanın DealerID’si (21134761) kabul edilmez.</p>
-            <label>Servis URL<input id="rapid360Url" placeholder="Atak’ın kendi Rapid360 adresi (örnek link değil)"/></label>
-            <div class="two-col"><label>Client ID<input id="rapid360ClientId" autocomplete="off"/></label><label>Client secret<input id="rapid360Secret" type="password" autocomplete="new-password"/></label></div>
-            <div class="two-col"><label>Dealer ID<input id="rapid360DealerId" placeholder="Atak bayi kodu — 21134761 değil"/></label><label>EInvoiceCode<input id="rapid360Code" placeholder="servis kodu"/></label></div>
-            <div class="two-col"><label>SystemId<input id="rapid360SystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="rapid360AddReturns" type="checkbox" checked/> İadeleri de getir (addReturns)</label></div>
-            <p class="note" style="margin:8px 0 0">Rapid Aktar Rapid360’ı açar ve satışları okur. Kod yazılmaz. Microsoft hata sayfası açılmaz.</p>
-            <label>Satış çekme URL (isteğe bağlı)<input id="rapid360SalesUrl" placeholder="boş = getdetailedsales / getsales adayları"/></label>
-            <p class="note" style="margin:4px 0 0">Okta girişi (robot): Yönetim paneli → Ayarlar → Rapid Aktar.</p>
-            <div class="two-col"><label>Satış mağaza kodu<input id="rapid360SalesStore" placeholder="340334"/></label><label>Şirket / cmp<input id="rapid360SalesCompany" placeholder="2521"/></label></div>
-            <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0 12px"/>
-            <h2 style="margin:0 0 8px;font-size:18px;color:#0b2a4a">Atak geteinvoices</h2>
-            <p class="note">Bu linkte yalnız <b>ATAKHOME</b> satış faturaları çıkar (ATK/ATA). Başkanın Rapid360 gelen faturaları (BEA/GEA) karışmaz.</p>
-            <label>Hazır URL (firmaya bunu verin)<textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?client_id=…&client_secret=…&StartDate=2023-03-27T00:00:00&EndDate=2023-03-31T00:00:00&DealerID=340344&EInvoiceCode=2E1N1D3E4&SystemId=1&addReturns=true"></textarea></label>
-            <div class="button-row"><button class="secondary-btn" type="button" id="atakDmsCopyBtn">URL’yi kopyala</button><button class="secondary-btn" type="button" id="atakDmsRotateBtn">Anahtarları yenile</button></div>
-            <div class="two-col"><label>Client ID<input id="atakDmsClientId" autocomplete="off"/></label><label>Client secret<input id="atakDmsSecret" type="password" autocomplete="new-password"/></label></div>
-            <div class="two-col"><label>Dealer ID<input id="atakDmsDealerId" placeholder="340344"/></label><label>E-Fatura servis kodu (EInvoiceCode)<input id="atakDmsCode" placeholder="2E1N1D3E4"/></label></div>
-            <div class="two-col"><label>SystemId<input id="atakDmsSystemId" placeholder="1"/></label><label class="check" style="align-self:end"><input id="atakDmsEnabled" type="checkbox" checked/> Servisi açık tut</label></div>
-            <label>İzinli firma IP’leri (isteğe bağlı ek kilit)<textarea id="atakDmsAllowedIps" rows="2" placeholder="boş = Rapid360 gibi sadece şifre; doldurursanız yalnız bu IP’ler"></textarea></label>
-            <label class="check hidden"><input id="atakDmsIncludeInbox" type="checkbox"/></label>
-          </form>
-          <hr style="border:0;border-top:1px solid #e2e8f0;margin:8px 0 4px"/>
-          <p class="note">Hazırlık — firma bilgisi, Rapid360 ve Atak geteinvoices.</p>
-          <div class="inv-checks" id="invReadyChecks"></div>
-          <button class="inv-btn primary" id="invRunReadyTestBtn" type="button" style="display:none">Altyapıyı Test Et</button>
+        <div class="inv-firm-box hidden" id="invFirmBox">
+          <h3>E-fatura firması linki</h3>
+          <p class="note">Bu URL son 60 günü ve bugünü kapsar. Eski EndDate’li link artık yeni faturaları da verir; yine de firmaya güncel URL’yi verin.</p>
+          <textarea id="atakDmsCopyUrl" rows="3" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?…"></textarea>
+          <div class="button-row">
+            <button class="inv-btn" type="button" id="atakDmsCopyBtn">URL’yi kopyala</button>
+          </div>
         </div>
       </div>
       <div class="inv-foot">
@@ -188,6 +60,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v236"></script>
+  <script src="/assets/fatura.js?v=fix-v264"></script>
 </body>
 </html>

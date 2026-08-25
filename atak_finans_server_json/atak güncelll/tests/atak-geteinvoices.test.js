@@ -147,9 +147,86 @@ const sameDay = atak.buildResponse(store, creds, {
   StartDate: '2026-08-12T00:00:00',
   EndDate: '2026-08-12T00:00:00',
   addReturns: 'true'
-});
+}, new Date('2026-08-12T12:00:00'));
 assert(sameDay.RecordCount === 1 && sameDay.EInvoices[0].FaturaNo === 'ATK2026000000002', 'EndDate gün dahil');
 assert(sameDay.endDate === '2026-08-12T00:00:00', 'endDate format');
+
+const staleNow = new Date('2026-08-25T12:00:00');
+const staleStore = {
+  invoiceQueue: [
+    {
+      invoiceNumber: 'ATA2026000000003',
+      invoiceDate: '2026-08-10',
+      uuid: 'uuid-old-range',
+      total: 10,
+      status: 'issued',
+      customer: { name: 'Eski aralık' },
+      items: [{ productCode: 'P0', name: 'A', quantity: 1, unitPrice: 10, vatRate: 20 }]
+    },
+    {
+      invoiceNumber: 'ATA2026000000004',
+      invoiceDate: '2026-08-20',
+      uuid: 'uuid-after-end',
+      total: 20,
+      status: 'issued',
+      customer: { name: 'Yeni fatura' },
+      items: [{ productCode: 'P4', name: 'B', quantity: 1, unitPrice: 20, vatRate: 20 }]
+    },
+    {
+      invoiceNumber: 'ATK2026000000001',
+      invoiceDate: '2026-08-21',
+      uuid: 'uuid-atk-1',
+      total: 30,
+      status: 'queued',
+      customer: { name: 'Kuyruk' },
+      items: [{ productCode: 'P5', name: 'C', quantity: 1, unitPrice: 30, vatRate: 20 }]
+    }
+  ]
+};
+const stale = atak.buildResponse(staleStore, creds, {
+  StartDate: '2026-08-01T00:00:00',
+  EndDate: '2026-08-19T00:00:00',
+  addReturns: 'true'
+}, staleNow);
+assert(stale.RecordCount === 3, 'eski EndDate bugüne uzar ' + stale.RecordCount);
+assert(stale.endDate === '2026-08-25T00:00:00', 'yanıttaki EndDate bugün');
+assert(stale.EInvoices.some(x => x.FaturaNo === 'ATA2026000000004'), '20 Ağustos aktarılır');
+assert(stale.EInvoices.some(x => x.FaturaNo === 'ATK2026000000001'), 'ATK kuyruk aktarılır');
+
+const pendingStore = {
+  customers: [{ id: 'c1', name: 'Ayşe Yılmaz', taxNo: '22222222222', city: 'İstanbul' }],
+  invoiceQueue: [],
+  financeTransactions: [
+    {
+      id: 'sale-pending-1',
+      kind: 'sale',
+      invoiceStatus: 'pending',
+      date: '2026-08-22',
+      total: 500,
+      reference: 'S-99',
+      customerId: 'c1',
+      items: [{ productCode: 'K1', name: 'Koltuk', quantity: 1, unitPrice: 500, vatRate: 20 }]
+    },
+    {
+      id: 'sale-rapid-open',
+      kind: 'sale',
+      invoiceStatus: 'pending',
+      rapidDraft: true,
+      date: '2026-08-22',
+      total: 9,
+      reference: 'RAPID-1',
+      items: [{ name: 'Taslak', quantity: 1, unitPrice: 9, vatRate: 20 }]
+    }
+  ]
+};
+const pending = atak.buildResponse(pendingStore, creds, {
+  StartDate: '2026-08-01T00:00:00',
+  EndDate: '2026-08-31T00:00:00',
+  addReturns: 'true'
+}, staleNow);
+assert(pending.RecordCount === 1, 'kesilmeyen satış aktarılır ' + pending.RecordCount);
+assert(pending.EInvoices[0].FaturaNo === 'S-99', 'kesilmeyen fatura no satış referansı');
+assert(pending.EInvoices[0].FaturalanacakMusteriAdi === 'Ayşe Yılmaz', 'kesilmeyen müşteri');
 
 const parsed = rapid.parseInvoices({
   DealerId: 21134761,
@@ -167,16 +244,28 @@ assert(parsed.length === 1 && parsed[0].invoiceNumber === 'BEA2026000002096', 'p
 assert(parsed[0].invoiceDate === '2026-08-17', 'parse DD/MM/YYYY');
 assert(parsed[0].total === 84999, 'parse TutarToplami');
 
-const pub = atak.publicConfig(creds, { reveal: false, baseUrl: 'https://panel.atakhome.com.tr' });
+const copyNow = new Date('2026-08-25T12:00:00');
+const pub = atak.publicConfig(creds, { reveal: false, baseUrl: 'https://panel.atakhome.com.tr', now: copyNow });
 assert(pub.copyUrl.includes('EInvoiceCode=2E1N1D3E4'), 'copy servis kodu');
 assert(pub.copyUrl.includes('client_id=' + muleQuery.client_id), 'copy client');
 assert(pub.copyUrl.includes('client_secret=' + muleQuery.client_secret), 'copy secret');
 assert(pub.copyUrl.includes('DealerID=340344'), 'copy DealerID');
 assert(pub.copyUrl.includes('SystemId=1'), 'copy SystemId');
 assert(pub.copyUrl.includes('addReturns=true'), 'copy addReturns');
-assert(pub.copyUrl.includes('StartDate=2023-03-27T00:00:00'), 'copy StartDate örnek');
-assert(pub.copyUrl.includes('EndDate=2023-03-31T00:00:00'), 'copy EndDate örnek');
+assert(pub.copyUrl.includes('StartDate=2026-06-27T00:00:00'), 'copy StartDate son 60 gün');
+assert(pub.copyUrl.includes('EndDate=2026-08-25T00:00:00'), 'copy EndDate bugün');
+assert(!pub.copyUrl.includes('2023-03-'), 'eski örnek tarih yok');
 assert(!pub.copyUrl.includes('%3A'), 'tarih encode yok');
-assert(pub.copyUrl === 'https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?client_id=' + muleQuery.client_id + '&client_secret=' + muleQuery.client_secret + '&StartDate=2023-03-27T00:00:00&EndDate=2023-03-31T00:00:00&DealerID=340344&EInvoiceCode=2E1N1D3E4&SystemId=1&addReturns=true', 'Arçelik ile aynı sıra');
+assert(pub.copyUrl === 'https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?client_id=' + muleQuery.client_id + '&client_secret=' + muleQuery.client_secret + '&StartDate=2026-06-27T00:00:00&EndDate=2026-08-25T00:00:00&DealerID=340344&EInvoiceCode=2E1N1D3E4&SystemId=1&addReturns=true', 'Arçelik ile aynı sıra, güncel tarih');
+
+const fs = require('fs');
+const path = require('path');
+const faturaHtml = fs.readFileSync(path.join(__dirname, '../public/fatura.html'), 'utf8');
+const faturaJs = fs.readFileSync(path.join(__dirname, '../public/assets/fatura.js'), 'utf8');
+assert(faturaHtml.includes('Kesilmeyen Faturalar'), 'fatura başlık');
+assert(!faturaHtml.includes('data-inv-module="efatura"'), 'e-Fatura ağacı yok');
+assert(!faturaHtml.includes('data-inv-view="ef_out_pending"'), 'gönderilecek klasör yok');
+assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v264'), 'fatura build');
+assert(faturaJs.includes("view:'pending_sales'"), 'varsayılan kesilmeyen');
 
 console.log('atak-geteinvoices.test.js ok');

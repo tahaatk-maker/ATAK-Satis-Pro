@@ -2067,8 +2067,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.260-stock-drop',
-    build:'fix-v263',
+    version:'6.3.261-kesilmeyen',
+    build:'fix-v264',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -7272,7 +7272,7 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
     portal:isStaffPortalReq(req)?'staff':'admin',
     canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),
     canIssue:req.session?.admin===true||staffCanInvoice(req),
-    note:'Gelen kutuya başkanın Rapid360 linki çekilmez. Giden kutu Atak kuyruğudur. geteinvoices URL’sini Kurulum’dan e-fatura firmasına verin.'
+    note:'Kesilmeyen satışlar geteinvoices ile e-fatura firmasına otomatik aktarılır. Eski EndDate’li link bugüne kadar uzar.'
   });
 });
 app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),async(req,res)=>{

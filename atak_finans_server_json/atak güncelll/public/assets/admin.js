@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v263 */
+/* ATAK_ADMIN_BUILD=fix-v264 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -684,7 +684,7 @@ function ckRenderAlerts(alerts){
   const box=q('#ckAlerts');
   if(!box)return;
   const items=[
-    {n:Number(alerts?.pendingInvoices||0),tone:'warn',icon:'F',title:'Kesilmeyen fatura',sub:'e-Fatura Merkezi’nde bekliyor',tab:'invoiceCenter'},
+    {n:Number(alerts?.pendingInvoices||0),tone:'warn',icon:'F',title:'Kesilmeyen fatura',sub:'Kesilmeyen Faturalar ekranında bekliyor',tab:'invoiceCenter'},
     {n:Number(alerts?.overdueNotes||0),tone:'bad',icon:'S',title:'Vadesi geçen senet',sub:'Müşteri Ödemeleri ekranı',tab:'customerPayments'},
     {n:Number(alerts?.lowStock||0),tone:'warn',icon:'D',title:'Stoğu biten ürün',sub:'Stok & Depo kontrolü',tab:'stockCenter'}
   ];
@@ -735,7 +735,7 @@ async function loadTasksCenter(){
   const pendingInv=Number(ck?.alerts?.pendingInvoices||0);
   if(pendingInv>0){
     tasks.push({tone:'warn',title:`${pendingInv} satışın faturası kesilmedi`,
-      sub:'e-Fatura Merkezi kuyruğunda bekliyor',go:'invoiceCenter',label:'Fatura kes',btn:'warn'});
+      sub:'Kesilmeyen Faturalar ekranında bekliyor',go:'invoiceCenter',label:'Listeyi aç',btn:'warn'});
   }
   const overdueNotes=Number(ck?.alerts?.overdueNotes||0);
   if(overdueNotes>0){
@@ -4622,7 +4622,7 @@ function salesPreviewHtml(d){
   const invLabel=d.invoiceStatus==='issued'
     ?`Manuel kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`
     :(d.invoiceStatus==='queue_qnb'?'QNB Solist ile kesilecek (e-Fatura / e-Arşiv kuyruğu)'
-      :(d.invoiceStatus==='pending'?'Daha sonra kesilecek (e-Fatura Merkezi)':'Fatura gerekmiyor'));
+      :(d.invoiceStatus==='pending'?'Daha sonra kesilecek (Kesilmeyen Faturalar)':'Fatura gerekmiyor'));
   const billLabel=d.billingParty==='corporate'
     ?`Kurumsal · ${d.customer?.companyName||'-'} · VKN ${d.customer?.taxNo||'-'}`
     :`Bireysel · ${d.customer?.name||'-'} · TCKN ${d.customer?.tckn||'—'}`;
@@ -6426,7 +6426,7 @@ q('#dynamicsImportBtn')?.addEventListener('click',async()=>{
 
 
 /** e-Fatura Merkezi — modül: e-Fatura / e-Arşiv / Kurulum */
-let invoiceCenterState={module:'efatura',view:'ef_out_pending',data:null,selected:new Set()};
+let invoiceCenterState={module:'pending',view:'pending_sales',data:null,selected:new Set()};
 const INV_VIEW_META={
   ef_out_pending:{title:'e-Fatura · Gönderilecek',hint:'Satıştan kuyruğa düşen giden e-Faturalar.'},
   ef_out_sent:{title:'e-Fatura · Gönderilen',hint:'Kuyruğa alınan / taslak / kesilmiş e-Faturalar.'},

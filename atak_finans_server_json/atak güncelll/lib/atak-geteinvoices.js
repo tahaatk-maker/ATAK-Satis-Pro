@@ -14,6 +14,7 @@ const PUBLIC_PATHS = [PATH, PATH_ALIAS];
 const ARCELIK_DEALER_ID = '21134761';
 const SAMPLE_START = '2023-03-27T00:00:00';
 const SAMPLE_END = '2023-03-31T00:00:00';
+const COPY_WINDOW_DAYS = 59;
 
 const DEFAULTS = {
   clientId: rapid360.DEFAULTS.clientId,
@@ -357,20 +358,36 @@ function toRapidInvoice(row, store, cfg){
   };
 }
 
-function inDateRange(row, range){
-  const d = ymd(row && (row.invoiceDate || row.FaturaTarihi || row.createdAt || (row.rapidRaw && row.rapidRaw.FaturaTarihi)));
+function rowInvoiceYmd(row, store){
+  const sale = findSale(store, row && row.saleId) || {};
+  return ymd(row && (
+    row.invoiceDate ||
+    row.FaturaTarihi ||
+    sale.invoiceDate ||
+    sale.date ||
+    row.createdAt ||
+    sale.createdAt ||
+    (row.rapidRaw && row.rapidRaw.FaturaTarihi)
+  ));
+}
+
+function inDateRange(row, range, store){
+  const d = rowInvoiceYmd(row, store);
   if(!d) return true;
   return d >= range.startYmd && d <= range.endYmd;
 }
 
-function parseRange(query){
+function parseRange(query, now){
   const startRaw = qpick(query, ['StartDate', 'startDate', 'start']);
   const endRaw = qpick(query, ['EndDate', 'endDate', 'end']);
-  const endYmd = ymd(endRaw) || ymd(new Date());
+  const todayYmd = ymd(now || new Date());
+  let endYmd = ymd(endRaw) || todayYmd;
+  // Firma linkinde eski EndDate kalınca yeni faturalar düşmesin: bugüne kadar uzat.
+  if(endYmd < todayYmd) endYmd = todayYmd;
   let startYmd = ymd(startRaw);
   if(!startYmd){
-    const end = new Date(`${endYmd}T00:00:00`);
-    startYmd = ymd(new Date(end.getTime() - 29 * 86400000));
+    const end = new Date(`${endYmd}T12:00:00`);
+    startYmd = ymd(new Date(end.getTime() - COPY_WINDOW_DAYS * 86400000));
   }
   return {
     startYmd,
@@ -380,6 +397,46 @@ function parseRange(query){
     startMs: Date.parse(`${startYmd}T00:00:00`),
     endMs: Date.parse(`${endYmd}T23:59:59`)
   };
+}
+
+function saleNeedsInvoiceStatus(status){
+  const st = String(status || 'pending').toLowerCase();
+  return st === 'pending' || st === 'queued' || st === 'queue_qnb';
+}
+
+function isSkippedPendingSale(sale){
+  if(!sale || typeof sale !== 'object') return true;
+  if(String(sale.kind || 'sale') !== 'sale') return true;
+  if(sale.cancelled) return true;
+  if(sale.rapidDraft || sale.needsCompletion) return true;
+  return false;
+}
+
+function pendingSalesAsQueueRows(store){
+  const queued = new Set(((store && store.invoiceQueue) || []).map(q => String(q.saleId || '')).filter(Boolean));
+  const extra = [];
+  for(const s of (store && store.financeTransactions) || []){
+    if(isSkippedPendingSale(s)) continue;
+    if(!saleNeedsInvoiceStatus(s.invoiceStatus)) continue;
+    if(queued.has(String(s.id))) continue;
+    extra.push({
+      id: 'sale-inv-' + s.id,
+      saleId: s.id,
+      reference: s.reference || '',
+      customerId: s.customerId,
+      customer: s.customer || {},
+      items: Array.isArray(s.items) ? s.items : [],
+      total: s.total,
+      status: 'pending',
+      invoiceType: s.invoiceType || 'auto',
+      docType: s.invoiceType || 'auto',
+      uuid: s.invoiceUuid || s.uuid || '',
+      invoiceNumber: String(s.invoiceNumber || s.reference || '').trim(),
+      invoiceDate: s.invoiceDate || s.date || s.createdAt,
+      createdAt: s.createdAt || s.date
+    });
+  }
+  return extra;
 }
 
 function isReturnRow(row){
@@ -453,17 +510,32 @@ function mapInboxRow(row, cfg){
   });
 }
 
-function collectRows(store, cfg, query){
+function collectRows(store, cfg, query, now){
   const c = ensureConfig(cfg).cfg;
-  const range = parseRange(query);
+  const range = parseRange(query, now);
   const addReturns = parseAddReturns(query, true);
   const out = [];
-  for(const row of (store && store.invoiceQueue) || []){
-    if(!row || (!row.invoiceNumber && !row.uuid && !row.FaturaNo)) continue;
-    if(!isAtakOwnInvoice(row)) continue;
-    if(!inDateRange(row, range)) continue;
+  const seen = new Set();
+  const queue = [...((store && store.invoiceQueue) || []), ...pendingSalesAsQueueRows(store)];
+  for(const row of queue){
+    if(!row) continue;
+    const st = String(row.status || '').toLowerCase();
+    if(st === 'not_required') continue;
+    const sale = findSale(store, row.saleId) || {};
+    const no = String(row.invoiceNumber || row.FaturaNo || row.reference || sale.invoiceNumber || sale.reference || '').trim();
+    const uuid = String(row.uuid || row.ettn || sale.invoiceUuid || '').trim();
+    if(!no && !uuid) continue;
+    const dated = Object.assign({}, row, {
+      invoiceNumber: no || row.invoiceNumber,
+      invoiceDate: row.invoiceDate || sale.invoiceDate || sale.date || row.createdAt
+    });
+    if(!isAtakOwnInvoice(dated)) continue;
+    if(!inDateRange(dated, range, store)) continue;
     if(!addReturns && isReturnRow(row)) continue;
-    out.push(toRapidInvoice(row, store, c));
+    const key = String(no || uuid || row.saleId || row.id);
+    if(seen.has(key)) continue;
+    seen.add(key);
+    out.push(toRapidInvoice(dated, store, c));
   }
   out.sort((a, b) => ymd(b.FaturaTarihi).localeCompare(ymd(a.FaturaTarihi)) || String(b.FaturaNo || '').localeCompare(String(a.FaturaNo || '')));
   return { rows: out.slice(0, 5000), range, addReturns };
@@ -479,8 +551,8 @@ function stampIds(invoices){
   }
 }
 
-function buildResponse(store, cfg, query){
-  const { rows, range, addReturns } = collectRows(store, cfg, query);
+function buildResponse(store, cfg, query, now){
+  const { rows, range, addReturns } = collectRows(store, cfg, query, now);
   stampIds(rows);
   const env = emptyRapidEnvelope(range, cfg, addReturns);
   env.RecordCount = rows.length;
@@ -508,10 +580,21 @@ function failBody(message, status){
   };
 }
 
-function muleQueryString(cfg, { startDate, endDate, mask } = {}){
+function rollingCopyRange(now){
+  const endYmd = ymd(now || new Date());
+  const end = new Date(`${endYmd}T12:00:00`);
+  const start = new Date(end.getTime() - COPY_WINDOW_DAYS * 86400000);
+  return {
+    startDate: `${ymd(start)}T00:00:00`,
+    endDate: `${endYmd}T00:00:00`
+  };
+}
+
+function muleQueryString(cfg, { startDate, endDate, mask, now } = {}){
   const c = ensureConfig(cfg).cfg;
-  const start = rapid360.formatDateTime(startDate || SAMPLE_START, false);
-  const end = rapid360.formatDateTime(endDate || SAMPLE_END, false);
+  const roll = rollingCopyRange(now);
+  const start = rapid360.formatDateTime(startDate || roll.startDate, false);
+  const end = rapid360.formatDateTime(endDate || roll.endDate, false);
   const secret = mask ? '********' : String(c.clientSecret || '');
   return [
     'client_id=' + String(c.clientId || ''),
@@ -525,13 +608,13 @@ function muleQueryString(cfg, { startDate, endDate, mask } = {}){
   ].join('&');
 }
 
-function buildCopyUrl(cfg, { baseUrl, startDate, endDate, mask } = {}){
+function buildCopyUrl(cfg, { baseUrl, startDate, endDate, mask, now } = {}){
   const c = ensureConfig(cfg).cfg;
   const origin = String(baseUrl || 'https://panel.atakhome.com.tr').replace(/\/$/, '');
-  return `${origin}${PATH}?${muleQueryString(c, { startDate, endDate, mask })}`;
+  return `${origin}${PATH}?${muleQueryString(c, { startDate, endDate, mask, now })}`;
 }
 
-function publicConfig(cfg, { reveal, baseUrl, env } = {}){
+function publicConfig(cfg, { reveal, baseUrl, env, now } = {}){
   const c = ensureConfig(cfg).cfg;
   const r = cfg && typeof cfg === 'object' ? cfg : {};
   const list = dmsAllowlist(c, env || process.env);
@@ -550,8 +633,8 @@ function publicConfig(cfg, { reveal, baseUrl, env } = {}){
     clientSecret: reveal ? c.clientSecret : (c.clientSecret ? '********' : ''),
     path: PATH,
     aliasPath: PATH_ALIAS,
-    copyUrlMasked: buildCopyUrl(c, { baseUrl, mask: true }),
-    copyUrl: buildCopyUrl(c, { baseUrl, mask: false }),
+    copyUrlMasked: buildCopyUrl(c, { baseUrl, mask: true, now }),
+    copyUrl: buildCopyUrl(c, { baseUrl, mask: false, now }),
     rotatedAt: r.rotatedAt || c.rotatedAt || '',
     ready: Boolean(c.clientId && c.clientSecret && c.dealerId && c.eInvoiceCode)
   };
@@ -593,6 +676,9 @@ module.exports = {
   DEFAULTS,
   SAMPLE_START,
   SAMPLE_END,
+  COPY_WINDOW_DAYS,
+  rollingCopyRange,
+  pendingSalesAsQueueRows,
   generateClientId,
   generateClientSecret,
   ensureConfig,
