@@ -50,6 +50,10 @@ s["products"]=[]
 s["productStocks"]=[]
 s["categories"]=cats
 s["brands"]=keep
+cust=len(s.get("customers") or [])
+wh=len(s.get("warehouses") or [])
+people=[x for x in (s.get("users") or [])+(s.get("staff") or []) if isinstance(x, dict)]
+sal=sum(1 for x in people if float(x.get("salaryMonthly") or 0)>0)
 logs=s.get("auditLogs") if isinstance(s.get("auditLogs"), list) else []
 logs.insert(0,{
     "id": str(uuid.uuid4()),
@@ -64,7 +68,7 @@ tmp=path+".tmp"
 with open(tmp, "w", encoding="utf-8") as f:
     json.dump(s, f, ensure_ascii=False, separators=(",", ":"))
 os.replace(tmp, path)
-print("SILINEN_URUN="+str(removed)+" SILINEN_STOK="+str(stocks_n)+" KALAN_KATEGORI="+str(len(cats))+" KALAN_MARKA="+str(len(keep))+" DOSYA="+path)
+print("SILINEN_URUN="+str(removed)+" SILINEN_STOK="+str(stocks_n)+" KALAN_KATEGORI="+str(len(cats))+" KALAN_MARKA="+str(len(keep))+" KALAN_MUSTERI="+str(cust)+" KALAN_DEPO="+str(wh)+" KALAN_MAAS="+str(sal)+" DOSYA="+path)
 PY
 }
 
@@ -114,7 +118,7 @@ for path in paths:
         continue
     if not isinstance(s,dict):
         continue
-    print("FILE",path,"urun",len(s.get("products") or []),"kategori",len(s.get("categories") or []),"marka",len(s.get("brands") or []))
+    print("FILE",path,"urun",len(s.get("products") or []),"musteri",len(s.get("customers") or []),"depo",len(s.get("warehouses") or []),"kategori",len(s.get("categories") or []),"marka",len(s.get("brands") or []))
 PY
 for P in 3100 3000 3200; do
   H=$(curl -sS -m 3 "http://127.0.0.1:$P/health" 2>/dev/null || true)
@@ -122,4 +126,4 @@ for P in 3100 3000 3200; do
 done
 
 echo "CLEAR-PRODUCTS_OK"
-echo "PANEL Ctrl+Shift+R : Tum Urunler = 0 , Markalar tek Istikbal , Kategoriler durur"
+echo "Musteri / maas / depo DOKUNULMADI. Panel Ctrl+Shift+R : Tum Urunler = 0"

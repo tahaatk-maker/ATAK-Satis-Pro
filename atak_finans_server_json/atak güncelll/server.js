@@ -496,7 +496,16 @@ function recoverIfLiveIsTiny(){
   let srcSize=0;
   try{srcSize=fs.statSync(src).size}catch(_){return false}
   // 5MB+ yedek var, canlı < %40 ve < 3MB → felaket (boş/yeni store)
+  // Ürün silindikten sonra müşteriler duruyorsa GERİ YÜKLEME (ürünler geri gelmesin)
   if(!(srcSize>=5*1024*1024 && live>=0 && live<3*1024*1024 && live<srcSize*0.4))return false;
+  try{
+    const liveObj=JSON.parse(fs.readFileSync(STORE_PATH,'utf8'));
+    const liveCust=Array.isArray(liveObj.customers)?liveObj.customers.length:0;
+    if(liveCust>=500){
+      console.warn('[store] tiny skip — live has',liveCust,'customers; not replacing with larger backup');
+      return false;
+    }
+  }catch(_){}
   if(path.resolve(src)===path.resolve(STORE_PATH))return false;
   try{
     const bak=`${STORE_PATH}.bak-tiny-${new Date().toISOString().replace(/[:.]/g,'-')}`;
@@ -9486,6 +9495,7 @@ app.get('*',(req,res)=>{
   res.redirect('/personel');
 });
 app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'Sunucu hatası'});});
+recoverIfLiveIsTiny();
 recoverStoreFile();
 ensureStore(readStore()); writeStore(readStore());
 app.listen(PORT,'127.0.0.1',()=>{
