@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v270 */
+/* ATAK_FATURA_BUILD=fix-v275 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={view:'pending_sales',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -6,6 +6,9 @@ let state={view:'pending_sales',data:null,selected:new Set(),portal:'admin',canS
 function toast(t){const el=q('#toast');if(!el)return;el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
 function salesMoney(n){return new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0))}
 function invEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function invoiceKeepPending(err){
+  return !!(err && (err.status===409 || err.payload?.keepPending || err.payload?.eva));
+}
 function invStatusBadge(st){
   const s=String(st||'pending');
   const label={pending:'Bekliyor',ready:'Hazır',queued:'Kuyruk',draft_sent:'Taslak',queued_remote:'Portal kuyruk',issued:'Kesildi',error:'Hatalı',cancelled:'İptal',archived:'Arşiv'}[s]||s;
@@ -15,8 +18,17 @@ async function api(url,opt={}){
   const r=await fetch(url,{credentials:'same-origin',...opt});
   const text=await r.text();
   let d={};try{d=JSON.parse(text||'{}')}catch(_){d={}}
-  if(r.status===401)throw new Error('Oturum yok');
-  if(!r.ok)throw new Error(d.error||'İşlem başarısız');
+  if(r.status===401){
+    const err=new Error('Oturum yok');
+    err.status=401;
+    throw err;
+  }
+  if(!r.ok){
+    const err=new Error(d.error||'İşlem başarısız');
+    err.status=r.status;
+    err.payload=d;
+    throw err;
+  }
   return d;
 }
 
@@ -120,15 +132,18 @@ function invRenderTable(rows){
   qa('[data-inv-qnb]').forEach(btn=>btn.onclick=async()=>{
     try{
       const out=await api('/web-api/admin/sale/'+encodeURIComponent(btn.dataset.invQnb)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-      toast(out.result?.message||'Fatura kesildi');await loadInvoiceCenter();
-    }catch(e){toast(e.message)}
+      toast(out.result?.message||'Fatura Digital Planet’e gönderildi');await loadInvoiceCenter();
+    }catch(e){
+      toast(e.message);
+      if(invoiceKeepPending(e))await loadInvoiceCenter();
+    }
   });
 }
 
 function invPaintCurrentView(){
   const rows=invApplySearch(state.data?.salesPending||[]);
   invRenderTable(rows);
-  if(q('#invFootStatus'))q('#invFootStatus').textContent=state.data?.note||'Dijital Planet SOAP gönderimi';
+  if(q('#invFootStatus'))q('#invFootStatus').textContent=state.data?.note||'EVA Rapid Veri Çek asıl yol · Kes = Digital Planet SOAP';
 }
 
 async function loadInvoiceCenter(){
@@ -158,10 +173,12 @@ q('#invIssueSelectedBtn')?.addEventListener('click',async()=>{
   if(!state.canIssue)return toast('Fatura kesme yetkiniz yok');
   const ids=[...state.selected];
   if(!ids.length)return toast('Önce satır seçin');
+  let sent=0,kept=0;
   for(const id of ids){
-    try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})}catch(_){}
+    try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});sent++}
+    catch(e){if(invoiceKeepPending(e))kept++}
   }
-  toast(`${ids.length} satış kesildi`);
+  toast(kept?`${sent} kesildi · ${kept} Kesilmeyen’de kaldı (EVA Rapid Veri Çek kessin)`:`${sent} satış kesildi`);
   await loadInvoiceCenter();
 });
 
@@ -176,8 +193,8 @@ function fillDigitalPlanet(d){
   if(q('#dpPostbox'))q('#dpPostbox').value=d.receiverPostboxName||'';
   if(q('#dpReadyNote')){
     q('#dpReadyNote').textContent=d.ready
-      ?`Hazır: ${d.corporateCode} · ${d.loginName}. Satırdaki “gönder” NetInvoice’a UBL yollar.`
-      :'Bu firma geteinvoices linkini kullanmaz. Aşağıdaki CorporateCode / kullanıcı / şifre ile Atak faturayı SOAP’tan gönderir.';
+      ?`Hazır: ${d.corporateCode} · ${d.loginName}. Satırdaki Kes NetInvoice SOAP ile yollar.`
+      :'SOAP yoksa Kes sahte kuyruk yazmaz. Asıl yol: yukarıdaki URL’yi EVA Rapid360’a yapıştırıp Rapid Veri Çek.';
   }
 }
 function dpPayload(){

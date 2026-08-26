@@ -402,7 +402,7 @@ function parseRange(query, now){
 
 function saleNeedsInvoiceStatus(status){
   const st = String(status || 'pending').toLowerCase();
-  return st === 'pending' || st === 'queued' || st === 'queue_qnb';
+  return st === 'pending' || st === 'queued' || st === 'queue_qnb' || st === 'ready';
 }
 
 function isSkippedPendingSale(sale){
@@ -414,7 +414,13 @@ function isSkippedPendingSale(sale){
 }
 
 function pendingSalesAsQueueRows(store){
-  const queued = new Set(((store && store.invoiceQueue) || []).map(q => String(q.saleId || '')).filter(Boolean));
+  const queued = new Set(((store && store.invoiceQueue) || [])
+    .filter(q=>{
+      const st=String(q && q.status || '').toLowerCase();
+      return st && !['error','cancelled','canceled','void','not_required','pending'].includes(st);
+    })
+    .map(q => String(q.saleId || ''))
+    .filter(Boolean));
   const extra = [];
   for(const s of (store && store.financeTransactions) || []){
     if(isSkippedPendingSale(s)) continue;

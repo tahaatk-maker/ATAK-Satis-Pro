@@ -268,6 +268,52 @@ assert(pending.RecordCount === 1, 'kesilmeyen satış aktarılır ' + pending.Re
 assert(pending.EInvoices[0].FaturaNo === 'S-99', 'kesilmeyen fatura no satış referansı');
 assert(pending.EInvoices[0].FaturalanacakMusteriAdi === 'Ayşe Yılmaz', 'kesilmeyen müşteri');
 
+const errorQueueStore = {
+  customers: pendingStore.customers,
+  invoiceQueue: [{
+    id: 'q-err',
+    saleId: 'sale-pending-1',
+    invoiceNumber: 'ATK-FAKE',
+    invoiceDate: '2026-08-22',
+    status: 'error',
+    total: 500,
+    customer: { name: 'Ayşe Yılmaz' },
+    items: [{ productCode: 'K1', name: 'Koltuk', quantity: 1, unitPrice: 500, vatRate: 20 }]
+  }],
+  financeTransactions: [{
+    ...pendingStore.financeTransactions[0],
+    invoiceStatus: 'queued'
+  }]
+};
+const extraAfterError = atak.pendingSalesAsQueueRows(errorQueueStore);
+assert(extraAfterError.length === 1 && extraAfterError[0].saleId === 'sale-pending-1', 'error kuyruk satışı gizlemez');
+const recovered = atak.buildResponse(errorQueueStore, creds, {
+  StartDate: '2026-08-01T00:00:00',
+  EndDate: '2026-08-31T00:00:00',
+  addReturns: 'true'
+}, staleNow);
+assert(recovered.RecordCount === 1, 'error kuyruk EVA’da 0 yapmaz ' + recovered.RecordCount);
+assert(recovered.EInvoices[0].FaturaNo === 'S-99', 'kesilmeyen referans aktarılır');
+
+const readyQueueStore = {
+  customers: pendingStore.customers,
+  invoiceQueue: [{
+    id: 'q-ready',
+    saleId: 'sale-pending-1',
+    invoiceNumber: 'ATK2026000000099',
+    invoiceDate: '2026-08-22',
+    status: 'ready',
+    total: 500,
+    customer: { name: 'Ayşe Yılmaz' },
+    items: [{ productCode: 'K1', name: 'Koltuk', quantity: 1, unitPrice: 500, vatRate: 20 }]
+  }],
+  financeTransactions: [{
+    ...pendingStore.financeTransactions[0],
+    invoiceStatus: 'queued'
+  }]
+};
+assert(atak.pendingSalesAsQueueRows(readyQueueStore).length === 0, 'hazır kuyruk mükerrer satmaz');
+
 const parsed = rapid.parseInvoices({
   DealerId: 21134761,
   EInvoiceCode: '2E1N1D3E4',
@@ -307,7 +353,7 @@ assert(faturaHtml.includes('EVA Connect'), 'eva url kutusu');
 assert(faturaHtml.includes('atakDmsCopyBtn'), 'url kopyala');
 assert(!faturaHtml.includes('data-inv-module="efatura"'), 'e-Fatura ağacı yok');
 assert(!faturaHtml.includes('data-inv-view="ef_out_pending"'), 'gönderilecek klasör yok');
-assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v270'), 'fatura build');
+assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v275'), 'fatura build');
 assert(faturaJs.includes("view:'pending_sales'"), 'varsayılan kesilmeyen');
 assert(faturaJs.includes('digital-planet-test'), 'dp test api');
 

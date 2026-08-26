@@ -28,7 +28,11 @@ assert.match(personelJs, /\$\('#salesInvoiceStatus'\)\.value=defaultSalesInvoice
 assert.match(adminJs, /q\('#salesInvoiceStatus'\)\.value='queue_qnb'/);
 assert.match(personelJs, /\$\('#salesInvoiceStatus'\)\.value='queue_qnb'/);
 assert.doesNotMatch(adminJs, /QNB Solist kuyruğuna alınır/);
-assert.match(server, /6\.3\.271-satis-adim/);
-assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v274/);
-assert.match(personelJs, /ATAK_PERSONEL_BUILD=fix-v274/);
+assert.match(adminJs, /invoiceKeepPending/);
+assert.match(personelJs, /invoiceKeepPending/);
+assert.match(server, /keepPending:true/);
+assert.doesNotMatch(fs.readFileSync(path.join(root, 'qnb-solist-adapter.js'), 'utf8'), /queued_local/);
+assert.match(server, /6\.3\.272-fatura/);
+assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v275/);
+assert.match(personelJs, /ATAK_PERSONEL_BUILD=fix-v275/);
 console.log('sales-center-invoice-first.test.js ok');

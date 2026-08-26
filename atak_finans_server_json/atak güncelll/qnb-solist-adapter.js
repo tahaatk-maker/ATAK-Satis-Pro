@@ -243,13 +243,23 @@ async function lookupTaxpayer(vkn,cfg={}){
 }
 
 /**
- * Gerçek SOAP çağrısı burada yapılacak.
- * Şimdilik: hazırlık + UBL üretimi + kuyruk durumu güncelleme.
+ * Digital Planet SOAP ile keser. Kayıt yoksa sahte kuyruk yazmaz —
+ * satış Kesilmeyen’de kalır, EVA Rapid Veri Çek çeker.
  */
 async function sendOrQueueInvoice({record,sale,customer,cfg}){
-  const checks=readinessChecks(cfg);
-  const ready=checks.filter(c=>['Firma VKN','Firma ünvanı','WSDL / servis URL','Kullanıcı','Şifre'].includes(c.name)).every(c=>c.ok);
   const docType=detectDocumentType(customer,cfg);
+  const dpCfg=digitalPlanet.ensureConfig(cfg.digitalPlanet).cfg;
+  if(!digitalPlanet.isReady(dpCfg)){
+    return {
+      ok:false,
+      keepPending:true,
+      eva:true,
+      mode:'need_eva',
+      status:'pending',
+      docType,
+      message:'Dijital Planet SOAP yok. Satış Kesilmeyen’de kalsın; EVA Rapid Veri Çek kessin.'
+    };
+  }
   const ubl=buildUblInvoiceDraft({
     sale:{
       ...sale,
@@ -262,43 +272,19 @@ async function sendOrQueueInvoice({record,sale,customer,cfg}){
     cfg,
     docType
   });
-  const dpCfg=digitalPlanet.ensureConfig(cfg.digitalPlanet).cfg;
-  if(digitalPlanet.isReady(dpCfg)){
-    const sent=await digitalPlanet.sendUbl(dpCfg,ubl);
-    if(!sent.ok){
-      return {ok:false,mode:'digital_planet',status:'error',docType,ublXml:ubl,message:sent.error||'Dijital Planet gönderilemedi'};
-    }
-    return {
-      ok:true,
-      mode:'digital_planet',
-      status:'issued',
-      docType,
-      ublXml:ubl,
-      providerDocumentId:sent.invoiceId||'',
-      uuid:sent.uuid||'',
-      message:sent.message||'Dijital Planet’e gönderildi'
-    };
+  const sent=await digitalPlanet.sendUbl(dpCfg,ubl);
+  if(!sent.ok){
+    return {ok:false,mode:'digital_planet',status:'error',docType,ublXml:ubl,message:sent.error||'Dijital Planet gönderilemedi'};
   }
-  if(!ready||!cfg.enabled){
-    return {
-      ok:true,
-      mode:'queued_local',
-      status:'ready',
-      docType,
-      ublXml:ubl,
-      message:'Dijital Planet firma kodu / kullanıcı / şifre kaydedilince gönderilir. UBL taslağı üretildi.'
-    };
-  }
-  // Canlı SOAP entegrasyonu: QNB WSDL metodları (sendInvoice / belgeleriv2 vb.) buraya bağlanır.
   return {
     ok:true,
-    mode:'stub_send',
-    status:cfg.draftMode!==false?'draft_sent':'queued_remote',
+    mode:'digital_planet',
+    status:'issued',
     docType,
     ublXml:ubl,
-    message:cfg.draftMode!==false
-      ?'QNB taslak/imza kuyruğuna gönderim noktası hazır (SOAP stub). WSDL bağlanınca aktifleşir.'
-      :'QNB gönderim noktası hazır (SOAP stub). WSDL bağlanınca aktifleşir.'
+    providerDocumentId:sent.invoiceId||'',
+    uuid:sent.uuid||'',
+    message:sent.message||'Dijital Planet’e gönderildi'
   };
 }
 

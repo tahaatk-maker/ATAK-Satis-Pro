@@ -2069,8 +2069,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.271-satis-adim',
-    build:'fix-v274',
+    version:'6.3.272-fatura',
+    build:'fix-v275',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -4750,7 +4750,7 @@ app.post('/web-api/admin/customer/:id/delete-request',requireAdminOrStaff('custo
 
 function saleNeedsInvoice(status){
   const st=String(status||'pending').toLowerCase();
-  return st==='pending'||st==='queue_qnb';
+  return st==='pending'||st==='queue_qnb'||st==='queued'||st==='ready';
 }
 function customerInvoiceIndex(s){
   const map=new Map();
@@ -7441,6 +7441,17 @@ app.post('/web-api/admin/invoice-queue/:id/retry',requireAdminOrStaffAny('invoic
   const cfg=s.invoiceIntegration||{};
   try{
     const out=await qnbSolist.sendOrQueueInvoice({record:r,sale:sale||r,customer,cfg});
+    if(out && out.ok===false){
+      if(out.keepPending||out.eva){
+        return res.status(409).json({ok:false,eva:true,keepPending:true,error:out.message||'Satış Kesilmeyen’de kalsın'});
+      }
+      r.status='error';
+      r.error=out.message||'Dijital Planet hata';
+      r.providerMessage=out.message||'';
+      r.updatedAt=new Date().toISOString();
+      writeStore(s);
+      return res.status(502).json({error:out.message||'Dijital Planet gönderilemedi',result:out});
+    }
     r.status=out.status||'ready';
     r.docType=out.docType||r.docType;
     r.ublXml=out.ublXml||r.ublXml;
@@ -7508,6 +7519,15 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaffAny('orders_
     return res.status(400).json({error:'Kurumsal fatura için müşteri kartına firma ünvanı ve VKN ekleyin'});
   }
   const cfg=s.invoiceIntegration||{};
+  const dpReady=digitalPlanet.isReady(digitalPlanet.ensureConfig(cfg.digitalPlanet).cfg);
+  if(!dpReady){
+    return res.status(409).json({
+      ok:false,
+      eva:true,
+      keepPending:true,
+      error:'Dijital Planet SOAP kayıtlı değil. Satış Kesilmeyen’de kaldı. EVA Connect’te Rapid Veri Çek ile kesin.'
+    });
+  }
   let record=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id));
   if(!record){
     record={
@@ -7533,13 +7553,17 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaffAny('orders_
   record.paymentNote=sale.paymentNote;
   const out=await qnbSolist.sendOrQueueInvoice({record,sale:{...sale,invoiceNumber:alloc.number},customer:invoiceParty,cfg});
   if(out && out.ok===false){
+    if(out.keepPending||out.eva){
+      return res.status(409).json({ok:false,eva:true,keepPending:true,error:out.message||'Satış Kesilmeyen’de kaldı'});
+    }
     record.status='error';
     record.error=out.message||'Dijital Planet hata';
     record.ublXml=out.ublXml||record.ublXml;
     record.providerMessage=out.message||'';
     record.updatedAt=new Date().toISOString();
+    sale.invoiceStatus='pending';
     writeStore(s);
-    return res.status(502).json({error:out.message||'Dijital Planet gönderilemedi',result:out});
+    return res.status(502).json({error:out.message||'Dijital Planet gönderilemedi',result:out,keepPending:true});
   }
   if(out.providerDocumentId)record.providerDocumentId=out.providerDocumentId;
   if(out.uuid)record.uuid=out.uuid;
@@ -7555,7 +7579,7 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaffAny('orders_
   sale.invoiceType=out.docType||docTypeHint;
   sale.invoiceUuid=record.uuid;
   sale.updatedAt=new Date().toISOString();
-  audit(s,out.mode==='digital_planet'?'Fatura Dijital Planet’e gönderildi':'Fatura kes / kuyruğa alındı',invoiceParty.name,{saleId:sale.id,status:record.status,docType:record.docType,invoiceNumber:record.invoiceNumber,party:invoiceParty.partyType,mode:out.mode||''});
+  audit(s,'Fatura Dijital Planet’e gönderildi',invoiceParty.name,{saleId:sale.id,status:record.status,docType:record.docType,invoiceNumber:record.invoiceNumber,party:invoiceParty.partyType,mode:out.mode||''});
   writeStore(s);
   res.json({ok:true,record,result:out,sale:{id:sale.id,invoiceStatus:sale.invoiceStatus,invoiceType:sale.invoiceType,invoiceNumber:sale.invoiceNumber,billingParty:sale.billingParty}});
 });

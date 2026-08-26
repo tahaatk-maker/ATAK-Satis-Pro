@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v274 */
+/* ATAK_PERSONEL_BUILD=fix-v275 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -948,10 +948,13 @@ function customerInitials(name){
   const p=String(name||'').trim().split(/\s+/).filter(Boolean);
   return ((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase();
 }
+function invoiceKeepPending(err){
+  return !!(err && (err.status===409 || err.payload?.keepPending || err.payload?.eva));
+}
 function saleNeedsInvoiceButton(t){
   if(!t?.id)return false;
   const st=String(t.invoiceStatus||'pending').toLowerCase();
-  return st==='pending'||st==='queue_qnb';
+  return st==='pending'||st==='queue_qnb'||st==='queued'||st==='ready';
 }
 async function loadSalesHubInvoiceHistory(customerId,boxSel){
   const box=$(boxSel||'#salesHubInvoiceHistory');if(!box||!customerId)return;
@@ -969,9 +972,9 @@ async function loadSalesHubInvoiceHistory(customerId,boxSel){
       btn.onclick=async()=>{
         try{
           await api('/web-api/admin/sale/'+encodeURIComponent(btn.dataset.saleInvoice)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-          stToast('Fatura kesildi');
+          stToast('Fatura Digital Planet’e gönderildi');
           await loadSalesHubInvoiceHistory(customerId,boxSel);
-        }catch(e){stToast(e.message)}
+        }catch(e){stToast(e.message||'Fatura kesilemedi')}
       };
     });
   }catch(e){box.innerHTML=`<div class="note">${esc(e.message||'Yüklenemedi')}</div>`}
@@ -1931,7 +1934,7 @@ function salesIssueInvoiceNow(){
   if(!canSaleInvoice()){stToast('Fatura kesme yetkiniz yok');return}
   if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value='queue_qnb';
   openSalesPreview();
-  stToast('Fatura Kes seçildi. Satışı onaylayınca e-fatura kesilir; basmazsanız Kesilmeyen’e düşer.');
+  stToast('Fatura Kes: SOAP varsa şimdi gider. Yoksa Kesilmeyen’de kalır; EVA Rapid Veri Çek kessin.');
 }
 async function confirmSalesDraft(){
   const d=activeSalesDraft||collectSalesDraft();
@@ -1961,8 +1964,12 @@ async function confirmSalesDraft(){
     if(d.invoiceStatus==='queue_qnb'&&createdSaleId&&canSaleInvoice()){
       try{
         const inv=await api('/web-api/admin/sale/'+encodeURIComponent(createdSaleId)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({billingParty:d.billingParty||'individual'})});
-        noteText+=` · fatura ${inv.result?.docType||''} (${inv.record?.status||'kuyruk'})`;
-      }catch(invErr){noteText+=` · fatura uyarısı: ${invErr.message}`}
+        noteText+=` · fatura ${inv.result?.docType||''} (${inv.record?.status||'kesildi'})`;
+      }catch(invErr){
+        noteText+=invoiceKeepPending(invErr)
+          ?' · Kesilmeyen’de kaldı (EVA Rapid Veri Çek kessin)'
+          :` · fatura uyarısı: ${invErr.message}`;
+      }
     }
     closeSalesPreview();
     st.textContent=`Satış bitti: ${r.sale?.reference||r.reference||'OK'}${noteText}`;
@@ -3034,7 +3041,7 @@ async function issuePersonelSaleInvoice(saleId){
   if(!canSaleInvoice()){payToast('Fatura kesme yetkiniz yok');return}
   try{
     const out=await api('/web-api/admin/sale/'+encodeURIComponent(saleId)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    payToast(out.sale?.invoiceNumber?`Fatura kuyruk · ${out.sale.invoiceNumber}`:'Fatura kuyruğa alındı');
+    payToast(out.sale?.invoiceNumber?`Fatura kesildi · ${out.sale.invoiceNumber}`:'Fatura Digital Planet’e gönderildi');
     if(payState.selectedId)selectPayCustomer(payState.selectedId,true);
   }catch(e){payToast(e.message||'Fatura kesilemedi')}
 }
@@ -3277,7 +3284,7 @@ async function custHubIssueInvoice(){
     if(pending.length===1){
       if(!confirm(`${pending[0].reference||'Satış'} fatura kesilsin mi?`))return;
       await api('/web-api/admin/sale/'+encodeURIComponent(pending[0].id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-      stToast('Fatura kesildi');
+      stToast('Fatura Digital Planet’e gönderildi');
       await loadCustHub();
     }else{
       await loadSalesHubInvoiceHistory(custHubSelected.id,'#custHubInvoiceHistory');

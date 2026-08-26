@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v274 */
+/* ATAK_ADMIN_BUILD=fix-v275 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -2528,11 +2528,14 @@ function renderCustomerSaleItems(items=[]){
     return `<div class="customer-sale-item"><div><b>${qty}× ${name}</b>${code?`<small>${code}</small>`:''}<small>Birim: ${money2(i.unitPrice||0)}</small></div><strong>${money2(line)}</strong></div>`;
   }).join('')}</div>`;
 }
+function invoiceKeepPending(err){
+  return !!(err && (err.status===409 || err.payload?.keepPending || err.payload?.eva));
+}
 function saleNeedsInvoiceButton(t){
   if(String(t.kind||'')!=='sale'||t.cancelled||!t.id)return false;
   if(t.needsCompletion||t.rapidDraft)return false;
   const st=String(t.invoiceStatus||'pending').toLowerCase();
-  return st==='pending'||st==='queue_qnb';
+  return st==='pending'||st==='queue_qnb'||st==='queued'||st==='ready';
 }
 function customerSaleActionButtons(t,{compact=false}={}){
   const kind=String(t.kind||'');
@@ -2884,9 +2887,12 @@ async function issueCustomerSaleInvoice(saleId){
   try{
     const inv=await api('/web-api/admin/sale/'+encodeURIComponent(saleId)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
     const no=inv.sale?.invoiceNumber||inv.record?.invoiceNumber||'';
-    toast(no?`Fatura kuyruğa alındı · ${no}`:'Fatura kuyruğa alındı');
+    toast(no?`Fatura Digital Planet’e gönderildi · ${no}`:'Fatura Digital Planet’e gönderildi');
     if(customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId);
-  }catch(e){toast(e.message||'Fatura kesilemedi')}
+  }catch(e){
+    toast(e.message||'Fatura kesilemedi');
+    if(invoiceKeepPending(e) && customersPageData.selectedId)await selectCustomerPage(customersPageData.selectedId);
+  }
 }
 function openSalesCenterForCustomer(c){
   goTab('salesCenter');
@@ -5155,15 +5161,14 @@ async function printSalesContractAndNotes(){
   openSalesPrintWindow('Atak Pazarlama · Sözleşme + Senet (Tek A4)',salesCombinedContractSenetA4Html(d));
 }
 async function salesIssueInvoiceNow(){
-  // İsteğe bağlı: kullanıcı Fatura kes’e basınca kuyruğa alınır
   if(q('#salesInvoiceStatus'))q('#salesInvoiceStatus').value='queue_qnb';
   const d=collectSalesDraft();
   if(d.error){toast(d.error);return}
   activeSalesDraft=d;
   openSalesPreview();
-  toast('Fatura Kes seçildi. Satışı onaylayınca e-fatura kesilir; basmazsanız Kesilmeyen’e düşer.');
+  toast('Fatura Kes: Dijital Planet SOAP varsa şimdi gider. Yoksa satış Kesilmeyen’de kalır; EVA Rapid Veri Çek kessin.');
   const hint=q('#salesStatus');
-  if(hint){hint.textContent='Fatura Kes seçildi → satışı onaylayınca e-fatura kuyruğuna alınır. EVA Rapid Veri Çek bunu çeker.';hint.className='form-status success'}
+  if(hint){hint.textContent='Fatura Kes seçildi → SOAP varsa şimdi gider. Yoksa Kesilmeyen’de kalır; EVA Rapid Veri Çek kessin.';hint.className='form-status success'}
 }
 async function confirmSalesDraft(){
   const d=activeSalesDraft||collectSalesDraft();if(d.error){toast(d.error);return}
@@ -5194,8 +5199,12 @@ async function confirmSalesDraft(){
     if(d.invoiceStatus==='queue_qnb'&&createdSaleId){
       try{
         const inv=await api('/web-api/admin/sale/'+encodeURIComponent(createdSaleId)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({billingParty:d.billingParty||'individual'})});
-        noteText+=` · fatura ${inv.result?.docType||''} (${inv.record?.status||'kuyruk'})`;
-      }catch(invErr){noteText+=` · fatura uyarısı: ${invErr.message}`}
+        noteText+=` · fatura ${inv.result?.docType||''} (${inv.record?.status||'kesildi'})`;
+      }catch(invErr){
+        noteText+=invoiceKeepPending(invErr)
+          ?' · Kesilmeyen’de kaldı (EVA Rapid Veri Çek kessin)'
+          :` · fatura uyarısı: ${invErr.message}`;
+      }
     }
     closeSalesPreview();status.textContent=`Satış kaydedildi. Yeni cari bakiye: ${salesMoney(result.balance)}${noteText}`;status.className='form-status success';
     try{
@@ -6643,7 +6652,7 @@ const INV_VIEW_META={
   ea_out_archive:{title:'e-Arşiv · Giden Arşiv',hint:'Arşivlenmiş giden e-Arşiv.'},
   ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv (portal bağlanınca).'},
   ea_in_archive:{title:'e-Arşiv · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Arşiv.'},
-  pending_sales:{title:'Kesilmeyen Faturalar',hint:'Geç kesilen satışlar. Kuyruğa alın veya manuel işaretleyin.'},
+  pending_sales:{title:'Kesilmeyen Faturalar',hint:'EVA Rapid Veri Çek bu listeyi çeker. Kes yalnızca gerçek Digital Planet SOAP içindir.'},
   setup_ready:{title:'Kurulum / Hazırlık',hint:'Firma, Rapid360 ve Atak geteinvoices kontrolü.'},
   setup_settings:{title:'Firma ve servis',hint:'Atak fatura ayarları.'}
 };
@@ -6726,7 +6735,7 @@ function invRenderTable(rows){
       <td>${invEsc(r.paymentMethod||'-')}</td>
       <td>${invStatusBadge(r.invoiceStatus)}</td>
       <td style="display:flex;gap:6px;flex-wrap:wrap">
-        <button type="button" class="inv-btn" data-inv-qnb="${invEsc(r.id)}">QNB’ye Al</button>
+        <button type="button" class="inv-btn" data-inv-qnb="${invEsc(r.id)}">Kes</button>
         <button type="button" class="inv-btn" data-mark-invoiced="${invEsc(r.id)}">Manuel Kes</button>
       </td>
     </tr>`).join('');
@@ -6741,7 +6750,7 @@ function invRenderTable(rows){
     qa('[data-inv-qnb]').forEach(btn=>btn.onclick=async()=>{
       try{
         const out=await api('/web-api/admin/sale/'+encodeURIComponent(btn.dataset.invQnb)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-        toast(`QNB kuyruk: ${out.result?.docType||''}`);await loadInvoiceCenter();
+        toast(out.result?.message||'Fatura Digital Planet’e gönderildi');await loadInvoiceCenter();
       }catch(e){toast(e.message)}
     });
     qa('[data-mark-invoiced]').forEach(btn=>btn.onclick=async()=>{
@@ -6843,7 +6852,7 @@ function invPaintCurrentView(){
   else rows=invFilterQueue(d.queue||[],view);
   rows=invApplySearch(rows);
   invRenderTable(rows);
-  q('#invFootStatus').textContent=d.note||'Yerel kuyruk aktif · Kesilmeyen faturalar bu merkezde';
+  q('#invFootStatus').textContent=d.note||'EVA Rapid Veri Çek asıl yol · Kes = Digital Planet SOAP';
 }
 async function invoiceConnectionTestForCenter(){
   try{
@@ -6911,10 +6920,12 @@ q('#invIssueSelectedBtn')?.addEventListener('click',async()=>{
   const ids=[...invoiceCenterState.selected];
   if(!ids.length)return toast('Önce satır seçin');
   if(invoiceCenterState.view==='pending_sales'){
+    let sent=0,kept=0;
     for(const id of ids){
-      try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})}catch(_){}
+      try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});sent++}
+      catch(e){if(invoiceKeepPending(e))kept++}
     }
-    toast(`${ids.length} satış QNB kuyruğuna alındı`);
+    toast(kept?`${sent} kesildi · ${kept} Kesilmeyen’de kaldı (EVA kessin)`:`${sent} satış kesildi`);
   }else{
     for(const id of ids){
       try{await api('/web-api/admin/invoice-queue/'+encodeURIComponent(id)+'/retry',{method:'POST',body:'{}'})}catch(_){}

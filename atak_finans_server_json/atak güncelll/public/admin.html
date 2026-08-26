@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="/web-admin-assets/admin.css?v=fix-v274" rel="stylesheet"/>
+<link href="/web-admin-assets/admin.css?v=fix-v275" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-cockpit.css?v=fix-v256" rel="stylesheet"/>
 <link href="/web-admin-assets/admin-calm.css?v=fix-v256" rel="stylesheet"/>
 <link href="/web-admin-assets/sip-call.css?v=fix-v256" rel="stylesheet"/>
@@ -1121,7 +1121,7 @@ body.inv-full #pageTitle{font-size:18px}
       </div>
       <div class="pos-finish-card invoice">
         <h4>Fatura kes</h4>
-        <p>İsteğe bağlı, satışın yanında ayrı basılır. Mevcut Dijital Planet / EVA akışı aynı kalır.</p>
+        <p>İsteğe bağlı. SOAP kayıtlıysa şimdi gider; yoksa Kesilmeyen’de kalır, EVA Rapid Veri Çek kessin.</p>
         <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button">FATURA KES</button>
       </div>
     </div>
@@ -1753,7 +1753,7 @@ Bulunamayan → Diğer.
   <div class="panel" style="max-width:640px;margin:40px auto;padding:28px">
     <small class="v4-kicker">FATURA</small>
     <h2>Kesilmeyen Faturalar</h2>
-    <p class="note">e-Fatura / e-Arşiv klasörleri kaldırıldı. Kesilmeyen satışlar ayrı sekmede durur ve e-fatura firmasına otomatik aktarılır.</p>
+    <p class="note">Kesilmeyen satışlar ayrı sekmede durur. EVA Connect Rapid Veri Çek bu listeyi geteinvoices’tan çeker. Kes yalnızca gerçek Digital Planet SOAP içindir; kayıt yoksa satış listede kalır.</p>
     <p><a class="primary" href="/e-fatura" target="_blank" rel="noopener">Kesilmeyen Faturalar’ı aç</a></p>
   </div>
 </section>
@@ -2959,5 +2959,5 @@ Bulunamayan → Diğer.
   </div>
 </div>
 <script src="/web-admin-assets/sip-call.js?v=fix-v236"></script>
-<script src="/web-admin-assets/admin.js?v=fix-v274"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
+<script src="/web-admin-assets/admin.js?v=fix-v275"></script><script src="/web-admin-assets/customer-sales.js?v=664-restore"></script>
 </body></html>
