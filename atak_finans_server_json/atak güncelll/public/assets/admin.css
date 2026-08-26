@@ -659,9 +659,6 @@ button.primary,.primary,button{font-size:12px}
 .sales-customer-panel,.sales-products-panel{gap:6px}
 .sales-customer-panel h3,.sales-products-panel h3{margin:0;font-size:14px}
 .sales-customer-info>div{padding:6px}
-#salesCenter .sales-customer-rail,#salesPanel .sales-customer-rail{
-  max-height:40px!important;min-height:0!important;height:auto!important;flex:0 0 auto!important;align-items:center!important
-}
 .sales-product-filterbar{gap:6px;margin:4px 0 6px}
 .sales-product-filterbar input,.sales-product-filterbar select{min-height:30px!important;padding:0 7px!important}
 .sales-product-filter-actions button{min-height:30px;padding:0 9px}
