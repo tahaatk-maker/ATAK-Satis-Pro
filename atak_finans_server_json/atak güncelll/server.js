@@ -737,7 +737,7 @@ const PERMISSION_CATALOG=[
   {id:'dashboard_view',name:'Dashboard görüntüle',group:'Genel'},
   {id:'screen_training',name:'Eğitim videoları',group:'Genel'},
   {id:'screen_finance',name:'Finans & Cari (ana)',group:'Finans & Cari'},
-  {id:'screen_uninvoiced',name:'Kesilmeyen Faturalar',group:'e-Fatura'},
+  {id:'screen_uninvoiced',name:'Faturalar',group:'e-Fatura'},
   {id:'screen_customer_payments',name:'Müşteri Ödemeleri',group:'Finans & Cari'},
   {id:'screen_money_center',name:'Para & Maaş',group:'Finans & Cari'},
   {id:'screen_customers',name:'Müşteriler',group:'Finans & Cari'},
@@ -2069,8 +2069,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.272-fatura',
-    build:'fix-v275',
+    version:'6.3.273-fatura',
+    build:'fix-v276',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -7321,10 +7321,10 @@ app.post('/web-api/admin/invoice-integration/test',requireAdminOrStaffAny(...INV
     {name:'Arçelik Rapid360',ok:!rz.blocked,detail:rz.blocked?'Başkan hesabı kapalı':(rz.ready?`DealerID ${rz.dealerId}`:'Örnek link gelen kutuya çekilmez')},
     {name:'Atak geteinvoices',ok:!!dms.ready,detail:dms.ready?`${dms.path} · DealerID ${dms.dealerId}`:'Eksik'}
   ];
-  res.json({ok:checks.every(x=>x.ok),mode:'atak',checks,digitalPlanet:{ready:dp.ready,corporateCode:dp.corporateCode},atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Dijital Planet faturaları SOAP ile alır. geteinvoices linki Rapid360 içindir, Dijital Planet’e verilmez.'});
+  res.json({ok:checks.every(x=>x.ok),mode:'atak',checks,digitalPlanet:{ready:dp.ready,corporateCode:dp.corporateCode},atakDms:{path:dms.path,aliasPath:dms.aliasPath,copyUrlMasked:dms.copyUrlMasked},note:'Fatura aktarımı Rapid360 geteinvoices web servisidir. Digital Planet SOAP ayrı protokoldür.'});
 });
 app.get('/web-api/admin/invoice-queue',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{const s=readStore();res.json({rows:(s.invoiceQueue||[]).slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))})});
-/** Faturalar özet: kuyruk klasörleri + Rapid360 gelen + kesilmeyen satışlar */
+/** Faturalar özet: kuyruk klasörleri + Rapid360 gelen + bekleyen satış faturaları */
 app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),(req,res)=>{
   const s=readStore();
   const cfg=s.invoiceIntegration||{};
@@ -7379,7 +7379,7 @@ app.get('/web-api/admin/invoice-center',requireAdminOrStaffAny(...INVOICE_CENTER
     portal:isStaffPortalReq(req)?'staff':'admin',
     canSetup:req.session?.admin===true||actorHasPermission(req,'settings_manage')||actorHasPermission(req,'invoices_manage'),
     canIssue:req.session?.admin===true||staffCanInvoice(req),
-    note:'Dijital Planet faturaları SOAP ile alır. Giriş bilgilerini kaydedip satırı gönderin. geteinvoices linki Dijital Planet değildir.'
+    note:'Fatura aktarımı Rapid360 geteinvoices web servisidir. EVA Rapid Veri Çek bunu çeker. Digital Planet SOAP ayrı protokoldür; kayıtlı değilse Atak kendisi kesmez.'
   });
 });
 app.post('/web-api/admin/invoice-center/portal-query',requireAdminOrStaffAny(...INVOICE_CENTER_VIEW_PERMS),async(req,res)=>{
@@ -7443,7 +7443,7 @@ app.post('/web-api/admin/invoice-queue/:id/retry',requireAdminOrStaffAny('invoic
     const out=await qnbSolist.sendOrQueueInvoice({record:r,sale:sale||r,customer,cfg});
     if(out && out.ok===false){
       if(out.keepPending||out.eva){
-        return res.status(409).json({ok:false,eva:true,keepPending:true,error:out.message||'Satış Kesilmeyen’de kalsın'});
+        return res.status(409).json({ok:false,eva:true,keepPending:true,error:out.message||'Satış Faturalar listesinde kalsın'});
       }
       r.status='error';
       r.error=out.message||'Dijital Planet hata';
@@ -7525,7 +7525,7 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaffAny('orders_
       ok:false,
       eva:true,
       keepPending:true,
-      error:'Dijital Planet SOAP kayıtlı değil. Satış Kesilmeyen’de kaldı. EVA Connect’te Rapid Veri Çek ile kesin.'
+      error:'Digital Planet SOAP kayıtlı değil. Satış Faturalar listesinde kaldı. EVA Rapid360 → Rapid Veri Çek faturayı oradan kessin.'
     });
   }
   let record=(s.invoiceQueue||[]).find(x=>String(x.saleId)===String(sale.id));
@@ -7554,7 +7554,7 @@ app.post('/web-api/admin/sale/:id/issue-invoice',requireAdminOrStaffAny('orders_
   const out=await qnbSolist.sendOrQueueInvoice({record,sale:{...sale,invoiceNumber:alloc.number},customer:invoiceParty,cfg});
   if(out && out.ok===false){
     if(out.keepPending||out.eva){
-      return res.status(409).json({ok:false,eva:true,keepPending:true,error:out.message||'Satış Kesilmeyen’de kaldı'});
+      return res.status(409).json({ok:false,eva:true,keepPending:true,error:out.message||'Satış Faturalar listesinde kaldı'});
     }
     record.status='error';
     record.error=out.message||'Dijital Planet hata';

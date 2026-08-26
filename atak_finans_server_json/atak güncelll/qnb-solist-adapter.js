@@ -244,7 +244,7 @@ async function lookupTaxpayer(vkn,cfg={}){
 
 /**
  * Digital Planet SOAP ile keser. Kayıt yoksa sahte kuyruk yazmaz —
- * satış Kesilmeyen’de kalır, EVA Rapid Veri Çek çeker.
+ * satış Faturalar listesinde kalır; Rapid360 geteinvoices ile EVA çeker.
  */
 async function sendOrQueueInvoice({record,sale,customer,cfg}){
   const docType=detectDocumentType(customer,cfg);
@@ -257,7 +257,7 @@ async function sendOrQueueInvoice({record,sale,customer,cfg}){
       mode:'need_eva',
       status:'pending',
       docType,
-      message:'Dijital Planet SOAP yok. Satış Kesilmeyen’de kalsın; EVA Rapid Veri Çek kessin.'
+      message:'Digital Planet SOAP yok. Satış Faturalar listesinde kalsın; Rapid360 Rapid Veri Çek kessin.'
     };
   }
   const ubl=buildUblInvoiceDraft({

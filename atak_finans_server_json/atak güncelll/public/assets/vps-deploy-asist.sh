@@ -10,8 +10,8 @@ log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
 BRANCH="${ATAK_BRANCH:-cursor/musteri-fatura-hub-474e}"
-EXPECT_V="${EXPECT_HEALTH:-6.3.272-fatura}"
-EXPECT_B="${EXPECT_BUILD:-fix-v275}"
+EXPECT_V="${EXPECT_HEALTH:-6.3.273-fatura}"
+EXPECT_B="${EXPECT_BUILD:-fix-v276}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"
@@ -58,8 +58,8 @@ grep -q "$EXPECT_V" "$SRC/server.js" || die "kaynak version yanlis"
 grep -q "build:'$EXPECT_B'" "$SRC/server.js" || die "kaynak build yanlis"
 grep -q "ATAK_ADMIN_BUILD=$EXPECT_B" "$SRC/public/assets/admin.js" || die "kaynak admin build yanlis"
 grep -q "ATAK_PERSONEL_BUILD=$EXPECT_B" "$SRC/public/assets/personel.js" || die "kaynak personel build yanlis"
-# Fatura ekranı fix-v275 (EVA asıl yol; sahte kuyruk yok).
-grep -q "ATAK_FATURA_BUILD=fix-v275" "$SRC/public/assets/fatura.js" || die "kaynak fatura build yanlis (beklenen fix-v275)"
+# Fatura ekranı fix-v276 (Faturalar + Rapid360 web servisi).
+grep -q "ATAK_FATURA_BUILD=fix-v276" "$SRC/public/assets/fatura.js" || die "kaynak fatura build yanlis (beklenen fix-v276)"
 grep -q 'purchaseBothBtn' "$SRC/public/admin.html" || die "Asist butonu kaynakta yok"
 grep -q "staff-send-login" "$SRC/server.js" || die "kaynakta sifre API yok"
 [ -f "$SRC/lib/session-actor.js" ] || die "kaynakta session-actor yok"

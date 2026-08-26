@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v275 */
+/* ATAK_PERSONEL_BUILD=fix-v276 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -79,7 +79,7 @@ function canScreen(id){return has(id)}
 function canSaleDocs(){return has('sale_docs')||has('*')}
 function canSaleOffer(){return has('sale_offer')||has('*')}
 function canSaleInvoice(){return has('sale_invoice_qnb')||has('finance_manage')||has('invoices_manage')||has('screen_sales_center')||has('orders_manage')||has('*')}
-/** Satış bitince fatura kesilmezse Kesilmeyen’e düşer. Fatura kes ayrı basılır. */
+/** Satış bitince fatura kesilmezse Faturalar listesinde durur. Fatura kes ayrı basılır. */
 function defaultSalesInvoiceStatus(){return 'pending'}
 function canInvoiceCenter(){
   return canScreen('screen_invoice_center')||canSaleInvoice()||has('screen_uninvoiced')
@@ -153,7 +153,7 @@ async function loadSession(){
     const closed=[];
     if(!canScreen('screen_staff_sales_report'))closed.push('Personel Satış Raporu');
     if(!canScreen('screen_manager_approvals'))closed.push('Yönetici Onayları');
-    if(!canInvoiceCenter())closed.push('Kesilmeyen Faturalar');
+    if(!canInvoiceCenter())closed.push('Faturalar');
     if(!canSaleInvoice())closed.push('Fatura Kes');
     if(!canDeductStock())closed.push('Stok düş');
     if($('#permissionText')){
@@ -784,7 +784,7 @@ $('#salesCard').onclick=async()=>{
 };
 function openPersonelInvoiceCenter(){
   const w=window.open('/e-fatura','_blank','noopener');
-  if(!w)stToast('Tarayıcı yeni sekmeyi engelledi — Kesilmeyen Faturalar açılamadı');
+  if(!w)stToast('Tarayıcı yeni sekmeyi engelledi — Faturalar açılamadı');
 }
 $('#invoiceCard')?.addEventListener('click',openPersonelInvoiceCenter);
 $('#invoiceHeaderBtn')?.addEventListener('click',openPersonelInvoiceCenter);
@@ -1934,7 +1934,7 @@ function salesIssueInvoiceNow(){
   if(!canSaleInvoice()){stToast('Fatura kesme yetkiniz yok');return}
   if($('#salesInvoiceStatus'))$('#salesInvoiceStatus').value='queue_qnb';
   openSalesPreview();
-  stToast('Fatura Kes: SOAP varsa şimdi gider. Yoksa Kesilmeyen’de kalır; EVA Rapid Veri Çek kessin.');
+  stToast('Fatura Kes: SOAP varsa şimdi gider. Yoksa Faturalar listesinde kalır; Rapid360 Rapid Veri Çek kessin.');
 }
 async function confirmSalesDraft(){
   const d=activeSalesDraft||collectSalesDraft();
@@ -1967,7 +1967,7 @@ async function confirmSalesDraft(){
         noteText+=` · fatura ${inv.result?.docType||''} (${inv.record?.status||'kesildi'})`;
       }catch(invErr){
         noteText+=invoiceKeepPending(invErr)
-          ?' · Kesilmeyen’de kaldı (EVA Rapid Veri Çek kessin)'
+          ?' · Faturalar listesinde kaldı (Rapid360 Rapid Veri Çek kessin)'
           :` · fatura uyarısı: ${invErr.message}`;
       }
     }
@@ -3075,12 +3075,12 @@ function renderPayInvoiceBox(customerId,pending,customer){
     <button type="button" class="primary-btn" data-pay-invoice="${esc(customerId)}">FATURA KES${rows.length?` (${rows.length})`:''}</button>
     <button type="button" class="ghost-btn" data-pay-sale="${esc(customerId)}">Satışa devam</button>
   </div>
-  ${rows.length?`<div class="pay-invoice-list">${rows.slice(0,8).map(p=>`<div class="pay-invoice-row"><span>${esc(p.date||'')} · ${esc(p.reference||'Satış')} · ${money(p.total)}</span><button type="button" data-sale-invoice="${esc(p.id)}">Kes</button></div>`).join('')}</div>`:'<small>Kesilmeyen fatura yok</small>'}`;
+  ${rows.length?`<div class="pay-invoice-list">${rows.slice(0,8).map(p=>`<div class="pay-invoice-row"><span>${esc(p.date||'')} · ${esc(p.reference||'Satış')} · ${money(p.total)}</span><button type="button" data-sale-invoice="${esc(p.id)}">Kes</button></div>`).join('')}</div>`:'<small>Bekleyen fatura yok</small>'}`;
   host.appendChild(wrap);
   wrap.querySelector('[data-pay-invoice]')?.addEventListener('click',()=>{
-    if(!rows.length){payToast('Kesilmeyen yok — satış merkezinden kesin');openSalesWithCustomer(customerId,name);return}
+    if(!rows.length){payToast('Bekleyen fatura yok — satış merkezinden kesin');openSalesWithCustomer(customerId,name);return}
     if(rows.length===1){if(confirm(`${rows[0].reference||'Satış'} fatura kesilsin mi?`))issuePersonelSaleInvoice(rows[0].id);return}
-    payToast(`${rows.length} kesilmeyen — aşağıdaki Kes butonunu kullanın`);
+    payToast(`${rows.length} bekleyen fatura — aşağıdaki Kes butonunu kullanın`);
   });
   wrap.querySelector('[data-pay-sale]')?.addEventListener('click',()=>openSalesWithCustomer(customerId,name));
   wrap.querySelectorAll('[data-sale-invoice]').forEach(btn=>btn.addEventListener('click',()=>issuePersonelSaleInvoice(btn.dataset.saleInvoice)));
@@ -3280,7 +3280,7 @@ async function custHubIssueInvoice(){
   try{
     const d=await api('/web-api/admin/customer-detail/'+encodeURIComponent(custHubSelected.id));
     const pending=d.pendingInvoices||[];
-    if(!pending.length){stToast('Kesilmeyen fatura yok');return}
+    if(!pending.length){stToast('Bekleyen fatura yok');return}
     if(pending.length===1){
       if(!confirm(`${pending[0].reference||'Satış'} fatura kesilsin mi?`))return;
       await api('/web-api/admin/sale/'+encodeURIComponent(pending[0].id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
@@ -3288,7 +3288,7 @@ async function custHubIssueInvoice(){
       await loadCustHub();
     }else{
       await loadSalesHubInvoiceHistory(custHubSelected.id,'#custHubInvoiceHistory');
-      stToast(`${pending.length} kesilmeyen — listeden Kes’e basın`);
+      stToast(`${pending.length} bekleyen fatura — listeden Kes’e basın`);
     }
   }catch(e){stToast(e.message)}
 }

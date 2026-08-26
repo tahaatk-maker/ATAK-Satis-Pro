@@ -10,7 +10,7 @@ const qnb = require('../qnb-solist-adapter');
     cfg: {}
   });
   assert.strictEqual(out.ok, false, 'DP yokken ok olmamalı');
-  assert.strictEqual(out.keepPending, true, 'Kesilmeyen’de kalsın');
+  assert.strictEqual(out.keepPending, true, 'Faturalar listesinde kalsın');
   assert.strictEqual(out.eva, true, 'EVA yolu');
   assert.strictEqual(out.mode, 'need_eva');
   assert.strictEqual(out.status, 'pending');

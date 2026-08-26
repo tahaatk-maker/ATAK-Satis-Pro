@@ -26,7 +26,7 @@ assert.match(adminHtml, /#salesCenter\[data-pos-step="1"\] \.sales-products-pane
 assert.doesNotMatch(adminHtml, /id="salesCustomerRail"/);
 assert.doesNotMatch(adminHtml.slice(adminHtml.indexOf('id="salesCenter"'), adminHtml.indexOf('id="mySalesReport"')), /id="salesHub"/);
 assert.match(adminHtml, /data-go="invoiceCenter"/);
-assert.match(adminHtml, /<b>KESİLMEYEN<\/b>/);
+assert.match(adminHtml, /<b>FATURALAR<\/b>/);
 assert.match(personelHtml, /id="salesCustomerSelect"/);
 assert.match(personelHtml, /id="salesOpenCustomerProfile"/);
 assert.doesNotMatch(personelHtml, /id="salesCustomerRail"/);
@@ -46,10 +46,12 @@ assert.match(adminCss, /\.customer-invoice-btn/);
 
 assert.match(faturaHtml, /id="invDateFrom"/);
 assert.match(faturaHtml, /id="invDealer"/);
+assert.match(faturaHtml, /Rapid360 web servisi/);
+assert.doesNotMatch(faturaHtml, /Kesilmeyen/);
 assert.match(faturaJs, />Kes</);
 assert.match(faturaJs, /invoiceKeepPending/);
 assert.match(server, /pendingInvoices:/);
-assert.match(server, /6\.3\.272-fatura/);
+assert.match(server, /6\.3\.273-fatura/);
 assert.match(server, /function handleAtakGetEInvoices/);
 assert.match(geteinvoices, /FaturaAsama: isReturnRow\(row, sale\) \? 'IADE' : 'NORMAL'/);
 assert.doesNotMatch(adminJs, /lib\/atak-geteinvoices/);

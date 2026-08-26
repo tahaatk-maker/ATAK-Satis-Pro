@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>Kesilmeyen Faturalar · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v275"/>
+  <title>Faturalar · ATAK Pazarlama</title>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v276"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
     <small>ATAK PAZARLAMA</small>
-    <h1>Kesilmeyen Faturalar</h1>
+    <h1>Faturalar</h1>
     <p>Personel veya yönetim girişi gerekir. Önce panele girin; bu ekran ayrı sekmede açılır.</p>
     <a class="inv-btn primary" href="/personel">Personel girişi</a>
     <a class="inv-btn" href="/web-admin">Yönetim paneli</a>
@@ -22,8 +22,8 @@
       <div class="inv-head">
         <div>
           <small>ATAK PAZARLAMA</small>
-          <h2 id="invViewTitle">Kesilmeyen Faturalar</h2>
-          <p id="invViewHint">EVA Connect → Rapid Veri Çek bu listedeki satışları geteinvoices linkinden çeker. Kesilmeyen’e EVA’dan bir şey yazılmaz; aşağıdaki URL’yi EVA Rapid360 ayarına yapıştırın.</p>
+          <h2 id="invViewTitle">Faturalar</h2>
+          <p id="invViewHint">Satıştan sonra fatura burada durur. Atak, Rapid360 ile aynı geteinvoices web servisini verir. EVA Rapid360 Fatura → Rapid Veri Çek bu servisi çağırır; faturayı Rapid keser. Digital Planet SOAP ayrı protokoldür — kayıtlı değilse Atak kendisi kesmez.</p>
         </div>
         <div class="inv-head-actions">
           <a class="inv-btn ghost" href="/web-admin" id="backLink">← Panele dön</a>
@@ -45,18 +45,18 @@
             <thead id="invTableHead"></thead>
             <tbody id="invTableBody"></tbody>
           </table>
-          <div class="inv-empty hidden" id="invEmpty">Kesilmeyen fatura yok.</div>
+          <div class="inv-empty hidden" id="invEmpty">Bekleyen fatura yok.</div>
         </div>
         <div class="inv-firm-box hidden" id="invFirmBox">
-          <h3>EVA Connect · Rapid Veri Çek</h3>
-          <p class="note">Bu ekran (connect.evaportal.net Rapid360 Fatura) Atak’tan veri <b>çeker</b>. Kesilmeyen formuna kullanıcı/şifre yazılmaz. Aşağıdaki tam URL’yi EVA Rapid360 ayarına yapıştırın, sonra <b>Rapid Veri Çek</b>’e basın.</p>
+          <h3>Rapid360 web servisi</h3>
+          <p class="note">Bu URL Rapid360 / Arçelik DMS geteinvoices sözleşmesidir. EVA Connect Rapid360 Fatura bunu <b>çeker</b> (Atak’a kullanıcı/şifre yazılmaz). Aşağıdaki tam URL’yi EVA Rapid360 ayarına yapıştırın, sonra <b>Rapid Veri Çek</b>’e basın. Karşı tarafın SOAP’ı (Digital Planet) bu servis değildir; o yüzden Rapid üzerinden fatura aktarımı bu linkledir.</p>
           <textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?…"></textarea>
           <div class="button-row">
-            <button class="inv-btn primary" type="button" id="atakDmsCopyBtn">EVA için URL’yi kopyala</button>
+            <button class="inv-btn primary" type="button" id="atakDmsCopyBtn">Rapid360 URL’yi kopyala</button>
           </div>
           <details class="dp-advanced" id="dpAdvanced">
-            <summary>SOAP gönderim (Rapid Veri Çek değil — çoğu hesapta gerekmez)</summary>
-            <p class="note" id="dpReadyNote">NetInvoice SOAP ile Atak’ın faturayı itmesi. EVA’daki Rapid Veri Çek bununla çalışmaz.</p>
+            <summary>Digital Planet SOAP (Rapid360 değil — çoğu hesapta yok)</summary>
+            <p class="note" id="dpReadyNote">Atak’ın faturayı SOAP ile itmesi. Rapid Veri Çek bununla çalışmaz; karşı tarafın servisi ayrı entegre edilmediği için faturayı Rapid keser.</p>
             <div class="dp-grid">
               <label>Firma kodu (CorporateCode)<input id="dpCorporateCode" autocomplete="off"/></label>
               <label>Kullanıcı<input id="dpLoginName" autocomplete="off"/></label>
@@ -88,6 +88,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v275"></script>
+  <script src="/assets/fatura.js?v=fix-v276"></script>
 </body>
 </html>

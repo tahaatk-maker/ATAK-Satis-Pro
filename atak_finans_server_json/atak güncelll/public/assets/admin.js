@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v275 */
+/* ATAK_ADMIN_BUILD=fix-v276 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -684,7 +684,7 @@ function ckRenderAlerts(alerts){
   const box=q('#ckAlerts');
   if(!box)return;
   const items=[
-    {n:Number(alerts?.pendingInvoices||0),tone:'warn',icon:'F',title:'Kesilmeyen fatura',sub:'Kesilmeyen Faturalar ekranında bekliyor',tab:'invoiceCenter'},
+    {n:Number(alerts?.pendingInvoices||0),tone:'warn',icon:'F',title:'Bekleyen fatura',sub:'Faturalar ekranında duruyor',tab:'invoiceCenter'},
     {n:Number(alerts?.overdueNotes||0),tone:'bad',icon:'S',title:'Vadesi geçen senet',sub:'Müşteri Ödemeleri ekranı',tab:'customerPayments'},
     {n:Number(alerts?.lowStock||0),tone:'warn',icon:'D',title:'Stoğu biten ürün',sub:'Stok & Depo kontrolü',tab:'stockCenter'}
   ];
@@ -735,7 +735,7 @@ async function loadTasksCenter(){
   const pendingInv=Number(ck?.alerts?.pendingInvoices||0);
   if(pendingInv>0){
     tasks.push({tone:'warn',title:`${pendingInv} satışın faturası kesilmedi`,
-      sub:'Kesilmeyen Faturalar ekranında bekliyor',go:'invoiceCenter',label:'Listeyi aç',btn:'warn'});
+      sub:'Faturalar ekranında duruyor',go:'invoiceCenter',label:'Listeyi aç',btn:'warn'});
   }
   const overdueNotes=Number(ck?.alerts?.overdueNotes||0);
   if(overdueNotes>0){
@@ -2868,7 +2868,7 @@ function renderCustomerInvoiceList(history,pending){
   if(!box)return;
   const list=Array.isArray(history)&&history.length?history:pendingRows;
   if(!list.length){
-    box.innerHTML='<div class="customer-invoice-empty"><b>Fatura geçmişi yok</b><p class="note" style="margin:8px 0 0">Satışı bitirince kesmezseniz Kesilmeyen’e düşer. İsterseniz burada Kes’e basın.</p></div>';
+    box.innerHTML='<div class="customer-invoice-empty"><b>Fatura geçmişi yok</b><p class="note" style="margin:8px 0 0">Satışı bitirince kesmezseniz Faturalar listesinde durur. İsterseniz burada Kes’e basın.</p></div>';
     return;
   }
   box.innerHTML=list.map(r=>{
@@ -2917,10 +2917,10 @@ async function customerHeroInvoice(){
   }
   if(pending.length>1){
     setCustomerHubPane('invoice');
-    toast(`${pending.length} kesilmeyen satış var — listeden kesin`);
+    toast(`${pending.length} bekleyen fatura var — listeden kesin`);
     return;
   }
-  toast('Kesilmeyen yok — satış merkezinden fatura kesin');
+  toast('Bekleyen fatura yok — satış merkezinden fatura kesin');
   openSalesCenterForCustomer(customersPageData._selected);
 }
 async function selectCustomerPage(id){
@@ -3753,7 +3753,7 @@ function salesRefreshRowStocks(){
 }
 
 let completingSaleId='';
-/** Satış bitince fatura kesilmezse Kesilmeyen’e düşer. Fatura kes ayrı basılır. */
+/** Satış bitince fatura kesilmezse Faturalar listesinde durur. Fatura kes ayrı basılır. */
 function defaultSalesInvoiceStatus(){return 'pending'}
 function salesReset(opts={}){
   completingSaleId='';
@@ -4821,7 +4821,7 @@ function salesPreviewHtml(d){
   const invLabel=d.invoiceStatus==='issued'
     ?`Manuel kesildi · ${d.invoiceNumber} · ${d.invoiceDate||d.date}`
     :(d.invoiceStatus==='queue_qnb'?'Fatura kesilecek (e-Fatura / e-Arşiv · EVA Rapid360)'
-      :(d.invoiceStatus==='pending'?'Daha sonra kesilecek (Kesilmeyen Faturalar)':'Fatura gerekmiyor'));
+      :(d.invoiceStatus==='pending'?'Daha sonra kesilecek (Faturalar)':'Fatura gerekmiyor'));
   const billLabel=d.billingParty==='corporate'
     ?`Kurumsal · ${d.customer?.companyName||'-'} · VKN ${d.customer?.taxNo||'-'}`
     :`Bireysel · ${d.customer?.name||'-'} · TCKN ${d.customer?.tckn||'—'}`;
@@ -5166,9 +5166,9 @@ async function salesIssueInvoiceNow(){
   if(d.error){toast(d.error);return}
   activeSalesDraft=d;
   openSalesPreview();
-  toast('Fatura Kes: Dijital Planet SOAP varsa şimdi gider. Yoksa satış Kesilmeyen’de kalır; EVA Rapid Veri Çek kessin.');
+  toast('Fatura Kes: Digital Planet SOAP varsa şimdi gider. Yoksa Faturalar listesinde kalır; Rapid360 Rapid Veri Çek kessin.');
   const hint=q('#salesStatus');
-  if(hint){hint.textContent='Fatura Kes seçildi → SOAP varsa şimdi gider. Yoksa Kesilmeyen’de kalır; EVA Rapid Veri Çek kessin.';hint.className='form-status success'}
+  if(hint){hint.textContent='Fatura Kes seçildi → SOAP varsa şimdi gider. Yoksa Faturalar listesinde kalır; Rapid360 Rapid Veri Çek kessin.';hint.className='form-status success'}
 }
 async function confirmSalesDraft(){
   const d=activeSalesDraft||collectSalesDraft();if(d.error){toast(d.error);return}
@@ -5202,7 +5202,7 @@ async function confirmSalesDraft(){
         noteText+=` · fatura ${inv.result?.docType||''} (${inv.record?.status||'kesildi'})`;
       }catch(invErr){
         noteText+=invoiceKeepPending(invErr)
-          ?' · Kesilmeyen’de kaldı (EVA Rapid Veri Çek kessin)'
+          ?' · Faturalar listesinde kaldı (Rapid360 Rapid Veri Çek kessin)'
           :` · fatura uyarısı: ${invErr.message}`;
       }
     }
@@ -6652,7 +6652,7 @@ const INV_VIEW_META={
   ea_out_archive:{title:'e-Arşiv · Giden Arşiv',hint:'Arşivlenmiş giden e-Arşiv.'},
   ea_in_incoming:{title:'e-Arşiv · Gelen',hint:'Gelen e-Arşiv (portal bağlanınca).'},
   ea_in_archive:{title:'e-Arşiv · Gelen Arşiv',hint:'Arşivlenmiş gelen e-Arşiv.'},
-  pending_sales:{title:'Kesilmeyen Faturalar',hint:'EVA Rapid Veri Çek bu listeyi çeker. Kes yalnızca gerçek Digital Planet SOAP içindir.'},
+  pending_sales:{title:'Faturalar',hint:'Rapid360 geteinvoices web servisi. EVA Rapid Veri Çek bu listeyi çeker. Kes yalnızca Digital Planet SOAP içindir.'},
   setup_ready:{title:'Kurulum / Hazırlık',hint:'Firma, Rapid360 ve Atak geteinvoices kontrolü.'},
   setup_settings:{title:'Firma ve servis',hint:'Atak fatura ayarları.'}
 };
@@ -6740,7 +6740,7 @@ function invRenderTable(rows){
       </td>
     </tr>`).join('');
     empty?.classList.toggle('hidden',rows.length>0);
-    q('#invFootCount').textContent=`${rows.length} kesilmeyen`;
+    q('#invFootCount').textContent=`${rows.length} fatura`;
     invoiceCenterState.selected=new Set();
     qa('[data-inv-check]').forEach(chk=>chk.onchange=()=>{
       const id=chk.dataset.invCheck;
@@ -6852,7 +6852,7 @@ function invPaintCurrentView(){
   else rows=invFilterQueue(d.queue||[],view);
   rows=invApplySearch(rows);
   invRenderTable(rows);
-  q('#invFootStatus').textContent=d.note||'EVA Rapid Veri Çek asıl yol · Kes = Digital Planet SOAP';
+  q('#invFootStatus').textContent=d.note||'Aktarım: Rapid360 geteinvoices · Kes = Digital Planet SOAP';
 }
 async function invoiceConnectionTestForCenter(){
   try{
@@ -6925,7 +6925,7 @@ q('#invIssueSelectedBtn')?.addEventListener('click',async()=>{
       try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});sent++}
       catch(e){if(invoiceKeepPending(e))kept++}
     }
-    toast(kept?`${sent} kesildi · ${kept} Kesilmeyen’de kaldı (EVA kessin)`:`${sent} satış kesildi`);
+    toast(kept?`${sent} kesildi · ${kept} Faturalar listesinde kaldı (Rapid360 kessin)`:`${sent} satış kesildi`);
   }else{
     for(const id of ids){
       try{await api('/web-api/admin/invoice-queue/'+encodeURIComponent(id)+'/retry',{method:'POST',body:'{}'})}catch(_){}

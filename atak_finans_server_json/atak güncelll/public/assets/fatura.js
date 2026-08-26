@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v275 */
+/* ATAK_FATURA_BUILD=fix-v276 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={view:'pending_sales',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -56,7 +56,7 @@ async function boot(){
       state.canIssue=has('sale_invoice_qnb')||has('invoices_manage')||has('finance_manage')||has('screen_sales_center')||has('orders_manage')||has('*');
       if(!(has('screen_invoice_center')||has('invoices_manage')||has('sale_invoice_qnb')||has('screen_uninvoiced')||has('finance_manage')||has('orders_manage')||has('screen_sales_center'))){
         q('#gate').classList.remove('hidden');
-        q('#gate p').textContent='Kesilmeyen fatura ekranı yetkiniz kapalı.';
+        q('#gate p').textContent='Fatura ekranı yetkiniz kapalı.';
         return;
       }
     }
@@ -114,7 +114,7 @@ function invRenderTable(rows){
       </td>
     </tr>`).join('');
   empty?.classList.toggle('hidden',rows.length>0);
-  if(q('#invFootCount'))q('#invFootCount').textContent=`${rows.length} kesilmeyen`;
+  if(q('#invFootCount'))q('#invFootCount').textContent=`${rows.length} fatura`;
   state.selected=new Set();
   qa('[data-inv-check]').forEach(chk=>chk.onchange=()=>{
     const id=chk.dataset.invCheck;
@@ -143,7 +143,7 @@ function invRenderTable(rows){
 function invPaintCurrentView(){
   const rows=invApplySearch(state.data?.salesPending||[]);
   invRenderTable(rows);
-  if(q('#invFootStatus'))q('#invFootStatus').textContent=state.data?.note||'EVA Rapid Veri Çek asıl yol · Kes = Digital Planet SOAP';
+  if(q('#invFootStatus'))q('#invFootStatus').textContent=state.data?.note||'Aktarım: Rapid360 geteinvoices · Kes = Digital Planet SOAP';
 }
 
 async function loadInvoiceCenter(){
@@ -178,7 +178,7 @@ q('#invIssueSelectedBtn')?.addEventListener('click',async()=>{
     try{await api('/web-api/admin/sale/'+encodeURIComponent(id)+'/issue-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});sent++}
     catch(e){if(invoiceKeepPending(e))kept++}
   }
-  toast(kept?`${sent} kesildi · ${kept} Kesilmeyen’de kaldı (EVA Rapid Veri Çek kessin)`:`${sent} satış kesildi`);
+  toast(kept?`${sent} kesildi · ${kept} Faturalar listesinde kaldı (Rapid360 Rapid Veri Çek kessin)`:`${sent} satış kesildi`);
   await loadInvoiceCenter();
 });
 
@@ -194,7 +194,7 @@ function fillDigitalPlanet(d){
   if(q('#dpReadyNote')){
     q('#dpReadyNote').textContent=d.ready
       ?`Hazır: ${d.corporateCode} · ${d.loginName}. Satırdaki Kes NetInvoice SOAP ile yollar.`
-      :'SOAP yoksa Kes sahte kuyruk yazmaz. Asıl yol: yukarıdaki URL’yi EVA Rapid360’a yapıştırıp Rapid Veri Çek.';
+      :'SOAP yoksa Kes sahte kuyruk yazmaz. Fatura aktarımı yukarıdaki Rapid360 geteinvoices URL’si ile olur — EVA Rapid Veri Çek.';
   }
 }
 function dpPayload(){
@@ -233,10 +233,10 @@ q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
   if(!url || url.indexOf('client_id=')<0 || url.indexOf('client_secret=')<0)return toast('Hazır URL tam değil, sayfayı yenileyin');
   try{
     await navigator.clipboard.writeText(url);
-    toast('EVA Rapid Veri Çek URL kopyalandı — EVA Rapid360 ayarına yapıştırın');
+    toast('Rapid360 geteinvoices URL kopyalandı — EVA Rapid360 ayarına yapıştırın');
   }catch(_){
     q('#atakDmsCopyUrl')?.select();
-    try{document.execCommand('copy');toast('EVA Rapid Veri Çek URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}
+    try{document.execCommand('copy');toast('Rapid360 geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}
   }
 });
 

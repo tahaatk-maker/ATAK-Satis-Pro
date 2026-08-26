@@ -26,7 +26,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/personel.css?v=fix-v248">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v275">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v276">
 <link rel="stylesheet" href="/assets/sip-call.css?v=fix-v236">
 </head>
 <body>
@@ -87,7 +87,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 <small id="roleName"></small>
 </div>
 <button id="homeBtn" type="button">Ana Sayfa</button>
-<button id="invoiceHeaderBtn" class="hidden" type="button">Kesilmeyen</button>
+<button id="invoiceHeaderBtn" class="hidden" type="button">Faturalar</button>
 <button id="logout" type="button">Çıkış</button>
 </header>
 
@@ -122,8 +122,8 @@ html.atak-reset-link #resetForm{display:grid!important}
 
 <button id="invoiceCard" class="module-card hidden tile-invoice" type="button">
 <span class="mod-ico">📄</span>
-<b>KESİLMEYEN</b>
-<small>Kesilmeyen faturalar</small>
+<b>FATURALAR</b>
+<small>Satış faturaları</small>
 </button>
 
 <button id="paymentsCard" class="module-card hidden tile-collect" type="button">
@@ -375,7 +375,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 </div>
 <div class="sales-hub">
   <aside class="sales-hub-list">
-    <button type="button" class="sales-hub-uninvoiced" id="custHubUninvoicedBtn">Kesilmeyen faturalar: <b id="custHubUninvoicedCount">0</b> müşteri</button>
+    <button type="button" class="sales-hub-uninvoiced" id="custHubUninvoicedBtn">Faturalar: <b id="custHubUninvoicedCount">0</b> müşteri</button>
     <div class="toolbar sales-customer-search-bar">
       <input id="custHubSearch" placeholder="Ad, telefon, kod, VKN" autocomplete="off">
       <button id="custHubSearchBtn" class="primary-btn" type="button">🔍 Ara</button>
@@ -622,7 +622,7 @@ html.atak-reset-link #resetForm{display:grid!important}
     <div class="sc-sec-title"><span>Fatura &amp; not</span></div>
     <label class="field">Fatura durumu
       <select id="salesInvoiceStatus">
-        <option value="pending" selected>Daha sonra kes (Kesilmeyen Faturalar’a düşer)</option>
+        <option value="pending" selected>Daha sonra kes (Faturalar listesine gider)</option>
         <option value="queue_qnb" data-need-perm="sale_invoice_qnb">Fatura kes (e-Fatura / e-Arşiv)</option>
         <option value="not_required">Fatura gerekmiyor</option>
         <option value="issued" data-need-perm="sale_invoice_qnb">Manuel faturalandı</option>
@@ -659,15 +659,15 @@ html.atak-reset-link #resetForm{display:grid!important}
       </div>
       <div class="pos-finish-card offer">
         <h4>Satışı bitir</h4>
-        <p>Fatura kesmek zorunlu değil. Basmazsanız satış Kesilmeyen listesine düşer.</p>
+        <p>Fatura kesmek zorunlu değil. Basmazsanız satış Faturalar listesinde durur.</p>
         <button class="pos-action-btn preview" id="salesSaveInlineBtn" type="button">SATIŞI BİTİR</button>
         <button class="pos-action-btn secondary" id="salesWizardOfferBtn" type="button" data-need-perm="sale_offer">TEKLİF YAZDIR / GÖNDER</button>
       </div>
       <div class="pos-finish-card invoice">
         <h4>Fatura kes</h4>
-        <p>İsteğe bağlı. SOAP kayıtlıysa şimdi gider; yoksa Kesilmeyen’de kalır, EVA Rapid Veri Çek kessin.</p>
+        <p>İsteğe bağlı. SOAP kayıtlıysa şimdi gider; yoksa Faturalar listesinde kalır, Rapid360 Rapid Veri Çek kessin.</p>
         <button class="pos-action-btn invoice" id="salesWizardInvoiceBtn" type="button" data-need-perm="sale_invoice_qnb">FATURA KES</button>
-        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">KESİLMEYEN (SONRA)</button>
+        <button class="pos-action-btn secondary" id="salesOpenInvoiceCenterBtn" type="button">FATURALAR (SONRA)</button>
       </div>
     </div>
     <div class="pos-nav">
@@ -939,6 +939,6 @@ html.atak-reset-link #resetForm{display:grid!important}
   </div>
 </div>
 <script src="/assets/sip-call.js?v=fix-v236"></script>
-<script src="/assets/personel.js?v=fix-v275"></script>
+<script src="/assets/personel.js?v=fix-v276"></script>
 </body>
 </html>
