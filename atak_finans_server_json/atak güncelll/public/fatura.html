@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>Kesilmeyen Faturalar · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v268"/>
+  <title>Faturalar · ATAK Pazarlama</title>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v277"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
     <small>ATAK PAZARLAMA</small>
-    <h1>Kesilmeyen Faturalar</h1>
+    <h1>Faturalar</h1>
     <p>Personel veya yönetim girişi gerekir. Önce panele girin; bu ekran ayrı sekmede açılır.</p>
     <a class="inv-btn primary" href="/personel">Personel girişi</a>
     <a class="inv-btn" href="/web-admin">Yönetim paneli</a>
@@ -22,8 +22,8 @@
       <div class="inv-head">
         <div>
           <small>ATAK PAZARLAMA</small>
-          <h2 id="invViewTitle">Kesilmeyen Faturalar</h2>
-          <p id="invViewHint">EVA Connect → Rapid Veri Çek bu listedeki satışları geteinvoices linkinden çeker. Kesilmeyen’e EVA’dan bir şey yazılmaz; aşağıdaki URL’yi EVA Rapid360 ayarına yapıştırın.</p>
+          <h2 id="invViewTitle">Faturalar</h2>
+          <p id="invViewHint">Satıştan sonra fatura burada durur. Atak, Rapid360 ile aynı geteinvoices web servisini verir. EVA Rapid360 Fatura → Rapid Veri Çek bu servisi çağırır; faturayı Rapid keser. Digital Planet SOAP ayrı protokoldür — kayıtlı değilse Atak kendisi kesmez.</p>
         </div>
         <div class="inv-head-actions">
           <a class="inv-btn ghost" href="/web-admin" id="backLink">← Panele dön</a>
@@ -31,8 +31,13 @@
         </div>
       </div>
       <div class="inv-toolbar" id="invToolbar">
-        <input id="invSearch" type="search" placeholder="Satış no, müşteri ara…"/>
-        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri Dijital Planet’e gönder</button>
+        <input id="invSearch" type="search" placeholder="Müşteri ara…"/>
+        <label>Başlangıç<input id="invDateFrom" type="date"/></label>
+        <label>Bitiş<input id="invDateTo" type="date"/></label>
+        <label>Bayi
+          <select id="invDealer"><option value="">Tüm bayiler</option></select>
+        </label>
+        <button class="inv-btn primary" id="invIssueSelectedBtn" type="button">Seçilileri kes</button>
       </div>
       <div class="inv-panel">
         <div id="invTableWrap">
@@ -40,18 +45,18 @@
             <thead id="invTableHead"></thead>
             <tbody id="invTableBody"></tbody>
           </table>
-          <div class="inv-empty hidden" id="invEmpty">Kesilmeyen fatura yok.</div>
+          <div class="inv-empty hidden" id="invEmpty">Bekleyen fatura yok.</div>
         </div>
         <div class="inv-firm-box hidden" id="invFirmBox">
-          <h3>EVA Connect · Rapid Veri Çek</h3>
-          <p class="note">Bu ekran (connect.evaportal.net Rapid360 Fatura) Atak’tan veri <b>çeker</b>. Kesilmeyen formuna kullanıcı/şifre yazılmaz. Aşağıdaki tam URL’yi EVA Rapid360 ayarına yapıştırın, sonra <b>Rapid Veri Çek</b>’e basın.</p>
+          <h3>Rapid360 web servisi</h3>
+          <p class="note">Bu URL Rapid360 / Arçelik DMS geteinvoices sözleşmesidir. EVA Rapid Veri Çek / Rapid Aktar bunu <b>çeker</b> — EVA’da ekstra ayar yok. Tarayıcıda DealerID 340344 görünür; Rapid Aktar 21134761 ile çağırır, ikisi de kabul edilir. Digital Planet SOAP ayrı protokoldür.</p>
           <textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?…"></textarea>
           <div class="button-row">
-            <button class="inv-btn primary" type="button" id="atakDmsCopyBtn">EVA için URL’yi kopyala</button>
+            <button class="inv-btn primary" type="button" id="atakDmsCopyBtn">Rapid360 URL’yi kopyala</button>
           </div>
           <details class="dp-advanced" id="dpAdvanced">
-            <summary>SOAP gönderim (Rapid Veri Çek değil — çoğu hesapta gerekmez)</summary>
-            <p class="note" id="dpReadyNote">NetInvoice SOAP ile Atak’ın faturayı itmesi. EVA’daki Rapid Veri Çek bununla çalışmaz.</p>
+            <summary>Digital Planet SOAP (Rapid360 değil — çoğu hesapta yok)</summary>
+            <p class="note" id="dpReadyNote">Atak’ın faturayı SOAP ile itmesi. Rapid Veri Çek bununla çalışmaz; karşı tarafın servisi ayrı entegre edilmediği için faturayı Rapid keser.</p>
             <div class="dp-grid">
               <label>Firma kodu (CorporateCode)<input id="dpCorporateCode" autocomplete="off"/></label>
               <label>Kullanıcı<input id="dpLoginName" autocomplete="off"/></label>
@@ -83,6 +88,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v268"></script>
+  <script src="/assets/fatura.js?v=fix-v277"></script>
 </body>
 </html>

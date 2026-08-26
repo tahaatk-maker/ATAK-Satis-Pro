@@ -35,12 +35,15 @@ a{color:inherit;text-decoration:none}
 #invoiceCenter .inv-btn.primary{background:#dda20c;color:#1a1300}
 #invoiceCenter .inv-btn.ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25)}
 #invoiceCenter .inv-toolbar{
-  background:#fff;border-bottom:1px solid #d5e0ee;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  background:#fff;border-bottom:1px solid #d5e0ee;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:end;
 }
-#invoiceCenter .inv-toolbar input{
-  border:1px solid var(--line);border-radius:9px;padding:10px 12px;font:inherit;font-size:13px;min-width:0;flex:1;
+#invoiceCenter .inv-toolbar input,
+#invoiceCenter .inv-toolbar select{
+  border:1px solid var(--line);border-radius:9px;padding:10px 12px;font:inherit;font-size:13px;min-width:0;
 }
-#invoiceCenter .inv-toolbar .inv-btn{background:#eef4fb}
+#invoiceCenter .inv-toolbar input[type="search"]{flex:1;min-width:180px}
+#invoiceCenter .inv-toolbar label{display:grid;gap:4px;font-size:11px;font-weight:800;color:#64748b}
+#invoiceCenter .inv-toolbar .inv-btn{background:#eef4fb;align-self:end}
 #invoiceCenter .inv-toolbar .inv-btn.primary{background:#1d4ed8;color:#fff}
 #invoiceCenter .inv-panel{background:#fff;overflow:auto;min-height:0}
 #invoiceCenter .inv-panel table{width:100%;border-collapse:collapse;font-size:13px}

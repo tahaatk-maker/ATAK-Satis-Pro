@@ -19,8 +19,8 @@ assert(atak.PATH === '/exp/dms/dms/geteinvoices', 'path');
 assert(atak.authenticate({}, muleQuery).ok === true, 'mule auth');
 assert(atak.authenticate({}, { ...muleQuery, EInvoiceCode: '' }).ok === false, 'servis kodu zorunlu');
 assert(atak.authenticate({}, { ...muleQuery, DealerID: '' }).ok === false, 'DealerID zorunlu');
+assert(atak.authenticate({}, { ...muleQuery, DealerID: '21134761' }).ok === true, 'Rapid Aktar DealerID kabul');
 assert(atak.authenticate({}, { ...muleQuery, DealerID: '999' }).ok === false, 'DealerID yanlış');
-assert(atak.authenticate({}, { ...muleQuery, DealerID: '21134761' }).ok === false, 'Arçelik bayi Atak’ta geçmez');
 assert(atak.authenticate({}, { ...muleQuery, client_id: '' }).ok === false, 'client_id zorunlu');
 assert(atak.authenticate({}, { ...muleQuery, client_secret: 'wrong' }).ok === false, 'secret');
 assert(atak.authenticate({}, { ...muleQuery, client_secret: 'wrong' }).message === 'Unauthorized', 'hata sızmaz');
@@ -245,6 +245,7 @@ const pendingStore = {
       total: 500,
       reference: 'S-99',
       customerId: 'c1',
+      reserveStock: true,
       items: [{ productCode: 'K1', name: 'Koltuk', quantity: 1, unitPrice: 500, vatRate: 20 }]
     },
     {
@@ -267,6 +268,66 @@ const pending = atak.buildResponse(pendingStore, creds, {
 assert(pending.RecordCount === 1, 'kesilmeyen satış aktarılır ' + pending.RecordCount);
 assert(pending.EInvoices[0].FaturaNo === 'S-99', 'kesilmeyen fatura no satış referansı');
 assert(pending.EInvoices[0].FaturalanacakMusteriAdi === 'Ayşe Yılmaz', 'kesilmeyen müşteri');
+assert(pending.EInvoices[0].EmanetMi === 'Hayır', 'rezerve emanet değil');
+assert(pending.EInvoices[0].EFaturaMi === 'Yes', 'Rapid Fatura listeler');
+assert(pending.EInvoices[0].FaturaAsama === 'NORMAL', 'NORMAL');
+
+const rapidPull = atak.buildResponse(pendingStore, creds, {
+  ...muleQuery,
+  StartDate: '2026-08-01T00:00:00',
+  EndDate: '2026-08-31T00:00:00',
+  addReturns: 'true',
+  DealerID: '21134761'
+}, staleNow);
+assert(rapidPull.RecordCount === 1, 'Rapid DealerID ile gelir ' + rapidPull.RecordCount);
+assert(rapidPull.DealerId === 21134761, 'yanıt DealerId Rapid');
+assert(rapidPull.EInvoices[0].BayiKodu === '21134761', 'BayiKodu Rapid');
+
+const errorQueueStore = {
+  customers: pendingStore.customers,
+  invoiceQueue: [{
+    id: 'q-err',
+    saleId: 'sale-pending-1',
+    invoiceNumber: 'ATK-FAKE',
+    invoiceDate: '2026-08-22',
+    status: 'error',
+    total: 500,
+    customer: { name: 'Ayşe Yılmaz' },
+    items: [{ productCode: 'K1', name: 'Koltuk', quantity: 1, unitPrice: 500, vatRate: 20 }]
+  }],
+  financeTransactions: [{
+    ...pendingStore.financeTransactions[0],
+    invoiceStatus: 'queued'
+  }]
+};
+const extraAfterError = atak.pendingSalesAsQueueRows(errorQueueStore);
+assert(extraAfterError.length === 1 && extraAfterError[0].saleId === 'sale-pending-1', 'error kuyruk satışı gizlemez');
+const recovered = atak.buildResponse(errorQueueStore, creds, {
+  StartDate: '2026-08-01T00:00:00',
+  EndDate: '2026-08-31T00:00:00',
+  addReturns: 'true'
+}, staleNow);
+assert(recovered.RecordCount === 1, 'error kuyruk EVA’da 0 yapmaz ' + recovered.RecordCount);
+assert(recovered.EInvoices[0].FaturaNo === 'S-99', 'kesilmeyen referans aktarılır');
+
+const readyQueueStore = {
+  customers: pendingStore.customers,
+  invoiceQueue: [{
+    id: 'q-ready',
+    saleId: 'sale-pending-1',
+    invoiceNumber: 'ATK2026000000099',
+    invoiceDate: '2026-08-22',
+    status: 'ready',
+    total: 500,
+    customer: { name: 'Ayşe Yılmaz' },
+    items: [{ productCode: 'K1', name: 'Koltuk', quantity: 1, unitPrice: 500, vatRate: 20 }]
+  }],
+  financeTransactions: [{
+    ...pendingStore.financeTransactions[0],
+    invoiceStatus: 'queued'
+  }]
+};
+assert(atak.pendingSalesAsQueueRows(readyQueueStore).length === 0, 'hazır kuyruk mükerrer satmaz');
 
 const parsed = rapid.parseInvoices({
   DealerId: 21134761,
@@ -302,12 +363,13 @@ const fs = require('fs');
 const path = require('path');
 const faturaHtml = fs.readFileSync(path.join(__dirname, '../public/fatura.html'), 'utf8');
 const faturaJs = fs.readFileSync(path.join(__dirname, '../public/assets/fatura.js'), 'utf8');
-assert(faturaHtml.includes('Kesilmeyen Faturalar'), 'fatura başlık');
-assert(faturaHtml.includes('EVA Connect'), 'eva url kutusu');
+assert(faturaHtml.includes('Faturalar'), 'fatura başlık');
+assert(faturaHtml.includes('Rapid360 web servisi'), 'rapid web servis');
+assert(faturaHtml.includes('Rapid Aktar'), 'rapid aktar');
 assert(faturaHtml.includes('atakDmsCopyBtn'), 'url kopyala');
 assert(!faturaHtml.includes('data-inv-module="efatura"'), 'e-Fatura ağacı yok');
 assert(!faturaHtml.includes('data-inv-view="ef_out_pending"'), 'gönderilecek klasör yok');
-assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v268'), 'fatura build');
+assert(faturaJs.includes('ATAK_FATURA_BUILD=fix-v277'), 'fatura build');
 assert(faturaJs.includes("view:'pending_sales'"), 'varsayılan kesilmeyen');
 assert(faturaJs.includes('digital-planet-test'), 'dp test api');
 

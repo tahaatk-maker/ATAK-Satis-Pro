@@ -2,16 +2,16 @@
 # Asist fatura+stok paneli — sadece ERP (atak). Vitrin/commerce'e DOKUNMAZ.
 # data/store.json ASLA değiştirilmez / restore edilmez.
 # Hostinger Web Terminal:
-#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/satis-fatura-oncelik-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/musteri-fatura-hub-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-deploy-asist.sh" | bash
 set -euo pipefail
 OUT=/tmp/atak-asist-deploy.txt
 : > "$OUT"
 log(){ echo "$*" | tee -a "$OUT"; }
 die(){ log "FAIL: $*"; exit 1; }
 
-BRANCH="${ATAK_BRANCH:-cursor/satis-fatura-oncelik-474e}"
-EXPECT_V="${EXPECT_HEALTH:-6.3.265-eva-normal}"
-EXPECT_B="${EXPECT_BUILD:-fix-v268}"
+BRANCH="${ATAK_BRANCH:-cursor/musteri-fatura-hub-474e}"
+EXPECT_V="${EXPECT_HEALTH:-6.3.274-fatura}"
+EXPECT_B="${EXPECT_BUILD:-fix-v277}"
 
 log "=== ATAK ASIST DEPLOY ==="
 log "BRANCH=$BRANCH"
@@ -57,12 +57,18 @@ log "SRC=$SRC"
 grep -q "$EXPECT_V" "$SRC/server.js" || die "kaynak version yanlis"
 grep -q "build:'$EXPECT_B'" "$SRC/server.js" || die "kaynak build yanlis"
 grep -q "ATAK_ADMIN_BUILD=$EXPECT_B" "$SRC/public/assets/admin.js" || die "kaynak admin build yanlis"
-grep -q "ATAK_FATURA_BUILD=$EXPECT_B" "$SRC/public/assets/fatura.js" || die "kaynak fatura build yanlis"
+grep -q "ATAK_PERSONEL_BUILD=$EXPECT_B" "$SRC/public/assets/personel.js" || die "kaynak personel build yanlis"
+# Fatura ekranı fix-v277 (Rapid Aktar DealerID 21134761).
+grep -q "ATAK_FATURA_BUILD=fix-v277" "$SRC/public/assets/fatura.js" || die "kaynak fatura build yanlis (beklenen fix-v277)"
 grep -q 'purchaseBothBtn' "$SRC/public/admin.html" || die "Asist butonu kaynakta yok"
 grep -q "staff-send-login" "$SRC/server.js" || die "kaynakta sifre API yok"
 [ -f "$SRC/lib/session-actor.js" ] || die "kaynakta session-actor yok"
 [ -f "$SRC/lib/stock-decrease.js" ] || die "kaynakta stock-decrease yok"
-[ -f "$SRC/lib/digital-planet.js" ] || die "kaynakta digital-planet yok"
+[ -f "$SRC/lib/atak-geteinvoices.js" ] || die "kaynakta geteinvoices yok"
+grep -q "function dealerIdMatchesAtak" "$SRC/lib/atak-geteinvoices.js" || die "kaynak Rapid DealerID kabul yok"
+grep -q "mode:'need_eva'" "$SRC/qnb-solist-adapter.js" || die "kaynak EVA yol yok"
+grep -q "queued_local" "$SRC/qnb-solist-adapter.js" && die "sahte queued_local hala var"
+grep -q "keepPending:true" "$SRC/server.js" || die "kaynak issue-invoice pending birakmiyor"
 grep -q "staffMailSendPassBtn" "$SRC/public/admin.html" || die "kaynakta sifre butonu yok"
 log "   kaynak OK"
 
@@ -85,6 +91,9 @@ copy_critical(){
   [ -f "$SRC/lib/staff-email.js" ] && cp -f "$SRC/lib/staff-email.js" "$D/lib/staff-email.js"
   [ -f "$SRC/lib/session-actor.js" ] && cp -f "$SRC/lib/session-actor.js" "$D/lib/session-actor.js"
   [ -f "$SRC/lib/stock-decrease.js" ] && cp -f "$SRC/lib/stock-decrease.js" "$D/lib/stock-decrease.js"
+  [ -f "$SRC/lib/digital-planet.js" ] && cp -f "$SRC/lib/digital-planet.js" "$D/lib/digital-planet.js"
+  [ -f "$SRC/lib/atak-geteinvoices.js" ] && cp -f "$SRC/lib/atak-geteinvoices.js" "$D/lib/atak-geteinvoices.js"
+  [ -f "$SRC/qnb-solist-adapter.js" ] && cp -f "$SRC/qnb-solist-adapter.js" "$D/qnb-solist-adapter.js"
 }
 
 log "2) kopyala (data / node_modules / .env dokunulmaz — store ASLA kopyalanmaz)"
@@ -157,5 +166,6 @@ log "STAFF_SEND_LOGIN_HTTP=$SL_CODE body=$(head -c 180 /tmp/atak-sl.body 2>/dev/
 log "5) panel HTML"
 HTML=$(curl -sS -m 12 https://panel.atakhome.com.tr/web-admin || true)
 echo "$HTML" | grep -q 'purchaseBothBtn\|Fatura Ve Stok Aktarım' || die "panel HTML Asist butonu yok — Ctrl+Shift+R"
-log "=== BASARILI: Asist yayinda ($EXPECT_V) — store dokunulmadi ==="
+echo "$HTML" | grep -q "admin.js?v=$EXPECT_B" || die "panel HTML cache eski (beklenen $EXPECT_B) — Ctrl+Shift+R"
+log "=== BASARILI: Asist yayinda ($EXPECT_V / $EXPECT_B) — store dokunulmadi ==="
 log "Log: $OUT"

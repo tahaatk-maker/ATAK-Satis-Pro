@@ -113,7 +113,15 @@
 .customer-card>div:first-child,.customer-card-pick{display:grid;gap:4px;min-width:0}
 .customer-card b,.customer-card small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .customer-card small{color:#6e7a8c}
-.customer-card-balance{display:grid;justify-items:end;gap:3px;flex-shrink:0}
+.customer-invoice-badge{display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800}
+.customer-invoice-badge.ok{background:#f0fdf4;color:#15803d}
+.customer-invoice-badge.pending{background:#fef2f2;color:#b91c1c}
+.customer-invoice-badge.new{background:#f1f5f9;color:#64748b}
+.customer-card-invoice{min-height:36px;padding:0 10px;border:0;border-radius:9px;background:#c2410c;color:#fff;font-weight:800;cursor:pointer;flex-shrink:0}
+.inv-tone{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+.inv-tone.ok{background:#f0fdf4;color:#15803d}
+.inv-tone.pending{background:#fef2f2;color:#b91c1c}
+.inv-tone.new{background:#f8fafc;color:#64748b}
 .customer-card-balance.debt strong{color:#b02b2b}.customer-card-balance.credit strong{color:#087c47}.customer-card-balance.closed strong{color:#41536c}
 .form-status{min-height:20px;font-size:12px;font-weight:800}.form-status.success{color:#087c47}.form-status.error{color:#b02b2b}
 @media(max-width:900px){.customer-page-grid{grid-template-columns:1fr}.customer-list-panel{position:static}}
@@ -131,7 +139,24 @@
 .customer-balance-box{text-align:right;padding:14px 18px;border-radius:14px;background:#eef6ff}
 .customer-balance-box small,.customer-balance-box strong{display:block}
 .customer-balance-box strong{font-size:26px;color:#075da8;margin-top:4px}
-.customer-action-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.customer-hero-actions{display:grid;grid-template-columns:1.35fr 1fr;gap:10px;margin:16px 0 10px}
+.customer-hero-actions button{min-height:56px;border:0;border-radius:14px;font-weight:900;cursor:pointer;font-size:16px;letter-spacing:.02em}
+.customer-invoice-btn{background:linear-gradient(180deg,#ea580c,#c2410c);color:#fff;box-shadow:0 8px 18px rgba(194,65,12,.25)}
+.customer-hero-actions .customer-sale-btn{background:linear-gradient(180deg,#1565c0,#0b4d94);color:#fff}
+.hub-tab-count{display:inline-grid;place-items:center;min-width:22px;height:22px;margin-left:8px;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.22);font-size:12px;vertical-align:middle}
+.hub-tab-count.hidden{display:none!important}
+.customer-hub-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 14px;padding:6px;border-radius:14px;background:#eef3f9}
+.customer-hub-tab{min-height:42px;padding:0 16px;border:0;border-radius:10px;background:transparent;color:#334155;font-weight:800;cursor:pointer}
+.customer-hub-tab.active{background:#fff;color:#0b2a4a;box-shadow:0 4px 12px rgba(11,42,74,.08)}
+.customer-hub-tab.has-pending{color:#c2410c}
+.customer-hub-pane{display:none}
+.customer-hub-pane.active{display:block}
+.customer-invoice-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px;border:1px solid #f0d2a8;border-radius:12px;background:#fffaf3;margin-bottom:8px}
+.customer-invoice-row>div{display:grid;gap:3px}
+.customer-invoice-row small{color:#7c6a4a}
+.customer-invoice-row button{min-height:40px;padding:0 14px;border:0;border-radius:10px;background:#c2410c;color:#fff;font-weight:800;cursor:pointer;white-space:nowrap}
+.customer-invoice-empty{padding:28px 16px;text-align:center;color:#64748b;border:1px dashed #d5e0ee;border-radius:12px;background:#f8fafc}
+.customer-action-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 16px}
 .customer-action-buttons button,.customer-action-buttons .sip-call-btn{height:48px;border:0;border-radius:11px;background:#0a5ca8;color:#fff;font-weight:900;cursor:pointer}
 .customer-action-buttons .sip-call-btn{background:#15803d}
 .customer-action-buttons button.customer-pay-btn{background:#0f766e}
@@ -182,7 +207,7 @@
 .customer-action-form .table-wrap{max-height:220px;overflow:auto;border:1px solid #e3e9f0;border-radius:10px;background:#fff}
 .customer-tx .tx-receipt-btn{margin-top:6px;min-height:32px;padding:0 10px;border:0;border-radius:8px;background:#e8f3ff;color:#0a5ca8;font-weight:800;cursor:pointer}
 @media(max-width:1000px){.customer-hub{grid-template-columns:1fr}.customer-list-panel{position:static}.customer-action-buttons{grid-template-columns:1fr 1fr}.customer-debt-box{grid-template-columns:1fr 1fr}}
-@media(max-width:700px){.customer-detail-head{align-items:stretch;flex-direction:column}.customer-balance-box{text-align:left}.customer-info-grid,.customer-action-form .two-col{grid-template-columns:1fr}.customer-action-buttons{grid-template-columns:1fr}.sale-row{grid-template-columns:1fr 70px 110px}.sale-row button{grid-column:1/-1;height:36px}}
+@media(max-width:700px){.customer-detail-head{align-items:stretch;flex-direction:column}.customer-balance-box{text-align:left}.customer-info-grid,.customer-action-form .two-col{grid-template-columns:1fr}.customer-hero-actions,.customer-action-buttons{grid-template-columns:1fr}.sale-row{grid-template-columns:1fr 70px 110px}.sale-row button{grid-column:1/-1;height:36px}}
 .customer-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 18px}
 .customer-info-grid>div{padding:13px;border:1px solid #e0e7ef;border-radius:10px}
 .customer-info-grid small,.customer-info-grid b{display:block}
@@ -198,6 +223,7 @@
 .customer-sale-actions.compact{margin-top:8px}
 .customer-sale-actions button{min-height:34px;padding:0 12px;border:0;border-radius:8px;font-weight:800;cursor:pointer}
 .customer-sale-actions button.secondary-btn{background:#e8f3ff;color:#0a5ca8}
+.customer-sale-actions button.primary,.customer-sale-actions button[data-sale-invoice]{background:#c2410c;color:#fff}
 .customer-sale-actions button[data-sale-cancel],.customer-sale-actions button[data-report-cancel]{background:#fff1f1;color:#b42318}
 .customer-sale-actions .tx-docs-btn{background:#0a5ca8;color:#fff}
 .customer-tx-sale-compact{align-items:flex-start}
@@ -367,7 +393,18 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .sales-main-column{display:flex!important;flex-direction:column!important;gap:15px;width:100%}
 .sales-summary-panel,#salesPaymentStep{position:static!important;flex-direction:column;gap:11px;width:100%;max-height:none!important}
 #salesCenter #salesPaymentStep.pos-step-visible{display:flex!important}
-#salesCenter .sales-customer-panel.pos-step-visible,#salesCenter .sales-products-panel.pos-step-visible{display:block!important}
+#salesCenter[data-pos-step="1"] .sales-products-panel,
+#salesCenter[data-pos-step="1"] .sales-products-panel.pos-step-visible,
+#salesCenter[data-pos-step="1"] #salesPaymentStep,
+#salesCenter[data-pos-step="1"] #salesPaymentStep.pos-step-visible{display:none!important}
+#salesCenter[data-pos-step="2"] .sales-customer-panel,
+#salesCenter[data-pos-step="2"] .sales-customer-panel.pos-step-visible,
+#salesCenter[data-pos-step="2"] #salesPaymentStep,
+#salesCenter[data-pos-step="2"] #salesPaymentStep.pos-step-visible{display:none!important}
+#salesCenter[data-pos-step="3"] .sales-customer-panel,
+#salesCenter[data-pos-step="3"] .sales-customer-panel.pos-step-visible,
+#salesCenter[data-pos-step="3"] .sales-products-panel,
+#salesCenter[data-pos-step="3"] .sales-products-panel.pos-step-visible{display:none!important}
 #salesCenter .sales-customer-panel.hidden,#salesCenter .sales-products-panel.hidden,#salesCenter #salesPaymentStep.hidden{display:none!important}
 .sales-summary-panel label{display:grid;gap:5px;font-size:12px;font-weight:800}.sales-summary-panel input,.sales-summary-panel select,.sales-summary-panel textarea{width:100%}
 .sales-customer-panel,.sales-products-panel{display:grid;gap:12px}.sales-customer-info{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.sales-customer-info>div{padding:11px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}.sales-customer-info small,.sales-customer-info b{display:block}.sales-customer-info small{color:var(--muted);margin-bottom:4px}.sales-customer-info .debt{color:#b42e2e}.sales-customer-info .credit{color:#087c47}
