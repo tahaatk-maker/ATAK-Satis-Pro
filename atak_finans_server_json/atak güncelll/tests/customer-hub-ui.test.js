@@ -51,9 +51,11 @@ assert.doesNotMatch(faturaHtml, /Kesilmeyen/);
 assert.match(faturaJs, />Kes</);
 assert.match(faturaJs, /invoiceKeepPending/);
 assert.match(server, /pendingInvoices:/);
-assert.match(server, /6\.3\.273-fatura/);
+assert.match(server, /6\.3\.274-fatura/);
 assert.match(server, /function handleAtakGetEInvoices/);
-assert.match(geteinvoices, /FaturaAsama: isReturnRow\(row, sale\) \? 'IADE' : 'NORMAL'/);
+assert.match(geteinvoices, /const isReturn = isReturnRow\(row, sale\)/);
+assert.match(geteinvoices, /FaturaAsama: isReturn \? 'IADE' : 'NORMAL'/);
+assert.match(geteinvoices, /function dealerIdMatchesAtak/);
 assert.doesNotMatch(adminJs, /lib\/atak-geteinvoices/);
 
 console.log('customer-hub-ui.test.js ok');

@@ -163,11 +163,38 @@ function ipAllowedForDms(cfg, ip, env = process.env){
   return { ok: list.some(a => ipMatchesEntry(needle, a)), locked: true };
 }
 
+const RAPID360_MULE_DEALER = ARCELIK_DEALER_ID;
+
+function requestedDealerId(query){
+  return qpick(query, ['DealerID', 'dealerId', 'DealerId']);
+}
+
+function dealerIdMatchesAtak(requested, cfgDealer){
+  const req = String(requested || '').trim();
+  const ours = String(cfgDealer || DEFAULTS.dealerId).trim();
+  if(!req) return false;
+  if(safeEq(req, ours)) return true;
+  // EVA Rapid Aktar Rapid360 DealerID gönderir; tarayıcıdaki Atak URL’si 340344 kullanır.
+  return req === RAPID360_MULE_DEALER && (ours === DEFAULTS.dealerId || ours === '340344');
+}
+
+function envelopeDealerId(cfg, query){
+  const req = requestedDealerId(query);
+  if(req === RAPID360_MULE_DEALER) return RAPID360_MULE_DEALER;
+  return String((cfg && cfg.dealerId) || DEFAULTS.dealerId);
+}
+
+function cleanText(v){
+  const s = String(v == null ? '' : v).trim();
+  if(!s || /^(null|undefined|-)$/i.test(s)) return '';
+  return s;
+}
+
 function authenticate(cfg, query){
   const c = ensureConfig(cfg).cfg;
   const clientId = qpick(query, ['client_id', 'clientId', 'ClientId']);
   const clientSecret = qpick(query, ['client_secret', 'clientSecret', 'ClientSecret']);
-  const dealerId = qpick(query, ['DealerID', 'dealerId', 'DealerId']);
+  const dealerId = requestedDealerId(query);
   const eInvoiceCode = qpick(query, ['EInvoiceCode', 'eInvoiceCode']);
   const systemId = qpick(query, ['SystemId', 'systemId']);
   if(!clientId || !clientSecret || !eInvoiceCode || !dealerId){
@@ -176,7 +203,7 @@ function authenticate(cfg, query){
   if(!safeEq(clientId, c.clientId) || !safeEq(clientSecret, c.clientSecret)){
     return { ok: false, status: 401, message: 'Unauthorized' };
   }
-  if(!safeEq(eInvoiceCode, c.eInvoiceCode) || !safeEq(dealerId, c.dealerId)){
+  if(!safeEq(eInvoiceCode, c.eInvoiceCode) || !dealerIdMatchesAtak(dealerId, c.dealerId)){
     return { ok: false, status: 401, message: 'Unauthorized' };
   }
   if(systemId && !safeEq(systemId, c.systemId)){
@@ -212,8 +239,9 @@ function formatTrDate(v){
   return `${day}/${m}/${y}`;
 }
 
-function dealerNumber(cfg){
-  const n = Number(String(cfg.dealerId || DEFAULTS.dealerId).replace(/\D/g, ''));
+function dealerNumber(cfg, query){
+  const id = envelopeDealerId(cfg, query);
+  const n = Number(String(id).replace(/\D/g, ''));
   return Number.isFinite(n) && n > 0 ? n : Number(DEFAULTS.dealerId);
 }
 
@@ -247,11 +275,11 @@ function findCustomer(store, customerId){
   return (store.customers || []).find(c => String(c.id) === String(customerId)) || null;
 }
 
-function emptyRapidEnvelope(range, cfg, addReturns){
+function emptyRapidEnvelope(range, cfg, addReturns, query){
   const c = ensureConfig(cfg).cfg;
   return {
     $id: '1',
-    DealerId: dealerNumber(c),
+    DealerId: dealerNumber(c, query),
     startDate: range && range.startDate || '',
     endDate: range && range.endDate || '',
     RecordCount: 0,
@@ -293,7 +321,7 @@ function mapLine(item, invoice, sayac, detaySayac, siparisSayac, i){
   };
 }
 
-function toRapidInvoice(row, store, cfg){
+function toRapidInvoice(row, store, cfg, query){
   const c = ensureConfig(cfg).cfg;
   if(row && row.rapidRaw && (row.rapidRaw.FaturaNo || row.rapidRaw.EInvoicesLines)){
     return JSON.parse(JSON.stringify(row.rapidRaw));
@@ -306,7 +334,7 @@ function toRapidInvoice(row, store, cfg){
   const dateSrc = row.invoiceDate || sale.invoiceDate || sale.date || row.createdAt;
   const dateTr = formatTrDate(dateSrc);
   const sayac = numericSayac(row.faturaSayac || row.uuid || row.id, 1);
-  const siparis = numericSayac(row.saleId || row.reference || row.id, sayac);
+  const siparis = numericSayac(row.saleId || row.reference || sale.reference || row.id, sayac);
   const items = Array.isArray(row.items) && row.items.length
     ? row.items
     : (Array.isArray(sale.items) ? sale.items : []);
@@ -318,34 +346,36 @@ function toRapidInvoice(row, store, cfg){
   const split = vatSplit(gross, vatRate);
   const vatSum = lines.length ? Math.round(lines.reduce((a, l) => a + Number(l.KDVTutari || 0), 0) * 100) / 100 : split.vat;
   const netSum = lines.length ? Math.round(lines.reduce((a, l) => a + Number(l.Tutar || 0), 0) * 100) / 100 : split.net;
-  const isEa = /earsiv|arsiv/i.test(String(row.docType || row.invoiceType || ''));
+  const isReturn = isReturnRow(row, sale);
   const valor = formatTrDate(sale.valorDate || sale.firstDueDate || row.valorDate);
+  const aciklama = [sale.reference || row.reference, row.description || sale.description].map(cleanText).filter(Boolean).join(' · ');
   return {
     FaturaTarihi: dateTr,
     FaturaSayac: sayac,
-    FaturaNo: String(row.invoiceNumber || row.reference || '').trim(),
-    Rapid360No: String(row.invoiceNumber || row.reference || '').trim(),
-    EmanetMi: sale.reserveStock ? 'Evet' : 'Hayır',
-    EFaturaMi: isEa ? 'No' : 'Yes',
-    ResmiBelgeNo: String(row.invoiceNumber || row.reference || '').trim(),
-    FaturaSinifi: isReturnRow(row, sale) ? 'IADE' : 'BEKLEYEN',
+    FaturaNo: String(row.invoiceNumber || row.reference || sale.reference || '').trim(),
+    Rapid360No: String(row.invoiceNumber || row.reference || sale.reference || '').trim(),
+    SiparisNo: cleanText(sale.reference || row.reference),
+    EmanetMi: (sale.consignment || sale.emanet) ? 'Evet' : 'Hayır',
+    EFaturaMi: isReturn ? 'No' : 'Yes',
+    ResmiBelgeNo: String(row.invoiceNumber || row.reference || sale.reference || '').trim(),
+    FaturaSinifi: isReturn ? 'IADE' : 'BEKLEYEN',
     FaturaTipi: 'Mal Faturası',
-    FaturaAsama: isReturnRow(row, sale) ? 'IADE' : 'NORMAL',
-    FaturaAciklama: String(row.description || sale.description || '').trim(),
+    FaturaAsama: isReturn ? 'IADE' : 'NORMAL',
+    FaturaAciklama: aciklama || 'Mağaza satışı',
     MusteriKodu: String(customer.code || customer.customerCode || row.customerId || customer.id || '').trim(),
-    MusteriEmail: String(customer.email || '').trim(),
+    MusteriEmail: cleanText(customer.email),
     SubeKodu: String(sale.storeId || c.subeKodu),
     Bayi: String(c.bayi || DEFAULTS.bayi),
-    BayiKodu: String(c.dealerId || DEFAULTS.dealerId),
+    BayiKodu: envelopeDealerId(c, query),
     MusteriSayac: numericSayac(customer.id || row.customerId, sayac),
     VergiNo: partyTax(customer),
-    VergiDairesi: String(customer.taxOffice || '').trim(),
-    Adres: String(customer.address || '').trim(),
-    Sehir: String(customer.city || '').trim(),
-    Ilce: String(customer.district || '').trim(),
-    Semt: String(customer.neighborhood || customer.semt || '').trim(),
-    IrtibatTelefonu: String(customer.workPhone || '').trim(),
-    EvTelefonu: String(customer.homePhone || '').trim(),
+    VergiDairesi: cleanText(customer.taxOffice),
+    Adres: cleanText(customer.address),
+    Sehir: cleanText(customer.city),
+    Ilce: cleanText(customer.district),
+    Semt: cleanText(customer.neighborhood || customer.semt),
+    IrtibatTelefonu: cleanText(customer.workPhone),
+    EvTelefonu: cleanText(customer.homePhone),
     CepTelefonu: String(customer.phone || customer.mobile || '').replace(/\D/g, ''),
     MuhasebeBaglantiKodu: '',
     FaturalanacakMusteriAdi: displayCustomerName(customer),
@@ -562,7 +592,7 @@ function collectRows(store, cfg, query, now){
     const key = String(no || uuid || row.saleId || row.id);
     if(seen.has(key)) continue;
     seen.add(key);
-    out.push(toRapidInvoice(dated, store, c));
+    out.push(toRapidInvoice(dated, store, c, query));
   }
   out.sort((a, b) => ymd(b.FaturaTarihi).localeCompare(ymd(a.FaturaTarihi)) || String(b.FaturaNo || '').localeCompare(String(a.FaturaNo || '')));
   return { rows: out.slice(0, 5000), range, addReturns };
@@ -581,7 +611,7 @@ function stampIds(invoices){
 function buildResponse(store, cfg, query, now){
   const { rows, range, addReturns } = collectRows(store, cfg, query, now);
   stampIds(rows);
-  const env = emptyRapidEnvelope(range, cfg, addReturns);
+  const env = emptyRapidEnvelope(range, cfg, addReturns, query);
   env.RecordCount = rows.length;
   env.EInvoices = rows;
   env.addReturns = addReturns;

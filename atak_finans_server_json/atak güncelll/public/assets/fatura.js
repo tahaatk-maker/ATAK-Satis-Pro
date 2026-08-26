@@ -1,4 +1,4 @@
-/* ATAK_FATURA_BUILD=fix-v276 */
+/* ATAK_FATURA_BUILD=fix-v277 */
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
 let state={view:'pending_sales',data:null,selected:new Set(),portal:'admin',canSetup:true,canIssue:true};
@@ -233,7 +233,7 @@ q('#atakDmsCopyBtn')?.addEventListener('click',async()=>{
   if(!url || url.indexOf('client_id=')<0 || url.indexOf('client_secret=')<0)return toast('Hazır URL tam değil, sayfayı yenileyin');
   try{
     await navigator.clipboard.writeText(url);
-    toast('Rapid360 geteinvoices URL kopyalandı — EVA Rapid360 ayarına yapıştırın');
+    toast('Rapid360 geteinvoices URL kopyalandı');
   }catch(_){
     q('#atakDmsCopyUrl')?.select();
     try{document.execCommand('copy');toast('Rapid360 geteinvoices URL kopyalandı')}catch(e){toast('Kopyalanamadı, metni elle alın')}

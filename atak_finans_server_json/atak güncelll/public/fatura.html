@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Faturalar · ATAK Pazarlama</title>
-  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v276"/>
+  <link rel="stylesheet" href="/assets/fatura.css?v=fix-v277"/>
 </head>
 <body>
   <div class="gate hidden" id="gate">
@@ -49,7 +49,7 @@
         </div>
         <div class="inv-firm-box hidden" id="invFirmBox">
           <h3>Rapid360 web servisi</h3>
-          <p class="note">Bu URL Rapid360 / Arçelik DMS geteinvoices sözleşmesidir. EVA Connect Rapid360 Fatura bunu <b>çeker</b> (Atak’a kullanıcı/şifre yazılmaz). Aşağıdaki tam URL’yi EVA Rapid360 ayarına yapıştırın, sonra <b>Rapid Veri Çek</b>’e basın. Karşı tarafın SOAP’ı (Digital Planet) bu servis değildir; o yüzden Rapid üzerinden fatura aktarımı bu linkledir.</p>
+          <p class="note">Bu URL Rapid360 / Arçelik DMS geteinvoices sözleşmesidir. EVA Rapid Veri Çek / Rapid Aktar bunu <b>çeker</b> — EVA’da ekstra ayar yok. Tarayıcıda DealerID 340344 görünür; Rapid Aktar 21134761 ile çağırır, ikisi de kabul edilir. Digital Planet SOAP ayrı protokoldür.</p>
           <textarea id="atakDmsCopyUrl" rows="4" readonly placeholder="https://panel.atakhome.com.tr/exp/dms/dms/geteinvoices?…"></textarea>
           <div class="button-row">
             <button class="inv-btn primary" type="button" id="atakDmsCopyBtn">Rapid360 URL’yi kopyala</button>
@@ -88,6 +88,6 @@
   </section>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/assets/fatura.js?v=fix-v276"></script>
+  <script src="/assets/fatura.js?v=fix-v277"></script>
 </body>
 </html>

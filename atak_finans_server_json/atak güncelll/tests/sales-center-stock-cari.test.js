@@ -40,8 +40,8 @@ assert.doesNotMatch(personelJs, /function fillSalesCustomerRail/);
 assert.match(server, /Stok durumu zorunludur: Rezerve et veya Stoktan düş seçin/);
 assert.match(server, /reserveStock:Boolean\(t\.reserveStock\)/);
 assert.match(server, /available:Math\.max\(0,Number\(x\.quantity\|\|0\)-Number\(x\.reserved\|\|0\)\)/);
-assert.match(server, /6\.3\.273-fatura/);
-assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v276/);
-assert.match(personelJs, /ATAK_PERSONEL_BUILD=fix-v276/);
+assert.match(server, /6\.3\.274-fatura/);
+assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v277/);
+assert.match(personelJs, /ATAK_PERSONEL_BUILD=fix-v277/);
 
 console.log('sales-center-stock-cari.test.js ok');
