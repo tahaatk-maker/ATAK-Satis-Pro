@@ -57,7 +57,9 @@ log "SRC=$SRC"
 grep -q "$EXPECT_V" "$SRC/server.js" || die "kaynak version yanlis"
 grep -q "build:'$EXPECT_B'" "$SRC/server.js" || die "kaynak build yanlis"
 grep -q "ATAK_ADMIN_BUILD=$EXPECT_B" "$SRC/public/assets/admin.js" || die "kaynak admin build yanlis"
-grep -q "ATAK_FATURA_BUILD=$EXPECT_B" "$SRC/public/assets/fatura.js" || die "kaynak fatura build yanlis"
+grep -q "ATAK_PERSONEL_BUILD=$EXPECT_B" "$SRC/public/assets/personel.js" || die "kaynak personel build yanlis"
+# Fatura ekranı ayrı sürüm (fix-v270). Satış geri alma fatura.js'i değiştirmez.
+grep -q "ATAK_FATURA_BUILD=fix-v270" "$SRC/public/assets/fatura.js" || die "kaynak fatura build yanlis (beklenen fix-v270)"
 grep -q 'purchaseBothBtn' "$SRC/public/admin.html" || die "Asist butonu kaynakta yok"
 grep -q "staff-send-login" "$SRC/server.js" || die "kaynakta sifre API yok"
 [ -f "$SRC/lib/session-actor.js" ] || die "kaynakta session-actor yok"
@@ -157,5 +159,6 @@ log "STAFF_SEND_LOGIN_HTTP=$SL_CODE body=$(head -c 180 /tmp/atak-sl.body 2>/dev/
 log "5) panel HTML"
 HTML=$(curl -sS -m 12 https://panel.atakhome.com.tr/web-admin || true)
 echo "$HTML" | grep -q 'purchaseBothBtn\|Fatura Ve Stok Aktarım' || die "panel HTML Asist butonu yok — Ctrl+Shift+R"
-log "=== BASARILI: Asist yayinda ($EXPECT_V) — store dokunulmadi ==="
+echo "$HTML" | grep -q "admin.js?v=$EXPECT_B" || die "panel HTML cache eski (beklenen $EXPECT_B) — Ctrl+Shift+R"
+log "=== BASARILI: Asist yayinda ($EXPECT_V / $EXPECT_B) — store dokunulmadi ==="
 log "Log: $OUT"
