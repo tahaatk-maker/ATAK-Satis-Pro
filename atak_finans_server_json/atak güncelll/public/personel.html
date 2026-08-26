@@ -26,7 +26,7 @@ html.atak-reset-link #resetForm{display:grid!important}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/personel.css?v=fix-v248">
-<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v273">
+<link rel="stylesheet" href="/assets/personel-shell.css?v=fix-v274">
 <link rel="stylesheet" href="/assets/sip-call.css?v=fix-v236">
 </head>
 <body>
@@ -435,12 +435,18 @@ html.atak-reset-link #resetForm{display:grid!important}
     <button id="customerSearchSaleBtn" class="primary-btn" type="button">🔍 Ara</button>
     <button id="salesNewCustomerBtn" class="ghost-btn" type="button">+ Yeni Müşteri</button>
   </div>
-  <p class="sales-customer-hint" id="salesCustomerSearchHint">10.000+ müşteri için tüm liste yüklenmez. Ara butonuyla bulun, sonra seçin.</p>
+  <p class="sales-customer-hint" id="salesCustomerSearchHint">Ad / kod / telefon / VKN yazın. Karttan seçin — ürün adımı müşteri seçilmeden açılmaz.</p>
   <label class="field">Sonuçlar
     <select id="salesCustomerSelect"><option value="">Önce arayın, sonra seçin</option></select>
   </label>
   <small id="salesCustomerCount" class="muted">0 sonuç</small>
-  <div id="salesCustomerInfo" class="info-box hidden"></div>
+  <div id="salesCustomerResults" class="sales-customer-results">
+    <div class="sales-customer-results-empty">Müşteri arayın, büyük karttan seçin.</div>
+  </div>
+  <div id="salesCustomerPicked" class="sales-customer-picked hidden">
+    <div id="salesCustomerInfo" class="info-box"></div>
+    <button type="button" class="primary-btn" id="salesOpenCustomerProfile">Müşteri profilini aç</button>
+  </div>
   <input type="hidden" id="salesBillingParty" value="individual"/>
   <div id="salesBillingAutoHint" class="status hidden"></div>
   <div class="pos-nav">
@@ -933,6 +939,6 @@ html.atak-reset-link #resetForm{display:grid!important}
   </div>
 </div>
 <script src="/assets/sip-call.js?v=fix-v236"></script>
-<script src="/assets/personel.js?v=fix-v273"></script>
+<script src="/assets/personel.js?v=fix-v274"></script>
 </body>
 </html>

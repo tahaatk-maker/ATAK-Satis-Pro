@@ -393,7 +393,18 @@ input,select,textarea{border:1px solid var(--line);border-radius:9px;background:
 .sales-main-column{display:flex!important;flex-direction:column!important;gap:15px;width:100%}
 .sales-summary-panel,#salesPaymentStep{position:static!important;flex-direction:column;gap:11px;width:100%;max-height:none!important}
 #salesCenter #salesPaymentStep.pos-step-visible{display:flex!important}
-#salesCenter .sales-customer-panel.pos-step-visible,#salesCenter .sales-products-panel.pos-step-visible{display:block!important}
+#salesCenter[data-pos-step="1"] .sales-products-panel,
+#salesCenter[data-pos-step="1"] .sales-products-panel.pos-step-visible,
+#salesCenter[data-pos-step="1"] #salesPaymentStep,
+#salesCenter[data-pos-step="1"] #salesPaymentStep.pos-step-visible{display:none!important}
+#salesCenter[data-pos-step="2"] .sales-customer-panel,
+#salesCenter[data-pos-step="2"] .sales-customer-panel.pos-step-visible,
+#salesCenter[data-pos-step="2"] #salesPaymentStep,
+#salesCenter[data-pos-step="2"] #salesPaymentStep.pos-step-visible{display:none!important}
+#salesCenter[data-pos-step="3"] .sales-customer-panel,
+#salesCenter[data-pos-step="3"] .sales-customer-panel.pos-step-visible,
+#salesCenter[data-pos-step="3"] .sales-products-panel,
+#salesCenter[data-pos-step="3"] .sales-products-panel.pos-step-visible{display:none!important}
 #salesCenter .sales-customer-panel.hidden,#salesCenter .sales-products-panel.hidden,#salesCenter #salesPaymentStep.hidden{display:none!important}
 .sales-summary-panel label{display:grid;gap:5px;font-size:12px;font-weight:800}.sales-summary-panel input,.sales-summary-panel select,.sales-summary-panel textarea{width:100%}
 .sales-customer-panel,.sales-products-panel{display:grid;gap:12px}.sales-customer-info{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.sales-customer-info>div{padding:11px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}.sales-customer-info small,.sales-customer-info b{display:block}.sales-customer-info small{color:var(--muted);margin-bottom:4px}.sales-customer-info .debt{color:#b42e2e}.sales-customer-info .credit{color:#087c47}

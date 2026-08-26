@@ -10,7 +10,9 @@ const personelJs = fs.readFileSync(path.join(root, 'public', 'assets', 'personel
 const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 
 assert.match(adminHtml, /id="salesCustomerSelect"/);
-assert.match(adminHtml, /<label>Sonuçlar<select id="salesCustomerSelect"/);
+assert.match(adminHtml, /Sonuçlar<select id="salesCustomerSelect"/);
+assert.match(adminHtml, /id="salesCustomerResults"/);
+assert.match(adminHtml, /id="salesOpenCustomerProfile"/);
 assert.doesNotMatch(adminHtml, /id="salesCustomerRail"/);
 assert.doesNotMatch(adminHtml, /sales-hub-select-fallback">Sonuçlar/);
 assert.doesNotMatch(personelHtml, /sales-hub-select-fallback">Sonuçlar/);
@@ -38,8 +40,8 @@ assert.doesNotMatch(personelJs, /function fillSalesCustomerRail/);
 assert.match(server, /Stok durumu zorunludur: Rezerve et veya Stoktan düş seçin/);
 assert.match(server, /reserveStock:Boolean\(t\.reserveStock\)/);
 assert.match(server, /available:Math\.max\(0,Number\(x\.quantity\|\|0\)-Number\(x\.reserved\|\|0\)\)/);
-assert.match(server, /6\.3\.270-satis-eski/);
-assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v273/);
-assert.match(personelJs, /ATAK_PERSONEL_BUILD=fix-v273/);
+assert.match(server, /6\.3\.271-satis-adim/);
+assert.match(adminJs, /ATAK_ADMIN_BUILD=fix-v274/);
+assert.match(personelJs, /ATAK_PERSONEL_BUILD=fix-v274/);
 
 console.log('sales-center-stock-cari.test.js ok');

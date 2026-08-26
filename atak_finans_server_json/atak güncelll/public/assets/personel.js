@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v273 */
+/* ATAK_PERSONEL_BUILD=fix-v274 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -607,7 +607,10 @@ function cartNet(){
 function setSalesStep(step){
   salesStep=Math.min(3,Math.max(1,Number(step)||1));
   ['1','2','3'].forEach(n=>{
-    $(`#salesStep${n}`)?.classList.toggle('hidden',String(salesStep)!==n);
+    const el=$(`#salesStep${n}`);if(!el)return;
+    const show=String(salesStep)===n;
+    el.classList.toggle('hidden',!show);
+    el.style.setProperty('display',show?'grid':'none','important');
   });
   document.querySelectorAll('.pos-step').forEach(btn=>{
     const n=Number(btn.dataset.posStep);
@@ -888,12 +891,41 @@ async function salesSearchCustomers(){
     }else{
       $('#salesCustomerSelect').value='';
     }
-    if(hint)hint.textContent=rows.length?`${rows.length} müşteri. Listeden seçin.`:'Eşleşen müşteri yok.';
+    if(hint)hint.textContent=rows.length?`${rows.length} müşteri. Karttan seçin.`:'Eşleşen müşteri yok.';
+    salesRenderCustomerResultList(rows);
     salesCustomerChanged();
   }finally{if(btn)btn.disabled=false}
 }
 function renderSalesCustomers(){return salesSearchCustomers()}
 function stToast(msg){const st=$('#salesStatus');if(st)st.textContent=msg||''}
+function salesRenderCustomerResultList(rows){
+  const box=$('#salesCustomerResults');
+  if(!box)return;
+  const selected=String($('#salesCustomerSelect')?.value||'');
+  const list=Array.isArray(rows)?rows:[];
+  if(!list.length){
+    box.innerHTML='<div class="sales-customer-results-empty">Müşteri arayın, karttan seçin. Ürün adımı müşteri seçilmeden açılmaz.</div>';
+    return;
+  }
+  box.innerHTML=list.map(c=>{
+    const sub=[c.customerCode||c.rapidCustAccount,c.phone,[c.district,c.city].filter(Boolean).join('/')].filter(Boolean).join(' · ');
+    const on=String(c.id)===selected?'on':'';
+    return `<button type="button" class="sales-customer-result ${on}" data-sales-cust="${esc(c.id)}"><b>${esc(c.name||'—')}</b><small>${esc(sub||'—')}</small></button>`;
+  }).join('');
+}
+function salesMarkCustomerResultRows(){
+  const selected=String($('#salesCustomerSelect')?.value||'');
+  [...document.querySelectorAll('#salesCustomerResults [data-sales-cust]')].forEach(btn=>btn.classList.toggle('on',String(btn.getAttribute('data-sales-cust'))===selected));
+}
+function openSalesCustomerProfile(){
+  const id=$('#salesCustomerSelect')?.value;
+  if(!id){stToast('Önce müşteri seçin');return}
+  const c=(salesCustomers||[]).find(x=>String(x.id)===String(id));
+  custHubSelected=c||{id};
+  openPersonelCustomers().then(()=>{
+    if(custHubSelected)fillCustHubCard(custHubSelected);
+  }).catch(err=>stToast(err.message||'Profil açılamadı'));
+}
 function salesCustomerInfoHtml(c){
   if(!c)return '';
   const hasCorp=customerHasCorp(c);
@@ -948,9 +980,12 @@ function salesCustomerChanged(){
   const c=salesCustomers.find(x=>String(x.id)===String($('#salesCustomerSelect')?.value||''));
   const box=$('#salesCustomerInfo');
   const hint=$('#salesBillingAutoHint');
+  const picked=$('#salesCustomerPicked');
   salesDetachKefil({silent:true});
+  salesMarkCustomerResultRows();
   if(!c){
     box?.classList.add('hidden');if(box)box.innerHTML='';
+    picked?.classList.add('hidden');
     if($('#salesBillingParty'))$('#salesBillingParty').value='individual';
     hint?.classList.add('hidden');
     setSalesStep(salesStep);return;
@@ -963,6 +998,7 @@ function salesCustomerChanged(){
       ?`Fatura otomatik kurumsal: ${c.companyName} · VKN ${c.taxNo}`
       :'Fatura bireysel (şahıs / TCKN). Senet her zaman şahsa.';
   }
+  picked?.classList.remove('hidden');
   if(box){box.classList.remove('hidden');box.innerHTML=salesCustomerInfoHtml(c)}
   salesRefreshKefilUI();
   setSalesStep(salesStep);
@@ -2377,6 +2413,22 @@ $('#customerSearchSale')?.addEventListener('input',()=>{
   window.__salesCustSearchT=setTimeout(()=>salesSearchCustomers(),280);
 });
 $('#salesCustomerSelect')?.addEventListener('change',salesCustomerChanged);
+$('#salesCustomerResults')?.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-sales-cust]');
+  if(!btn)return;
+  const id=btn.getAttribute('data-sales-cust');
+  const c=(salesCustomers||[]).find(x=>String(x.id)===String(id));
+  if(c)salesPickCustomerRecord(c);
+  else{
+    const sel=$('#salesCustomerSelect');
+    if(sel){sel.value=id;salesCustomerChanged()}
+  }
+});
+$('#salesOpenCustomerProfile')?.addEventListener('click',openSalesCustomerProfile);
+$('#salesCustomerInfo')?.addEventListener('click',e=>{
+  if(e.target.closest('a,button,.sip-call-sm'))return;
+  if($('#salesCustomerSelect')?.value)openSalesCustomerProfile();
+});
 ['#productSearch','#salesItemCodeFilter','#salesMaterialCodeFilter'].forEach(id=>{
   $(id)?.addEventListener('input',()=>{
     clearTimeout(window.__prodFilterT);

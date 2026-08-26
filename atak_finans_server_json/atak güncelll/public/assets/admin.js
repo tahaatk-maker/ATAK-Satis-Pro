@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v273 */
+/* ATAK_ADMIN_BUILD=fix-v274 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4222,12 +4222,44 @@ async function salesSearchCustomers(){
       q('#salesCustomerSelect').value='';
     }
     if(hint)hint.textContent=rows.length
-      ?`${rows.length} müşteri. Listeden seçin.`
+      ?`${rows.length} müşteri. Karttan seçin veya üstteki listeden.`
       :'Eşleşen müşteri yok. Yeni müşteri ekleyebilirsiniz.';
+    salesRenderCustomerResultList(rows);
     salesCustomerChanged();
   }finally{if(btn)btn.disabled=false}
 }
 function salesRenderCustomers(){ /* geriye uyum: ara butonuyla aynı */ return salesSearchCustomers(); }
+function salesEscHtml(t){
+  return String(t??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function salesRenderCustomerResultList(rows){
+  const box=q('#salesCustomerResults');
+  if(!box)return;
+  const selected=String(q('#salesCustomerSelect')?.value||'');
+  const list=Array.isArray(rows)?rows:[];
+  if(!list.length){
+    box.innerHTML='<div class="sales-customer-results-empty">Müşteri arayın, karttan seçin. Ürün adımı müşteri seçilmeden açılmaz.</div>';
+    return;
+  }
+  box.innerHTML=list.map(c=>{
+    const sub=[c.customerCode||c.rapidCustAccount,c.phone,[c.district,c.city].filter(Boolean).join('/')].filter(Boolean).join(' · ');
+    const on=String(c.id)===selected?'on':'';
+    return `<button type="button" class="sales-customer-result ${on}" data-sales-cust="${salesEscHtml(c.id)}"><b>${salesEscHtml(c.name||'—')}</b><small>${salesEscHtml(sub||'—')}</small></button>`;
+  }).join('');
+}
+function salesMarkCustomerResultRows(){
+  const selected=String(q('#salesCustomerSelect')?.value||'');
+  qa('#salesCustomerResults [data-sales-cust]').forEach(btn=>btn.classList.toggle('on',String(btn.getAttribute('data-sales-cust'))===selected));
+}
+function openSalesCustomerProfile(){
+  const id=q('#salesCustomerSelect')?.value;
+  if(!id){toast('Önce müşteri seçin');return}
+  const c=(salesCenterData.customers||[]).find(x=>String(x.id)===String(id));
+  customersPageData.selectedId=id;
+  if(c)customersPageData._selected=c;
+  goTab('customersPage');
+  setTimeout(()=>selectCustomerPage(id).catch(err=>toast(err.message||'Profil açılamadı')),80);
+}
 function salesCustomerInfoHtml(c){
   if(!c)return '';
   const addr=[c.district,c.city].filter(Boolean).join('/')||(c.address||'-');
@@ -4242,14 +4274,18 @@ function invoiceToneLabel(tone){
 function salesCustomerChanged(){
   const c=salesCenterData.customers.find(x=>String(x.id)===String(q('#salesCustomerSelect')?.value||'')),box=q('#salesCustomerInfo'),noteWrap=q('#salesCustomerNoteWrap');
   const billWrap=q('#salesBillingPartyWrap'),billSel=q('#salesBillingParty');
+  const picked=q('#salesCustomerPicked');
+  salesMarkCustomerResultRows();
   if(!c){
     box?.classList.add('hidden');if(box)box.innerHTML='';noteWrap?.classList.add('hidden');if(q('#salesCustomerNote'))q('#salesCustomerNote').value='';
     billWrap?.classList.add('hidden');
+    picked?.classList.add('hidden');
     if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent='—';
     salesDetachKefil({silent:true});
     salesUpdatePosSteps(salesCalcState());
     return;
   }
+  picked?.classList.remove('hidden');
   if(box){box.classList.remove('hidden');box.innerHTML=salesCustomerInfoHtml(c)}
   const hasCorp=customerHasCorporate(c);
   if(billWrap&&billSel){
@@ -4616,6 +4652,22 @@ q('#salesCustomerSearch')?.addEventListener('input',()=>{
   window.__salesCustSearchT=setTimeout(()=>salesSearchCustomers(),280);
 });
 q('#salesCustomerSelect')?.addEventListener('change',salesCustomerChanged);
+q('#salesCustomerResults')?.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-sales-cust]');
+  if(!btn)return;
+  const id=btn.getAttribute('data-sales-cust');
+  const c=(salesCenterData.customers||[]).find(x=>String(x.id)===String(id));
+  if(c)salesSelectCustomerRecord(c);
+  else{
+    const sel=q('#salesCustomerSelect');
+    if(sel){sel.value=id;sel.dispatchEvent(new Event('change'))}
+  }
+});
+q('#salesOpenCustomerProfile')?.addEventListener('click',openSalesCustomerProfile);
+q('#salesCustomerInfo')?.addEventListener('click',e=>{
+  if(e.target.closest('a,button,.sip-call-sm'))return;
+  if(q('#salesCustomerSelect')?.value)openSalesCustomerProfile();
+});
 
 q('#salesCustomerNoteSave')?.addEventListener('click',async()=>{
   const customerId=q('#salesCustomerSelect')?.value||'';if(!customerId){toast('Önce müşteri seçin');return}
