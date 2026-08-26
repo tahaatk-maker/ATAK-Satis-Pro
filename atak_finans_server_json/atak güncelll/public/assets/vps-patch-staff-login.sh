@@ -4,7 +4,7 @@
 #   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/musteri-fatura-hub-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/musteri-fatura-hub-474e}"
-EXPECT="6.3.268-stok-satis"
+EXPECT="6.3.269-satis-compact"
 log(){ echo "$*"; }
 die(){
   echo "FAIL: $*"

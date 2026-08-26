@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v271 */
+/* ATAK_ADMIN_BUILD=fix-v272 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -4074,6 +4074,8 @@ function salesSetWizardStep(step){
   if(!hasCustomer)step2?.classList.add('locked');
   if(!hasCustomer||!hasCart)step3?.classList.add('locked');
   salesUpdateWizardChrome();
+  const cust=(salesCenterData.customers||[]).find(x=>String(x.id)===String(q('#salesCustomerSelect')?.value||''));
+  fillSalesCustomerRail(cust||null);
   try{window.scrollTo({top:0,behavior:'smooth'})}catch(_){}
 }
 function salesWizardCanGo(to){
@@ -4239,6 +4241,39 @@ function salesCustomerInfoHtml(c){
   const corpLine=hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'-'}</b><span style="display:block;font-size:11px;color:#667890">VKN ${c.taxNo||'-'} · ${c.taxOffice||''}</span></div>`:'';
   return `<div><small>Şahıs / Senet</small><b>${c.name}</b><span style="display:block;font-size:11px;color:#667890">Kod ${c.customerCode||c.rapidCustAccount||'—'} · TCKN ${c.tckn||'—'}</span></div><div><small>Telefon</small><b>${c.phone||'-'}</b>${sipBtn(c.phone,{className:'sip-call-sm',customerId:c.id})}</div><div><small>Adres</small><b>${addr}</b></div><div><small>Güncel Cari</small><b class="${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</b></div>${corpLine}`;
 }
+function fillSalesCustomerRail(c){
+  const rail=q('#salesCustomerRail');
+  const info=q('#salesCustomerRailInfo');
+  if(!rail)return;
+  const step=typeof salesWizardStep==='number'?salesWizardStep:1;
+  if(!c || step===1){rail.classList.add('hidden');if(info)info.innerHTML='';return}
+  const addr=[c.district,c.city].filter(Boolean).join('/')||'';
+  const name=typeof salesCustomerName==='function'?salesCustomerName(c):String(c.name||'');
+  if(info)info.innerHTML=`<b class="picked-name">${salesEsc(name)}</b><span class="picked-bit">${salesEsc(c.phone||'—')}</span><span class="picked-bit">${salesEsc(addr||'—')}</span><span class="picked-bit ${Number(c.balance)>0?'debt':'credit'}">${salesMoney(c.balance)}</span>`;
+  rail.classList.remove('hidden');
+}
+function salesRailAction(kind){
+  const c=(salesCenterData.customers||[]).find(x=>String(x.id)===String(q('#salesCustomerSelect')?.value||''));
+  if(!c){toast('Önce müşteri seçin');return}
+  if(kind==='continue'){
+    if(salesWizardStep===1 && salesWizardCanGo(2))salesSetWizardStep(2);
+    else if(salesWizardStep===2 && salesWizardCanGo(3))salesSetWizardStep(3);
+    return;
+  }
+  if(kind==='invoice'){
+    salesHubIssueInvoice();
+    return;
+  }
+  if(kind==='sms'||kind==='card'){
+    customersPageData.selectedId=c.id;
+    customersPageData._pane=kind==='sms'?'sms':'card';
+    goTab('customersPage');
+    selectCustomerPage(c.id).then(()=>{
+      setCustomerHubPane(kind==='sms'?'sms':'card');
+      if(kind==='sms' && typeof openCustomerSmsPanel==='function')openCustomerSmsPanel('custom');
+    }).catch(e=>toast(e.message));
+  }
+}
 function invoiceToneLabel(tone){
   return tone==='pending'?'Fatura kesilmedi':(tone==='ok'?'Tamam':'Yeni / satış yok');
 }
@@ -4338,6 +4373,7 @@ function salesCustomerChanged(){
     billWrap?.classList.add('hidden');
     if(q('#salesDockCustomer'))q('#salesDockCustomer').textContent='—';
     fillSalesHubCard(null);
+    fillSalesCustomerRail(null);
     q('#salesHubCustomerList')?.querySelectorAll('.sales-hub-row').forEach(el=>el.classList.remove('active'));
     salesDetachKefil({silent:true});
     salesUpdatePosSteps(salesCalcState());
@@ -4345,6 +4381,7 @@ function salesCustomerChanged(){
   }
   if(box){box.classList.add('hidden');box.innerHTML=salesCustomerInfoHtml(c)}
   fillSalesHubCard(c);
+  fillSalesCustomerRail(c);
   q('#salesHubCustomerList')?.querySelectorAll('.sales-hub-row').forEach(el=>el.classList.toggle('active',String(el.dataset.salesHubId)===String(c.id)));
   const hasCorp=customerHasCorporate(c);
   if(billWrap&&billSel){
@@ -5309,6 +5346,10 @@ q('#salesDockDocsHintBtn')?.addEventListener('click',()=>printSalesContractAndNo
 q('#salesDockPreviewBtn')?.addEventListener('click',()=>{
   if(salesWizardStep<3){salesWizardNext();return}
   openSalesPreview();
+});
+q('#salesCustomerRail')?.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-sales-rail]');
+  if(btn)salesRailAction(btn.dataset.salesRail);
 });
 q('#posStep1')?.addEventListener('click',()=>salesSetWizardStep(1));
 q('#posStep2')?.addEventListener('click',()=>{if(salesWizardCanGo(2))salesSetWizardStep(2)});

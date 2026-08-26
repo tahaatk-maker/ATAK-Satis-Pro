@@ -1,4 +1,4 @@
-/* ATAK_PERSONEL_BUILD=fix-v271 */
+/* ATAK_PERSONEL_BUILD=fix-v272 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 window.atakOnSipCall=function(info){
   const id=info?.customerId||(typeof payState!=='undefined'?payState.selectedId:'');
@@ -614,6 +614,7 @@ function setSalesStep(step){
     btn.classList.toggle('active',n===salesStep);
     btn.classList.toggle('done',n<salesStep);
   });
+  $('#salesPanel')?.setAttribute('data-pos-step',String(salesStep));
   const hasCustomer=!!$('#salesCustomerSelect')?.value;
   const hasCart=salesCart.length>0;
   $('#salesBanner').textContent=salesStep===1
@@ -636,6 +637,8 @@ function setSalesStep(step){
   }
   if(salesStep===3){syncPayAccounts();applyStaffSalePermissions();salesRecalcPay()}
   else salesRecalcPay();
+  const cust=(salesCustomers||[]).find(x=>String(x.id)===String($('#salesCustomerSelect')?.value||''));
+  fillSalesCustomerRail(cust||null);
 }
 function salesReset(){
   completingSaleId='';
@@ -905,6 +908,34 @@ function salesCustomerInfoHtml(c){
     <div><small>Cari</small><b>${money(c.balance)}</b></div>
     ${hasCorp?`<div><small>Fatura firması</small><b>${c.companyName||'—'}</b><span style="display:block;font-size:11px;color:#7a879a">VKN ${c.taxNo||'—'} · ${c.taxOffice||''}</span></div>`:''}`;
 }
+function fillSalesCustomerRail(c){
+  const rail=$('#salesCustomerRail');
+  const info=$('#salesCustomerRailInfo');
+  if(!rail)return;
+  if(!c || salesStep===1){rail.classList.add('hidden');if(info)info.innerHTML='';return}
+  const addr=[c.district,c.city].filter(Boolean).join('/')||'';
+  const name=typeof salesCustomerName==='function'?salesCustomerName(c):String(c.name||'');
+  if(info)info.innerHTML=`<b class="picked-name">${esc(name)}</b><span class="picked-bit">${esc(c.phone||'—')}</span><span class="picked-bit">${esc(addr||'—')}</span><span class="picked-bit">${money(c.balance)}</span>`;
+  rail.classList.remove('hidden');
+}
+function salesRailAction(kind){
+  const c=(salesCustomers||[]).find(x=>String(x.id)===String($('#salesCustomerSelect')?.value||''));
+  if(!c){stToast('Önce müşteri seçin');return}
+  if(kind==='continue'){
+    if(salesStep===1 && $('#salesCustomerSelect')?.value)setSalesStep(2);
+    else if(salesStep===2 && salesCart.length)setSalesStep(3);
+    return;
+  }
+  if(kind==='invoice'){salesHubIssueInvoice();return}
+  if(kind==='sms'||kind==='card'){
+    hidePanels();
+    $('#paymentsPanel')?.classList.remove('hidden');
+    payState.filter='all';
+    payState.q=c.phone||c.name||'';
+    if($('#paySearch'))$('#paySearch').value=payState.q;
+    loadPayments().then(()=>selectPayCustomer(c.id)).catch(err=>stToast(err.message||''));
+  }
+}
 function invoiceToneBadge(tone,pending){
   const t=String(tone||'new');
   if(t==='pending')return `<span class="inv-tone pending">🔴 Fatura kesilmedi${pending?` · ${pending}`:''}</span>`;
@@ -1022,6 +1053,7 @@ function salesCustomerChanged(){
     if($('#salesBillingParty'))$('#salesBillingParty').value='individual';
     hint?.classList.add('hidden');
     fillSalesHubCard(null);
+    fillSalesCustomerRail(null);
     $('#salesHubCustomerList')?.querySelectorAll('.sales-hub-row').forEach(el=>el.classList.remove('active'));
     setSalesStep(salesStep);return;
   }
@@ -1036,6 +1068,7 @@ function salesCustomerChanged(){
   }
   if(box)box.innerHTML=salesCustomerInfoHtml(c);
   fillSalesHubCard(c);
+  fillSalesCustomerRail(c);
   $('#salesHubCustomerList')?.querySelectorAll('.sales-hub-row').forEach(el=>el.classList.toggle('active',String(el.dataset.salesHubId)===String(c.id)));
   salesRefreshKefilUI();
   setSalesStep(salesStep);
@@ -2497,6 +2530,10 @@ $('#salesWizardOfferBtn')?.addEventListener('click',()=>sendSalesOffer());
 $('#salesWizardInvoiceBtn')?.addEventListener('click',()=>salesIssueInvoiceNow());
 $('#salesHubInvoiceBtn')?.addEventListener('click',()=>salesHubIssueInvoice());
 $('#salesHubUninvoicedBtn')?.addEventListener('click',openPersonelInvoiceCenter);
+$('#salesCustomerRail')?.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-sales-rail]');
+  if(btn)salesRailAction(btn.dataset.salesRail);
+});
 $('#salesHubCustomerList')?.addEventListener('click',e=>{
   const btn=e.target.closest('[data-sales-hub-id]');
   if(!btn)return;
