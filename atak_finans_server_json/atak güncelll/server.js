@@ -2069,8 +2069,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.267-satis-hub',
-    build:'fix-v270',
+    version:'6.3.268-stok-satis',
+    build:'fix-v271',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -3237,7 +3237,12 @@ app.get('/web-api/admin/sales-catalog',requireAdminOrStaff('orders_manage'),(req
   }));
   const dealerSettings=(s.dealerSettings||[]).map(d=>({...d,brand:branchLock.dealerBrand(d)}));
   const stores=(s.stores||[]).map(st=>({id:st.id,name:st.name,code:st.code||'',active:st.active!==false,brand:branchLock.storeBrand(st)}));
-  res.json({ok:true,products,categories,dealerSettings,customers,customerTotal:allCustomers.length,accounts,warehouses,stores});
+  const stocks=(s.productStocks||[]).map(x=>({
+    productCode:x.productCode,warehouseId:x.warehouseId,
+    quantity:Number(x.quantity||0),reserved:Number(x.reserved||0),
+    available:Math.max(0,Number(x.quantity||0)-Number(x.reserved||0))
+  }));
+  res.json({ok:true,products,categories,dealerSettings,customers,customerTotal:allCustomers.length,accounts,warehouses,stores,stocks});
 });
 
 app.get('/web-api/admin/stock-center',requireAdminOrStaffAny('stock_manage','stock_view','screen_stock_in'),(req,res)=>{
@@ -4946,7 +4951,11 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
     else stockMode='none';
   }
   if(stockMode==='yes')stockMode='deduct';
+  if(stockMode==='no')stockMode='none';
   if(!['none','reserve','deduct'].includes(stockMode))stockMode='none';
+  if(stockMode==='none'){
+    return res.status(400).json({error:'Stok durumu zorunludur: Rezerve et veya Stoktan düş seçin'});
+  }
   const deductStock=stockMode==='deduct';
   const reserveStock=stockMode==='reserve';
   const warehouseId=String(x.warehouseId||'');
@@ -5051,15 +5060,23 @@ app.post('/web-api/admin/customer-sale',requireAdminOrStaff('orders_manage'),(re
   }
 
   if(deductStock){
-    for(const item of cleanItems){
-      addStockMovement(s,{productCode:item.productCode,warehouseId,type:'sale',quantity:-item.quantity,reference:ref,note:`${customer.name} satışı`,user:currentActor(req)?.name||'Admin'});
+    try{
+      for(const item of cleanItems){
+        addStockMovement(s,{productCode:item.productCode,warehouseId,type:'sale',quantity:-item.quantity,reference:ref,note:`${customer.name} satışı`,user:currentActor(req)?.name||'Admin'});
+      }
+    }catch(err){
+      return res.status(400).json({error:err.message||'Stoktan düşülemedi'});
     }
   }else if(reserveStock){
-    for(const item of cleanItems){
-      adjustReserved(s,{
-        productCode:item.productCode,warehouseId,quantity:item.quantity,type:'reserve',
-        reference:ref,note:`${customer.name} satışı · rezerv`,user:currentActor(req)?.name||'Admin'
-      });
+    try{
+      for(const item of cleanItems){
+        adjustReserved(s,{
+          productCode:item.productCode,warehouseId,quantity:item.quantity,type:'reserve',
+          reference:ref,note:`${customer.name} satışı · rezerv`,user:currentActor(req)?.name||'Admin'
+        });
+      }
+    }catch(err){
+      return res.status(400).json({error:err.message||'Stok rezerve edilemedi'});
     }
   }
   const collections=[];
@@ -5544,7 +5561,9 @@ app.get('/web-api/admin/sales-tracking',requireAdminOrStaffAny('screen_sales_tra
         salespersonId:t.salespersonId||'',salespersonName:t.salespersonName||t.createdBy||'',
         customerId:t.customerId||'',customerName:c.name||'',customerPhone:c.phone||'',customerNote:c.note||'',
         total:saleAmount(t),items:t.items||[],deliveryStatus:t.deliveryStatus||'order_received',
-        deliveryNote:t.deliveryNote||'',invoiceStatus:t.invoiceStatus||'pending',deductStock:Boolean(t.deductStock),
+        deliveryNote:t.deliveryNote||'',invoiceStatus:t.invoiceStatus||'pending',
+        deductStock:Boolean(t.deductStock),reserveStock:Boolean(t.reserveStock),
+        stockMode:t.stockMode||(t.deductStock?'deduct':(t.reserveStock?'reserve':'none')),
         warehouseId:t.warehouseId||'',createdAt:t.createdAt||'',
         needsCompletion:rapidSalesCatalog.isOpenRapidSale(t),rapidDraft:Boolean(t.rapidDraft),
         rapidSalesId:t.rapidSalesId||'',source:t.source||''

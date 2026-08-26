@@ -44,7 +44,7 @@ assert.match(faturaHtml, /id="invDateFrom"/);
 assert.match(faturaHtml, /id="invDealer"/);
 assert.match(faturaJs, />Kes</);
 assert.match(server, /pendingInvoices:/);
-assert.match(server, /6\.3\.267-satis-hub/);
+assert.match(server, /6\.3\.268-stok-satis/);
 assert.match(server, /function handleAtakGetEInvoices/);
 assert.match(geteinvoices, /FaturaAsama: isReturnRow\(row, sale\) \? 'IADE' : 'NORMAL'/);
 assert.doesNotMatch(adminJs, /lib\/atak-geteinvoices/);
