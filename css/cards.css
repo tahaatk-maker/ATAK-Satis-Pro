@@ -1,0 +1,403 @@
+:root {
+  --navy: #08325c;
+  --navy-deep: #05203c;
+  --blue: #1568b0;
+  --blue-mid: #1e7cc9;
+  --sky: #4aa6de;
+  --sky-soft: #7ec4ea;
+  --beko: #0082c8;
+  --ink: #1c1c1c;
+  --muted: #3a3a3a;
+  --card-w: 90mm;
+  --card-h: 50mm;
+  --radius: 3.2mm;
+  --paper: #f3f5f7;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+}
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 24px 64px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.hero h1 {
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+
+.hero p {
+  margin-top: 6px;
+  color: #5b6570;
+  font-size: 14px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbar button,
+.toolbar a {
+  appearance: none;
+  border: 0;
+  background: var(--navy);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.toolbar button.ghost,
+.toolbar a.ghost {
+  background: #fff;
+  color: var(--navy);
+  border: 1px solid #d5dde5;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 28px 22px;
+}
+
+.seller-block h2 {
+  font-size: 15px;
+  margin-bottom: 12px;
+  color: var(--navy);
+}
+
+.seller-block.pending h2 {
+  color: #8a93a0;
+}
+
+.pair {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stage {
+  width: var(--card-w);
+  height: var(--card-h);
+  transform: scale(1.55);
+  transform-origin: top left;
+  margin-bottom: calc(var(--card-h) * 0.55);
+}
+
+.card {
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(12, 32, 58, 0.14);
+}
+
+.card.pending {
+  filter: grayscale(0.35);
+  opacity: 0.72;
+}
+
+.texture {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(120, 130, 140, 0.16) 0.45px, transparent 0.55px);
+  background-size: 2.4mm 2.4mm;
+  background-position: 0 0;
+  pointer-events: none;
+}
+
+.waves {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.front .brand-panel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 32%;
+  height: 100%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  padding: 3mm 1.6mm;
+}
+
+.lockup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.35mm;
+  width: 100%;
+}
+
+.lockup-rule {
+  display: block;
+  width: 18mm;
+  height: 0.32mm;
+  background: currentColor;
+  opacity: 0.95;
+}
+
+.lockup-partners {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.7mm;
+  width: 100%;
+}
+
+.beko-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
+}
+
+.beko-word {
+  font-family: "Nunito Sans", "Plus Jakarta Sans", sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  text-transform: lowercase;
+  font-size: 3.15mm;
+}
+
+.beko-slash {
+  width: 9.4mm;
+  height: 1.15mm;
+  margin-top: 0.25mm;
+  display: block;
+}
+
+.atak-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9mm;
+}
+
+.atak-a {
+  width: 7.6mm;
+  height: 6.8mm;
+}
+
+.atak-word {
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  font-size: 2.85mm;
+}
+
+.istikbal-mark {
+  display: flex;
+  align-items: center;
+  gap: 0.7mm;
+}
+
+.istikbal-waves {
+  width: 5.4mm;
+  height: 4mm;
+  flex: 0 0 auto;
+}
+
+.istikbal-word {
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-size: 2.35mm;
+  line-height: 1;
+}
+
+.front .atak-word,
+.front .beko-word,
+.front .istikbal-word {
+  color: #fff;
+}
+
+.lockup-photo {
+  width: 46mm;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.front .info {
+  position: absolute;
+  left: 33.5%;
+  right: 4.2mm;
+  top: 3.4mm;
+  bottom: 3.2mm;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+}
+
+.info-bottom {
+  margin-top: 2.6mm;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2mm;
+}
+
+.company {
+  color: var(--navy);
+  font-size: 2.35mm;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.person {
+  margin-top: 2.5mm;
+  font-size: 4.15mm;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #151515;
+}
+
+.contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15mm;
+  min-width: 0;
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.6mm;
+  min-height: 3.6mm;
+}
+
+.icon {
+  width: 3.55mm;
+  height: 3.55mm;
+  border-radius: 0.7mm;
+  background: var(--blue);
+  color: #fff;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  margin-top: 0.15mm;
+}
+
+.icon svg {
+  width: 2.15mm;
+  height: 2.15mm;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.row span {
+  font-size: 2.42mm;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.28;
+}
+
+.qr {
+  width: 11.6mm;
+  height: 11.6mm;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.back .brand-stack {
+  position: absolute;
+  left: 6mm;
+  top: 0;
+  height: 100%;
+  width: 54mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.placeholder-note {
+  font-size: 12px;
+  color: #7b8490;
+  margin-top: -6px;
+  margin-bottom: 10px;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .page {
+    padding: 0;
+    max-width: none;
+  }
+
+  .hero,
+  .toolbar,
+  .seller-block h2,
+  .placeholder-note {
+    display: none !important;
+  }
+
+  .grid {
+    display: block;
+  }
+
+  .seller-block {
+    break-inside: avoid;
+  }
+
+  .stage {
+    transform: none;
+    margin: 0 0 8mm;
+  }
+
+  .card {
+    box-shadow: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@page {
+  size: A4;
+  margin: 10mm;
+}
