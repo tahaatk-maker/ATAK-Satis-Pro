@@ -147,94 +147,111 @@ body {
   position: absolute;
   left: 0;
   top: 0;
-  width: 31%;
+  width: 32%;
   height: 100%;
   z-index: 2;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3.2mm;
   color: #fff;
+  padding: 3mm 1.6mm;
+}
+
+.lockup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.35mm;
+  width: 100%;
+}
+
+.lockup-rule {
+  display: block;
+  width: 18mm;
+  height: 0.32mm;
+  background: currentColor;
+  opacity: 0.95;
+}
+
+.lockup-partners {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.7mm;
+  width: 100%;
 }
 
 .beko-mark {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   line-height: 1;
 }
 
 .beko-word {
   font-family: "Nunito Sans", "Plus Jakarta Sans", sans-serif;
   font-weight: 800;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.05em;
   text-transform: lowercase;
+  font-size: 3.15mm;
 }
 
-.front .beko-word {
-  font-size: 5.1mm;
-  color: #fff;
-}
-
-.back .beko-word {
-  font-size: 7.2mm;
-  color: var(--beko);
-}
-
-.beko-rule {
+.beko-slash {
+  width: 9.4mm;
+  height: 1.15mm;
+  margin-top: 0.25mm;
   display: block;
-  height: 0.42mm;
-  border-radius: 99px;
-  margin-top: 0.7mm;
-}
-
-.front .beko-rule {
-  width: 15mm;
-  background: #fff;
-}
-
-.back .beko-rule {
-  width: 21mm;
-  background: var(--beko);
 }
 
 .atak-mark {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.1mm;
+  gap: 0.9mm;
 }
 
 .atak-a {
-  width: 9.4mm;
-  height: 8.4mm;
-}
-
-.front .atak-a {
-  width: 8.2mm;
-  height: 7.3mm;
+  width: 7.6mm;
+  height: 6.8mm;
 }
 
 .atak-word {
   font-weight: 800;
-  letter-spacing: 0.18em;
-  font-size: 3.5mm;
+  letter-spacing: 0.2em;
+  font-size: 2.85mm;
 }
 
-.front .atak-word {
-  font-size: 3.05mm;
-  letter-spacing: 0.22em;
+.istikbal-mark {
+  display: flex;
+  align-items: center;
+  gap: 0.7mm;
+}
+
+.istikbal-waves {
+  width: 5.4mm;
+  height: 4mm;
+  flex: 0 0 auto;
+}
+
+.istikbal-word {
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-size: 2.35mm;
+  line-height: 1;
+}
+
+.front .atak-word,
+.front .beko-word,
+.front .istikbal-word {
   color: #fff;
 }
 
-.back .atak-mark {
-  color: var(--navy);
-}
-
-.back .atak-word {
-  color: var(--navy);
-  font-size: 4.4mm;
+.lockup-photo {
+  width: 46mm;
+  height: auto;
+  display: block;
+  object-fit: contain;
 }
 
 .front .info {
@@ -326,13 +343,13 @@ body {
 
 .back .brand-stack {
   position: absolute;
-  left: 10mm;
+  left: 6mm;
   top: 0;
   height: 100%;
+  width: 54mm;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 3.4mm;
   z-index: 2;
 }
 

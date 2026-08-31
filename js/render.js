@@ -1,10 +1,48 @@
 import { COMPANY } from "./sellers.js";
 
 const ATAK_A = `
-  <svg class="atak-a" viewBox="0 0 80 72" aria-hidden="true">
-    <polygon points="40,2 78,70 59.5,70 40,32 20.5,70 2,70" fill="currentColor"/>
+  <svg class="atak-a" viewBox="0 0 120 108" aria-hidden="true">
+    <path fill="currentColor" d="M60 4 L116 104 H91 L60 42 L48 66 H34 L50 36 L32 104 H4 Z"/>
   </svg>
 `;
+
+const BEKO_MARK = `
+  <div class="beko-mark">
+    <span class="beko-word">beko</span>
+    <svg class="beko-slash" viewBox="0 0 64 8" aria-hidden="true">
+      <polygon points="0,7 56,7 64,1 8,1" fill="currentColor"/>
+    </svg>
+  </div>
+`;
+
+const ISTIKBAL_MARK = `
+  <div class="istikbal-mark">
+    <svg class="istikbal-waves" viewBox="0 0 30 22" aria-hidden="true">
+      <g fill="none" stroke="#F5C400" stroke-width="2.35" stroke-linecap="round">
+        <path d="M1.2 4.2 C5.2 1.2 9.2 7.2 13.5 4.2 S22 1.2 28.6 4.2"/>
+        <path d="M1.2 11 C5.2 8 9.2 14 13.5 11 S22 8 28.6 11"/>
+        <path d="M1.2 17.8 C5.2 14.8 9.2 20.8 13.5 17.8 S22 14.8 28.6 17.8"/>
+      </g>
+    </svg>
+    <span class="istikbal-word">istikbal</span>
+  </div>
+`;
+
+function brandLockup(theme) {
+  return `
+    <div class="lockup lockup-${theme}">
+      <div class="atak-mark">
+        ${ATAK_A}
+        <span class="atak-word">ATAK</span>
+      </div>
+      <span class="lockup-rule"></span>
+      <div class="lockup-partners">
+        ${BEKO_MARK}
+        ${ISTIKBAL_MARK}
+      </div>
+    </div>
+  `;
+}
 
 function frontWaves(uid) {
   return `
@@ -76,14 +114,7 @@ export function frontCardHTML(seller, complete) {
       ${frontWaves(uid)}
       <div class="texture"></div>
       <div class="brand-panel">
-        <div class="beko-mark">
-          <span class="beko-word">beko</span>
-          <span class="beko-rule"></span>
-        </div>
-        <div class="atak-mark">
-          ${ATAK_A}
-          <span class="atak-word">ATAK</span>
-        </div>
+        ${brandLockup("light")}
       </div>
       <div class="info">
         <div class="company">${COMPANY.legalName}</div>
@@ -109,35 +140,8 @@ export function backCardHTML(seller, complete) {
       <div class="texture"></div>
       ${backWaves(uid)}
       <div class="brand-stack">
-        <div class="beko-mark">
-          <span class="beko-word">beko</span>
-          <span class="beko-rule"></span>
-        </div>
-        <div class="atak-mark">
-          ${ATAK_A}
-          <span class="atak-word">ATAK</span>
-        </div>
+        <img class="lockup-photo" src="./assets/logos/brand-lockup.png" alt="ATAK, beko ve istikbal">
       </div>
     </article>
   `;
 }
-
-export const ICONS_SPRITE = `
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="icon-mobile" viewBox="0 0 24 24">
-    <rect x="7" y="3" width="10" height="18" rx="2"></rect>
-    <path d="M11 18h2"></path>
-  </symbol>
-  <symbol id="icon-mail" viewBox="0 0 24 24">
-    <rect x="3" y="5" width="18" height="14" rx="2"></rect>
-    <path d="M4 7l8 6 8-6"></path>
-  </symbol>
-  <symbol id="icon-phone" viewBox="0 0 24 24">
-    <path d="M7 3h3l1.5 4-2 1.5a12 12 0 0 0 6 6L17 13l4 1.5V18a2 2 0 0 1-2 2A16 16 0 0 1 5 6a2 2 0 0 1 2-3z"></path>
-  </symbol>
-  <symbol id="icon-pin" viewBox="0 0 24 24">
-    <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"></path>
-    <circle cx="12" cy="10" r="2.2"></circle>
-  </symbol>
-</svg>
-`;
