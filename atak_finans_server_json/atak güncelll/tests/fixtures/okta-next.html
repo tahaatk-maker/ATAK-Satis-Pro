@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="utf-8"><title>Okta İleri fixture</title></head>
+<body>
+  <form id="f">
+    <input name="identifier" id="okta-signin-username" value="W340334.1"/>
+    <button type="button" id="nextBtn">İleri</button>
+    <input name="credentials.passcode" id="okta-signin-password" type="password" style="display:none"/>
+  </form>
+  <script>
+    document.getElementById('nextBtn').addEventListener('click', function(){
+      document.getElementById('okta-signin-username').style.display = 'none';
+      this.style.display = 'none';
+      document.getElementById('okta-signin-password').style.display = 'inline';
+    });
+  </script>
+</body>
+</html>

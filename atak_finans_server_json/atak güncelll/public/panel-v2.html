@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="tr" data-theme="soft">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATAK Panel — Tasarım Örneği</title>
+<style>
+/* ——— Sakin tema: tek vurgu rengi, düşük kontrast, geniş boşluk ——— */
+:root{
+  --bg:#f4f6f4; --surface:#fff; --surface-2:#fafbfa;
+  --ink:#1f2a24; --ink-2:#55625b; --ink-3:#8b968f;
+  --line:#e3e8e4; --line-2:#eef1ee;
+  --accent:#1f6f5c; --accent-soft:#e8f1ee; --accent-ink:#12503f;
+  --warn:#8a6212; --warn-soft:#fdf4e3;
+  --bad:#9c3730; --bad-soft:#fbeceb;
+  --radius:14px; --radius-lg:18px;
+  --shadow:0 1px 2px rgba(31,42,36,.04), 0 8px 24px rgba(31,42,36,.05);
+  --focus:0 0 0 3px rgba(31,111,92,.28);
+  --sidebar:#fbfcfb;
+}
+html[data-theme="night"]{
+  --bg:#161a18; --surface:#1e2422; --surface-2:#222a27;
+  --ink:#e8ede9; --ink-2:#aab5af; --ink-3:#7f8c86;
+  --line:#2c3532; --line-2:#262e2b;
+  --accent:#5fbfa3; --accent-soft:#1f2f2a; --accent-ink:#9ad9c4;
+  --warn:#d9b169; --warn-soft:#2c2718;
+  --bad:#e08c85; --bad-soft:#2e1f1e;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.28);
+  --focus:0 0 0 3px rgba(95,191,163,.35);
+  --sidebar:#1a201e;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font:16px/1.55 system-ui,-apple-system,"Segoe UI",Inter,Roboto,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:none;box-shadow:var(--focus);border-radius:10px}
+.app{display:grid;grid-template-columns:264px minmax(0,1fr);min-height:100vh}
+
+/* ——— Sol menü: gruplu, sakin, aktif satır belirgin ama bağırmıyor ——— */
+aside{
+  background:var(--sidebar);border-right:1px solid var(--line);
+  padding:20px 14px;position:sticky;top:0;height:100vh;overflow:auto;
+  display:flex;flex-direction:column;gap:22px;
+}
+.brand{display:flex;align-items:center;gap:12px;padding:4px 8px 0}
+.brand .mark{
+  width:40px;height:40px;border-radius:12px;flex:0 0 auto;
+  background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;letter-spacing:-.5px;
+}
+.brand b{display:block;font-size:15px;letter-spacing:-.01em}
+.brand small{display:block;color:var(--ink-3);font-size:11.5px}
+.nav-group{display:grid;gap:2px}
+.nav-group>h4{
+  margin:0 0 6px;padding:0 10px;font-size:11px;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+}
+.nav-item{
+  display:flex;align-items:center;gap:11px;width:100%;
+  min-height:44px;padding:0 12px;border:0;border-radius:11px;
+  background:transparent;color:var(--ink-2);cursor:pointer;text-align:left;font-size:14.5px;
+}
+.nav-item .ico{width:20px;text-align:center;opacity:.85;font-size:15px}
+.nav-item:hover{background:var(--line-2);color:var(--ink)}
+.nav-item[aria-current="page"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:650}
+.nav-item .tag{margin-left:auto;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn);font-weight:700}
+.nav-foot{margin-top:auto;display:grid;gap:8px}
+.who{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.who .av{width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font-weight:700;font-size:13px}
+.who b{display:block;font-size:13.5px}
+.who small{display:block;color:var(--ink-3);font-size:11.5px}
+
+/* ——— İçerik ——— */
+main{padding:26px 30px 48px;min-width:0;max-width:1320px}
+.topbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:26px}
+.topbar h1{margin:0;font-size:24px;letter-spacing:-.02em}
+.topbar p{margin:3px 0 0;color:var(--ink-2);font-size:14px}
+.spacer{flex:1}
+.search{
+  display:flex;align-items:center;gap:9px;min-width:260px;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 13px;height:44px;
+}
+.search input{border:0;background:transparent;outline:none;width:100%}
+.search span{color:var(--ink-3)}
+.btn{
+  min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);
+  background:var(--surface);cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:8px;
+}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.05)}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px}
+.seg button{min-height:38px;padding:0 12px;border:0;border-radius:9px;background:transparent;cursor:pointer;color:var(--ink-2);font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:650}
+
+/* ——— Kartlar ——— */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow)}
+.kpi{padding:18px 18px 16px}
+.kpi small{display:block;color:var(--ink-2);font-size:13px}
+.kpi b{display:block;font-size:28px;letter-spacing:-.02em;margin:8px 0 4px;font-variant-numeric:tabular-nums}
+.kpi .delta{font-size:12.5px;color:var(--ink-3)}
+.kpi .delta.up{color:var(--accent-ink)}
+.kpi .delta.down{color:var(--bad)}
+
+.grid-2{display:grid;grid-template-columns:1.35fr .95fr;gap:14px;margin-bottom:18px}
+.card-head{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line-2)}
+.card-head h2{margin:0;font-size:16px;letter-spacing:-.01em}
+.card-head .sub{margin:2px 0 0;color:var(--ink-3);font-size:12.5px}
+.card-body{padding:18px}
+
+/* ——— Grafik (sade, ızgarasız) ——— */
+.chart{width:100%;height:190px;display:block}
+.chart .area{fill:var(--accent-soft)}
+.chart .line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round}
+.chart .dot{fill:var(--surface);stroke:var(--accent);stroke-width:2.5}
+.chart text{fill:var(--ink-2);font-size:11px}
+.chart .base{stroke:var(--line);stroke-width:1}
+
+/* ——— Hızlı işlemler: en çok kullanılan 4 iş ——— */
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quick button{
+  display:flex;align-items:center;gap:12px;text-align:left;
+  min-height:64px;padding:12px 14px;border:1px solid var(--line);border-radius:13px;
+  background:var(--surface-2);cursor:pointer;
+}
+.quick button:hover{border-color:var(--accent);background:var(--accent-soft)}
+.quick .ico{width:34px;height:34px;flex:0 0 auto;border-radius:10px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center}
+.quick b{display:block;font-size:14.5px}
+.quick small{display:block;color:var(--ink-3);font-size:12px}
+
+/* ——— Listeler ——— */
+.list{display:grid}
+.list-row{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line-2)}
+.list-row:last-child{border-bottom:0}
+.list-row b{font-size:14.5px}
+.list-row small{display:block;color:var(--ink-3);font-size:12.5px}
+.pill{margin-left:auto;font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink);white-space:nowrap}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+
+/* ——— Tablo: seyrek çizgi, rahat satır, sabit başlık ——— */
+.table-wrap{overflow:auto;border-radius:var(--radius-lg)}
+table{width:100%;border-collapse:collapse;min-width:720px}
+th{
+  position:sticky;top:0;background:var(--surface-2);text-align:left;
+  padding:12px 18px;font-size:12px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-2);border-bottom:1px solid var(--line)
+}
+td{padding:15px 18px;border-bottom:1px solid var(--line-2);font-size:14.5px}
+tbody tr:hover td{background:var(--surface-2)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.hint{margin:16px 2px 0;color:var(--ink-2);font-size:13.5px;max-width:80ch}
+
+@media(max-width:1180px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-2{grid-template-columns:1fr}
+}
+@media(max-width:880px){
+  .app{grid-template-columns:1fr}
+  aside{position:static;height:auto}
+  main{padding:20px 16px 40px}
+  .quick{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside>
+  <div class="brand">
+    <span class="mark">A</span>
+    <div>
+      <b>Atak Pazarlama</b>
+      <small>Beko · İstikbal</small>
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <h4>Günlük iş</h4>
+    <button class="nav-item" aria-current="page"><span class="ico">◉</span> Özet</button>
+    <button class="nav-item"><span class="ico">₺</span> Satış yap</button>
+    <button class="nav-item"><span class="ico">◇</span> Tahsilat al <span class="tag">3</span></button>
+    <button class="nav-item"><span class="ico">☰</span> Satış takibi</button>
+  </div>
+
+  <div class="nav-group">
+    <h4>Müşteri &amp; Finans</h4>
+    <button class="nav-item"><span class="ico">☺</span> Müşteriler</button>
+    <button class="nav-item"><span class="ico">≡</span> Ödemeler</button>
+    <button class="nav-item"><span class="ico">▤</span> Kasa &amp; banka</button>
+    <button class="nav-item"><span class="ico">◔</span> Raporlar</button>
+  </div>
+
+  <div class="nav-group">
+    <h4>Ürün &amp; Stok</h4>
+    <button class="nav-item"><span class="ico">▣</span> Ürünler</button>
+    <button class="nav-item"><span class="ico">⬒</span> Stok</button>
+    <button class="nav-item"><span class="ico">⇩</span> Alış faturaları</button>
+  </div>
+
+  <div class="nav-group">
+    <h4>Yönetim</h4>
+    <button class="nav-item"><span class="ico">▷</span> Eğitim</button>
+    <button class="nav-item"><span class="ico">⚙</span> Ayarlar</button>
+  </div>
+
+  <div class="nav-foot">
+    <div class="who">
+      <span class="av">TA</span>
+      <div>
+        <b>Taha Atak</b>
+        <small>Sahip · Tam yetki</small>
+      </div>
+    </div>
+    <button class="btn" id="themeBtn">◐ Koyu tema</button>
+  </div>
+</aside>
+
+<main>
+  <div class="topbar">
+    <div>
+      <h1>Bugün</h1>
+      <p>16 Ağustos 2026 · Beko Mağaza</p>
+    </div>
+    <div class="spacer"></div>
+    <label class="search">
+      <span>⌕</span>
+      <input placeholder="Müşteri, ürün veya fiş ara" aria-label="Ara">
+    </label>
+    <div class="seg" role="group" aria-label="Dönem">
+      <button aria-pressed="true">Bugün</button>
+      <button aria-pressed="false">Bu ay</button>
+      <button aria-pressed="false">Yıl</button>
+    </div>
+    <button class="btn primary">＋ Satış yap</button>
+  </div>
+
+  <section class="kpis">
+    <article class="card kpi">
+      <small>Bugünkü satış</small>
+      <b>₺48.750</b>
+      <span class="delta up">▲ %12 · dün ₺43.500</span>
+    </article>
+    <article class="card kpi">
+      <small>Tahsil edilen</small>
+      <b>₺21.300</b>
+      <span class="delta">7 makbuz</span>
+    </article>
+    <article class="card kpi">
+      <small>Vadesi geçen</small>
+      <b>₺9.480</b>
+      <span class="delta down">3 müşteri · SMS gönderilebilir</span>
+    </article>
+    <article class="card kpi">
+      <small>Açık cari</small>
+      <b>₺186.900</b>
+      <span class="delta">42 müşteri</span>
+    </article>
+  </section>
+
+  <section class="grid-2">
+    <article class="card">
+      <div class="card-head">
+        <div>
+          <h2>Satış eğrisi</h2>
+          <p class="sub">Son 7 gün · net satış</p>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn">Rapor</button>
+      </div>
+      <div class="card-body">
+        <svg class="chart" viewBox="0 0 640 190" preserveAspectRatio="none" role="img" aria-label="Son 7 günün satış eğrisi">
+          <path class="area" d="M20,150 L120,120 L220,132 L320,86 L420,98 L520,60 L620,74 L620,175 L20,175 Z"></path>
+          <line class="base" x1="20" y1="175" x2="620" y2="175"></line>
+          <path class="line" d="M20,150 L120,120 L220,132 L320,86 L420,98 L520,60 L620,74"></path>
+          <circle class="dot" cx="520" cy="60" r="5"></circle>
+          <text x="16" y="188">Pzt</text><text x="112" y="188">Sal</text><text x="212" y="188">Çar</text>
+          <text x="312" y="188">Per</text><text x="412" y="188">Cum</text><text x="512" y="188">Cmt</text><text x="606" y="188">Paz</text>
+        </svg>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <div>
+          <h2>Hızlı işlem</h2>
+          <p class="sub">En çok kullanılan dört iş</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="quick">
+          <button><span class="ico">₺</span><span><b>Satış yap</b><small>Müşteri → ürün → ödeme</small></span></button>
+          <button><span class="ico">◇</span><span><b>Tahsilat al</b><small>Makbuz yazdır</small></span></button>
+          <button><span class="ico">☺</span><span><b>Yeni müşteri</b><small>Cari kart aç</small></span></button>
+          <button><span class="ico">✉</span><span><b>Gecikme SMS</b><small>Seçili müşterilere</small></span></button>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="grid-2">
+    <article class="card">
+      <div class="card-head">
+        <div>
+          <h2>Son satışlar</h2>
+          <p class="sub">Bugün kaydedilen fişler</p>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn">Tümü</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Müşteri</th><th>Ürün</th><th>Ödeme</th><th class="num">Tutar</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Ahmet Demir</td><td>Beko BSF 3000 Buzdolabı</td><td>Nakit</td><td class="num">₺18.400</td></tr>
+            <tr><td>Ayşe Yılmaz</td><td>İstikbal Kalypso Koltuk</td><td>6 taksit</td><td class="num">₺14.250</td></tr>
+            <tr><td>Mehmet Kaya</td><td>Grundig HD 7880</td><td>Kart</td><td class="num">₺9.100</td></tr>
+            <tr><td>Fatma Şahin</td><td>Beko Çamaşır Makinesi</td><td>Senet</td><td class="num">₺7.000</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <div>
+          <h2>Bekleyen işler</h2>
+          <p class="sub">Bugün ilgilenilmesi gerekenler</p>
+        </div>
+      </div>
+      <div class="list">
+        <div class="list-row">
+          <div><b>Vadesi geçen taksit</b><small>3 müşteri · ₺9.480</small></div>
+          <span class="pill bad">SMS gönder</span>
+        </div>
+        <div class="list-row">
+          <div><b>Kesilmeyen fatura</b><small>2 satış · QNB kuyruğu</small></div>
+          <span class="pill warn">Fatura kes</span>
+        </div>
+        <div class="list-row">
+          <div><b>Onay bekleyen iptal</b><small>Demo Personel · dün 17:40</small></div>
+          <span class="pill">İncele</span>
+        </div>
+        <div class="list-row">
+          <div><b>Stoğu biten ürün</b><small>Beko AC 6030</small></div>
+          <span class="pill warn">Sipariş ver</span>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <p class="hint">
+    Tasarım örneği: tek vurgu rengi, yumuşak zemin, 44 piksel dokunma alanı, sabit tablo başlığı ve gruplu menü.
+    Sağ üstteki tema düğmesiyle koyu temayı deneyebilirsiniz.
+  </p>
+</main>
+</div>
+
+<script>
+const root=document.documentElement, btn=document.getElementById('themeBtn');
+const label=()=>btn.textContent=root.dataset.theme==='night'?'◐ Açık tema':'◐ Koyu tema';
+btn.addEventListener('click',()=>{
+  root.dataset.theme=root.dataset.theme==='night'?'soft':'night';
+  label();
+});
+label();
+document.querySelectorAll('.nav-item').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.nav-item').forEach(x=>x.removeAttribute('aria-current'));
+  b.setAttribute('aria-current','page');
+}));
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{
+  b.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true');
+}));
+</script>
+</body>
+</html>
