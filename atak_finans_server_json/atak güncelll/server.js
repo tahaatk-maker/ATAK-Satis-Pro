@@ -2069,8 +2069,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.275-okta-user',
-    build:'fix-v278',
+    version:'6.3.276-okta-pass',
+    build:'fix-v279',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -6199,9 +6199,13 @@ app.post('/web-api/admin/rapid360-robot-test',rapidSalesPerm,async(req,res)=>{
   const s=readStore();
   const rapid=(s.invoiceIntegration||{}).rapid360||{};
   const user=d365Auth.normalizeRapidAccount(rapid.oktaUser||'')||d365Auth.DEFAULT_ACCOUNT;
+  const password=String(rapid.oktaPassword||'').trim();
+  if(!password||password==='********'){
+    return res.status(400).json({error:'Okta şifresi kayıtlı değil. Ayarlar → Rapid Aktar’da şifreyi yazıp Kaydet’e basın (******** bırakmayın).'});
+  }
   try{
     const job=rapidRobot.startProbe({
-      user,password:String(rapid.oktaPassword||'').trim(),oktaLogin:d365Auth.oktaLoginName(user),
+      user,password,oktaLogin:d365Auth.oktaLoginName(user),
       store:rapidSalesFetch.DEFAULT_STORE,company:rapidSalesFetch.DEFAULT_COMPANY,
       reportUrl:d365Auth.dynamicsReportUrl({company:rapidSalesFetch.DEFAULT_COMPANY,store:rapidSalesFetch.DEFAULT_STORE}),
       profileDir:path.join(ROOT,'data','rapid360-profile')

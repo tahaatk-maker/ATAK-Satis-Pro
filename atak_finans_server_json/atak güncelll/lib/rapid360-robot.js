@@ -303,10 +303,50 @@ async function clickFirst(page, names){
 }
 
 async function typeOktaField(locator, value){
+  const want = String(value ?? '');
   await locator.click({ timeout: 5000 });
-  await locator.fill('');
+  await locator.fill('').catch(() => {});
   await locator.press('Control+A').catch(() => {});
-  await locator.type(String(value), { delay: 55 });
+  await locator.press('Meta+A').catch(() => {});
+  await locator.press('Backspace').catch(() => {});
+  await locator.type(want, { delay: 40 });
+  let got = await locator.inputValue().catch(() => '');
+  if(got !== want){
+    await locator.fill(want).catch(() => {});
+    got = await locator.inputValue().catch(() => '');
+  }
+  if(got !== want){
+    await locator.evaluate((el, v) => {
+      el.focus();
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      if(setter) setter.call(el, v);
+      else el.value = v;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, want);
+    got = await locator.inputValue().catch(() => '');
+  }
+  return got === want;
+}
+
+async function fillOktaPassword(page, opts, job){
+  const secret = String(opts.password || '').trim();
+  if(!secret || secret === '********'){
+    robotFail(job, 'PASSWORD_PAGE', 'Okta şifresi kayıtlı değil veya ********. Ayarlar → Rapid Aktar’da şifreyi yeniden yazıp Kaydet’e basın.');
+  }
+  robotLog(job, 'PASSWORD_PAGE', 'Şifre ekranı — yazılıyor');
+  const pass = await passwordLocator(page);
+  const ok = await typeOktaField(pass, secret);
+  if(!ok){
+    robotFail(job, 'PASSWORD_PAGE', 'Şifre kutusu boş kaldı (yazılamadı). Şifreyi Ayarlar’da tekrar kaydedin.');
+  }
+  robotLog(job, 'PASSWORD_FILLED', 'Okta şifresi yazıldı');
+  await takeShot(job, page);
+  job._oktaPassTried = true;
+  await clickLoginSubmit(page);
+  robotLog(job, 'LOGIN_CLICKED', 'Doğrula basıldı — telefonda Okta’yı onaylayın');
+  await takeShot(job, page);
+  await page.waitForTimeout(1200);
 }
 
 async function clickWithFallback(page, locator){
@@ -330,7 +370,7 @@ async function usernameLocator(page){
 }
 
 async function passwordLocator(page){
-  return page.locator('input[name="credentials.passcode"], #okta-signin-password, input[type="password"]:not([type=hidden])').first();
+  return page.locator('input[name="credentials.passcode"], #okta-signin-password, input[type="password"]:visible, input[type="password"]:not([type=hidden])').first();
 }
 
 async function isVisibleLocator(loc){
@@ -446,23 +486,11 @@ async function handleOkta(page, opts, job){
   }
 
   if(await passwordVisible(page)){
-    robotLog(job, 'PASSWORD_PAGE', 'Şifre ekranı açıldı');
-    if(!opts.password){
-      robotFail(job, 'PASSWORD_PAGE', 'Okta şifresi kayıtlı değil. Ayarlar → Rapid Aktar’dan şifre kaydedin.');
-    }
     if(job._oktaPassTried){
-      setStatus(job, 'Okta şifre gönderildi, sonuç bekleniyor…');
+      setStatus(job, 'Okta şifre gönderildi — telefonda bildirimi onaylayın…');
       return;
     }
-    const pass = await passwordLocator(page);
-    await typeOktaField(pass, opts.password);
-    robotLog(job, 'PASSWORD_FILLED', 'Kayıtlı Okta şifresi yazıldı');
-    await takeShot(job, page);
-    job._oktaPassTried = true;
-    await clickLoginSubmit(page);
-    robotLog(job, 'LOGIN_CLICKED', 'Oturum aç / Doğrula basıldı');
-    await takeShot(job, page);
-    await page.waitForTimeout(1500);
+    await fillOktaPassword(page, opts, job);
     return;
   }
 
@@ -483,8 +511,9 @@ async function handleOkta(page, opts, job){
     if(!ok){
       robotFail(job, 'NEXT_CLICKED', 'İleri basıldı ama şifre alanı gelmedi. Ekran fotoğrafına bakın.');
     }
-    robotLog(job, 'NEXT_CLICKED', 'İleri sonrası şifre alanı göründü');
-    await takeShot(job, page);
+    robotLog(job, 'NEXT_CLICKED', 'İleri sonrası şifre alanı göründü — şimdi şifre yazılıyor');
+    // Aynı turda şifreyi yaz; boş ekran görüntüsü bırakma.
+    await fillOktaPassword(page, opts, job);
     return;
   }
 
@@ -848,7 +877,7 @@ async function runProbe(job, opts = {}){
     const page = ctx.pages()[0] || await ctx.newPage();
     setStatus(job, 'Robot Rapid360’ı açıyor…');
     await page.goto(opts.reportUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
-    const until = Date.now() + 40000;
+    const until = Date.now() + 45000;
     while(Date.now() < until){
       const kind = classifyUrl(page.url());
       try{
@@ -866,12 +895,19 @@ async function runProbe(job, opts = {}){
         }
       }catch(e){
         setStatus(job, e && e.message ? e.message : 'Robot hatası');
+        await takeShot(job, page);
+        if(e && e.stage) throw e;
       }
       await takeShot(job, page);
-      if(!/Oturum açılamıyor|bildirimini onaylayın|Mağaza/i.test(String(job.status || ''))){
+      const st = String(job.status || '');
+      // Önemli durum mesajını “okta ekranında” ile ezme.
+      if(!/(Oturum açılamıyor|bildirimini onaylayın|Mağaza|şifre|Şifre|PASSWORD|yazılamadı|kayıtlı değil|Doğrula)/i.test(st)){
         setStatus(job, `Robot şu an: ${classifyUrl(page.url())} ekranında`);
       }
-      await page.waitForTimeout(3000);
+      if(job._oktaPassTried && /okta|microsoft/i.test(kind)){
+        setStatus(job, 'Şifre yazıldı — telefonda Okta bildiriminionaylayın…');
+      }
+      await page.waitForTimeout(2500);
     }
     await takeShot(job, page);
     return { probe: { url: String(page.url() || ''), kind: classifyUrl(page.url()) } };
