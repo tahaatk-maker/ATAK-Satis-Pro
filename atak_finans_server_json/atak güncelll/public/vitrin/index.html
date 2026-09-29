@@ -3,35 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Atak Home — Eviniz için her şey</title>
-  <meta name="description" content="Atak Home Sarıyer. Beko, İstikbal, beyaz eşya, mobilya, klima ve TV.">
+  <title>Atak Home — Sarıyer Showroom</title>
+  <meta name="description" content="Atak Home Sarıyer. Beko beyaz eşya ve İstikbal mobilya showroom’u.">
   <link rel="icon" href="/atak-header-logo.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=242">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=311">
 </head>
 <body>
-  <header class="top">
+  <header class="top" id="topBar">
     <div class="wrap top-row">
       <a class="brand" href="#/" aria-label="Atak Home">
-        <img src="/atak-header-logo.svg" alt="Atak Pazarlama" width="180" height="52">
+        <span class="brand-mark">Atak Home</span>
       </a>
-      <form class="search" id="searchForm">
-        <span class="search-ico" aria-hidden="true">⌕</span>
-        <input id="searchInput" type="search" placeholder="Buzdolabı, klima, kanepe ara" autocomplete="off">
-        <button type="submit">Ara</button>
+      <nav class="nav-links" id="catsBar" aria-label="Kategoriler"></nav>
+      <form class="search" id="searchForm" role="search">
+        <span class="search-ico" aria-hidden="true"></span>
+        <input id="searchInput" type="search" placeholder="Ürün ara" autocomplete="off">
       </form>
       <div class="top-actions">
         <a class="phone" id="phoneBtn" href="tel:+902122232871">0212 223 28 71</a>
         <a class="btn btn-wa" id="waBtn" href="https://wa.me/905433585060" target="_blank" rel="noopener">WhatsApp</a>
         <button class="cart-ico" id="cartBtn" type="button" aria-label="Sepet">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h15l-1.5 9h-12z"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M6 6 5 3H2"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 6h15l-1.5 9h-12z"/><circle cx="9" cy="20" r="1.3"/><circle cx="18" cy="20" r="1.3"/><path d="M6 6 5 3H2"/></svg>
           <b id="cartCount">0</b>
         </button>
       </div>
     </div>
-    <nav class="cat-row wrap" id="catsBar"></nav>
   </header>
 
   <main id="app"></main>
@@ -49,14 +48,21 @@
   </aside>
 
   <footer class="foot">
-    <div class="wrap foot-row">
-      <span class="pin">📍</span>
+    <div class="wrap foot-grid">
       <div>
-        <strong>Atak Home Showroom</strong>
+        <strong class="foot-brand">Atak Home</strong>
+        <p>Sarıyer showroom — Beko beyaz eşya &amp; İstikbal mobilya.</p>
+      </div>
+      <div>
+        <span class="foot-label">Showroom</span>
         <p id="footAddr">Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul</p>
+      </div>
+      <div>
+        <span class="foot-label">İletişim</span>
+        <p><a id="footPhone" href="tel:+902122232871">0212 223 28 71</a></p>
       </div>
     </div>
   </footer>
-  <script src="/app.js"></script>
+  <script src="/app.js?v=311"></script>
 </body>
 </html>

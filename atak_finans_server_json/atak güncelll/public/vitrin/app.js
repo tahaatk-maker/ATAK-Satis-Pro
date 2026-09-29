@@ -1,21 +1,16 @@
 (function(){
   var MAIN_CATS=[
-    {id:'beyaz-esya',name:'Beyaz Eşya',ico:'🧊'},
-    {id:'klima',name:'Klima',ico:'❄️'},
-    {id:'tv-elektronik',name:'TV',ico:'📺'},
-    {id:'mobilya',name:'Mobilya',ico:'🛋️'},
-    {id:'ceyiz',name:'Çeyiz',ico:'🎁'},
-    {id:'kucuk-ev-aletleri',name:'Küçük Ev Aletleri',ico:'🔌'}
+    {id:'beyaz-esya',name:'Beyaz Eşya'},
+    {id:'mobilya',name:'Mobilya'},
+    {id:'klima',name:'Klima'},
+    {id:'tv-elektronik',name:'TV'},
+    {id:'ceyiz',name:'Çeyiz'}
   ];
   var BRAND_FILTERS=[
     {id:'',name:'Tümü'},
     {id:'Beko',name:'Beko'},
     {id:'İstikbal',name:'İstikbal'}
   ];
-  var CAM_IMG={
-    'çeyiz':'/img/cam-ceyiz.jpg','ceyiz':'/img/cam-ceyiz.jpg',
-    'klima':'/img/cam-klima.jpg','tv':'/img/cam-tv.jpg'
-  };
   var SHOWCASE=[
     {id:'demo-buz',name:'No-frost buzdolabı',brand:'Beko',category:'buzdolabi',image:'/img/urun-buzdolabi.jpg',wa:'Buzdolabı',salePrice:39999,listPrice:42999},
     {id:'demo-klima',name:'Duvar tipi klima',brand:'Beko',category:'klima',image:'/img/urun-klima.jpg',wa:'Klima',salePrice:26999,listPrice:28999},
@@ -24,32 +19,40 @@
   ];
   var FALLBACK={
     settings:{siteName:'Atak Home',tagline:'Eviniz için her şey',phone:'02122232871',whatsapp:'905433585060',address:'Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul'},
-    banners:[{headline:'Evinizi sadece döşemeyin. Yaşatın.',subheadline:'Beko beyaz eşya ve İstikbal mobilya — Atak Home Sarıyer showroom.',ctaText:'Ürünleri keşfet',ctaUrl:'#/urunler',desktopImage:'/img/hero.jpg'}],
-    campaigns:[
-      {title:'Çeyiz Paketleri',subtitle:'Evinize güçlü bir başlangıç',label:'FIRSAT',homepage:true},
-      {title:'Klima Fırsatları',subtitle:'Serinlik evinize yakışsın',label:'FIRSAT',homepage:true},
-      {title:'TV Kampanyaları',subtitle:'Sinemayı eve taşıyın',label:'FIRSAT',homepage:true}
-    ],
-    categories:MAIN_CATS,brands:[{id:'beko',name:'Beko'},{id:'istikbal',name:'İstikbal'}],products:[]
+    banners:[{headline:'Evinizi sadece döşemeyin. Yaşatın.',subheadline:'Beko beyaz eşya ve İstikbal mobilya — Sarıyer showroom’da keşfedin.',ctaText:'Koleksiyonu gör',ctaUrl:'#/urunler',desktopImage:'/img/hero.jpg'}],
+    categories:MAIN_CATS,brands:[{id:'beko',name:'Beko'},{id:'istikbal',name:'İstikbal'}],products:[],campaigns:[]
   };
-  var data=FALLBACK, slide=0, cart=[];
+  var data=FALLBACK, cart=[], onHome=false;
 
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function money(n){return Number(n||0).toLocaleString('tr-TR')+' TL';}
   function wa(){return String((data.settings||{}).whatsapp||'905433585060').replace(/\D/g,'');}
   function phone(){return String((data.settings||{}).phone||'02122232871');}
   function img(u){if(!u)return '';if(/^https?:|data:|\//.test(u))return u;return '/'+u;}
+  function fallbackImg(p){
+    var cat=String(p.category||'').toLocaleLowerCase('tr-TR');
+    var brand=String(p.brand||'').toLocaleLowerCase('tr-TR');
+    var name=String(p.name||'').toLocaleLowerCase('tr-TR');
+    if(/klima/.test(cat+name)) return '/img/urun-klima.jpg';
+    if(/tv|televizyon/.test(cat+name)) return '/img/urun-tv.jpg';
+    if(/oturma|koltuk|kanepe|mobilya|yatak|yemek|istikbal/.test(cat+brand+name)) return '/img/urun-kanepe.jpg';
+    if(/buz|camasir|çamaşır|beyaz/.test(cat+name)) return '/img/urun-buzdolabi.jpg';
+    return '/img/urun-buzdolabi.jpg';
+  }
+  function productImg(p){
+    return img(p.image||(p.images&&p.images[0])||'')||fallbackImg(p);
+  }
   function price(p){return Number(p.salePrice!=null?p.salePrice:(p.cashPrice!=null?p.cashPrice:p.listPrice||0));}
   function listPrice(p){return Number(p.listPrice||p.oldPrice||0);}
   function navCats(){
-    var api=(data.categories||[]).filter(function(c){return !c.parent;});
-    if(api.length>=4){
-      return api.slice(0,8).map(function(c){
-        var hit=MAIN_CATS.find(function(m){return m.id===c.id;});
-        return {id:c.id,name:c.name,ico:hit?hit.ico:'•'};
-      });
-    }
-    return MAIN_CATS;
+    var preferred=['beyaz-esya','mobilya','klima','tv-elektronik','ceyiz'];
+    var api=data.categories||[];
+    var out=[];
+    preferred.forEach(function(id){
+      var hit=api.find(function(c){return c.id===id;})||MAIN_CATS.find(function(c){return c.id===id;});
+      if(hit) out.push({id:hit.id,name:hit.name});
+    });
+    return out.length?out:MAIN_CATS;
   }
   function childCats(parentId){
     return (data.categories||[]).filter(function(c){return String(c.parent||'')===String(parentId);});
@@ -57,13 +60,6 @@
   function brandMatch(p,brand){
     if(!brand)return true;
     return String(p.brand||'').toLocaleLowerCase('tr-TR')===String(brand).toLocaleLowerCase('tr-TR');
-  }
-  function camImg(c){
-    var t=String(c.title||'').toLocaleLowerCase('tr-TR');
-    if(/klima/.test(t))return '/img/cam-klima.jpg';
-    if(/tv|televizyon/.test(t))return '/img/cam-tv.jpg';
-    if(/çeyiz|ceyiz/.test(t))return '/img/cam-ceyiz.jpg';
-    return CAM_IMG.ceyiz;
   }
   function route(){
     var h=(location.hash||'#/').replace(/^#/,'');
@@ -98,40 +94,28 @@
     var lines=cart.map(function(x){return '- '+x.name+' x'+x.qty;}).join('%0A');
     document.getElementById('cartWa').href='https://wa.me/'+wa()+'?text='+encodeURIComponent('Merhaba, Atak Home sipariş:\n')+lines;
   }
-
   function waLink(text){return 'https://wa.me/'+wa()+'?text='+encodeURIComponent('Merhaba, '+text+' hakkında bilgi almak istiyorum.');}
 
   function productCard(p){
     var pr=price(p);
     var old=listPrice(p)>pr?'<span class="old">'+esc(money(listPrice(p)))+'</span>':'';
-    var pic=img(p.image||(p.images&&p.images[0])||'');
+    var pic=productImg(p);
     var priceHtml=pr?esc(money(pr))+old:'Fiyat için sorun';
     var href=String(p.id).indexOf('demo-')===0?'#/urunler':'#/urun/'+esc(p.id);
-    return '<article class="pcard"><a href="'+href+'"><div class="pic">'+(pic?'<img src="'+esc(pic)+'" alt="">':'')+'</div></a><div class="body"><div class="brand">'+esc(p.brand||'')+'</div><h3>'+esc(p.name||'Ürün')+'</h3><div class="price">'+priceHtml+'</div><div class="card-actions"><button type="button" class="btn btn-ghost wide" data-add="'+esc(p.id)+'">Sepete ekle</button><a class="btn btn-primary wide" href="'+waLink(p.wa||p.name)+'" target="_blank" rel="noopener">WhatsApp ile sor</a></div></div></article>';
+    return '<article class="pcard reveal"><a href="'+href+'"><div class="pic"><img src="'+esc(pic)+'" alt="'+esc(p.name||'')+'"></div></a><div class="body"><div class="brand">'+esc(p.brand||'')+'</div><h3>'+esc(p.name||'Ürün')+'</h3><div class="price">'+priceHtml+'</div><div class="card-actions"><button type="button" class="btn btn-ghost wide" data-add="'+esc(p.id)+'">Sepete ekle</button><a class="btn btn-primary wide" href="'+waLink(p.wa||p.name)+'" target="_blank" rel="noopener">WhatsApp ile sor</a></div></div></article>';
   }
 
   function home(){
     var banners=data.banners&&data.banners.length?data.banners:FALLBACK.banners;
-    var b=banners[slide%banners.length];
+    var b=banners[0]||FALLBACK.banners[0];
     var bg=img(b.desktopImage||b.mobileImage||'')||'/img/hero.jpg';
-    if(!b.desktopImage&&!b.mobileImage)bg='/img/hero.jpg';
-    var camps=(data.campaigns||[]).filter(function(c){return c.homepage!==false;}).slice(0,3);
-    if(!camps.length)camps=FALLBACK.campaigns;
-    var prods=(data.products||[]).slice().sort(function(a,c){return (c.featured?1:0)-(a.featured?1:0);}).slice(0,8);
+    var prods=(data.products||[]).slice().sort(function(a,c){return (c.featured?1:0)-(a.featured?1:0);}).slice(0,6);
     if(!prods.length)prods=SHOWCASE;
-    var beko=(data.products||[]).filter(function(p){return /beko/i.test(p.brand||'');}).slice(0,4);
-    var ist=(data.products||[]).filter(function(p){return /istikbal/i.test(p.brand||'');}).slice(0,4);
-    var html='<section class="hero" style="background-image:url(\''+esc(bg)+'\')"><button class="arrow l" type="button" id="prevSlide">‹</button><button class="arrow r" type="button" id="nextSlide">›</button><div class="hero-inner"><p class="brand-hero">Atak Home</p><h1>'+esc(b.headline||'Atak Home')+'</h1><p>'+esc(b.subheadline||'')+'</p><div class="hero-cta"><a class="btn btn-primary" href="#/urunler">'+esc(b.ctaText||'Ürünleri keşfet')+'</a><a class="btn btn-ghost-light" href="#/urunler?brand=Beko">Beko</a><a class="btn btn-ghost-light" href="#/urunler?brand=%C4%B0stikbal">İstikbal</a></div><div class="dots">'+banners.map(function(_,i){return '<i class="'+(i===slide%banners.length?'on':'')+'"></i>';}).join('')+'</div></div></section>';
-    html+='<section class="section wrap"><div class="cams">'+camps.map(function(c){
-      return '<a class="cam" href="#/urunler" style="background-image:url(\''+esc(camImg(c))+'\')"><div class="txt"><h3>'+esc(c.title)+'</h3><p>'+esc(c.subtitle||'')+'</p><span>Keşfet →</span></div></a>';
-    }).join('')+'</div></section>';
-    html+='<section class="section wrap"><div class="section-head"><h2>Öne çıkanlar</h2><a href="#/urunler">Tümünü gör</a></div><div class="prods">'+prods.map(productCard).join('')+'</div></section>';
-    if(beko.length){
-      html+='<section class="section wrap"><div class="section-head"><h2>Beko beyaz eşya</h2><a href="#/urunler?brand=Beko">Tümü</a></div><div class="prods">'+beko.map(productCard).join('')+'</div></section>';
-    }
-    if(ist.length){
-      html+='<section class="section wrap"><div class="section-head"><h2>İstikbal mobilya</h2><a href="#/urunler?brand=%C4%B0stikbal">Tümü</a></div><div class="prods">'+ist.map(productCard).join('')+'</div></section>';
-    }
+    var html='';
+    html+='<section class="hero"><div class="hero-media" style="background-image:url(\''+esc(bg)+'\')"></div><div class="hero-inner"><p class="hero-brand">Atak Home</p><p class="hero-copy">'+esc(b.subheadline||'Beko beyaz eşya ve İstikbal mobilya — Sarıyer showroom’da.')+'</p><div class="hero-cta"><a class="btn btn-light" href="#/urunler">'+esc(b.ctaText||'Koleksiyonu gör')+'</a><a class="btn btn-wa" href="#/urunler?brand=Beko">Beko</a><a class="btn btn-wa" href="#/urunler?brand=%C4%B0stikbal">İstikbal</a></div></div></section>';
+    html+='<section class="section wrap"><div class="section-head reveal"><div><h2>Markalar</h2><p>Yetkili satış noktası — showroom’da yerinde görün, birlikte seçin.</p></div></div><div class="lanes reveal"><a class="lane" href="#/urunler?brand=Beko" style="background-image:url(\'/img/cam-klima.jpg\')"><div class="lane-body"><small>Beyaz eşya</small><h3>Beko</h3><p>Buzdolabı, çamaşır, klima ve TV.</p><span class="btn btn-light">İncele</span></div></a><a class="lane" href="#/urunler?brand=%C4%B0stikbal" style="background-image:url(\'/img/urun-kanepe.jpg\')"><div class="lane-body"><small>Mobilya</small><h3>İstikbal</h3><p>Oturma grubu, yatak ve yemek odası.</p><span class="btn btn-light">İncele</span></div></a></div></section>';
+    html+='<section class="section wrap"><div class="section-head reveal"><div><h2>Seçilmiş ürünler</h2><p>Showroom’daki güncel seçki.</p></div><a href="#/urunler">Tümünü gör</a></div><div class="prods">'+prods.map(productCard).join('')+'</div></section>';
+    html+='<section class="visit"><div class="wrap visit-inner reveal"><div><h2>Sarıyer showroom</h2><p>'+esc((data.settings&&data.settings.address)||FALLBACK.settings.address)+'</p></div><div class="visit-actions"><a class="btn btn-light" id="visitPhone" href="tel:+902122232871">Ara</a><a class="btn btn-wa" id="visitWa" href="https://wa.me/'+wa()+'" target="_blank" rel="noopener">WhatsApp</a></div></div></section>';
     return html;
   }
 
@@ -159,11 +143,12 @@
     var catsForFilter=navCats().concat(childCats('beyaz-esya')).concat(childCats('mobilya'));
     var seen={};
     catsForFilter=catsForFilter.filter(function(c){if(seen[c.id])return false;seen[c.id]=1;return true;});
-    var html='<div class="wrap"><div class="crumb"><a href="#/">Anasayfa</a> / Ürünler</div><div class="list-wrap"><aside class="filters"><h3>Filtre</h3><label>Marka<select id="fBrand">'+BRAND_FILTERS.map(function(b){
+    var title=q?('Arama: '+q):(brand||'Koleksiyon');
+    var html='<div class="wrap list-page"><div class="crumb"><a href="#/">Anasayfa</a> / Ürünler</div><div class="list-wrap"><aside class="filters"><h3>Filtre</h3><label>Marka<select id="fBrand">'+BRAND_FILTERS.map(function(b){
       return '<option value="'+esc(b.id)+'"'+(brand===b.id?' selected':'')+'>'+esc(b.name)+'</option>';
     }).join('')+'</select></label><label>Kategori<select id="fCat"><option value="">Tümü</option>'+catsForFilter.map(function(c){
       return '<option value="'+esc(c.id)+'"'+(cat===c.id?' selected':'')+'>'+esc(c.name)+'</option>';
-    }).join('')+'</select></label></aside><div><div class="section-head"><h2>'+(q?('Arama: '+esc(q)):(brand||'Ürünler'))+'</h2><p>'+items.length+' ürün</p></div>';
+    }).join('')+'</select></label></aside><div><div class="section-head"><div><h2>'+esc(title)+'</h2><p>'+items.length+' ürün</p></div></div>';
     html+=items.length?'<div class="prods">'+items.map(productCard).join('')+'</div>':'<div class="empty">Bu filtrede ürün yok. WhatsApp’tan sorun.</div>';
     html+='</div></div></div>';
     return html;
@@ -171,15 +156,15 @@
 
   function detail(id){
     var p=(data.products||[]).find(function(x){return String(x.id)===String(id);});
-    if(!p)return '<div class="wrap empty" style="margin:40px auto">Ürün bulunamadı. <a href="#/urunler">Listeye dön</a></div>';
-    var pic=img(p.image||(p.images&&p.images[0])||'');
+    if(!p)return '<div class="wrap list-page empty">Ürün bulunamadı. <a href="#/urunler">Listeye dön</a></div>';
+    var pic=productImg(p);
     var pr=price(p);
-    return '<div class="wrap"><div class="crumb"><a href="#/">Anasayfa</a> / <a href="#/urunler">Ürünler</a> / '+esc(p.name)+'</div><div class="detail"><div>'+(pic?'<img src="'+esc(pic)+'" alt="">':'')+'</div><div><div class="brand">'+esc(p.brand||'')+'</div><h1>'+esc(p.name)+'</h1><div class="price">'+(pr?esc(money(pr)):'Fiyat için sorun')+'</div><button type="button" class="btn btn-ghost" data-add="'+esc(p.id)+'">Sepete ekle</button> <a class="btn btn-primary" href="'+waLink(p.name)+'" target="_blank" rel="noopener">WhatsApp ile sor</a><p>'+esc(p.description||'Showroom’da yerinde inceleyebilirsiniz.')+'</p></div></div></div>';
+    return '<div class="wrap list-page"><div class="crumb"><a href="#/">Anasayfa</a> / <a href="#/urunler">Ürünler</a> / '+esc(p.name)+'</div><div class="detail"><div class="pic"><img src="'+esc(pic)+'" alt="'+esc(p.name)+'"></div><div><div class="brand">'+esc(p.brand||'')+'</div><h1>'+esc(p.name)+'</h1><div class="price">'+(pr?esc(money(pr)):'Fiyat için sorun')+'</div><div class="actions"><button type="button" class="btn btn-ghost" data-add="'+esc(p.id)+'">Sepete ekle</button><a class="btn btn-primary" href="'+waLink(p.name)+'" target="_blank" rel="noopener">WhatsApp ile sor</a></div><p>'+esc(p.description||'Showroom’da yerinde inceleyebilirsiniz.')+'</p></div></div></div>';
   }
 
   function catsBar(){
     document.getElementById('catsBar').innerHTML=navCats().map(function(c){
-      return '<a class="cat-btn" href="#/urunler?cat='+encodeURIComponent(c.id)+'"><span>'+c.ico+'</span>'+esc(c.name)+'</a>';
+      return '<a href="#/urunler?cat='+encodeURIComponent(c.id)+'">'+esc(c.name)+'</a>';
     }).join('');
   }
 
@@ -193,23 +178,49 @@
     });
   }
 
+  function observeReveal(){
+    var nodes=document.querySelectorAll('.reveal');
+    if(!('IntersectionObserver' in window)){
+      nodes.forEach(function(n){n.classList.add('in');});
+      return;
+    }
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}
+      });
+    },{threshold:0.12,rootMargin:'0px 0px -40px 0px'});
+    nodes.forEach(function(n){io.observe(n);});
+  }
+
+  function syncTop(){
+    var top=document.getElementById('topBar');
+    top.classList.toggle('is-home', onHome);
+    top.classList.toggle('is-solid', !onHome || window.scrollY>40);
+  }
+
   function render(){
     var r=route();
     var box=document.getElementById('app');
+    onHome=!(r.path.indexOf('/urun')===0);
     if(r.path.indexOf('/urun/')===0) box.innerHTML=detail(r.path.slice(6));
     else if(r.path.indexOf('/urunler')===0) box.innerHTML=listing();
     else box.innerHTML=home();
     catsBar();
     drawCart();
     bindCards();
+    observeReveal();
+    syncTop();
     var raw=phone().replace(/\D/g,'');
-    document.getElementById('phoneBtn').href='tel:+90'+raw.replace(/^90/,'').replace(/^0/,'');
+    var tel='tel:+90'+raw.replace(/^90/,'').replace(/^0/,'');
+    document.getElementById('phoneBtn').href=tel;
     document.getElementById('waBtn').href='https://wa.me/'+wa();
     if(data.settings&&data.settings.address)document.getElementById('footAddr').textContent=data.settings.address;
-    var prev=document.getElementById('prevSlide');
-    var next=document.getElementById('nextSlide');
-    if(prev)prev.onclick=function(){slide=Math.max(0,slide-1);render();};
-    if(next)next.onclick=function(){slide++;render();};
+    var fp=document.getElementById('footPhone');
+    if(fp)fp.href=tel;
+    var visitPhone=document.getElementById('visitPhone');
+    var visitWa=document.getElementById('visitWa');
+    if(visitPhone)visitPhone.href=tel;
+    if(visitWa)visitWa.href='https://wa.me/'+wa();
     var fCat=document.getElementById('fCat');
     var fBrand=document.getElementById('fBrand');
     if(fCat||fBrand){
@@ -231,12 +242,12 @@
   document.getElementById('cartBtn').onclick=function(){document.getElementById('cartDrawer').classList.remove('hidden');};
   document.getElementById('cartClose').onclick=document.getElementById('cartX').onclick=function(){document.getElementById('cartDrawer').classList.add('hidden');};
   window.addEventListener('hashchange',render);
+  window.addEventListener('scroll',syncTop,{passive:true});
 
   function apply(d){
     data=d||FALLBACK;
     if(!data.settings)data.settings=FALLBACK.settings;
     if(!data.products)data.products=[];
-    if(!data.campaigns||!data.campaigns.length)data.campaigns=FALLBACK.campaigns;
     if(!data.banners||!data.banners.length)data.banners=FALLBACK.banners;
     if(!data.categories||!data.categories.length)data.categories=FALLBACK.categories;
     render();
