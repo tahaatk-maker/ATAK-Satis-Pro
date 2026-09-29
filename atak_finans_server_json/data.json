@@ -1,0 +1,42 @@
+{
+  "users": [
+    {
+      "name": "Taha",
+      "role": "admin",
+      "password_hash": "$2a$10$VN9JcNWYPjtd4oAZdaB3HO9vCzSY3izgt1v5s67f/95aoCElbdrBO",
+      "active": true
+    },
+    {
+      "name": "Hasan",
+      "role": "partner",
+      "password_hash": "$2a$10$YUgMiPgEChHGttapeTqMOOVp/XK3n1AM34p9GYDjdmcGs5MA0JskK",
+      "active": true
+    },
+    {
+      "name": "Emir",
+      "role": "beko_staff",
+      "password_hash": "$2a$10$hRAPK9n.1xf1UhLVg5fzHuTstVeW812VDzPmJ6/mXaS1.qeCkLOE.",
+      "active": true
+    },
+    {
+      "name": "İbrahim",
+      "role": "istikbal_staff",
+      "password_hash": "$2a$10$wM/AqZAltqFF5HLCDrVfXehuMElX3/WPUIZD84wryamka5Vtpc0f6",
+      "active": true
+    }
+  ],
+  "transactions": [],
+  "invoices": [],
+  "bankMovements": [],
+  "cards": [],
+  "cardMovements": [],
+  "partnerMovements": [],
+  "reviewQueue": [],
+  "settings": {
+    "beko_debt": 0,
+    "istikbal_debt": 0,
+    "cash": 0,
+    "tax_reserved": 0
+  },
+  "importLog": []
+}

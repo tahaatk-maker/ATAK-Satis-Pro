@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atak Home — Eviniz için her şey</title>
+  <meta name="description" content="Atak Home Sarıyer. Beko, İstikbal, beyaz eşya, mobilya, klima ve TV.">
+  <link rel="icon" href="/atak-header-logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=242">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-row">
+      <a class="brand" href="#/" aria-label="Atak Home">
+        <img src="/atak-header-logo.svg" alt="Atak Pazarlama" width="180" height="52">
+      </a>
+      <form class="search" id="searchForm">
+        <span class="search-ico" aria-hidden="true">⌕</span>
+        <input id="searchInput" type="search" placeholder="Buzdolabı, klima, kanepe ara" autocomplete="off">
+        <button type="submit">Ara</button>
+      </form>
+      <div class="top-actions">
+        <a class="phone" id="phoneBtn" href="tel:+902122232871">0212 223 28 71</a>
+        <a class="btn btn-wa" id="waBtn" href="https://wa.me/905433585060" target="_blank" rel="noopener">WhatsApp</a>
+        <button class="cart-ico" id="cartBtn" type="button" aria-label="Sepet">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h15l-1.5 9h-12z"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M6 6 5 3H2"/></svg>
+          <b id="cartCount">0</b>
+        </button>
+      </div>
+    </div>
+    <nav class="cat-row wrap" id="catsBar"></nav>
+  </header>
+
+  <main id="app"></main>
+
+  <aside class="drawer hidden" id="cartDrawer" aria-label="Sepet">
+    <div class="drawer-bg" id="cartClose"></div>
+    <div class="drawer-box">
+      <div class="drawer-head"><h2>Sepet</h2><button type="button" id="cartX">Kapat</button></div>
+      <div id="cartItems"></div>
+      <div class="drawer-foot">
+        <p>Toplam <b id="cartTotal">0 TL</b></p>
+        <a class="btn btn-primary wide" id="cartWa" href="#" target="_blank" rel="noopener">WhatsApp ile sipariş</a>
+      </div>
+    </div>
+  </aside>
+
+  <footer class="foot">
+    <div class="wrap foot-row">
+      <span class="pin">📍</span>
+      <div>
+        <strong>Atak Home Showroom</strong>
+        <p id="footAddr">Ferahevler Mah. Adnan Kahveci Cad. No:109 Sarıyer / İstanbul</p>
+      </div>
+    </div>
+  </footer>
+  <script src="/app.js"></script>
+</body>
+</html>
