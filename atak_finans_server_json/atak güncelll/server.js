@@ -27,6 +27,7 @@ const rapidSalesFetch = require('./lib/rapid360-sales-fetch');
 const rapidSalesCatalog = require('./lib/rapid360-sales-catalog');
 const rapidSalesBridge = require('./lib/rapid360-sales-bridge');
 const rapidRobot = require('./lib/rapid360-robot');
+rapidRobot.setShotDir(path.join(__dirname,'data'));
 const d365Auth = require('./lib/rapid360-d365-auth');
 const personName = require('./lib/person-name');
 const customerCode = require('./lib/customer-code');
