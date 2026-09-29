@@ -97,6 +97,58 @@ function sweepJobs(){
 }
 
 let lastJob = null;
+let shotDir = '';
+
+function setShotDir(dir){
+  shotDir = String(dir || '').trim();
+}
+
+function persistShot(job){
+  if(!job || !job.shot || !shotDir) return;
+  try{
+    fs.mkdirSync(shotDir, { recursive: true });
+    fs.writeFileSync(path.join(shotDir, 'rapid360-last-shot.png'), job.shot);
+    fs.writeFileSync(path.join(shotDir, 'rapid360-last-shot.json'), JSON.stringify({
+      id: job.id || '',
+      at: job.shotAt || new Date().toISOString(),
+      url: job.lastUrl || '',
+      status: job.status || '',
+      stage: job.stage || '',
+      error: job.error || ''
+    }));
+  }catch(e){
+    console.error('[RAPID-ROBOT] shot save fail', e && e.message);
+  }
+}
+
+function loadPersistedShot(){
+  try{
+    if(!shotDir) return null;
+    const p = path.join(shotDir, 'rapid360-last-shot.png');
+    if(!fs.existsSync(p)) return null;
+    const buf = fs.readFileSync(p);
+    return buf && buf.length ? buf : null;
+  }catch(_){
+    return null;
+  }
+}
+
+function getLastShot(){
+  if(lastJob && lastJob.shot && lastJob.shot.length) return {
+    shot: lastJob.shot,
+    shotAt: lastJob.shotAt || '',
+    lastUrl: lastJob.lastUrl || '',
+    status: lastJob.status || ''
+  };
+  const disk = loadPersistedShot();
+  if(!disk) return null;
+  let meta = {};
+  try{
+    meta = JSON.parse(fs.readFileSync(path.join(shotDir, 'rapid360-last-shot.json'), 'utf8'));
+  }catch(_){ }
+  return { shot: disk, shotAt: meta.at || '', lastUrl: meta.url || '', status: meta.status || '' };
+}
+
 function getLastJob(){
   return lastJob;
 }
@@ -104,10 +156,14 @@ function getLastJob(){
 async function takeShot(job, page){
   if(!job || !page) return;
   try{
-    job.shot = await page.screenshot({ type: 'png', timeout: 8000 });
+    await page.waitForTimeout(400).catch(() => {});
+    job.shot = await page.screenshot({ type: 'png', fullPage: false, timeout: 12000 });
     job.shotAt = new Date().toISOString();
     job.lastUrl = String(page.url() || '');
-  }catch(_){ }
+    persistShot(job);
+  }catch(e){
+    console.error('[RAPID-ROBOT] screenshot fail', e && e.message);
+  }
 }
 
 function getJob(id){
@@ -191,6 +247,11 @@ function jobPublicView(job){
 
 function startPull(opts = {}){
   sweepJobs();
+  if(opts.profileDir){
+    setShotDir(path.join(String(opts.profileDir), '..'));
+  }else if(opts.shotDir){
+    setShotDir(opts.shotDir);
+  }
   if(runningJobId && jobs.get(runningJobId) && !jobs.get(runningJobId).done){
     throw new Error('Robot zaten çalışıyor. Birkaç saniye bekleyin.');
   }
@@ -936,6 +997,9 @@ module.exports = {
   runProbe,
   getJob,
   getLastJob,
+  getLastShot,
+  setShotDir,
+  loadPersistedShot,
   runPull,
   resetForTests,
   LOGIN_TIMEOUT_MS,

@@ -2069,8 +2069,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.277-okta-pass',
-    build:'fix-v280',
+    version:'6.3.278-okta-shot',
+    build:'fix-v281',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -6217,18 +6217,32 @@ app.post('/web-api/admin/rapid360-robot-test',rapidSalesPerm,async(req,res)=>{
 });
 app.get('/web-api/admin/rapid360-robot-last',rapidSalesPerm,(req,res)=>{
   const job=rapidRobot.getLastJob();
-  if(!job)return res.json({ok:true,job:null});
+  const disk=rapidRobot.getLastShot();
+  if(!job&&!disk)return res.json({ok:true,job:null});
+  if(!job){
+    return res.json({ok:true,job:{
+      id:'disk',status:disk.status||'Son ekran görüntüsü (disk)',error:'',done:true,okRun:false,
+      at:disk.shotAt||'',shotAt:disk.shotAt||'',lastUrl:disk.lastUrl||'',hasShot:true
+    }});
+  }
   res.json({ok:true,job:{
     id:job.id,status:job.status,error:job.error||'',done:job.done,okRun:job.ok,
     at:new Date(job.at).toISOString(),shotAt:job.shotAt||'',lastUrl:job.lastUrl||'',
-    hasShot:Boolean(job.shot),
+    hasShot:Boolean((job.shot&&job.shot.length)||(disk&&disk.shot)),
     ...rapidRobot.jobPublicView(job)
   }});
 });
 app.get('/web-api/admin/rapid360-robot-shot',rapidSalesPerm,(req,res)=>{
-  const job=rapidRobot.getLastJob();
-  if(!job||!job.shot)return res.status(404).json({error:'Robot ekran görüntüsü yok. Önce Satışları oku çalıştırın.'});
-  res.type('png').send(job.shot);
+  const got=rapidRobot.getLastShot();
+  if(!got||!got.shot||!got.shot.length){
+    return res.status(404).type('html').send(`<!doctype html><meta charset="utf-8"><title>Robot ekranı yok</title>
+      <p><b>Robot ekran görüntüsü yok.</b></p>
+      <p>Ayarlar → Rapid Aktar → <b>Robot testi</b> çalıştırın. Test bitince bu sayfayı yenileyin.</p>
+      <p style="color:#64748b">Eski mesaj “Satışları oku” yanlışıydı; artık Robot testi yeterli.</p>`);
+  }
+  res.setHeader('Cache-Control','no-store');
+  if(got.lastUrl)res.setHeader('X-Robot-Url',String(got.lastUrl).slice(0,300));
+  res.type('png').send(got.shot);
 });
 app.get('/web-api/admin/rapid360-robot-diag',rapidSalesPerm,async(req,res)=>{
   const pwMeta=rapidRobot.resolvePlaywrightMeta();

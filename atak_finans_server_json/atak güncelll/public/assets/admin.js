@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v280 */
+/* ATAK_ADMIN_BUILD=fix-v281 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -5311,8 +5311,9 @@ async function loadRapidSettings(){
           ?'<div style="margin-top:6px;color:#15803d">🤖 Robot hazır — Chromium sunucuda açılıyor</div>'
           :`<div style="margin-top:6px;color:#b45309">🤖 Robot çalışmıyor: ${rapidOktaEsc(diag.launchError||(diag.playwright?'bilinmiyor':'playwright kurulu değil'))} · node ${rapidOktaEsc(diag.node||'')}${diag.playwrightVersion?` · playwright ${rapidOktaEsc(diag.playwrightVersion)}`:''}<br>Hostinger scriptini çalıştırın; terminaldeki "rapid robot" satırlarını kontrol edin.</div>`)
         :'';
+      const shotLink=last&&last.hasShot?` · <a href="/web-api/admin/rapid360-robot-shot?t=${Date.now()}" target="_blank"><b>Robotun gördüğü ekranı aç</b></a>`:'';
       const lastLine=last
-        ?`<div style="margin-top:6px;color:#475569">Son çalışma: ${rapidOktaEsc(last.error||last.status||'-')}${last.hasShot?' · <a href="/web-api/admin/rapid360-robot-shot" target="_blank"><b>Robotun gördüğü ekranı aç</b></a>':''}</div>`
+        ?`<div style="margin-top:6px;color:#475569">Son çalışma: ${rapidOktaEsc(last.error||last.status||'-')}${shotLink}</div>${last.hasShot?`<div style="margin-top:8px"><img src="/web-api/admin/rapid360-robot-shot?t=${Date.now()}" alt="robot ekranı" style="max-width:100%;max-height:320px;border:1px solid #cbd5e1;border-radius:10px;background:#fff"/></div>`:''}`
         :'';
       conn.innerHTML=(c.canPull
         ?'<span style="color:#15803d;font-weight:800">🟢 Bağlı — aktarım hazır</span>'
@@ -5323,6 +5324,13 @@ async function loadRapidSettings(){
 q('#rapidRobotTestBtn')?.addEventListener('click',async()=>{
   const st=q('#rapidSettingsStatus');
   if(st){st.textContent='Robot testi başladı — sunucu Rapid360’ı açıyor…';st.className='form-status'}
+  const showShot=(msg,ok)=>{
+    const t=Date.now();
+    if(st){
+      st.innerHTML=`${rapidOktaEsc(msg||'Test bitti')}<div style="margin-top:8px"><a href="/web-api/admin/rapid360-robot-shot?t=${t}" target="_blank"><b>Robotun gördüğü ekranı aç</b></a></div><div style="margin-top:8px"><img src="/web-api/admin/rapid360-robot-shot?t=${t}" alt="robot ekranı" style="max-width:100%;max-height:360px;border:1px solid #cbd5e1;border-radius:10px;background:#fff"/></div>`;
+      st.className='form-status '+(ok?'success':'error');
+    }
+  };
   try{
     const start=await api('/web-api/admin/rapid360-robot-test',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
     const deadline=Date.now()+90000;
@@ -5331,15 +5339,16 @@ q('#rapidRobotTestBtn')?.addEventListener('click',async()=>{
       try{
         const jr=await api('/web-api/admin/rapid360-robot-poll/'+encodeURIComponent(start.jobId));
         if(jr.pending){if(st)st.textContent=jr.message||'Robot çalışıyor…';continue}
-        if(st){st.innerHTML=`${rapidOktaEsc(jr.message||'Test bitti')} — <a href="/web-api/admin/rapid360-robot-shot" target="_blank"><b>Robotun gördüğü ekranı aç</b></a>`;st.className='form-status success'}
+        showShot(jr.message||'Test bitti',true);
         loadRapidSettings().catch(()=>{});
         return;
       }catch(e){
-        if(st){st.innerHTML=`${rapidOktaEsc(e.message||'Robot hatası')} — <a href="/web-api/admin/rapid360-robot-shot" target="_blank"><b>Robotun gördüğü ekranı aç</b></a>`;st.className='form-status error'}
+        showShot(e.message||'Robot hatası',false);
+        loadRapidSettings().catch(()=>{});
         return;
       }
     }
-    if(st){st.textContent='Test zaman aşımı. Robotun gördüğü ekranı açmayı deneyin.';st.className='form-status error'}
+    showShot('Test zaman aşımı — yine de ekran görüntüsüne bakın',false);
   }catch(e){
     if(st){st.textContent=e.message;st.className='form-status error'}
   }
