@@ -4,7 +4,7 @@
 #   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/site-api-connections-e50f/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
 set -euo pipefail
 BRANCH="${ATAK_BRANCH:-cursor/site-api-connections-e50f}"
-EXPECT="6.3.276-okta-pass"
+EXPECT="6.3.277-okta-pass"
 log(){ echo "$*"; }
 die(){
   echo "FAIL: $*"
@@ -83,34 +83,52 @@ grep -q "$EXPECT" "$START/server.js" || die "start dir surum yanlis"
 log "START=$START disk=$(grep -o "version:'[^']*'" "$START/server.js" | head -1)"
 
 kill_3100(){
-  local i p args
-  for i in 1 2 3 4 5 6; do
-    p=$(ss -lntp 2>/dev/null | grep ':3100' | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2 || true)
-    if [ -z "$p" ] && command -v fuser >/dev/null; then
-      p=$(fuser 3100/tcp 2>/dev/null | awk '{print $NF}' | head -1 || true)
+  local i p args all
+  for i in 1 2 3 4 5 6 7 8; do
+    all=$(ss -lntp 2>/dev/null | grep ':3100' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u || true)
+    if [ -z "$all" ] && command -v fuser >/dev/null; then
+      all=$(fuser 3100/tcp 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u || true)
     fi
-    [ -n "$p" ] || return 0
-    args=$(ps -o args= -p "$p" 2>/dev/null | head -c 200 || true)
-    case "$args" in
-      *atakhome-web*|*atakhome-commerce*|*commerce*)
-        log "SKIP kill pid=$p (shop): $args"
-        return 0
-        ;;
-    esac
-    log "KILL 3100 pid=$p $args"
-    kill "$p" 2>/dev/null || true
-    sleep 1
-    kill -9 "$p" 2>/dev/null || true
+    if [ -z "$all" ]; then
+      return 0
+    fi
+    for p in $all; do
+      args=$(ps -o args= -p "$p" 2>/dev/null | head -c 220 || true)
+      case "$args" in
+        *atakhome-web*|*atakhome-commerce*|*commerce*)
+          log "SKIP kill pid=$p (shop): $args"
+          continue
+          ;;
+      esac
+      log "KILL 3100 pid=$p $args"
+      kill -9 "$p" 2>/dev/null || true
+    done
+    # Bilinen atak server yollarını da öldür (pm2 dışından basılan node)
+    pkill -9 -f '/root/atakhome-platform/server.js' 2>/dev/null || true
+    pkill -9 -f '/root/atak-v10/server.js' 2>/dev/null || true
+    pkill -9 -f '/root/atak/server.js' 2>/dev/null || true
+    if command -v fuser >/dev/null; then
+      fuser -k -n tcp 3100 >/dev/null 2>&1 || true
+    fi
     sleep 1
   done
+  # Hâlâ doluysa son durum
+  ss -lntp 2>/dev/null | grep ':3100' || true
 }
 
 log "pm2 delete atak + 3100 serbest"
 pm2 delete atak >/dev/null 2>&1 || true
+pm2 stop atak >/dev/null 2>&1 || true
 sleep 1
 kill_3100
 if ss -lntp 2>/dev/null | grep -q ':3100'; then
-  die "3100 hala dolu — eski node olmedi"
+  log "UYARI: 3100 hala gorunuyor, son bir force kill"
+  fuser -k -n tcp 3100 >/dev/null 2>&1 || true
+  pkill -9 -f 'atakhome-platform/server.js' 2>/dev/null || true
+  sleep 2
+fi
+if ss -lntp 2>/dev/null | grep -q ':3100'; then
+  die "3100 hala dolu — eski node olmedi. Elle: fuser -k 3100/tcp; pkill -9 -f atakhome-platform/server.js"
 fi
 log "3100 BOS"
 
