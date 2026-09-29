@@ -74,7 +74,11 @@ async function run(){
   assert.equal(auth.normalizeRapidAccount('W3403341'), 'W340334.1@rapid360.arcelikpazarlama.com.tr');
   assert.equal(auth.normalizeRapidAccount('W3403341@rapid360.arcelikpazarlama.com.tr'), 'W340334.1@rapid360.arcelikpazarlama.com.tr');
   assert.equal(auth.normalizeRapidAccount('W340334.1@rapid360.arcelikpazarlama.com.tr'), 'W340334.1@rapid360.arcelikpazarlama.com.tr');
+  assert.equal(auth.normalizeRapidAccount('W340334'), 'W340334.1@rapid360.arcelikpazarlama.com.tr');
+  assert.equal(auth.normalizeRapidAccount('W340334@rapid360.arcelikpazarlama.com.tr'), 'W340334.1@rapid360.arcelikpazarlama.com.tr');
+  assert.equal(auth.normalizeRapidAccount('w340334.1'), 'W340334.1@rapid360.arcelikpazarlama.com.tr');
   assert.equal(auth.oktaLoginName('W3403341'), 'W340334.1');
+  assert.equal(auth.oktaLoginName('W340334'), 'W340334.1');
   assert.equal(auth.oktaLoginName(''), 'W340334.1');
   const report = auth.dynamicsReportUrl({ company: '2521', store: '340334', startDate: '2026-08-18', endDate: '2026-08-19' });
   assert.ok(report.includes('cmp=2521'));

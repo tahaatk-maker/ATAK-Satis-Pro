@@ -14,11 +14,19 @@ const LOGIN_HOST = 'https://login.microsoftonline.com';
 const DEFAULT_TENANT = 'organizations';
 const DEFAULT_ACCOUNT = 'W340334.1@rapid360.arcelikpazarlama.com.tr';
 
-/** W3403341 → W340334.1 (nokta unutulunca Okta “Oturum açılamıyor” der). */
+/**
+ * Bayi Okta hesabı her zaman W340334.1 olmalı.
+ * W340334 / W340334@… → W340334.1@…  |  W3403341 → W340334.1@…
+ * Nokta unutulunca Okta “Oturum açılamıyor” der; robot kutusu da boş kalır.
+ */
 function normalizeRapidAccount(raw){
   let s = String(raw || '').trim();
   if(!s) return '';
+  s = s.replace(/^w(?=\d)/i, 'W');
+  // W3403341 → W340334.1
   s = s.replace(/^W340334(\d)(?=@|$)/i, 'W340334.$1');
+  // W340334 veya W340334@domain → W340334.1 (noktasız bayi hesabı)
+  s = s.replace(/^W340334(?!\.\d)(?=@|$)/i, 'W340334.1');
   if(!s.includes('@') && /^W\d/i.test(s)) s += '@rapid360.arcelikpazarlama.com.tr';
   return s;
 }

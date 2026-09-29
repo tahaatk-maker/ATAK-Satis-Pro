@@ -2069,8 +2069,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.274-fatura',
-    build:'fix-v277',
+    version:'6.3.278-okta-shot',
+    build:'fix-v281',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -6180,14 +6180,17 @@ app.post('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('setting
   s.invoiceIntegration=s.invoiceIntegration||{};
   const rapid=s.invoiceIntegration.rapid360=s.invoiceIntegration.rapid360||{};
   const body=req.body||{};
-  if(body.oktaUser!=null)rapid.oktaUser=d365Auth.normalizeRapidAccount(body.oktaUser);
+  if(body.oktaUser!=null){
+    const normalized=d365Auth.normalizeRapidAccount(body.oktaUser)||d365Auth.DEFAULT_ACCOUNT;
+    rapid.oktaUser=normalized;
+  }
   if(body.oktaPassword!=null){
     const v=String(body.oktaPassword);
     if(v!=='********')rapid.oktaPassword=v;
   }
   audit(s,'Rapid Aktar Okta girişi güncellendi',rapid.oktaUser||'-',{passwordSet:Boolean(String(rapid.oktaPassword||'').trim())});
   writeStore(s);
-  res.json({ok:true,oktaUser:rapid.oktaUser||'',oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+  res.json({ok:true,oktaUser:rapid.oktaUser||'',oktaLogin:d365Auth.oktaLoginName(rapid.oktaUser||''),oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
 });
 app.post('/web-api/admin/rapid360-robot-test',rapidSalesPerm,async(req,res)=>{
   if(!rapidRobot.available())return res.status(501).json({error:'Sunucuda Rapid robotu kurulu değil. Hostinger deploy scriptini çalıştırın.'});
@@ -6196,9 +6199,13 @@ app.post('/web-api/admin/rapid360-robot-test',rapidSalesPerm,async(req,res)=>{
   const s=readStore();
   const rapid=(s.invoiceIntegration||{}).rapid360||{};
   const user=d365Auth.normalizeRapidAccount(rapid.oktaUser||'')||d365Auth.DEFAULT_ACCOUNT;
+  const password=String(rapid.oktaPassword||'').trim();
+  if(!password||password==='********'){
+    return res.status(400).json({error:'Okta şifresi kayıtlı değil. Ayarlar → Rapid Aktar’da şifreyi yazıp Kaydet’e basın (******** bırakmayın).'});
+  }
   try{
     const job=rapidRobot.startProbe({
-      user,password:String(rapid.oktaPassword||'').trim(),oktaLogin:d365Auth.oktaLoginName(user),
+      user,password,oktaLogin:d365Auth.oktaLoginName(user),
       store:rapidSalesFetch.DEFAULT_STORE,company:rapidSalesFetch.DEFAULT_COMPANY,
       reportUrl:d365Auth.dynamicsReportUrl({company:rapidSalesFetch.DEFAULT_COMPANY,store:rapidSalesFetch.DEFAULT_STORE}),
       profileDir:path.join(ROOT,'data','rapid360-profile')
@@ -6210,18 +6217,32 @@ app.post('/web-api/admin/rapid360-robot-test',rapidSalesPerm,async(req,res)=>{
 });
 app.get('/web-api/admin/rapid360-robot-last',rapidSalesPerm,(req,res)=>{
   const job=rapidRobot.getLastJob();
-  if(!job)return res.json({ok:true,job:null});
+  const disk=rapidRobot.getLastShot();
+  if(!job&&!disk)return res.json({ok:true,job:null});
+  if(!job){
+    return res.json({ok:true,job:{
+      id:'disk',status:disk.status||'Son ekran görüntüsü (disk)',error:'',done:true,okRun:false,
+      at:disk.shotAt||'',shotAt:disk.shotAt||'',lastUrl:disk.lastUrl||'',hasShot:true
+    }});
+  }
   res.json({ok:true,job:{
     id:job.id,status:job.status,error:job.error||'',done:job.done,okRun:job.ok,
     at:new Date(job.at).toISOString(),shotAt:job.shotAt||'',lastUrl:job.lastUrl||'',
-    hasShot:Boolean(job.shot),
+    hasShot:Boolean((job.shot&&job.shot.length)||(disk&&disk.shot)),
     ...rapidRobot.jobPublicView(job)
   }});
 });
 app.get('/web-api/admin/rapid360-robot-shot',rapidSalesPerm,(req,res)=>{
-  const job=rapidRobot.getLastJob();
-  if(!job||!job.shot)return res.status(404).json({error:'Robot ekran görüntüsü yok. Önce Satışları oku çalıştırın.'});
-  res.type('png').send(job.shot);
+  const got=rapidRobot.getLastShot();
+  if(!got||!got.shot||!got.shot.length){
+    return res.status(404).type('html').send(`<!doctype html><meta charset="utf-8"><title>Robot ekranı yok</title>
+      <p><b>Robot ekran görüntüsü yok.</b></p>
+      <p>Ayarlar → Rapid Aktar → <b>Robot testi</b> çalıştırın. Test bitince bu sayfayı yenileyin.</p>
+      <p style="color:#64748b">Eski mesaj “Satışları oku” yanlışıydı; artık Robot testi yeterli.</p>`);
+  }
+  res.setHeader('Cache-Control','no-store');
+  if(got.lastUrl)res.setHeader('X-Robot-Url',String(got.lastUrl).slice(0,300));
+  res.type('png').send(got.shot);
 });
 app.get('/web-api/admin/rapid360-robot-diag',rapidSalesPerm,async(req,res)=>{
   const pwMeta=rapidRobot.resolvePlaywrightMeta();
