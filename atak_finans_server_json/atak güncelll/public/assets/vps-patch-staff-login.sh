@@ -3,8 +3,8 @@
 # store.json / musteri / stok DOKUNULMAZ. atakhome-web ve commerce DOKUNULMAZ.
 #   curl -fsSL "https://raw.githubusercontent.com/tahaatk-maker/ATAK-Satis-Pro/cursor/musteri-fatura-hub-474e/atak_finans_server_json/atak%20g%C3%BCncelll/public/assets/vps-patch-staff-login.sh" | bash
 set -euo pipefail
-BRANCH="${ATAK_BRANCH:-cursor/musteri-fatura-hub-474e}"
-EXPECT="6.3.274-fatura"
+BRANCH="${ATAK_BRANCH:-cursor/site-api-connections-e50f}"
+EXPECT="6.3.275-okta-user"
 log(){ echo "$*"; }
 die(){
   echo "FAIL: $*"

@@ -2069,8 +2069,8 @@ app.get('/health',(req,res)=>{
   res.json({
     ok:true,
     service:'atakhome-erp-v2',
-    version:'6.3.274-fatura',
-    build:'fix-v277',
+    version:'6.3.275-okta-user',
+    build:'fix-v278',
     ownerOnly:ownerOnlyEnabled(),
     storeOk:storeFileSize(STORE_PATH)>=200,
     productCount,
@@ -6180,14 +6180,17 @@ app.post('/web-api/admin/rapid360-okta-settings',requireAdminOrStaffAny('setting
   s.invoiceIntegration=s.invoiceIntegration||{};
   const rapid=s.invoiceIntegration.rapid360=s.invoiceIntegration.rapid360||{};
   const body=req.body||{};
-  if(body.oktaUser!=null)rapid.oktaUser=d365Auth.normalizeRapidAccount(body.oktaUser);
+  if(body.oktaUser!=null){
+    const normalized=d365Auth.normalizeRapidAccount(body.oktaUser)||d365Auth.DEFAULT_ACCOUNT;
+    rapid.oktaUser=normalized;
+  }
   if(body.oktaPassword!=null){
     const v=String(body.oktaPassword);
     if(v!=='********')rapid.oktaPassword=v;
   }
   audit(s,'Rapid Aktar Okta girişi güncellendi',rapid.oktaUser||'-',{passwordSet:Boolean(String(rapid.oktaPassword||'').trim())});
   writeStore(s);
-  res.json({ok:true,oktaUser:rapid.oktaUser||'',oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
+  res.json({ok:true,oktaUser:rapid.oktaUser||'',oktaLogin:d365Auth.oktaLoginName(rapid.oktaUser||''),oktaPasswordSet:Boolean(String(rapid.oktaPassword||'').trim())});
 });
 app.post('/web-api/admin/rapid360-robot-test',rapidSalesPerm,async(req,res)=>{
   if(!rapidRobot.available())return res.status(501).json({error:'Sunucuda Rapid robotu kurulu değil. Hostinger deploy scriptini çalıştırın.'});

@@ -1,4 +1,4 @@
-/* ATAK_ADMIN_BUILD=fix-v277 */
+/* ATAK_ADMIN_BUILD=fix-v278 */
 function sipBtn(phone,opts){return typeof sipCallButton==='function'?sipCallButton(phone,opts||{}):''}
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];let store=null,page=1,pageSize=30,selected=new Set();
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number(n||0));
@@ -5348,12 +5348,15 @@ q('#rapidSettingsForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
   const st=q('#rapidSettingsStatus');
   try{
-    await api('/web-api/admin/rapid360-okta-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    const saved=await api('/web-api/admin/rapid360-okta-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       oktaUser:q('#rapidSettingsOktaUser')?.value||'',
       oktaPassword:q('#rapidSettingsOktaPass')?.value||''
     })});
-    if(st){st.textContent='Kaydedildi. Rapid Aktar → Satışları oku ile deneyin.';st.className='form-status success'}
-    toast('Rapid Aktar Okta girişi kaydedildi');
+    if(q('#rapidSettingsOktaUser')&&saved.oktaUser)q('#rapidSettingsOktaUser').value=saved.oktaUser;
+    if(q('#rapidSettingsOktaPass')&&saved.oktaPasswordSet)q('#rapidSettingsOktaPass').value='********';
+    const login=saved.oktaLogin||String(saved.oktaUser||'').split('@')[0]||'W340334.1';
+    if(st){st.textContent=`Kaydedildi → robot ${login} yazar (tam: ${saved.oktaUser||''}). Rapid Aktar → Satışları oku.`;st.className='form-status success'}
+    toast('Kaydedildi: '+login);
     loadRapidSettings().catch(()=>{});
   }catch(err){if(st){st.textContent=err.message;st.className='form-status error'}}
 });

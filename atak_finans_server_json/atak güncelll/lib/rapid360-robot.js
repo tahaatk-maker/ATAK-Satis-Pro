@@ -250,21 +250,39 @@ async function handleMicrosoft(page, opts, job){
       await btn.click().catch(() => {});
       return;
     }
-    if(opts.user){
-      const tile = await page.getByText(opts.user, { exact: false }).first().elementHandle().catch(() => null);
+    const fullUser = String(opts.user || '').trim();
+    const shortUser = String(opts.oktaLogin || fullUser.split('@')[0] || '').trim();
+    if(fullUser){
+      const tile = await page.getByText(fullUser, { exact: false }).first().elementHandle().catch(() => null)
+        || (shortUser ? await page.getByText(shortUser, { exact: false }).first().elementHandle().catch(() => null) : null);
       if(tile){
         setStatus(job, 'Microsoft hesabı seçiliyor…');
         await tile.click().catch(() => {});
         return;
       }
     }
-    const email = await page.$('input[name="loginfmt"]');
-    if(email){
+    // Microsoft loginfmt React kontrollü — fill() bazen boş bırakır; type ile yaz.
+    const emailLoc = page.locator('input[name="loginfmt"], #i0116, input[type="email"]:not([type=hidden])').first();
+    if(await isVisibleLocator(emailLoc)){
+      const who = fullUser || shortUser;
+      if(!who){
+        robotFail(job, 'USERNAME_PAGE', 'Okta kullanıcı boş. Ayarlar → Rapid Aktar’da W340334.1 kaydedin.');
+      }
       setStatus(job, 'Microsoft hesabı giriliyor…');
-      await email.fill(String(opts.user || '')).catch(() => {});
-      await page.click('#idSIButton9').catch(() => {});
+      robotLog(job, 'USERNAME_PAGE', 'Microsoft e-posta kutusu');
+      await typeOktaField(emailLoc, who);
+      const after = await emailLoc.inputValue().catch(() => '');
+      if(!after){
+        robotFail(job, 'USERNAME_PAGE', 'Microsoft kullanıcı kutusu boş kaldı (yazılamadı). Tekrar Kaydet + Robot testi yapın.');
+      }
+      robotLog(job, 'USERNAME_FILLED', 'Microsoft kullanıcı: ' + after);
+      await takeShot(job, page);
+      const next = page.locator('#idSIButton9, input[type="submit"][value], button[type="submit"]').first();
+      await clickWithFallback(page, next);
     }
-  }catch(_){ }
+  }catch(e){
+    if(e && e.stage) throw e;
+  }
 }
 
 async function pageInnerText(page){
@@ -308,7 +326,7 @@ async function clickWithFallback(page, locator){
 }
 
 async function usernameLocator(page){
-  return page.locator('input[name="identifier"], #okta-signin-username, input[name="username"]:not([type=hidden])').first();
+  return page.locator('input[name="identifier"], #okta-signin-username, input[name="username"]:not([type=hidden]), input[name="loginfmt"], #i0116').first();
 }
 
 async function passwordLocator(page){
