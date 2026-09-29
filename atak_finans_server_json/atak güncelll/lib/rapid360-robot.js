@@ -905,7 +905,7 @@ async function runProbe(job, opts = {}){
         setStatus(job, `Robot şu an: ${classifyUrl(page.url())} ekranında`);
       }
       if(job._oktaPassTried && /okta|microsoft/i.test(kind)){
-        setStatus(job, 'Şifre yazıldı — telefonda Okta bildiriminionaylayın…');
+        setStatus(job, 'Şifre yazıldı — telefonda Okta bildirimini onaylayın…');
       }
       await page.waitForTimeout(2500);
     }
